@@ -131,6 +131,7 @@ function Press.run(ctx)
 					h = h * 1.04 -- 떼면 살짝 되돌아옴
 					dal:setThickness(h)
 					rec.thick[count] = h
+					print(string.format("[Press] %d번째 두께 %.3f (목표 %.3f)", count, h, target))
 					local s = Scoring.pressOne(count, h)
 					if h > target * 1.25 then
 						ui:hint("조금 더 길게 꾹 눌러요")

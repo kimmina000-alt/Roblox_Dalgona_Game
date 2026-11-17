@@ -8,6 +8,48 @@ Dalgona.__index = Dalgona
 
 local UP = CFrame.Angles(0, 0, math.rad(90))
 
+-- 탄 정도 b(0~1)에 따른 색·광택 (docs/DALGONA_LOOK.md: 참고 사진 분석)
+-- 광택은 Reflectance를 거의 안 씀 (하늘이 비쳐 보라색이 됨) → 밝은 하이라이트 점(gloss 개수)으로 표현
+local STOPS = {
+	{ b = 0.0, base = Color3.fromRGB(216, 146, 62), rim = Color3.fromRGB(186, 112, 42), spot = Color3.fromRGB(176, 104, 44), refl = 0.0, gloss = 0 },
+	{ b = 0.35, base = Color3.fromRGB(196, 116, 46), rim = Color3.fromRGB(150, 78, 30), spot = Color3.fromRGB(150, 80, 32), refl = 0.01, gloss = 3 },
+	{ b = 0.65, base = Color3.fromRGB(168, 88, 40), rim = Color3.fromRGB(105, 48, 20), spot = Color3.fromRGB(90, 40, 16), refl = 0.02, gloss = 7 },
+	{ b = 1.0, base = Color3.fromRGB(92, 42, 18), rim = Color3.fromRGB(38, 20, 10), spot = Color3.fromRGB(25, 15, 10), refl = 0.03, gloss = 10 },
+}
+local AMBER = Color3.fromRGB(190, 110, 40) -- 소다가 적어 촘촘한 반죽 (투명한 호박색)
+
+local function sample(b)
+	b = math.clamp(b, 0, 1)
+	for i = 1, #STOPS - 1 do
+		local a, z = STOPS[i], STOPS[i + 1]
+		if b <= z.b then
+			local t = (b - a.b) / (z.b - a.b)
+			return {
+				base = a.base:Lerp(z.base, t),
+				rim = a.rim:Lerp(z.rim, t),
+				spot = a.spot:Lerp(z.spot, t),
+				refl = a.refl + (z.refl - a.refl) * t,
+				gloss = a.gloss + (z.gloss - a.gloss) * t,
+			}
+		end
+	end
+	local z = STOPS[#STOPS]
+	return { base = z.base, rim = z.rim, spot = z.spot, refl = z.refl, gloss = z.gloss }
+end
+
+-- 제작 기록 → 겉모습. records: ctx.records (melt, soda), st: ctx.state
+-- 반환 { b = 탄 정도 0~1, dense = 소다 부족 0~1 }
+function Dalgona.lookFor(records, st)
+	local melt = records.melt or {}
+	local soda = records.soda or {}
+	local b = (st and st.burn or melt.burn or 0) * 1.4
+	b += (1 - (melt.tempOk or 1)) * 0.25 -- 적정 온도를 벗어나 있던 시간
+	b += math.clamp(((soda.delay or 0) - Config.Soda.bestDelay) * 0.08, 0, 0.3) -- 소다를 늦게
+	b += math.clamp(((soda.amount or Config.Soda.idealMin) - Config.Soda.idealMax) / 0.85, 0, 1) * 0.35 -- 소다를 많이
+	local dense = math.clamp((Config.Soda.idealMin - (soda.amount or Config.Soda.idealMin)) / Config.Soda.idealMin, 0, 1)
+	return { b = math.clamp(b, 0, 1), dense = dense }
+end
+
 function Dalgona.new(station, center, color, volume, ellipse)
 	local self = setmetatable({}, Dalgona)
 	self.S = station
@@ -17,6 +59,11 @@ function Dalgona.new(station, center, color, volume, ellipse)
 	self.e = ellipse or 0
 	self.h = Config.Press.h0
 	self.body = station:fxPart(station.fx, { Name = "Dalgona", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic })
+	-- 가장자리 띠 2겹 (본체보다 살짝 낮고 넓음 → 위에서 보면 진한 테두리 그러데이션)
+	self.rim = station:fxPart(station.fx, { Name = "DalgonaRim", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic })
+	self.rim2 = station:fxPart(station.fx, { Name = "DalgonaRim2", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic })
+	self.rimW = 0.06
+	self.details = {}
 	self.dome = station:fxPart(station.fx, { Name = "DalgonaDome", Shape = Enum.PartType.Ball, Color = color, Material = Enum.Material.SmoothPlastic })
 	self.lumps = {}
 	for i = 1, 4 do
@@ -37,8 +84,28 @@ function Dalgona:setThickness(h)
 	local d = self:diameter(h)
 	local k = math.sqrt(1 + self.e)
 	local c = self.center
-	self.body.Size = Vector3.new(h * 0.75, d * k, d / k)
+	local w = self.rimW
+	self.rim.Size = Vector3.new(h * 0.75 - 0.008, d * k, d / k)
+	self.rim.CFrame = CFrame.new(c.X, c.Y + (h * 0.75 - 0.008) / 2, c.Z) * UP
+	self.rim2.Size = Vector3.new(h * 0.75 - 0.004, d * k * (1 - w), d / k * (1 - w))
+	self.rim2.CFrame = CFrame.new(c.X, c.Y + (h * 0.75 - 0.004) / 2, c.Z) * UP
+	self.body.Size = Vector3.new(h * 0.75, d * k * (1 - 2 * w), d / k * (1 - 2 * w))
 	self.body.CFrame = CFrame.new(c.X, c.Y + h * 0.375, c.Z) * UP
+	-- 표면 무늬(결정 반점·기포·얼룩)는 반지름에 맞춰 따라 퍼짐
+	local top = c.Y + h * 0.75
+	local R = d / 2
+	for _, dt in ipairs(self.details) do
+		local x = c.X + math.cos(dt.a) * dt.rr * R * k
+		local z = c.Z + math.sin(dt.a) * dt.rr * R / k
+		if dt.kind == "flat" then
+			local size = dt.abs or dt.frac * R
+			dt.part.Size = Vector3.new(0.006, size, size * dt.squash)
+			dt.part.CFrame = CFrame.new(x, top + 0.002, z) * CFrame.Angles(0, dt.yaw, 0) * UP
+		else
+			dt.part.Size = Vector3.new(dt.abs, dt.abs * 0.6, dt.abs)
+			dt.part.CFrame = CFrame.new(x, top + dt.abs * 0.12, z)
+		end
+	end
 	-- 언덕 모양: 두꺼울 때만 위에 둥근 봉우리와 덩어리
 	local s = math.clamp((h - 0.22) / (Config.Press.h0 - 0.22), 0, 1)
 	local dd = d * 0.8 * s
@@ -59,6 +126,79 @@ end
 
 function Dalgona:radius()
 	return self:diameter(self.h) / 2
+end
+
+-- 겉모습의 본체 색 (붓는 줄기·떨어지는 반죽도 같은 색)
+function Dalgona.colorFor(look)
+	return sample(look.b).base:Lerp(AMBER, (look.dense or 0) * 0.5)
+end
+
+-- 탄 정도에 따른 색·광택·무늬 (look = Dalgona.lookFor 결과)
+function Dalgona:setLook(look)
+	self.look = look
+	local b, dense = look.b, look.dense or 0
+	local L = sample(b)
+	local base = L.base:Lerp(AMBER, dense * 0.5)
+	local refl = L.refl + dense * 0.01
+	self.rimW = 0.05 + 0.07 * b
+	for _, p in ipairs({ self.body, self.dome }) do
+		p.Color = base
+		p.Reflectance = refl
+	end
+	for _, l in ipairs(self.lumps) do
+		l.part.Color = base
+		l.part.Reflectance = refl
+	end
+	self.rim2.Color = base:Lerp(L.rim, 0.5)
+	self.rim.Color = L.rim
+	self.rim.Reflectance = refl
+	self.rim2.Reflectance = refl
+	self.color = base
+	for _, dt in ipairs(self.details) do
+		dt.part:Destroy()
+	end
+	self.details = {}
+	local rng = Random.new(math.floor(b * 1000) + 7)
+	local function add(kind, props, rr, extra)
+		local part = self.S:fxPart(self.S.fx, props)
+		local dt = { part = part, kind = kind, a = rng:NextNumber(0, 2 * math.pi), rr = rr, yaw = rng:NextNumber(0, math.pi), squash = rng:NextNumber(0.6, 1) }
+		for k, v in pairs(extra) do
+			dt[k] = v
+		end
+		table.insert(self.details, dt)
+	end
+	-- 결정 반점: 잘 된 달고나의 밝은 점 (탈수록 사라짐)
+	local speck = math.floor(30 * math.clamp(1 - b / 0.45, 0, 1) * (1 - dense))
+	for _ = 1, speck do
+		add("flat", { Name = "DalgonaSpeck", Shape = Enum.PartType.Cylinder, Color = base:Lerp(Color3.fromRGB(255, 236, 190), 0.55), Material = Enum.Material.SmoothPlastic, Transparency = 0.25 },
+			math.sqrt(rng:NextNumber()) * 0.85, { abs = rng:NextNumber(0.025, 0.05) })
+	end
+	-- 얼룩: 눌어붙은 갈색·검은 자국 (b 0.2부터)
+	local spots = math.floor(math.clamp((b - 0.15) / 0.85, 0, 1) * 7 + 0.5)
+	for _ = 1, spots do
+		add("flat", { Name = "DalgonaSpot", Shape = Enum.PartType.Cylinder, Color = L.spot, Material = Enum.Material.SmoothPlastic, Transparency = 0.15, Reflectance = refl },
+			math.sqrt(rng:NextNumber()) * 0.6, { frac = rng:NextNumber(0.08, 0.16) + 0.06 * b })
+	end
+	-- 기포: 잘 되면 아주 작은 구멍 몇 개, 지나칠수록 크고 볼록, 소다가 적으면 적음
+	local pores = math.floor((6 + 26 * math.clamp(b / 0.65, 0, 1)) * (1 - 0.7 * dense))
+	for _ = 1, pores do
+		local big = b > 0.45
+		local size = big and rng:NextNumber(0.05, 0.1 + 0.08 * b) or rng:NextNumber(0.025, 0.045)
+		if big then
+			add("bump", { Name = "DalgonaBubble", Shape = Enum.PartType.Ball, Color = base:Lerp(Color3.fromRGB(255, 190, 110), 0.25), Material = Enum.Material.SmoothPlastic, Reflectance = refl },
+				math.sqrt(rng:NextNumber()) * 0.8, { abs = size })
+		else
+			add("flat", { Name = "DalgonaPore", Shape = Enum.PartType.Cylinder, Color = L.rim:Lerp(L.spot, 0.5), Material = Enum.Material.SmoothPlastic, Transparency = 0.2 },
+				math.sqrt(rng:NextNumber()) * 0.85, { abs = size })
+		end
+	end
+	-- 번들거림: 탈수록(또는 소다가 적어 촘촘할수록) 빛이 맺힌 밝은 길쭉한 점
+	local gloss = math.floor(L.gloss + dense * 5 + 0.5)
+	for _ = 1, gloss do
+		add("flat", { Name = "DalgonaGloss", Shape = Enum.PartType.Cylinder, Color = base:Lerp(Color3.fromRGB(255, 240, 215), 0.6), Material = Enum.Material.SmoothPlastic, Transparency = 0.45 },
+			math.sqrt(rng:NextNumber()) * 0.75, { abs = rng:NextNumber(0.06, 0.14), squash = rng:NextNumber(0.3, 0.5) })
+	end
+	self:setThickness(self.h)
 end
 
 function Dalgona:setColor(c)
