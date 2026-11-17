@@ -80,9 +80,10 @@ function Picker.run(ctx)
 	local vpf = Instance.new("ViewportFrame")
 	vpf.Size = UDim2.fromScale(1, 1)
 	vpf.BackgroundTransparency = 1
-	vpf.Ambient = Color3.fromRGB(170, 166, 160)
-	vpf.LightColor = Color3.fromRGB(255, 250, 240)
-	vpf.LightDirection = Vector3.new(-0.6, -1, -0.8)
+	-- 그림자 대비를 낮춤: 포장지 찢는 이음매에 생기던 어두운 줄이 안 보이게 (입체감은 조금 남김)
+	vpf.Ambient = Color3.fromRGB(214, 211, 204)
+	vpf.LightColor = Color3.fromRGB(115, 112, 106)
+	vpf.LightDirection = Vector3.new(-0.3, -0.4, -1)
 	vpf.ZIndex = 30
 	vpf.Parent = holder
 	local cam = Instance.new("Camera")
@@ -155,9 +156,53 @@ function Picker.run(ctx)
 	local wrapOpen = add("WrapOpen", CFrame.new(cs.WrapOpen:GetAttribute("Offset")), 1)
 	render()
 
-	-- 1) 왼쪽의 포장된 나무젓가락 누르기
+	-- 1) 테이블 왼쪽에 놓인 포장된 나무젓가락 누르기
+	-- 처음에는 테이블 위 진짜 젓가락이 보이고, 누를 자리(holder)만 그 위에 겹쳐 둔다.
+	-- 누르면 같은 자리에서 3D 미리 보기로 바뀌어 화면 가운데로 커진다 (테이블에서 집어 드는 느낌).
+	local worldWrap = {}
+	for _, p in ipairs(ctx.station.Chopsticks:GetChildren()) do
+		if p.Name:sub(1, 7) == "Wrapped" then
+			table.insert(worldWrap, p)
+		end
+	end
+	local function placeOverWorld()
+		local cam = workspace.CurrentCamera
+		local lo, hi = Vector2.new(math.huge, math.huge), Vector2.new(-math.huge, -math.huge)
+		for _, p in ipairs(worldWrap) do
+			local half = p.Size / 2
+			for _, sx in ipairs({ -1, 1 }) do
+				for _, sy in ipairs({ -1, 1 }) do
+					for _, sz in ipairs({ -1, 1 }) do
+						local v = cam:WorldToScreenPoint(p.CFrame:PointToWorldSpace(Vector3.new(half.X * sx, half.Y * sy, half.Z * sz)))
+						lo = lo:Min(Vector2.new(v.X, v.Y))
+						hi = hi:Max(Vector2.new(v.X, v.Y))
+					end
+				end
+			end
+		end
+		local s = ui.scale.Scale
+		local c = (lo + hi) / 2 / s
+		local len = math.max(hi.Y - lo.Y, hi.X - lo.X) / s
+		local h = len / 0.81 -- 미리 보기 카메라에서 젓가락이 화면 높이의 81%
+		holder.AnchorPoint = Vector2.new(0.5, 0.5)
+		holder.Position = UDim2.fromOffset(c.X, c.Y)
+		holder.Size = UDim2.fromOffset(math.max(h * 0.625, 70), h)
+	end
 	ui:say("왼쪽 나무젓가락을 눌러요", "포장된 나무젓가락을 꺼내요")
-	if not waitClick() then
+	if #worldWrap > 0 then
+		vpf.Visible = false
+		clicked = nil
+		while not clicked do
+			placeOverWorld()
+			if not ctx.frame() then
+				return finish(nil)
+			end
+		end
+		for _, p in ipairs(worldWrap) do
+			p.LocalTransparencyModifier = 1
+		end
+		vpf.Visible = true
+	elseif not waitClick() then
 		return finish(nil)
 	end
 	-- 2) 화면 가운데로 사선으로 커지며 줌

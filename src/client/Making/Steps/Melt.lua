@@ -10,6 +10,7 @@ local Scoring = require(Shared:WaitForChild("Scoring"))
 local Making = script.Parent.Parent
 local Stir = require(Making:WaitForChild("Stir"))
 local Heat = require(Making:WaitForChild("Heat"))
+local Fx = require(Making:WaitForChild("Fx"))
 
 local Melt = {}
 
@@ -122,6 +123,15 @@ function Melt.run(ctx)
 			Material = p > 0.35 and Enum.Material.Glass or Enum.Material.Sand,
 			Transparency = p > 0.35 and 0.12 or 0,
 		})
+		-- 3D 설탕 더미: 녹을수록 낮아지고 좁아지다가 사라짐
+		if st.pile and st.pileD then
+			local k = (1 - p) ^ 0.7
+			Fx.placeDome(st.pile, Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.01, S.Bowl.Position.Z), st.pileD * (0.55 + 0.45 * k), st.pileH * k, 0.7)
+			st.pile.Transparency = p > 0.92 and 1 or 0
+			if st.burn > 0 then
+				st.pile.Color = Heat.meltColor(0.4, st.burn)
+			end
+		end
 		local visible = math.ceil(#st.grains * (1 - p) ^ 0.8)
 		for i, g in ipairs(st.grains) do
 			g.Transparency = i <= visible and 0 or 1
@@ -155,6 +165,9 @@ function Melt.run(ctx)
 	ui:setMeter(false)
 	for _, g in ipairs(st.grains) do
 		g.Transparency = 1
+	end
+	if st.pile then
+		st.pile.Transparency = 1
 	end
 	rec.burn = st.burn
 	if rec.burnt then

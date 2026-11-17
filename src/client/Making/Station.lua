@@ -94,6 +94,13 @@ end
 -- 국자 안 내용물 모양: thickness 두께, color, material, transparency
 function Station:setContents(props)
 	local c = self.Contents
+	-- 국자가 비면 3D 거품도 같이 사라짐 (붓기)
+	if (props.thickness and props.thickness < 0.05) or props.Transparency == 1 then
+		local foam = self.Ladle:FindFirstChild("FxFoam")
+		if foam then
+			foam:Destroy()
+		end
+	end
 	for k, v in pairs(props) do
 		if k == "thickness" then
 			local s = c.Size
@@ -156,10 +163,10 @@ function Station:reset()
 	end
 end
 
--- 누르는 동안 누름판을 반투명하게 (위에서 내려다봐도 아래 반죽이 보이게)
+-- 누름판은 누를 때도 금속 그대로 보인다 (사용자 요청: 반투명 안 함). 부르는 쪽은 그대로 둠
 function Station:presserSeeThrough(on)
 	for p, t in pairs(self.presserParts) do
-		p.Transparency = on and math.max(t, 0.55) or t
+		p.Transparency = t
 	end
 end
 
@@ -221,12 +228,15 @@ function Station:pourEmitter(model, color)
 	if not pe then
 		pe = Instance.new("ParticleEmitter")
 		pe.Name = "Pour"
-		pe.Size = NumberSequence.new(0.07)
+		-- 고운 알갱이 줄기: 작고 많이, 크기가 제각각
+		pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.045, 0.015), NumberSequenceKeypoint.new(1, 0.03, 0.01) })
 		pe.Lifetime = NumberRange.new(0.35, 0.5)
-		pe.Speed = NumberRange.new(0.3, 0.8)
-		pe.SpreadAngle = Vector2.new(20, 20)
+		pe.Speed = NumberRange.new(0.3, 0.9)
+		pe.SpreadAngle = Vector2.new(14, 14)
 		pe.Acceleration = Vector3.new(0, -30, 0)
-		pe.Rate = 120
+		pe.Rotation = NumberRange.new(0, 360)
+		pe.RotSpeed = NumberRange.new(-200, 200)
+		pe.Rate = 260
 		pe.EmissionDirection = Enum.NormalId.Left
 		pe.LightInfluence = 1
 		pe.Enabled = false

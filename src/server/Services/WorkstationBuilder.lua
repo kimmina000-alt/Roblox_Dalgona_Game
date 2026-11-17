@@ -71,15 +71,16 @@ local function model(parent, name)
 end
 
 local function buildTable(ws)
-	local top = part(ws, "TableTop", Vector3.new(16, 0.6, 5.2), CFrame.new(at(0.5, TABLE_TOP - 0.3, 0)), WOOD, Enum.Material.WoodPlanks, { CanCollide = true })
-	for _, x in ipairs({ -7.1, 8.1 }) do
-		for _, z in ipairs({ -2.2, 2.2 }) do
+	-- 테이블 22 × 7 (처음 16 × 5.2에서 키움: 화로 1.5배 + 왼쪽 끝에 나무젓가락 자리)
+	local top = part(ws, "TableTop", Vector3.new(22, 0.6, 7), CFrame.new(at(0.5, TABLE_TOP - 0.3, 0)), WOOD, Enum.Material.WoodPlanks, { CanCollide = true })
+	for _, x in ipairs({ -10.0, 11.0 }) do
+		for _, z in ipairs({ -3.1, 3.1 }) do
 			part(ws, "TableLeg", Vector3.new(0.5, TABLE_TOP - 0.6, 0.5), CFrame.new(at(x, (TABLE_TOP - 0.6) / 2, z)), WOOD, Enum.Material.Wood, { CanCollide = true })
 		end
 	end
 	local att = Instance.new("Attachment")
 	att.Name = "PromptAtt"
-	att.Position = Vector3.new(0, 0.6, 2.6)
+	att.Position = Vector3.new(0, 0.6, 3.5)
 	att.Parent = top
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "MakePrompt"
@@ -331,7 +332,8 @@ end
 
 local function buildChopsticks(ws)
 	local m = model(ws, "Chopsticks")
-	local cf = CFrame.new(at(-1.4, TABLE_TOP + 0.04, 2.0)) * CFrame.Angles(0, math.rad(80), 0)
+	-- 테이블 왼쪽 끝에 세로로 눕혀 둠 (제작 화면 왼쪽에 보이고, 고르기 연출이 여기서 시작)
+	local cf = CFrame.new(at(-8.2, TABLE_TOP + 0.04, 0.3))
 	local s1 = part(m, "Stick1", Vector3.new(0.07, 0.07, 2.6), cf, LIGHT_WOOD, Enum.Material.Wood)
 	part(m, "Stick2", Vector3.new(0.07, 0.07, 2.6), cf * CFrame.new(0.13, 0, 0), LIGHT_WOOD, Enum.Material.Wood)
 	m.PrimaryPart = s1

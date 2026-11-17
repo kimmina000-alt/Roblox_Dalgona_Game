@@ -11,6 +11,7 @@ local Scoring = require(Shared:WaitForChild("Scoring"))
 local Making = script.Parent.Parent
 local Stir = require(Making:WaitForChild("Stir"))
 local Heat = require(Making:WaitForChild("Heat"))
+local Fx = require(Making:WaitForChild("Fx"))
 
 local Soda = {}
 
@@ -63,6 +64,7 @@ function Soda.run(ctx)
 	local firstDrop = nil
 	local mound = nil
 	local puffed = false
+	local foam, foamT, foamYaw = nil, 0, 0
 	local tStir, tFast = 0, 0
 	local sampleAcc = 0
 	local baseThick = S.Contents.Size.X
@@ -133,11 +135,18 @@ function Soda.run(ctx)
 			S:setHeap("SodaSpoon", 1 - rec.amount / HEAP_MAX)
 			if rec.amount > 0 then
 				if not mound then
-					mound = S:fxPart(S.Ladle, { Name = "FxSoda", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.one * 0.1 })
+					-- 3D 소다 가루 더미 (고운 가루 + 작은 덩어리). 없으면 공 모양
+					mound = Fx.mesh("SodaMound", S.Ladle, { Name = "FxSoda", Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand })
+						or S:fxPart(S.Ladle, { Name = "FxSoda", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.one * 0.1 })
 				end
 				local size = 0.15 + 0.4 * math.min(rec.amount, HEAP_MAX)
-				mound.Size = Vector3.new(size, size * 0.55, size)
-				mound.CFrame = CFrame.new(S.Bowl.Position.X, S:contentsTopY() + size * 0.15, S.Bowl.Position.Z)
+				if mound:IsA("MeshPart") then
+					local d = size * 1.3
+					Fx.placeDome(mound, Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.02, S.Bowl.Position.Z), d, d * Fx.HEIGHT.SodaMound * 0.8, 0)
+				else
+					mound.Size = Vector3.new(size, size * 0.55, size)
+					mound.CFrame = CFrame.new(S.Bowl.Position.X, S:contentsTopY() + size * 0.15, S.Bowl.Position.Z)
+				end
 				ui:say("분홍 숟가락을 국자 가운데로 끌어 톡!", string.format("소다 양 %d%%", math.floor(100 * rec.amount / cfg.idealMax * 0.75)))
 				if rec.amount > 0.9 then
 					ui:hint("소다가 너무 많아요 (쓴맛)")
@@ -178,11 +187,11 @@ function Soda.run(ctx)
 					puffed = true
 					-- 0.5초 만에 불투명한 연갈색으로 부풀어 오름 (부피 1.5배)
 					local dark = math.clamp((rec.amount - cfg.idealMax) / 0.85, 0, 1)
-					local foam = FOAM:Lerp(FOAM_DARK, dark)
+					local foamColor = FOAM:Lerp(FOAM_DARK, dark)
 					if mound then
 						TweenService:Create(mound, TweenInfo.new(0.3), { Transparency = 1 }):Play()
 					end
-					S:setContents({ Material = Enum.Material.SmoothPlastic, Transparency = 0, Color = foam })
+					S:setContents({ Material = Enum.Material.SmoothPlastic, Transparency = 0, Color = foamColor })
 					local t = 0
 					task.spawn(function()
 						while t < 0.5 and not ctx.aborted do
@@ -193,10 +202,26 @@ function Soda.run(ctx)
 					end)
 					bubbles(S, true)
 					ui:buzz(0.6, 0.12)
+					-- 3D 거품: 기포가 오톨도톨한 돔이 솟아오름
+					foam = Fx.mesh("FoamPuff", S.Ladle, { Name = "FxFoam", Color = foamColor, Material = Enum.Material.SmoothPlastic })
+					foamT = 0
 				end
 				if puffed then
 					local dark = math.clamp((rec.amount - cfg.idealMax) / 0.85, 0, 1)
-					S:setContents({ Color = FOAM:Lerp(CREAM, rec.puff * 0.6):Lerp(FOAM_DARK, dark) })
+					local color = FOAM:Lerp(CREAM, rec.puff * 0.6):Lerp(FOAM_DARK, dark)
+					S:setContents({ Color = color })
+					if foam then
+						-- 0.6초 동안 살짝 넘치게(오버슈트) 솟았다가 자리 잡고, 저을 때마다 숨 쉬듯 부풀었다 가라앉음
+						foamT += dt
+						local a = math.min(foamT / 0.6, 1)
+						local back = 1 + 2.2 * (a - 1) ^ 3 + 1.2 * (a - 1) ^ 2
+						local R = S.bowlRadius - 0.08
+						local h = 2 * R * Fx.HEIGHT.FoamPuff * (0.35 + 0.65 * rec.puff) * back
+						h *= 1 + 0.05 * math.sin(foamT * 17) + 0.03 * math.sin(foamT * 29)
+						foamYaw += speed * dt * 0.15
+						foam.Color = color
+						Fx.placeDome(foam, Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.04, S.Bowl.Position.Z), 2 * R * (0.92 + 0.08 * a), h, foamYaw)
+					end
 				end
 			end
 			ui:setGauge(true, speed, mcfg.slow, cfg.fastMin, "STIR FAST! · 빠르게")

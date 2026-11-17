@@ -5,6 +5,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
+local Fx = require(script.Parent.Parent:WaitForChild("Fx"))
 
 local Sugar = {}
 
@@ -12,9 +13,43 @@ local WHITE = Color3.fromRGB(252, 252, 252)
 local BROWN = Color3.fromRGB(214, 168, 92)
 local MAX_TILT = math.rad(78)
 local GRAINS = 16
+local CRYSTALS = 30 -- 3D 설탕 결정이 있을 때 더미 위에 흩어 놓는 낱알 수
 
-local function addGrain(S, list)
+-- 국자 속 설탕 더미(3D 결정 수백 개 메시). 없으면 예전처럼 모래 원판 + 공 알갱이
+local function updatePile(S, st, fill, color)
+	if not Fx.template("SugarPile") then
+		return false
+	end
+	if not st.pile then
+		st.pile = Fx.mesh("SugarPile", S.Ladle, { Name = "FxPile", Material = Enum.Material.SmoothPlastic, Reflectance = 0.05 })
+	end
+	local R = (S.bowlRadius - 0.12) * (0.55 + 0.45 * fill)
+	st.pileD = 2 * R
+	st.pileH = st.pileD * Fx.HEIGHT.SugarPile * (0.45 + 0.55 * fill)
+	st.pile.Color = color
+	Fx.placeDome(st.pile, Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.01, S.Bowl.Position.Z), st.pileD, st.pileH, 0.7)
+	return true
+end
+
+local function addGrain(S, list, st)
 	local a = math.random() * 2 * math.pi
+	if st and st.pile then
+		-- 3D 결정 낱알: 더미 표면 위에 비스듬히
+		local R = st.pileD / 2 * 0.92
+		local r = math.sqrt(math.random()) * R
+		local top = S:contentsTopY() - 0.01 + st.pileH * (1 - (r / (st.pileD / 2)) ^ 2) ^ 0.6
+		local g = Fx.mesh("SugarCrystal", S.Ladle, {
+			Name = "FxGrain",
+			Size = Vector3.one * (0.05 + math.random() * 0.035),
+			Color = WHITE,
+			Material = Enum.Material.SmoothPlastic,
+			Reflectance = 0.08,
+			CFrame = CFrame.new(S.Bowl.Position.X + math.cos(a) * r, top, S.Bowl.Position.Z + math.sin(a) * r)
+				* CFrame.Angles(math.random() * 3, math.random() * 3, math.random() * 3),
+		})
+		table.insert(list, g)
+		return
+	end
 	local r = math.sqrt(math.random()) * (S.bowlRadius - 0.25)
 	local top = S.Bowl.Position.Y + S.bowlHalf + 0.15
 	local g = S:fxPart(S.Ladle, {
@@ -34,7 +69,16 @@ local function spillGrain(S, at, color)
 	params.FilterDescendantsInstances = { S.WoodSpoon, S.SodaSpoon, S.fx, S.Chopsticks }
 	local origin = at + Vector3.new((math.random() - 0.5) * 0.3, 0, (math.random() - 0.5) * 0.3)
 	local hit = workspace:Raycast(origin, Vector3.new(0, -10, 0), params)
-	if hit then
+	if hit and Fx.template("SugarCrystal") then
+		local s = 0.045 + math.random() * 0.03
+		Fx.mesh("SugarCrystal", S.fx, {
+			Name = "Spill",
+			Size = Vector3.one * s,
+			Color = color,
+			Material = Enum.Material.SmoothPlastic,
+			CFrame = CFrame.new(hit.Position + Vector3.new(0, s / 2, 0)) * CFrame.Angles(0, math.random() * 6, 0),
+		})
+	elseif hit then
 		S:fxPart(S.fx, {
 			Name = "Spill",
 			Shape = Enum.PartType.Ball,
@@ -127,14 +171,19 @@ function Sugar.run(ctx)
 		local total = rec.white + rec.brown
 		if total > 0 then
 			local need = cfg.white + cfg.brown
+			local fill = math.min(total / need, 1)
+			local color = WHITE:Lerp(BROWN, 0.35 * rec.brown / cfg.brown)
+			local hasPile = Fx.template("SugarPile") ~= nil
 			S:setContents({
-				thickness = 0.04 + 0.11 * math.min(total / need, 1),
+				thickness = hasPile and (0.03 + 0.04 * fill) or (0.04 + 0.11 * fill),
 				Transparency = 0,
 				Material = Enum.Material.Sand,
-				Color = WHITE:Lerp(BROWN, 0.35 * rec.brown / cfg.brown),
+				Color = color,
 			})
-			while #st.grains < math.floor(GRAINS * math.min(total / need, 1)) do
-				addGrain(S, st.grains)
+			updatePile(S, st, fill, color)
+			local count = hasPile and CRYSTALS or GRAINS
+			while #st.grains < math.floor(count * fill) do
+				addGrain(S, st.grains, st)
 			end
 		end
 
