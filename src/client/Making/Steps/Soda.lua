@@ -176,26 +176,34 @@ function Soda.run(ctx)
 	local baseThick = S.Contents.Size.X
 
 	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "소다 통에서 국자로 끌어요 · 2~3번")
+	P.sideZone = Heat.sideZone -- 왼쪽 구역 위아래로 끌기 = 국자 높이 (녹이기와 같음)
 
 	while true do
 		local dt = ctx.frame()
 		if not dt then
 			bubbles(S, false)
+			P.sideZone = nil
 			return nil
 		end
 
-		-- 국자는 아직 불 위: 오래 끌면 탐 (너무 늦게 넣음)
+		-- 국자는 아직 불 위: 오래 끌면 탐 (너무 늦게 넣음). 높이는 왼쪽 막대로
+		local danger = Heat.control(st, P, ui)
+		S.Ladle:PivotTo(S:ladleAt(st.h))
+		Heat.flame(S, st.h)
 		Heat.step(st, dt)
+		if danger then
+			ui:hint("불에 너무 가까워요! 왼쪽을 위로 끌어 국자를 올려요")
+		end
 		if st.burn >= 1 then
 			bubbles(S, false)
+			P.sideZone = nil
+			ui:setHeight(false)
 			ctx.markBurnt()
 			ui:hint("너무 늦었어요, 타 버렸어요…")
 			rec.t1 = ctx.now()
 			return rec
 		end
-		if st.burn > 0.2 then
-			Heat.smoke(S, true, st.burn)
-		end
+		Heat.smoke(S, st.burn > 0.03, st.burn)
 
 		if phase == "drop" then
 			-- 나무젓가락 끝에 소다를 묻혀(소다 통에서 끌어) 국자 위에서 놓으면 톡. 넣은 횟수 = 양 (실제 영상: "2~3번")
@@ -302,12 +310,6 @@ function Soda.run(ctx)
 			local zone = Stir.zone(speed, mcfg.slow, cfg.fastMin)
 			local target = 0
 			if stir.active then
-				local y01 = stir:centerHeight01()
-				if y01 then
-					st.h += (Heat.heightFromScreen(y01) - st.h) * (1 - math.exp(-10 * dt))
-				end
-				S.Ladle:PivotTo(S:ladleAt(st.h))
-				Heat.flame(S, st.h)
 				Stir.placeChopsticks(S, P.toPlane(S:contentsTopY()))
 				tStir += dt
 				if zone == 3 then
@@ -325,7 +327,7 @@ function Soda.run(ctx)
 				-- 소다 넣은 뒤엔 불에서 떼고 저어야 함: 불 가까이 저으면 금방 탐 (실제 영상 1:31)
 				if puffed and st.h < 0.8 then
 					st.burn = math.min(1, st.burn + dt * 0.2 * (0.8 - st.h) / 0.65)
-					ui:hint("불에서 떼고 저어요! (위로 올려 저어요)")
+					ui:hint("불에서 떼고 저어요! 왼쪽을 위로 끌어 국자를 올려요")
 				end
 				if not puffed and speed > 3 then
 					puffed = true
@@ -375,6 +377,8 @@ function Soda.run(ctx)
 	end
 
 	bubbles(S, false)
+	P.sideZone = nil
+	ui:setHeight(false)
 	Sfx.stopStir()
 	Sfx.stop("fire") -- 소다 다음부터는 불을 안 씀
 	ui:setGauge(false)

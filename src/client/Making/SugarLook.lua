@@ -173,6 +173,9 @@ function SugarLook:update(dt, p, tip, burn)
 		local k = (1 - flat * 0.85) * (1 - toLumps)
 		Fx.placeDome(st.pile, Vector3.new(c.X, c.Y - 0.01, c.Z), st.pileD * (1 + 0.15 * flat), math.max(st.pileH * k, 0.005), 0.7)
 		st.pile.Transparency = (k < 0.03) and 1 or 0
+		if burn > 0 then -- 불에 너무 가까우면 더미도 갈색 → 검게
+			st.pile.Color = POWDER:Lerp(Heat.meltColor(0.3, burn), math.min(1, burn * 1.5))
+		end
 	end
 	local visible = math.ceil(#st.grains * (1 - flat))
 	for i, g in ipairs(st.grains) do

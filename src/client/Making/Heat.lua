@@ -17,7 +17,26 @@ function Heat.sourceTemp(h)
 	return 235 - 95 * (h - cfg.hMin) / (cfg.hMax - cfg.hMin)
 end
 
--- 원 중심 화면 높이(0 위 ~ 1 아래) → 국자 높이
+-- 국자 높이 조작 (사용자 요청 2026-11-18): 화면 왼쪽 구역을 위로 끌면 국자가 올라가고(불에서 멀어짐),
+-- 아래로 끌면 불 가까이 내려감. 젓는 원은 높이와 상관없음. 왼쪽 막대에 높이 표시, 탈 만큼 가까우면 빨강
+function Heat.sideZone(pos)
+	local v = workspace.CurrentCamera.ViewportSize
+	return pos.X < v.X * 0.24 and pos.Y > v.Y * 0.12
+end
+
+function Heat.control(st, P, ui)
+	local cfg = Config.Melt
+	local d = P.takeSideDelta()
+	if d.Y ~= 0 then
+		local vh = workspace.CurrentCamera.ViewportSize.Y
+		st.h = math.clamp(st.h - d.Y / (vh * 0.45) * (cfg.hMax - cfg.hMin), cfg.hMin, cfg.hMax)
+	end
+	local danger = Heat.sourceTemp(st.h) > cfg.burnTemp or st.temp > cfg.burnTemp - 3
+	ui:setHeight(true, (st.h - cfg.hMin) / (cfg.hMax - cfg.hMin), danger, P.side.down)
+	return danger
+end
+
+-- (예전 방식) 원 중심 화면 높이(0 위 ~ 1 아래) → 국자 높이
 function Heat.heightFromScreen(y01)
 	local cfg = Config.Melt
 	local f = math.clamp((y01 - 0.2) / 0.6, 0, 1)
@@ -28,7 +47,8 @@ function Heat.step(st, dt)
 	local src = Heat.sourceTemp(st.h)
 	st.temp += (src - st.temp) * (1 - math.exp(-0.6 * dt))
 	if st.temp > Config.Melt.burnTemp then
-		st.burn = math.min(1, st.burn + dt * (st.temp - Config.Melt.burnTemp) / 60)
+		-- 불에 너무 가까우면 탐: 온도가 넘을수록 빨리 (가장 낮으면 2초 안팎)
+		st.burn = math.min(1, st.burn + dt * (st.temp - Config.Melt.burnTemp) / 40)
 	end
 end
 

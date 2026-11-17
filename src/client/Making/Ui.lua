@@ -75,6 +75,7 @@ function Ui.new(player, steps)
 	self:_buildCorners()
 	self:_buildGauge()
 	self:_buildMeter()
+	self:_buildHeight()
 	self:_buildResult()
 
 	local function rescale()
@@ -91,6 +92,7 @@ function Ui.new(player, steps)
 		local qy = math.max(16, rowBottom + 10)
 		self.qualityBox.Position = UDim2.fromOffset(20, qy)
 		self.meter.Position = UDim2.fromOffset(20, qy + self.qualityBox.Size.Y.Offset + 10)
+		self.heightBox.Position = UDim2.fromOffset(76, qy + self.qualityBox.Size.Y.Offset + 10)
 		root.Size = UDim2.fromOffset(v.X / s, v.Y / s)
 	end
 	rescale()
@@ -275,6 +277,49 @@ function Ui:_buildMeter()
 	self.meterFill = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), BackgroundColor3 = INK, BackgroundTransparency = 0.25, BorderSizePixel = 0, Parent = track }, { corner(6) })
 	self.meterLabel = label({ Text = "", TextSize = 12, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 16), Parent = m })
 	self.meter = m
+end
+
+-- 국자 높이 막대 (녹이기·소다): 화면 왼쪽 구역을 위아래로 끌면 국자가 오르내림. 아래 = 불 가까이(빨강)
+function Ui:_buildHeight()
+	local h = self.touch and 200 or 240
+	local box = new("Frame", {
+		Name = "Height",
+		Position = UDim2.fromOffset(76, 16),
+		Size = UDim2.fromOffset(64, h),
+		BackgroundColor3 = PAPER,
+		BackgroundTransparency = 0.08,
+		Visible = false,
+		Parent = self.root,
+	}, { corner(12) })
+	label({ Text = "▲ 멀리", TextSize = 12, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(1, 0, 0, 14), Parent = box })
+	label({ Text = "불 가까이", TextSize = 11, TextColor3 = RED, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -6), Size = UDim2.new(1, 0, 0, 14), Parent = box })
+	local track = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 26), Size = UDim2.new(0, 12, 1, -52), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Parent = box }, { corner(6) })
+	new("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 170, 230)),
+			ColorSequenceKeypoint.new(0.45, Color3.fromRGB(80, 190, 90)),
+			ColorSequenceKeypoint.new(0.7, GOLD),
+			ColorSequenceKeypoint.new(1, RED),
+		}),
+		Parent = track,
+	})
+	self.heightKnob = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(30, 30), BackgroundColor3 = Color3.new(1, 1, 1), Parent = track }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+	self.heightStroke = new("UIStroke", { Thickness = 3, Color = INK, Parent = self.heightKnob })
+	self.heightBox = box
+end
+
+-- h01: 1 = 가장 높이(불에서 멀리), 0 = 불 바로 위. danger면 빨갛게, active(끄는 중)면 크게
+function Ui:setHeight(visible, h01, danger, active)
+	self.heightBox.Visible = visible
+	if not visible then
+		return
+	end
+	self.heightKnob.Position = UDim2.fromScale(0.5, 1 - math.clamp(h01, 0, 1))
+	local s = active and 36 or 30
+	self.heightKnob.Size = UDim2.fromOffset(s, s)
+	self.heightKnob.BackgroundColor3 = danger and RED or Color3.new(1, 1, 1)
+	self.heightStroke.Color = danger and RED or INK
 end
 
 function Ui:_buildResult()

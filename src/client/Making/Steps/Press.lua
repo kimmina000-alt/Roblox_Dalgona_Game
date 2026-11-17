@@ -58,8 +58,13 @@ function Press.run(ctx)
 	local ring = makeRing(S)
 	placeRing(S, ring, dal)
 
+	-- 누른 뒤 떼면 누름판이 옆으로 살짝 비켜 올라가 눌린 모양이 보임 (사용자 요청 2026-11-18).
+	-- 다시 누르면 가운데로 돌아와 내려감. aside: 0 = 가운데, 1 = 비킨 자리
+	local discR = math.max(presser.Disc.Size.Y, presser.Disc.Size.Z) / 2
+	local asideOffset = Vector3.new(discR * 1.35, 0.6, -discR * 0.55)
+	local aside = 0
 	local function presserAt(bottomY)
-		return CFrame.new(c.X, bottomY + discHalf, c.Z) * rot
+		return CFrame.new(Vector3.new(c.X, bottomY + discHalf, c.Z) + asideOffset * aside) * rot
 	end
 
 	-- 누름판이 반죽 위로 날아옴
@@ -97,11 +102,14 @@ function Press.run(ctx)
 			hStart = h
 			overHinted = false
 		end
+		-- 누르는 중엔 가운데로 빠르게, 뗀 뒤(한 번이라도 누른 뒤)엔 옆으로 천천히 비킴
+		local asideTarget = (not holding and count > 0) and 1 or 0
+		aside += (asideTarget - aside) * (1 - math.exp(-(holding and 25 or 7) * dt))
 		if holding then
 			local surface = c.Y + h * 0.75
 			if not contact then
-				bottom -= 7 * dt
-				if bottom <= surface then
+				bottom = math.max(bottom - 7 * dt, surface) -- 옆에서 돌아오는 동안엔 반죽 위에서 기다림
+				if bottom <= surface and aside < 0.05 then
 					bottom = surface
 					contact = true
 					ui:buzz(0.3, 0.05)

@@ -1,5 +1,5 @@
 -- 2. 녹이기: 국자 안에서 원을 그리며 드래그 = 나무젓가락이 저음.
--- 원을 그리는 화면 높이 = 국자 높이 (위로 올려 저으면 불에서 멀어져 덜 뜨거움).
+-- 국자 높이 = 화면 왼쪽 구역을 위아래로 끌기 (위 = 불에서 멀리, 아래 = 불 가까이. 너무 가까우면 탐).
 -- STIR SPEED 게이지(SLOW / JUST RIGHT / FAST) + 온도. 너무 뜨거우면 갈색 → 검정 → Burnt(그 자리에서 끝).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -58,12 +58,14 @@ function Melt.run(ctx)
 	local tip = nil
 
 	Stir.placeChopsticks(S, S.Bowl.Position)
-	ui:say("국자 안에서 원을 그리며 저어요", "초록(JUST RIGHT)에 맞춰요 · 위로 올려 저으면 덜 뜨거워요")
+	P.sideZone = Heat.sideZone
+	ui:say("국자 안에서 원을 그리며 저어요", "초록(JUST RIGHT)에 맞춰요 · 왼쪽을 위아래로 끌면 국자 높이")
 
 	while true do
 		local dt = ctx.frame()
 		if not dt then
 			look:destroy()
+			P.sideZone = nil
 			return nil
 		end
 		elapsed += dt
@@ -71,12 +73,8 @@ function Melt.run(ctx)
 		local zone = Stir.zone(speed, cfg.slow, cfg.fast)
 		if stir.active then
 			started = true
-			local y01 = stir:centerHeight01()
-			if y01 then
-				local target = Heat.heightFromScreen(y01)
-				st.h += (target - st.h) * (1 - math.exp(-10 * dt))
-			end
 		end
+		local danger = Heat.control(st, P, ui)
 		S.Ladle:PivotTo(S:ladleAt(st.h))
 		tip = nil
 		if stir.active then
@@ -116,8 +114,10 @@ function Melt.run(ctx)
 			rec.scorch += dt * 0.15
 			ui:hint("멈추지 말고 계속 저어요 (바닥이 눌어붙어요)")
 		end
-		if st.temp > cfg.tempHigh + 1 then
-			ui:hint("불에서 조금 떨어뜨려요 (위로 올려 저어요)")
+		if st.temp > cfg.burnTemp then
+			ui:hint("타고 있어요! 왼쪽을 위로 끌어 국자를 올려요")
+		elseif danger or st.temp > cfg.tempHigh + 1 then
+			ui:hint("불에 너무 가까워요! 왼쪽을 위로 끌어 국자를 올려요")
 		elseif zone == 3 and stir.active then
 			ui:hint("너무 빨라요! 초록에 맞춰요")
 		end
@@ -126,7 +126,7 @@ function Melt.run(ctx)
 		local p = st.melt
 		stage = look:update(dt, p, tip, st.burn)
 		Sfx.stir(stage == "가루" and "stirDry" or (stage == "결정" and "stirCrystal" or "stirLiquid"), speed, stir.active)
-		Heat.smoke(S, st.burn > 0.2, st.burn)
+		Heat.smoke(S, st.burn > 0.03, st.burn)
 
 		ui:setGauge(true, speed, cfg.slow, cfg.fast)
 		ui:setMeter(true, (st.temp - 20) / 220, (cfg.tempLow - 20) / 220, (cfg.tempHigh - 20) / 220, string.format("%d°", math.floor(st.temp + 0.5)))
@@ -134,7 +134,7 @@ function Melt.run(ctx)
 		rec.tempOk = tOkAll > 0 and tOkCount / tOkAll or 1
 		rec.burn = st.burn
 		ctx.live("melt", Scoring.melt(rec))
-		ui:say("국자 안에서 원을 그리며 저어요", string.format("%s · 녹은 정도 %d%% · 위로 올려 저으면 덜 뜨거워요", stage, math.floor(p * 100)))
+		ui:say("국자 안에서 원을 그리며 저어요", string.format("%s · 녹은 정도 %d%% · 왼쪽을 위아래로 끌면 국자 높이", stage, math.floor(p * 100)))
 		if not started and elapsed > 1.5 then
 			ui:say("국자 안에서 원을 그리며 저어요", "손가락으로 국자 위에 동그라미를 그려요")
 		end
@@ -151,6 +151,8 @@ function Melt.run(ctx)
 	ui:setGauge(false)
 	ui:setMeter(false)
 	Sfx.stopStir()
+	P.sideZone = nil
+	ui:setHeight(false)
 	for _, g in ipairs(st.grains) do
 		g.Transparency = 1
 	end

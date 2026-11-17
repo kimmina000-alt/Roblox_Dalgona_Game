@@ -16,17 +16,33 @@ local MAX_TILT = math.rad(78)
 local GRAINS = 16
 local CRYSTALS = 90 -- 3D 설탕 결정이 있을 때 더미 위에 흩어 놓는 낱알 수 (작고 많이 = 고운 설탕)
 
--- 국자 속 설탕 더미(3D 결정 수백 개 메시). 없으면 예전처럼 모래 원판 + 공 알갱이
+-- 국자 속 설탕 더미: 설탕 그릇에 담긴 더미(SugarHeapMesh)와 똑같은 모양·재질 (사용자 요청 2026-11-18).
+-- 그릇 더미가 없으면 3D 결정 더미(SugarPile), 그것도 없으면 예전처럼 모래 원판 + 공 알갱이
+local function cupHeap(S)
+	return S.WhiteBowl:FindFirstChild("SugarHeapMesh")
+end
+
 local function updatePile(S, st, fill, color)
-	if not Fx.template("SugarPile") then
+	local cup = cupHeap(S)
+	if not cup and not Fx.template("SugarPile") then
 		return false
 	end
 	if not st.pile then
-		st.pile = Fx.mesh("SugarPile", S.Ladle, { Name = "FxPile", Material = Enum.Material.SmoothPlastic, Reflectance = 0.05 })
+		if cup then
+			local p = cup:Clone()
+			p.Name = "FxPile"
+			p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+			p.Parent = S.Ladle
+			st.pile = p
+			st.pileAspect = cup.Size.Y / math.max(cup.Size.X, cup.Size.Z)
+		else
+			st.pile = Fx.mesh("SugarPile", S.Ladle, { Name = "FxPile", Material = Enum.Material.SmoothPlastic, Reflectance = 0.05 })
+			st.pileAspect = Fx.HEIGHT.SugarPile
+		end
 	end
 	local R = (S.bowlRadius - 0.12) * (0.55 + 0.45 * fill)
 	st.pileD = 2 * R
-	st.pileH = st.pileD * Fx.HEIGHT.SugarPile * (0.45 + 0.55 * fill)
+	st.pileH = st.pileD * st.pileAspect * (0.6 + 0.4 * fill)
 	st.pile.Color = color
 	Fx.placeDome(st.pile, Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.01, S.Bowl.Position.Z), st.pileD, st.pileH, 0.7)
 	return true
@@ -176,7 +192,7 @@ function Sugar.run(ctx)
 			local need = cfg.white + cfg.brown
 			local fill = math.min(total / need, 1)
 			local color = WHITE:Lerp(BROWN, 0.35 * rec.brown / cfg.brown)
-			local hasPile = Fx.template("SugarPile") ~= nil
+			local hasPile = cupHeap(S) ~= nil or Fx.template("SugarPile") ~= nil
 			S:setContents({
 				thickness = hasPile and (0.03 + 0.04 * fill) or (0.04 + 0.11 * fill),
 				Transparency = 0,
@@ -184,7 +200,7 @@ function Sugar.run(ctx)
 				Color = color,
 			})
 			updatePile(S, st, fill, color)
-			local count = hasPile and CRYSTALS or GRAINS
+			local count = cupHeap(S) and 0 or (hasPile and CRYSTALS or GRAINS) -- 그릇 더미 모양이면 따로 낱알 없음
 			while #st.grains < math.floor(count * fill) do
 				addGrain(S, st.grains, st)
 			end

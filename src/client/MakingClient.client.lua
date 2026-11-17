@@ -323,4 +323,20 @@ if RunService:IsStudio() then
 			Pointer.releases += 1
 		end
 	end)
+	-- 왼쪽 구역 옆 조작 (국자 높이) 주입: Fire(down, x, y)
+	local testSide = Instance.new("BindableEvent")
+	testSide.Name = "TestSide"
+	testSide.Parent = script
+	testSide.Event:Connect(function(down, x, y)
+		local pos = Vector2.new(x, y)
+		if down then
+			if Pointer.side.down then
+				Pointer.side.delta += pos - Pointer.side.pos
+			end
+			Pointer.side.down = true
+			Pointer.side.pos = pos
+		else
+			Pointer.side.down = false
+		end
+	end)
 end
