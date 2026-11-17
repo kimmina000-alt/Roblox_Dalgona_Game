@@ -18,7 +18,7 @@ C.Grades = {
 -- 별 개수 (결과 화면, QUALITY 링 아래)
 C.StarCut = { 50, 70, 85 }
 
-C.Shape = { id = "Star", name = "별", price = 22 }
+C.Shape = { id = "Star", name = "별", price = 22 } -- 기본 도안 (도안 목록은 ShapeCatalog)
 
 C.Steps = {
 	{ key = "sugar", label = "설탕", icon = "🥄", title = "설탕 넣기", desc = "백설탕 2스푼 + 황설탕 1/4" },
@@ -26,7 +26,7 @@ C.Steps = {
 	{ key = "soda", label = "소다", icon = "🧂", title = "소다", desc = "투명해지면 바로 톡!" },
 	{ key = "pour", label = "붓기", icon = "🍯", title = "붓기", desc = "설탕 원 가운데에 부어요" },
 	{ key = "press", label = "누르기", icon = "⚪", title = "누르기", desc = "3번 나눠서 꾹" },
-	{ key = "stamp", label = "모양", icon = "⭐", title = "모양 찍기", desc = "별 틀을 올리고 살살" },
+	{ key = "stamp", label = "모양", icon = "⭐", title = "모양 찍기", desc = "틀을 올리고 살살" },
 }
 
 -- 단계 가중치 (QUALITY 링 실시간 표시용). T = 설탕 20% + 녹이기 80%, P = 붓기 30% + 누르기 70%

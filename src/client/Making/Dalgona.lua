@@ -97,7 +97,7 @@ function Dalgona:engrave(wires, clarity)
 		local cf = w.CFrame
 		self.S:fxPart(self.S.fx, {
 			Name = "Engrave",
-			Size = Vector3.new(0.07, 0.014, w.Size.Z),
+			Size = Vector3.new(w:GetAttribute("Width") or 0.07, 0.014, w.Size.Z),
 			CFrame = cf + Vector3.new(0, y - cf.Position.Y, 0),
 			Color = dark,
 			Transparency = 0.6 * (1 - math.clamp(clarity, 0, 1)),

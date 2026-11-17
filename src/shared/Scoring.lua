@@ -102,7 +102,8 @@ function Scoring.starsFor(q)
 end
 
 -- records: { sugar = {...}, melt = {...}, ... } (없는 단계는 0점)
-function Scoring.compute(records)
+-- shape: ShapeCatalog 항목 (가격). 없으면 Config.Shape
+function Scoring.compute(records, shape)
 	local s = {}
 	for _, step in ipairs(Config.Steps) do
 		local r = records[step.key]
@@ -136,7 +137,7 @@ function Scoring.compute(records)
 		burnt = burnt,
 		cracked = (records.press ~= nil and records.press.cracked == true)
 			or (records.stamp ~= nil and records.stamp.hold > Config.Stamp.crackHold),
-		price = round(Config.Shape.price * g.mult),
+		price = round((shape or Config.Shape).price * g.mult),
 	}
 end
 

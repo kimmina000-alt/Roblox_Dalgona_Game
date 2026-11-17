@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
+local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local WorkstationBuilder = require(script.Parent:WaitForChild("WorkstationBuilder"))
 
 local COAL_PER_MAKE = 0.1 -- 연탄 1장으로 10번 만듦
@@ -143,7 +144,7 @@ local function sanitize(session, raw)
 	return out, prevEnd
 end
 
-function ProductionService.start(player)
+function ProductionService.start(player, shapeId)
 	local now = workspace:GetServerTimeNow()
 	local old = sessions[player]
 	if old and now - old.t0 < 1 then
@@ -154,7 +155,9 @@ function ProductionService.start(player)
 	if ws and (ws:GetAttribute("CoalLeft") or 1) <= 0.001 then
 		WorkstationBuilder.setCoal(ws, 1)
 	end
-	local s = { id = HttpService:GenerateGUID(false), t0 = now }
+	-- 고른 도안 (모르는 id면 기본 도안). 가격은 서버 목록에서만 가져온다
+	local shape = ShapeCatalog.get(type(shapeId) == "string" and shapeId or "") or ShapeCatalog.get(ShapeCatalog.default)
+	local s = { id = HttpService:GenerateGUID(false), t0 = now, shape = shape }
 	sessions[player] = s
 	return s.id, s.t0
 end
@@ -174,14 +177,15 @@ function ProductionService.submit(player, sessionId, raw)
 	if lastEnd > now + 1 or now - s.t0 > Config.Server.maxTotal then
 		return { ok = false, reason = "time" }
 	end
-	local result = Scoring.compute(records)
+	local result = Scoring.compute(records, s.shape)
 	result.ok = true
+	result.shapeId = s.shape.id
 	-- 쓸수록 연탄이 낮아지고 잿빛이 됨
 	local ws = workspace:FindFirstChild("DalgonaWorkstation")
 	if ws then
 		WorkstationBuilder.setCoal(ws, (ws:GetAttribute("CoalLeft") or 1) - COAL_PER_MAKE)
 	end
-	print(string.format("[Production] %s Q=%d %s (T%d M%d P%d S%d)", player.Name, result.Q, result.grade, result.T, result.M, result.P, result.S))
+	print(string.format("[Production] %s %s Q=%d %s price=%d (T%d M%d P%d S%d)", player.Name, s.shape.id, result.Q, result.grade, result.price, result.T, result.M, result.P, result.S))
 	return result
 end
 

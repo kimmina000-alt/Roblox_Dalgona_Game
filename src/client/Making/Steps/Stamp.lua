@@ -1,4 +1,4 @@
--- 6. 모양: ① 별 틀을 끌어서 원판 가운데에 놓기 ② 누름판을 살살 짧게 누르기
+-- 6. 모양: ① 고른 도안 틀을 끌어서 원판 가운데에 놓기 ② 누름판을 살살 짧게 누르기
 -- 점수: 중심 거리 + 각도 + 누른 세기(적당). 세게 누르면 틀이 끝까지 박혀 금이 감.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,7 +15,8 @@ function Stamp.run(ctx)
 	local cfg = Config.Stamp
 	local rec = { t0 = ctx.now(), dist = 10, angle = 0, hold = 0 }
 	local dal = st.dalgona
-	local cutter = S.StarCutter
+	local cutter = S.Cutter
+	local shapeName = st.shape and st.shape.name or "별"
 	local presser = S.Presser
 	local pRot = S.rest.Presser - S.rest.Presser.Position
 	local discHalf = presser.Disc.Size.X / 2
@@ -37,7 +38,7 @@ function Stamp.run(ctx)
 	local holding, contact, holdT = false, false, 0
 	local pBottom = 0
 
-	ui:say("별 틀을 끌어 원판 가운데에 놓아요", "가운데에, 반듯하게")
+	ui:say(shapeName .. " 틀을 끌어 원판 가운데에 놓아요", "가운데에, 반듯하게")
 
 	while true do
 		local dt = ctx.frame()
@@ -83,7 +84,7 @@ function Stamp.run(ctx)
 				end
 			else
 				yaw += (0 - yaw) * (1 - math.exp(-10 * dt))
-				S:springTo(cutter, S.rest.StarCutter, dt, 22)
+				S:springTo(cutter, S.rest.Cutter, dt, 22)
 			end
 		elseif phase == "press" then
 			local contactY = placed.Position.Y + 0.42 + 0.05
@@ -151,12 +152,12 @@ function Stamp.run(ctx)
 		if t < 0.3 then
 			cutter:PivotTo(lift + Vector3.new(0, 0.8 * t / 0.3, 0))
 		else
-			S:springTo(cutter, S.rest.StarCutter, dt, 16)
+			S:springTo(cutter, S.rest.Cutter, dt, 16)
 		end
 	end
 	presser:PivotTo(S.rest.Presser)
 	S:presserSeeThrough(false)
-	cutter:PivotTo(S.rest.StarCutter)
+	cutter:PivotTo(S.rest.Cutter)
 	rec.t1 = ctx.now()
 	return rec
 end

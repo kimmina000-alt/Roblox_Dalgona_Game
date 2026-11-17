@@ -6,7 +6,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Station = {}
 Station.__index = Station
 
-local MOVABLE = { "Ladle", "WoodSpoon", "SodaSpoon", "Presser", "StarCutter", "Chopsticks" }
+local MOVABLE = { "Ladle", "WoodSpoon", "SodaSpoon", "Presser", "Cutter", "Chopsticks" }
+local CutterRig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CutterRig"))
 
 function Station.new()
 	local m = workspace:WaitForChild("DalgonaWorkstation")
@@ -233,6 +234,12 @@ function Station:pourEmitter(model, color)
 	end
 	pe.Color = ColorSequence.new(color)
 	return pe
+end
+
+-- 고른 도안으로 모양 틀 바꿔 끼우기 (이 플레이어 화면에서만). 틀은 제자리에서 바꾼다.
+function Station:setCutter(id)
+	self.Cutter:PivotTo(self.rest.Cutter)
+	return CutterRig.apply(self.Cutter, id)
 end
 
 return Station

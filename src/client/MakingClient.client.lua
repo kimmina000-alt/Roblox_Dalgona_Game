@@ -1,5 +1,5 @@
 -- 달고나 제작 화면 진입점 (Phase 1 프로토타입)
--- 작업대 앞에서 E(폰은 버튼) → 6단계: 설탕 → 녹이기 → 소다 → 붓기 → 누르기 → 모양 → 결과
+-- 작업대 앞에서 E(폰은 버튼) → 도안 고르기 → 나무젓가락 → 6단계: 설탕 → 녹이기 → 소다 → 붓기 → 누르기 → 모양 → 결과
 -- 단계마다 모듈 하나 (Making/Steps). 점수는 서버가 입력 기록으로 다시 계산한다.
 
 local Players = game:GetService("Players")
@@ -10,6 +10,7 @@ local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
+local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 local Making = script.Parent:WaitForChild("Making")
@@ -18,6 +19,7 @@ local Station = require(Making:WaitForChild("Station"))
 local CameraRig = require(Making:WaitForChild("CameraRig"))
 local Ui = require(Making:WaitForChild("Ui"))
 local ChopstickPicker = require(Making:WaitForChild("ChopstickPicker"))
+local CutterPicker = require(Making:WaitForChild("CutterPicker"))
 local StepsFolder = Making:WaitForChild("Steps")
 
 local STEP_MODULES = {}
@@ -32,6 +34,8 @@ CameraRig.init(station.model:GetPivot())
 
 local running = false
 local current = nil -- 지금 진행 중인 ctx
+local shape = ShapeCatalog.get(ShapeCatalog.default) -- 고른 도안 (다시 하기는 같은 도안)
+local pickShape = true -- 다음 판 시작 때 도안 고르기 화면을 띄울지
 
 -- 제작 중에는 캐릭터가 움직이지 않게 (PlayerModule이 없는 환경도 있어서 속도도 0으로)
 local savedSpeed = nil
@@ -140,9 +144,21 @@ local function runSession()
 	Pointer.reset()
 	Pointer.enabled = true
 
-	-- 0. 나무젓가락 고르기 (포장지 찢기 → 꺼내기 → 쪼개기 → 한 짝 고르기)
+	-- 0. 도안 고르기 (처음 시작, 또는 결과 화면의 "다른 도안")
 	ui:setStep(1)
 	CameraRig.go("sugar")
+	if pickShape then
+		local picked = CutterPicker.run(ctx, shape.id)
+		if ctx.aborted or not picked then
+			return
+		end
+		shape = picked
+		pickShape = false
+	end
+	station:setCutter(shape.id)
+	ctx.state.shape = shape
+
+	-- 0. 나무젓가락 고르기 (포장지 찢기 → 꺼내기 → 쪼개기 → 한 짝 고르기)
 	local pick = ChopstickPicker.run(ctx)
 	if ctx.aborted or not pick then
 		return
@@ -151,12 +167,12 @@ local function runSession()
 	ctx.state.chopstick = pick
 
 	local okStart, sessionId = pcall(function()
-		return Remotes.StartProduction:InvokeServer()
+		return Remotes.StartProduction:InvokeServer(shape.id)
 	end)
 	if not okStart or not sessionId then
 		task.wait(1)
 		okStart, sessionId = pcall(function()
-			return Remotes.StartProduction:InvokeServer()
+			return Remotes.StartProduction:InvokeServer(shape.id)
 		end)
 	end
 
@@ -200,7 +216,7 @@ local function runSession()
 	end
 
 	-- 결과: 클라이언트 미리 보기 → 서버 판정으로 덮어씀
-	local preview = Scoring.compute(ctx.records)
+	local preview = Scoring.compute(ctx.records, shape)
 	local result = preview
 	if okStart and sessionId then
 		local ok, server = pcall(function()
@@ -229,13 +245,15 @@ local function runSession()
 	end
 	ui:say(string.format("%s · 완성도 %d%%", result.grade, result.Q), "")
 	Pointer.enabled = false
-	ui:showResult(result, Config.Shape, {
+	ui:showResult(result, shape, {
 		retry = function()
 			ui:hideResult()
 			task.spawn(startMaking, true)
 		end,
 		other = function()
-			ui:toast("지금은 별 도안만 있어요 (도안 해금은 Phase 4)")
+			ui:hideResult()
+			pickShape = true
+			task.spawn(startMaking, true)
 		end,
 		leave = function()
 			finish()
@@ -243,7 +261,7 @@ local function runSession()
 	})
 	current = nil
 	local s = result.steps or {}
-	print(string.format("[Making] result Q=%d %s stars=%d (verified=%s) sugar=%s melt=%s soda=%s pour=%s press=%s stamp=%s", result.Q, result.grade, result.stars, tostring(result.verified), tostring(s.sugar), tostring(s.melt), tostring(s.soda), tostring(s.pour), tostring(s.press), tostring(s.stamp)))
+	print(string.format("[Making] result %s Q=%d %s price=%s stars=%d (verified=%s) sugar=%s melt=%s soda=%s pour=%s press=%s stamp=%s", shape.id, result.Q, result.grade, tostring(result.price), result.stars, tostring(result.verified), tostring(s.sugar), tostring(s.melt), tostring(s.soda), tostring(s.pour), tostring(s.press), tostring(s.stamp)))
 end
 
 function startMaking(restart)
@@ -253,6 +271,9 @@ function startMaking(restart)
 	if current then
 		current.aborted = true
 		current = nil
+	end
+	if not restart then
+		pickShape = true -- 작업대에 새로 앉으면 도안부터 고름
 	end
 	running = true
 	station.Prompt.Enabled = false

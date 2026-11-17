@@ -1,7 +1,10 @@
 -- 작업대 1개를 Part로 만든다 (Phase 1 프로토타입, Phase 6에서 Blender 모델로 교체)
 -- 연탄 화로 + 철망, 구리 국자, 나무젓가락, 나무 숟가락, 설탕 그릇 2개(흰 / 노란),
--- 소다 통 + 분홍 숟가락, 검은 철판 + 설탕 원, 둥근 누름판(세운 손잡이), 별 철사 틀
+-- 소다 통 + 분홍 숟가락, 검은 철판 + 설탕 원, 둥근 누름판(세운 손잡이), 모양 틀(도안은 CutterRig)
 -- 클라이언트 스크립트는 아래 이름으로 부품을 찾는다. 이름을 바꾸면 Making/Station.lua도 같이 바꾼다.
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CutterRig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CutterRig"))
 
 local Builder = {}
 
@@ -456,66 +459,23 @@ function Builder.attachPresserMesh(m)
 	return true
 end
 
-local function buildStarCutter(ws)
-	local m = model(ws, "StarCutter")
+-- 모양 틀: 투명한 Root만 만들고, 도안(메시 + 각인용 Wire)은 공용 CutterRig가 끼운다.
+-- 손님이 고른 도안은 클라이언트가 같은 CutterRig로 바꿔 끼운다. 처음 놓여 있는 건 별.
+function Builder.buildCutter(ws)
+	local old = ws:FindFirstChild("StarCutter")
+	if old then
+		old:Destroy() -- 예전 별 전용 틀 (Studio에 저장된 작업대)
+	end
+	local m = ws:FindFirstChild("Cutter")
+	if m then
+		m:Destroy()
+	end
+	m = model(ws, "Cutter")
 	local center = at(7.1, TABLE_TOP + 0.14, 0.6) -- 손잡이가 플레이어 쪽(+Z)으로 뻗어도 테이블 안에 들어오게
 	local root = part(m, "Root", Vector3.new(0.1, 0.1, 0.1), CFrame.new(center), STEEL, Enum.Material.Metal, { Transparency = 1 })
-	local outer, inner = 0.8, 0.36
-	local pts = {}
-	for k = 0, 9 do
-		local a = math.rad(-90 + k * 36)
-		local r = (k % 2 == 0) and outer or inner
-		pts[k + 1] = center + Vector3.new(math.cos(a) * r, 0, math.sin(a) * r)
-	end
-	for k = 1, 10 do
-		local a, b = pts[k], pts[k % 10 + 1]
-		local len = (b - a).Magnitude
-		local seg = part(m, "Wire", Vector3.new(0.06, 0.28, len + 0.04), CFrame.lookAt((a + b) / 2, b), STEEL, Enum.Material.Metal)
-		seg:SetAttribute("Outline", true)
-	end
-	part(m, "Bar", Vector3.new(0.07, 0.07, 1.25), CFrame.new(center + Vector3.new(0, 0.42, 0)), STEEL, Enum.Material.Metal)
-	part(m, "Post", Vector3.new(0.07, 0.3, 0.07), CFrame.new(center + Vector3.new(0, 0.27, 0)), STEEL, Enum.Material.Metal)
 	m.PrimaryPart = root
-	Builder.attachCutterMesh(m)
-end
-
--- Claude가 Blender 스크립트로 만든 별 틀 메시(tools/blender/star_cutter.py → ServerStorage.Assets.StarCutterMesh).
--- 크기는 게임 외곽선과 같다(1:1). 투명한 Wire 부품은 그대로 두고 각인 자국·판정에 쓴다.
--- glb에서 별 중심은 메시 가운데에서 손잡이 반대쪽으로 길이의 21.6%(0.6 stud) 떨어져 있다.
--- Roblox로 가져오면 별 꼭짓점이 메시 +Z, 손잡이가 -Z → 180° 돌려서 손잡이가 플레이어 쪽(+Z)을 향하게.
-local CUTTER_CENTER_Z = 0.6 / 2.7807
-function Builder.attachCutterMesh(m)
-	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
-	local tpl = assets and assets:FindFirstChild("StarCutterMesh")
-	if not tpl then
-		return false
-	end
-	local old = m:FindFirstChild("Mesh")
-	if old then
-		old:Destroy()
-	end
-	for _, p in ipairs(m:GetChildren()) do
-		if p:IsA("BasePart") and p.Name ~= "Root" then
-			p.Transparency = 1 -- Wire는 각인용으로 남김, Bar/Post는 메시 손잡이로 대신
-		end
-	end
-	local root = m:FindFirstChild("Root")
-	local mesh = tpl:Clone()
-	mesh.Name = "Mesh"
-	mesh.Anchored = true
-	mesh.CanCollide = false
-	mesh.CanQuery = false
-	mesh.Material = Enum.Material.Metal
-	mesh.Color = Color3.fromRGB(205, 207, 212)
-	local sa = Instance.new("SurfaceAppearance")
-	sa.Name = "SteelShine"
-	sa.Color = Color3.fromRGB(214, 216, 222)
-	sa.MetalnessMap = METALNESS_MAP
-	sa.RoughnessMap = ROUGHNESS_MAP
-	sa.Parent = mesh
-	mesh.CFrame = root.CFrame * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, -mesh.Size.Z * CUTTER_CENTER_Z)
-	mesh.Parent = m
-	return true
+	CutterRig.apply(m, "Star")
+	return m
 end
 
 function Builder.build(parent)
@@ -531,7 +491,7 @@ function Builder.build(parent)
 	buildSoda(ws)
 	buildPlate(ws)
 	buildPresser(ws)
-	buildStarCutter(ws)
+	Builder.buildCutter(ws)
 	Builder.setCoal(ws, 1)
 	ws.WorldPivot = CFrame.new(ORIGIN)
 	ws.Parent = parent or workspace

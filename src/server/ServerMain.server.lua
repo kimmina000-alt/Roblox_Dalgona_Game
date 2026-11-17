@@ -21,6 +21,9 @@ end
 
 -- 맵은 스크립트로 만든다. Studio에 이미 저장된 작업대가 있으면 그대로 쓴다.
 local ws = workspace:FindFirstChild("DalgonaWorkstation") or WorkstationBuilder.build(workspace)
+if not ws:FindFirstChild("Cutter") then
+	WorkstationBuilder.buildCutter(ws) -- 예전 별 전용 틀 → 도안을 바꿔 끼우는 틀
+end
 if ws:GetAttribute("CoalLeft") == nil then
 	WorkstationBuilder.setCoal(ws, 1)
 end
