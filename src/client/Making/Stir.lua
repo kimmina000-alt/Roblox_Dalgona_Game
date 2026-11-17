@@ -74,7 +74,11 @@ function Stir.placeChopsticks(station, world)
 	if flat.Magnitude > r then
 		flat = flat.Unit * r
 	end
-	local tip = Vector3.new(bowl.X, top - 0.04, bowl.Z) + flat
+	return Stir.placeChopsticksAt(station, Vector3.new(bowl.X, top - 0.04, bowl.Z) + flat)
+end
+
+-- 나무젓가락 끝을 아무 world 위치에 둔다 (국자 밖도: 소다 찍기)
+function Stir.placeChopsticksAt(station, tip)
 	local dir = Vector3.new(0.35, 1, 0.55).Unit
 	local cf = CFrame.lookAt(tip + dir * 1.3, tip)
 	local m = station.Chopsticks

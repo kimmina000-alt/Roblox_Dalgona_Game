@@ -10,7 +10,7 @@ local Scoring = require(Shared:WaitForChild("Scoring"))
 local Making = script.Parent.Parent
 local Stir = require(Making:WaitForChild("Stir"))
 local Heat = require(Making:WaitForChild("Heat"))
-local Fx = require(Making:WaitForChild("Fx"))
+local SugarLook = require(Making:WaitForChild("SugarLook"))
 
 local Melt = {}
 
@@ -52,6 +52,9 @@ function Melt.run(ctx)
 	local hotSeen = false
 	local started = false
 	local elapsed = 0
+	local look = SugarLook.new(S, st)
+	local stage = "가루"
+	local tip = nil
 
 	Stir.placeChopsticks(S, S.Bowl.Position)
 	ui:say("국자 안에서 원을 그리며 저어요", "초록(JUST RIGHT)에 맞춰요 · 위로 올려 저으면 덜 뜨거워요")
@@ -59,6 +62,7 @@ function Melt.run(ctx)
 	while true do
 		local dt = ctx.frame()
 		if not dt then
+			look:destroy()
 			return nil
 		end
 		elapsed += dt
@@ -73,8 +77,9 @@ function Melt.run(ctx)
 			end
 		end
 		S.Ladle:PivotTo(S:ladleAt(st.h))
+		tip = nil
 		if stir.active then
-			Stir.placeChopsticks(S, P.toPlane(S:contentsTopY()))
+			tip = Stir.placeChopsticks(S, P.toPlane(S:contentsTopY()))
 		elseif started then
 			Stir.placeChopsticks(S, S.Chopsticks.Stick1.Position + S.Chopsticks.Stick1.CFrame.LookVector * 1.3)
 		end
@@ -116,29 +121,9 @@ function Melt.run(ctx)
 			ui:hint("너무 빨라요! 초록에 맞춰요")
 		end
 
-		-- 보이는 변화: 흰 알갱이 → 가장자리부터 투명한 호박색, 알갱이가 줄어듦. 타면 갈색 → 검정 + 연기
+		-- 보이는 변화 4단계: 가루 → 결정 → 반쯤 녹음 → 맑은 호박색 액체 (SugarLook). 타면 갈색 → 검정 + 연기
 		local p = st.melt
-		S:setContents({
-			Color = Heat.meltColor(p, st.burn),
-			Material = p > 0.35 and Enum.Material.Glass or Enum.Material.Sand,
-			Transparency = p > 0.35 and 0.12 or 0,
-		})
-		-- 3D 설탕 더미: 녹을수록 낮아지고 좁아지다가 사라짐
-		if st.pile and st.pileD then
-			local k = (1 - p) ^ 0.7
-			Fx.placeDome(st.pile, Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.01, S.Bowl.Position.Z), st.pileD * (0.55 + 0.45 * k), st.pileH * k, 0.7)
-			st.pile.Transparency = p > 0.92 and 1 or 0
-			if st.burn > 0 then
-				st.pile.Color = Heat.meltColor(0.4, st.burn)
-			end
-		end
-		local visible = math.ceil(#st.grains * (1 - p) ^ 0.8)
-		for i, g in ipairs(st.grains) do
-			g.Transparency = i <= visible and 0 or 1
-			if st.burn > 0 then
-				g.Color = Heat.meltColor(0.4, st.burn)
-			end
-		end
+		stage = look:update(dt, p, tip, st.burn)
 		Heat.smoke(S, st.burn > 0.2, st.burn)
 
 		ui:setGauge(true, speed, cfg.slow, cfg.fast)
@@ -147,7 +132,7 @@ function Melt.run(ctx)
 		rec.tempOk = tOkAll > 0 and tOkCount / tOkAll or 1
 		rec.burn = st.burn
 		ctx.live("melt", Scoring.melt(rec))
-		ui:say("국자 안에서 원을 그리며 저어요", string.format("녹은 정도 %d%% · 위로 올려 저으면 덜 뜨거워요", math.floor(p * 100)))
+		ui:say("국자 안에서 원을 그리며 저어요", string.format("%s · 녹은 정도 %d%% · 위로 올려 저으면 덜 뜨거워요", stage, math.floor(p * 100)))
 		if not started and elapsed > 1.5 then
 			ui:say("국자 안에서 원을 그리며 저어요", "손가락으로 국자 위에 동그라미를 그려요")
 		end
@@ -169,6 +154,7 @@ function Melt.run(ctx)
 	if st.pile then
 		st.pile.Transparency = 1
 	end
+	look:finish(st.burn, tip)
 	rec.burn = st.burn
 	if rec.burnt then
 		Heat.smoke(S, true, 1)

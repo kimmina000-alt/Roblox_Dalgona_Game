@@ -1,5 +1,5 @@
--- 3. 소다: ① 분홍 숟가락을 국자로 끌어 한 번 털기 (양 = 기울인 시간)
---          ② 빠르게 젓기 (이번엔 FAST 쪽이 정답) → 실제 영상처럼 3.5초 S곡선으로 부풀어 오름
+-- 3. 소다: ① 나무젓가락 끝에 소다를 묻혀(소다 통 → 국자로 끌기) 톡. 넣은 횟수 = 양 (2~3번이 알맞음, 실제 영상 YqKNy2l802c 1:17)
+--          ② 불에서 떼고 빠르게 젓기 (이번엔 FAST 쪽이 정답, 불 가까이 저으면 금방 탐) → 실제 영상처럼 3.5초 S곡선으로 부풀어 오름
 --             (docs/MOTION_REFERENCE_ANALYSIS.md 7장: 느린 시작 1.1초 → 빠른 상승 1.5초 → 멈춤 0.9초 → 유지)
 -- 점수: 넣은 타이밍(투명해진 직후) + 양 + 부푼 정도
 
@@ -16,8 +16,9 @@ local Fx = require(Making:WaitForChild("Fx"))
 
 local Soda = {}
 
-local MAX_TILT = math.rad(75)
 local HEAP_MAX = 1.2
+local DIP_AMOUNT = 0.21 -- 한 번 찍을 때 양: 1번 0.21(적음) · 2~3번 0.42~0.63(알맞음) · 4번 0.84(많음)
+local MAX_DIPS = 5
 local FOAM = Color3.fromRGB(214, 160, 92)
 local FOAM_DARK = Color3.fromRGB(140, 86, 40)
 local CREAM = Color3.fromRGB(226, 182, 118)
@@ -285,16 +286,15 @@ function Soda.run(ctx)
 	local rec = { t0 = ctx.now(), delay = 0, amount = 0, fastFrac = 0, puff = 0, samples = {} }
 	local spoon = S.SodaSpoon
 	local rest = S.rest.SodaSpoon
-	local restRot = rest - rest.Position
-	local emitter = S:pourEmitter(spoon, Color3.new(1, 1, 1))
 	local stir = Stir.new()
 
 	local phase = "drop"
-	local grabbing = false
 	local seenPress = P.presses
-	local tilt = 0
+	local carrying = false
+	local dips = 0
+	local spots = {}
+	local tipPowder = nil
 	local firstDrop = nil
-	local mound = nil
 	local puffed = false
 	local puff = nil
 	local drive, idle = 0, 0
@@ -302,12 +302,11 @@ function Soda.run(ctx)
 	local sampleAcc = 0
 	local baseThick = S.Contents.Size.X
 
-	ui:say("분홍 숟가락을 국자 가운데로 끌어 톡!", "소다는 적당히 (기울인 시간 = 양)")
+	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "소다 통에서 국자로 끌어요 · 2~3번")
 
 	while true do
 		local dt = ctx.frame()
 		if not dt then
-			emitter.Enabled = false
 			bubbles(S, false)
 			return nil
 		end
@@ -315,7 +314,6 @@ function Soda.run(ctx)
 		-- 국자는 아직 불 위: 오래 끌면 탐 (너무 늦게 넣음)
 		Heat.step(st, dt)
 		if st.burn >= 1 then
-			emitter.Enabled = false
 			bubbles(S, false)
 			ctx.markBurnt()
 			ui:hint("너무 늦었어요, 타 버렸어요…")
@@ -327,70 +325,71 @@ function Soda.run(ctx)
 		end
 
 		if phase == "drop" then
-			if P.down and not grabbing and P.presses ~= seenPress then
+			-- 나무젓가락 끝에 소다를 묻혀(소다 통에서 끌어) 국자 위에서 놓으면 톡. 넣은 횟수 = 양 (실제 영상: "2~3번")
+			local tubPos = S.SodaTub.Soda.Position
+			if P.down and P.presses ~= seenPress then
 				seenPress = P.presses
-				grabbing = rec.amount < HEAP_MAX
-			end
-			if grabbing and not P.down then
-				grabbing = false
-				if rec.amount > 0.05 then
-					phase = "stir"
-					ui:say("빠르게 저어요!", "FAST 쪽이 정답 · 크림처럼 될 때까지")
+				local w = P.toPlane(tubPos.Y)
+				local onTub = Vector3.new(w.X - tubPos.X, 0, w.Z - tubPos.Z).Magnitude < 1.1
+				if onTub and dips < MAX_DIPS then
+					carrying = true
+					ui:buzz(0.2, 0.04)
+				elseif dips > 0 then
+					phase = "stir" -- 국자를 누르면 젓기 시작
+					ui:say("빠르게 저어요!", "FAST 쪽이 정답 · 불에서 떼고 저어요")
 				end
 			end
-			local pouring = false
-			if grabbing then
-				local center = S.Bowl.Position
-				local w = P.toPlane(S:contentsTopY() + 0.8)
-				local flat = Vector3.new(center.X - w.X, 0, center.Z - w.Z)
-				local d = flat.Magnitude
-				local target = MAX_TILT * math.clamp((1.8 - d) / 1.0, 0, 1)
-				tilt += (target - tilt) * (1 - math.exp(-18 * dt))
-				local toward = d > 0.05 and flat.Unit or Vector3.new(-1, 0, 0)
-				spoon:PivotTo(CFrame.new(w) * CFrame.fromAxisAngle(Vector3.yAxis:Cross(toward), tilt) * restRot)
-				if math.deg(tilt) > 40 and rec.amount < HEAP_MAX then
-					pouring = true
-					if not firstDrop then
-						firstDrop = ctx.now()
-						rec.delay = firstDrop - (st.meltDoneAt or firstDrop)
+			if carrying then
+				local tip = P.toPlane(S:contentsTopY() + 0.35)
+				Stir.placeChopsticksAt(S, tip)
+				if not tipPowder then
+					tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.09, 0.07, 0.09) })
+				end
+				tipPowder.Transparency = 0
+				tipPowder.CFrame = CFrame.new(tip + Vector3.new(0, 0.03, 0))
+				if not P.down then
+					carrying = false
+					tipPowder.Transparency = 1
+					local bowl = S.Bowl.Position
+					local flat = Vector3.new(tip.X - bowl.X, 0, tip.Z - bowl.Z)
+					if flat.Magnitude < S.bowlRadius then
+						dips += 1
+						rec.amount = math.min(HEAP_MAX, dips * DIP_AMOUNT)
+						if not firstDrop then
+							firstDrop = ctx.now()
+							rec.delay = firstDrop - (st.meltDoneAt or firstDrop)
+						end
+						-- 액체 위에 떠 있는 흰 소다 점
+						if flat.Magnitude > S.bowlRadius - 0.3 then
+							flat = flat.Unit * (S.bowlRadius - 0.3)
+						end
+						local spot = Fx.mesh("SodaMound", S.Ladle, { Name = "FxSoda", Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand })
+							or S:fxPart(S.Ladle, { Name = "FxSoda", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.2, 0.06, 0.2) })
+						local base = Vector3.new(bowl.X + flat.X, S:contentsTopY() - 0.01, bowl.Z + flat.Z)
+						if spot:IsA("MeshPart") then
+							Fx.placeDome(spot, base, 0.24, 0.24 * Fx.HEIGHT.SodaMound * 0.6, math.random() * 6)
+						else
+							spot.CFrame = CFrame.new(base)
+						end
+						table.insert(spots, spot)
+						ui:buzz(0.35, 0.06)
+						if dips >= 4 then
+							ui:hint("소다가 너무 많아요 (쓴맛)")
+						end
+					else
+						ui:hint("국자 위에서 놓아요")
 					end
-					local amt = 0.6 * dt * (tilt / MAX_TILT)
-					rec.amount = math.min(HEAP_MAX, rec.amount + amt)
-					if d > S.bowlRadius then
-						ui:hint("국자 가운데에 넣어요")
-					end
 				end
-			else
-				tilt = 0
-				S:springTo(spoon, rest, dt, 22)
+			elseif dips > 0 then
+				Stir.placeChopsticks(S, S.Bowl.Position + Vector3.new(0.3, 0, 0.2))
 			end
-			emitter.Enabled = pouring
-			S:setHeap("SodaSpoon", 1 - rec.amount / HEAP_MAX)
-			if rec.amount > 0 then
-				if not mound then
-					-- 3D 소다 가루 더미 (고운 가루 + 작은 덩어리). 없으면 공 모양
-					mound = Fx.mesh("SodaMound", S.Ladle, { Name = "FxSoda", Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand })
-						or S:fxPart(S.Ladle, { Name = "FxSoda", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.one * 0.1 })
-				end
-				local size = 0.15 + 0.4 * math.min(rec.amount, HEAP_MAX)
-				if mound:IsA("MeshPart") then
-					local d = size * 1.3
-					Fx.placeDome(mound, Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.02, S.Bowl.Position.Z), d, d * Fx.HEIGHT.SodaMound * 0.8, 0)
-				else
-					mound.Size = Vector3.new(size, size * 0.55, size)
-					mound.CFrame = CFrame.new(S.Bowl.Position.X, S:contentsTopY() + size * 0.15, S.Bowl.Position.Z)
-				end
-				ui:say("분홍 숟가락을 국자 가운데로 끌어 톡!", string.format("소다 양 %d%%", math.floor(100 * rec.amount / cfg.idealMax * 0.75)))
-				if rec.amount > 0.9 then
-					ui:hint("소다가 너무 많아요 (쓴맛)")
-				end
-			end
+			ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", dips == 0 and "소다 통에서 국자로 끌어요 · 2~3번" or string.format("%d번 넣었어요 · 2~3번이 알맞아요 · 다 넣었으면 국자를 눌러 저어요", dips))
 			ui:setMeter(true, rec.amount / HEAP_MAX, cfg.idealMin / HEAP_MAX, cfg.idealMax / HEAP_MAX, "소다")
-			if rec.amount >= HEAP_MAX - 1e-3 and not grabbing then
-				phase = "stir"
-			end
 		else
-			emitter.Enabled = false
+			if tipPowder then
+				tipPowder:Destroy()
+				tipPowder = nil
+			end
 			S:springTo(spoon, rest, dt, 22)
 			local speed = stir:update(dt)
 			local zone = Stir.zone(speed, mcfg.slow, cfg.fastMin)
@@ -416,10 +415,15 @@ function Soda.run(ctx)
 				if zone < 3 and not (puff and puff.done) then
 					ui:hint("더 빠르게! 쉬지 말고 저어요")
 				end
+				-- 소다 넣은 뒤엔 불에서 떼고 저어야 함: 불 가까이 저으면 금방 탐 (실제 영상 1:31)
+				if puffed and st.h < 0.8 then
+					st.burn = math.min(1, st.burn + dt * 0.2 * (0.8 - st.h) / 0.65)
+					ui:hint("불에서 떼고 저어요! (위로 올려 저어요)")
+				end
 				if not puffed and speed > 3 then
 					puffed = true
-					if mound then
-						TweenService:Create(mound, TweenInfo.new(0.3), { Transparency = 1 }):Play()
+					for _, spot in ipairs(spots) do
+						TweenService:Create(spot, TweenInfo.new(0.3), { Transparency = 1 }):Play()
 					end
 					ui:buzz(0.6, 0.12)
 					puff = newPuff(S, rec.amount, baseThick)
