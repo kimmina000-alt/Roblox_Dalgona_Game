@@ -40,6 +40,11 @@
 
 항공샷 폰 스크린샷: `docs/screenshots/2026-11-17/phone-aerial/` (5 누르기는 일부러 오래 눌러 금이 간 화면)
 
+### 국자 교체 (사용자 Blender 모델)
+- `레퍼런스/dalgona_gukja.glb`(사용자가 Studio로 가져옴)를 `ServerStorage.Assets.LadleMesh`로 옮기고, 작업대 국자를 이 메시로 바꿈. 색은 glb 재질 색(구리).
+- 판정용 그릇은 그대로 투명 원기둥(`Ladle.Bowl`, 지름 1.7)이고 메시를 거기에 맞춰 1.17배로 붙임. 그래서 단계 코드는 바꾸지 않음.
+- 확인: 녹이기(내용물이 그릇 안에 맞게 보임), 붓기(기울이기·덩어리 떨어짐) 포함 한 판 끝까지, 오류 0. 스크린샷 `9_ladle_mesh*.jpg`.
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음.

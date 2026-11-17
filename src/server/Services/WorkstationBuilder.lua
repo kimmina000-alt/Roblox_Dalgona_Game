@@ -137,6 +137,49 @@ local function buildLadle(ws)
 	part(m, "Handle", Vector3.new(3.4, 0.12, 0.22), base * CFrame.new(0.85 + 1.6, 0.42, 0) * CFrame.Angles(0, 0, math.rad(14)), COPPER, Enum.Material.Metal)
 	part(m, "Grip", Vector3.new(1.1, 0.2, 0.3), base * CFrame.new(0.85 + 3.0, 0.78, 0) * CFrame.Angles(0, 0, math.rad(14)), Color3.fromRGB(80, 50, 30), Enum.Material.Wood)
 	m.PrimaryPart = bowl
+	Builder.attachLadleMesh(m)
+end
+
+-- 사용자가 만든 국자 메시(레퍼런스/dalgona_gukja.glb → ServerStorage.Assets.LadleMesh)가 있으면 그걸 쓴다.
+-- 게임 코드는 그대로 투명한 원기둥 "Bowl"(피벗, 크기 = 판정용 그릇)을 기준으로 움직이고, 메시는 Bowl에 맞춰 붙는다.
+-- glb 분석: 그릇 지름 = 메시 X 크기, 그릇 중심은 경계 상자 중심에서 길이의 30.5%만큼 끝쪽.
+-- Roblox로 가져오면 앞뒤가 뒤집혀서 그릇이 -Z 끝, 손잡이가 +Z 쪽이 된다.
+local MESH_BOWL_Z = 0.305
+function Builder.attachLadleMesh(m)
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	local tpl = assets and assets:FindFirstChild("LadleMesh")
+	if not tpl then
+		return false
+	end
+	local bowl = m:FindFirstChild("Bowl")
+	local old = m:FindFirstChild("Mesh")
+	if old then
+		old:Destroy()
+	end
+	for _, name in ipairs({ "Inner", "Handle", "Grip" }) do
+		local p = m:FindFirstChild(name)
+		if p then
+			p:Destroy()
+		end
+	end
+	bowl.Transparency = 1
+	local mesh = tpl:Clone()
+	mesh.Name = "Mesh"
+	mesh.Anchored = true
+	mesh.CanCollide = false
+	mesh.CastShadow = true
+	mesh.Color = Color3.fromRGB(153, 106, 56) -- glb 재질 색(baseColor 0.32, 0.14, 0.04)을 sRGB로
+	mesh.Material = Enum.Material.Metal
+	local scale = bowl.Size.Y / tpl.Size.X -- 그릇 지름을 판정용 원기둥과 같게
+	mesh.Size = tpl.Size * scale
+	local center = bowl.Position
+	local handleDir = (CFrame.Angles(0, math.rad(-25), 0)).RightVector -- 예전 손잡이 방향(오른쪽 앞)
+	local frame = CFrame.lookAt(center, center - handleDir) -- +Z = 손잡이 쪽
+	local rimAboveBowlTop = 0.08 -- 내용물(원기둥 윗면)이 그릇 가장자리보다 조금 아래에 보이게
+	local dy = bowl.Size.X / 2 + rimAboveBowlTop - mesh.Size.Y / 2
+	mesh.CFrame = frame * CFrame.new(0, dy, mesh.Size.Z * MESH_BOWL_Z)
+	mesh.Parent = m
+	return true
 end
 
 local function buildChopsticks(ws)

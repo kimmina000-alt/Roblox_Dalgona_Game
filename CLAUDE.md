@@ -14,6 +14,10 @@
 
 미니게임 단계는 모듈 하나씩 (Luau 로컬 변수 200개 제한).
 
+## 에셋 (Rojo 밖, Studio에만 있음)
+- `ServerStorage.Assets.LadleMesh`: 사용자가 만든 구리 국자 (`레퍼런스/dalgona_gukja.glb`를 Studio에서 가져옴). `WorkstationBuilder.attachLadleMesh`가 투명한 판정용 원기둥 `Ladle.Bowl`에 맞춰 붙인다. 게임 코드는 계속 `Bowl` 기준으로 움직인다.
+- glb는 Roblox로 가져오면 앞뒤(Z)가 뒤집힌다. 다른 메시를 바꿀 때도 방향을 화면으로 먼저 확인한다.
+
 ## Studio 동기화
 - Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).
 - 이 PC에는 Rojo가 없고, Studio Assistant의 HTTP 허용 목록 때문에 로컬 서버에서 받아 오는 방식도 막혀 있다.
