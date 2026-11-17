@@ -2,6 +2,7 @@
 -- 위: 단계 칩 / 왼쪽: 다음 단계 카드 / 오른쪽: QUALITY 링 + 별 3개 / 아래: 지시문 알약 + 부제(실수하면 빨강)
 -- 왼쪽 아래 ✕, 오른쪽 위 진동 토글. 1280x720 기준으로 그리고 UIScale로 줄인다.
 
+local GuiService = game:GetService("GuiService")
 local HapticService = game:GetService("HapticService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -83,6 +84,8 @@ function Ui.new(player, steps)
 		end
 		local s = math.clamp(math.min(v.X / self.ref.X, v.Y / self.ref.Y), 0.5, 1.25)
 		self.scale.Scale = s
+		-- 작업 순서 줄은 Roblox 위쪽 메뉴 줄 높이까지 올림 (메뉴 버튼은 왼쪽 끝이라 안 겹침)
+		self.topRow.Position = UDim2.new(0.5, 0, 0, -GuiService:GetGuiInset().Y / s + 6)
 		root.Size = UDim2.fromOffset(v.X / s, v.Y / s)
 	end
 	rescale()
@@ -105,7 +108,7 @@ function Ui:_buildChips()
 	})
 	local bar = new("Frame", {
 		Name = "Chips",
-		Size = UDim2.fromOffset(0, 44),
+		Size = UDim2.fromOffset(0, self.touch and 52 or 44),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.1,
@@ -140,7 +143,7 @@ end
 function Ui:_buildQuality()
 	local box = new("Frame", {
 		Name = "Quality",
-		Position = UDim2.fromOffset(20, 84), -- 왼쪽 위 (위 줄 아래)
+		Position = UDim2.fromOffset(20, 16), -- 왼쪽 위
 		Size = UDim2.fromOffset(190, self.touch and 180 or 232),
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.08,
@@ -199,15 +202,15 @@ function Ui:_buildBottom()
 end
 
 function Ui:_buildCorners()
-	-- X는 작업 순서 칩 바로 오른쪽 (2026-11-17 사용자 요청). 폰에서도 64px 이상
-	local size = self.touch and 84 or 52
+	-- X는 작업 순서 칩 바로 오른쪽, 같은 높이 (2026-11-17 사용자 요청)
+	local size = self.touch and 52 or 44 -- 작업 순서 창 높이에 맞춤
 	local x = new("TextButton", {
 		Name = "Exit",
 		Size = UDim2.fromOffset(size, size),
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.1,
 		Text = "X",
-		TextSize = self.touch and 34 or 26,
+		TextSize = self.touch and 26 or 22,
 		Font = FONT,
 		TextColor3 = INK,
 		LayoutOrder = 2,
@@ -254,7 +257,7 @@ end
 function Ui:_buildMeter()
 	local m = new("Frame", {
 		Name = "Meter",
-		Position = UDim2.fromOffset(222, 84), -- QUALITY 창 오른쪽 옆
+		Position = UDim2.fromOffset(222, 16), -- QUALITY 창 오른쪽 옆
 		Size = UDim2.fromOffset(46, self.touch and 150 or 200),
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.08,

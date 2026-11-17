@@ -9,6 +9,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
+local WorkstationBuilder = require(script.Parent:WaitForChild("WorkstationBuilder"))
+
+local COAL_PER_MAKE = 0.1 -- 연탄 1장으로 10번 만듦
 
 local ProductionService = {}
 
@@ -146,6 +149,11 @@ function ProductionService.start(player)
 	if old and now - old.t0 < 1 then
 		return nil -- 1초에 한 번
 	end
+	-- 연탄이 다 탔으면 새 연탄으로 갈아 넣음
+	local ws = workspace:FindFirstChild("DalgonaWorkstation")
+	if ws and (ws:GetAttribute("CoalLeft") or 1) <= 0.001 then
+		WorkstationBuilder.setCoal(ws, 1)
+	end
 	local s = { id = HttpService:GenerateGUID(false), t0 = now }
 	sessions[player] = s
 	return s.id, s.t0
@@ -168,6 +176,11 @@ function ProductionService.submit(player, sessionId, raw)
 	end
 	local result = Scoring.compute(records)
 	result.ok = true
+	-- 쓸수록 연탄이 낮아지고 잿빛이 됨
+	local ws = workspace:FindFirstChild("DalgonaWorkstation")
+	if ws then
+		WorkstationBuilder.setCoal(ws, (ws:GetAttribute("CoalLeft") or 1) - COAL_PER_MAKE)
+	end
 	print(string.format("[Production] %s Q=%d %s (T%d M%d P%d S%d)", player.Name, result.Q, result.grade, result.T, result.M, result.P, result.S))
 	return result
 end

@@ -20,8 +20,9 @@ for _, name in ipairs({ "StartProduction", "SubmitProduction" }) do
 end
 
 -- 맵은 스크립트로 만든다. Studio에 이미 저장된 작업대가 있으면 그대로 쓴다.
-if not workspace:FindFirstChild("DalgonaWorkstation") then
-	WorkstationBuilder.build(workspace)
+local ws = workspace:FindFirstChild("DalgonaWorkstation") or WorkstationBuilder.build(workspace)
+if ws:GetAttribute("CoalLeft") == nil then
+	WorkstationBuilder.setCoal(ws, 1)
 end
 
 ProductionService.init({

@@ -81,7 +81,8 @@ local function buildTable(ws)
 	prompt.Parent = att
 end
 
-local function buildBrazier(ws)
+-- 예전 Part 화로 (메시 에셋이 없을 때)
+local function buildBrazierParts(ws)
 	local m = model(ws, "Brazier")
 	local cx = -3.2
 	vcyl(m, "Body", 2.5, 1.8, at(cx, TABLE_TOP + 0.9, 0), Color3.fromRGB(168, 96, 62), Enum.Material.Concrete)
@@ -126,6 +127,142 @@ local function buildBrazier(ws)
 	light.Range = 9
 	light.Brightness = 2
 	light.Parent = fire
+end
+
+-- 사용자가 만든 화로·연탄 메시(레퍼런스/dalgona_wharo.glb → ServerStorage.Assets)
+-- glb 분석: 연탄과 연탄2(다 탄 연탄)는 바닥 높이가 같고, 연탄 바닥은 화로 바닥에서 화로 높이의 8.3% 위.
+local COAL_BOTTOM = 0.185 / 2.2193
+local BRAZIER_HEIGHT = 1.88 -- 화로 윗면이 철망(테이블 위 1.98) 바로 아래에 오게
+local COAL_BLACK = Color3.fromRGB(30, 28, 28)
+local COAL_ASH = Color3.fromRGB(196, 192, 186) -- 잿더미 같은 밝은 회색
+
+local function brazierTemplates()
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	if not assets then
+		return nil
+	end
+	local b, c, c2 = assets:FindFirstChild("BrazierMesh"), assets:FindFirstChild("CoalMesh"), assets:FindFirstChild("CoalBurntMesh")
+	if b and c and c2 then
+		return b, c, c2
+	end
+	return nil
+end
+
+local function addFire(parent, offset, direction)
+	local fire = Instance.new("Attachment")
+	fire.Name = "FireAtt"
+	fire.Position = offset
+	fire.Parent = parent
+	local pe = Instance.new("ParticleEmitter")
+	pe.Name = "Flame"
+	pe.Color = ColorSequence.new(Color3.fromRGB(255, 200, 80), Color3.fromRGB(255, 70, 20))
+	pe.LightEmission = 1
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.05) })
+	pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+	pe.Lifetime = NumberRange.new(0.25, 0.45)
+	pe.Rate = 30
+	pe.Speed = NumberRange.new(1.2, 2)
+	pe.SpreadAngle = Vector2.new(25, 25)
+	pe.EmissionDirection = direction
+	pe.Parent = fire
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(255, 140, 60)
+	light.Range = 9
+	light.Brightness = 2
+	light.Parent = fire
+	return fire
+end
+
+local function buildBrazierMesh(ws, bT, cT, c2T)
+	local m = model(ws, "Brazier")
+	local cx = -3.2
+	local s = BRAZIER_HEIGHT / bT.Size.Y
+	local function clone(tpl, name)
+		local p = tpl:Clone()
+		p.Name = name
+		p.Anchored = true
+		p.CanCollide = false
+		p.Size = tpl.Size * s
+		p.Parent = m
+		return p
+	end
+	-- 낡은 금속 화로
+	local body = clone(bT, "Body")
+	body.Material = Enum.Material.CorrodedMetal
+	body.Color = Color3.fromRGB(104, 88, 74)
+	body.CFrame = CFrame.new(at(cx, TABLE_TOP + body.Size.Y / 2, 0))
+	-- 연탄 (쓸수록 연탄2처럼 낮아지고 잿빛이 됨: Builder.setCoal)
+	local bottomY = TABLE_TOP + BRAZIER_HEIGHT * COAL_BOTTOM
+	local coal = clone(cT, "Briquette")
+	coal.Material = Enum.Material.Slate
+	coal.Color = COAL_BLACK
+	coal:SetAttribute("FullHeight", coal.Size.Y)
+	coal:SetAttribute("BottomY", bottomY)
+	coal.CFrame = CFrame.new(at(cx, 0, 0).X, bottomY + coal.Size.Y / 2, at(cx, 0, 0).Z)
+	local burnt = clone(c2T, "BriquetteBurnt")
+	burnt.Material = Enum.Material.Slate
+	burnt.Color = COAL_ASH
+	burnt.Transparency = 1
+	burnt.CFrame = CFrame.new(coal.Position.X, bottomY + burnt.Size.Y / 2, coal.Position.Z)
+	-- 연탄 구멍 사이로만 보이는 불씨 (윗면 바로 아래에 깔린 빛나는 원판)
+	local ember = vcyl(m, "Ember", coal.Size.X * 0.9, 0.02, coal.Position + Vector3.new(0, coal.Size.Y / 2 - 0.04, 0), Color3.fromRGB(255, 110, 30), Enum.Material.Neon, { Transparency = 0.35 })
+	ember.CastShadow = false
+	addFire(coal, Vector3.new(0, coal.Size.Y / 2 + 0.05, 0), Enum.NormalId.Top)
+	local grillY = TABLE_TOP + 1.98
+	for i = -2, 2 do
+		part(m, "Grill", Vector3.new(2.5, 0.06, 0.06), CFrame.new(at(cx, grillY, i * 0.4)), Color3.fromRGB(70, 70, 72), Enum.Material.Metal)
+	end
+	for _, x in ipairs({ -0.6, 0.6 }) do
+		part(m, "Grill", Vector3.new(0.06, 0.06, 2.0), CFrame.new(at(cx + x, grillY, 0)), Color3.fromRGB(70, 70, 72), Enum.Material.Metal)
+	end
+	m:SetAttribute("GrillTopY", grillY + 0.03)
+end
+
+local function buildBrazier(ws)
+	local bT, cT, c2T = brazierTemplates()
+	if bT then
+		buildBrazierMesh(ws, bT, cT, c2T)
+	else
+		buildBrazierParts(ws)
+	end
+end
+
+-- 연탄 남은 양 (1 = 새 연탄, 0 = 다 탐). 높이는 연탄 → 연탄2 높이로, 색은 검정 → 잿빛으로.
+-- 서버에서 부르면 모두에게 보인다. 작업대 속성 "CoalLeft"에도 남김.
+function Builder.setCoal(ws, left)
+	left = math.clamp(left, 0, 1)
+	ws:SetAttribute("CoalLeft", left)
+	local b = ws:FindFirstChild("Brazier")
+	local coal = b and b:FindFirstChild("Briquette")
+	local burnt = b and b:FindFirstChild("BriquetteBurnt")
+	if not (coal and burnt and coal:GetAttribute("FullHeight")) then
+		return
+	end
+	local full, small = coal:GetAttribute("FullHeight"), burnt.Size.Y
+	local bottomY = coal:GetAttribute("BottomY")
+	local h = small + (full - small) * left
+	local useBurnt = left < 0.25
+	local color = COAL_ASH:Lerp(COAL_BLACK, left)
+	coal.Size = Vector3.new(coal.Size.X, h, coal.Size.Z)
+	coal.CFrame = CFrame.new(coal.Position.X, bottomY + h / 2, coal.Position.Z)
+	coal.Color = color
+	coal.Transparency = useBurnt and 1 or 0
+	burnt.Color = color
+	burnt.Transparency = useBurnt and 0 or 1
+	local top = bottomY + (useBurnt and small or h)
+	local fire = coal:FindFirstChild("FireAtt")
+	if fire then
+		fire.Position = Vector3.new(0, top - coal.Position.Y + 0.05, 0)
+		local light = fire:FindFirstChildOfClass("PointLight")
+		if light then
+			light.Brightness = 0.8 + 1.2 * left
+		end
+	end
+	local ember = b:FindFirstChild("Ember")
+	if ember then
+		ember.CFrame = CFrame.new(coal.Position.X, top - 0.04, coal.Position.Z) * CFrame.Angles(0, 0, math.rad(90))
+		ember.Transparency = 0.35 + 0.45 * (1 - left)
+	end
 end
 
 local function buildLadle(ws)
@@ -284,6 +421,7 @@ function Builder.build(parent)
 	buildPlate(ws)
 	buildPresser(ws)
 	buildStarCutter(ws)
+	Builder.setCoal(ws, 1)
 	ws.WorldPivot = CFrame.new(ORIGIN)
 	ws.Parent = parent or workspace
 	return ws
