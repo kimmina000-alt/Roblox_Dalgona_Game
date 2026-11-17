@@ -148,6 +148,7 @@
 - `tools/blender/dalgona_mesh.py` → `레퍼런스/dalgona_batter.glb`: 주름진 언덕(메타볼 리본), 부푼 원판(둥근 가장자리 + 기포 구멍 30개), 눌린 원판(고운 구멍 70개), 붓는 반죽 리본. + 나무젓가락 4개를 길이 = X축으로 눕힘.
 - 나뭇결: UV를 두 방향으로 바꿔 봐도 결이 계속 가로 → 일반 Part로 시험해 보니 Roblox 나무 결은 부품 X축을 따름. 메시를 눕히고 코드(`ChopstickPicker`, `Station.useChopstick`, `Stir`)에서 90° 보정 (메시 크기로 자동 판별).
 - 달고나(`Dalgona.lua`): 메시가 있으면 두께에 따라 언덕 → 부푼 원판 → 눌린 원판. 반점·얼룩 무늬는 눌린 원판에서만. 붓기(`Pour.lua`): 공 줄기 대신 넓적한 리본 하나가 국자 가장자리 → 반죽 사이에서 비틀리며 흔들림.
+- 사용자가 `dalgona_batter.glb`를 가져옴 → 반죽 메시 4개는 `ReplicatedStorage.Assets.Fx`, 젓가락 4개는 `Assets.Chopsticks` 교체(Offset·색 유지). 결이 길이 방향인 것 확인 (`fx/grain_fixed.jpg`, `picker_sticks_grain.jpg`). 한 판 Q 79(서버 검증), 결과는 눌린 원판 메시 + 별 자국 (`fx/result_flat_mesh.jpg`). 누르기 2점은 테스트 중 멈춘 사이 붓기 단계가 시간 초과로 넘어가고, 자동 입력의 탭이 첫 누름으로 잡힌 것.
 
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
