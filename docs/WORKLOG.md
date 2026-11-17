@@ -114,6 +114,7 @@
 - 참고: 레퍼런스 2·7·8번(노점 설탕 양은 그릇, 소다 봉지), 웹 검색(국자·나무젓가락·소다, 학교 앞 뽑기 노점).
 - `tools/blender/props.py` → `레퍼런스/dalgona_props.glb`: 양은 그릇(살짝 찌그러짐)+설탕 더미, 소다 깡통(빨간 띠, 말린 테)+소다 가루, 나무 숟가락(설탕), 쇠 티스푼(소다). 미리 보기 `props/props_preview.png`.
 - 작업대: `ServerStorage.Assets`에 메시가 있으면 Part 대신 보이고, 게임용 부품(Scoop·Heap·Bowl·Tub)은 투명하게 남김. 나무 숟가락 자리는 그릇 설탕 위로 내림(높이 0.75 → 0.5).
+- 사용자가 glb를 가져옴 → 메시 7개를 `ServerStorage.Assets`로 옮기고 Studio 작업대를 새로 만듦. 확인: 하트 한 판 Q 96 Perfect 31코인(서버 검증), 설탕 100점, 우리 스크립트 오류 0. 스크린샷 `props/`.
 
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.

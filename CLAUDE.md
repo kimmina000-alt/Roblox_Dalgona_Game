@@ -21,6 +21,7 @@
 - `ReplicatedStorage.Assets.Chopsticks`: 나무젓가락·포장지 7조각 (`dalgona_joggalack.glb`). 클라이언트도 써야 해서 ReplicatedStorage. 조각마다 속성 `Offset`(짝 안에서 상대 위치). 포장지 = 흰 종이, 젓가락 = 연한 나무. 제작 시작 때 `Making/ChopstickPicker`가 고르기 연출을 하고, 고른 한 짝(`Chosen`)으로 젓는다.
 - `ServerStorage.Assets.StarCutterMesh`: 예전 별 틀 (지금은 안 씀, 도안 틀 전체로 바뀜).
 - 도안 틀 전체 (`ReplicatedStorage.Assets.Cutters` — 클라이언트 미리 보기·교체에 필요, 메시 이름 `Cutter_<id>`, 금속 광택 SteelShine 넣어 둠): `tools/blender/cutters.py` → `레퍼런스/dalgona_cutters.glb`(Cutter_<id>, 23개). 사용자 모형틀(3D.blend 모형틀1~8)이 있는 도안은 그 모델, 없는 도안은 `shapes.py`로 생성. 안쪽 선이 있는 도안(문어·호랑이·공룡·궁전·Master 4종)은 먼저 `python tools/blender/design_shapes.py`(OpenCV) → `shape_data.json`. `src/shared/CutterShapes.lua`는 자동 생성.
+- `ServerStorage.Assets.SugarBowlMesh / SugarHeapMesh / SodaCanMesh / SodaLabelMesh / SodaPowderMesh / WoodSpoonMesh / TinSpoonMesh`: Claude가 `tools/blender/props.py`로 만든 양은 설탕 그릇·소다 깡통·숟가락 (`레퍼런스/dalgona_props.glb`). 빌더가 붙이고 게임용 부품은 투명하게 남김. 스크립트를 다시 돌리면 `PROP_CENTER` 값도 같이 고친다.
 - glb는 Roblox로 가져오면 앞뒤(Z)가 뒤집힌다. 다른 메시를 바꿀 때도 방향을 화면으로 먼저 확인한다.
 - glb의 금속도·거칠기 값(Principled BSDF 숫자)은 Roblox로 넘어오지 않는다. 그래서 `LadleMesh` 안에 SurfaceAppearance `CopperShine`을 직접 넣었다: 금속도 텍스처 `rbxassetid://75555295293901`(0.95), 거칠기 텍스처 `rbxassetid://116334782975968`(0.25), 색 (214,132,72). `rbxasset://` 내장 텍스처는 게임 안에서 막혀서 쓸 수 없다.
 
