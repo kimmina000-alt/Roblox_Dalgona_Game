@@ -14,7 +14,7 @@
 
 설계 근거: `docs/MOTION_REFERENCE_ANALYSIS.md` 8-6 (실제 영상 YqKNy2l802c 소리 분석).
 영상 소리는 대부분 해설 목소리 + 배경음악이라 조리 소리를 그대로 따올 수 없다. 아래는 Creator Store(무료)에서 찾은 후보다.
-**Claude는 소리를 들을 수 없어서 이름·설명만 보고 골랐다.** 게임에는 아직 아무 ID도 넣지 않았다 (코드 연결은 끝남, ID만 비어 있음).
+**Claude는 소리를 들을 수 없어서 이름·설명만 보고 골랐다.** (처음 찾을 때 기준. 지금은 위 표의 소리가 들어가 있음.)
 
 ## 고르는 법
 1. 링크(`https://create.roblox.com/store/asset/<ID>`)를 열어 재생하거나, Studio 도구 상자(Toolbox) → 오디오에서 ID로 검색해 들어 본다.
