@@ -413,7 +413,7 @@ end
 
 local function buildPresser(ws)
 	local m = model(ws, "Presser")
-	local pos = at(7.1, TABLE_TOP + 0.06, -1.1)
+	local pos = at(7.1, TABLE_TOP + 0.06, -1.35)
 	local disc = vcyl(m, "Disc", 2.2, 0.1, pos, STEEL, Enum.Material.Metal, { Reflectance = 0.15 })
 	vcyl(m, "Handle", 0.32, 1.0, pos + Vector3.new(0, 0.55, 0), LIGHT_WOOD, Enum.Material.Wood)
 	ball(m, "Knob", 0.5, pos + Vector3.new(0, 1.1, 0), LIGHT_WOOD, Enum.Material.Wood)
@@ -458,7 +458,7 @@ end
 
 local function buildStarCutter(ws)
 	local m = model(ws, "StarCutter")
-	local center = at(7.1, TABLE_TOP + 0.14, 1.4)
+	local center = at(7.1, TABLE_TOP + 0.14, 0.6) -- 손잡이가 플레이어 쪽(+Z)으로 뻗어도 테이블 안에 들어오게
 	local root = part(m, "Root", Vector3.new(0.1, 0.1, 0.1), CFrame.new(center), STEEL, Enum.Material.Metal, { Transparency = 1 })
 	local outer, inner = 0.8, 0.36
 	local pts = {}
@@ -476,6 +476,46 @@ local function buildStarCutter(ws)
 	part(m, "Bar", Vector3.new(0.07, 0.07, 1.25), CFrame.new(center + Vector3.new(0, 0.42, 0)), STEEL, Enum.Material.Metal)
 	part(m, "Post", Vector3.new(0.07, 0.3, 0.07), CFrame.new(center + Vector3.new(0, 0.27, 0)), STEEL, Enum.Material.Metal)
 	m.PrimaryPart = root
+	Builder.attachCutterMesh(m)
+end
+
+-- Claude가 Blender 스크립트로 만든 별 틀 메시(tools/blender/star_cutter.py → ServerStorage.Assets.StarCutterMesh).
+-- 크기는 게임 외곽선과 같다(1:1). 투명한 Wire 부품은 그대로 두고 각인 자국·판정에 쓴다.
+-- glb에서 별 중심은 메시 가운데에서 손잡이 반대쪽으로 길이의 21.6%(0.6 stud) 떨어져 있다.
+-- Roblox로 가져오면 별 꼭짓점이 메시 +Z, 손잡이가 -Z → 180° 돌려서 손잡이가 플레이어 쪽(+Z)을 향하게.
+local CUTTER_CENTER_Z = 0.6 / 2.7807
+function Builder.attachCutterMesh(m)
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	local tpl = assets and assets:FindFirstChild("StarCutterMesh")
+	if not tpl then
+		return false
+	end
+	local old = m:FindFirstChild("Mesh")
+	if old then
+		old:Destroy()
+	end
+	for _, p in ipairs(m:GetChildren()) do
+		if p:IsA("BasePart") and p.Name ~= "Root" then
+			p.Transparency = 1 -- Wire는 각인용으로 남김, Bar/Post는 메시 손잡이로 대신
+		end
+	end
+	local root = m:FindFirstChild("Root")
+	local mesh = tpl:Clone()
+	mesh.Name = "Mesh"
+	mesh.Anchored = true
+	mesh.CanCollide = false
+	mesh.CanQuery = false
+	mesh.Material = Enum.Material.Metal
+	mesh.Color = Color3.fromRGB(205, 207, 212)
+	local sa = Instance.new("SurfaceAppearance")
+	sa.Name = "SteelShine"
+	sa.Color = Color3.fromRGB(214, 216, 222)
+	sa.MetalnessMap = METALNESS_MAP
+	sa.RoughnessMap = ROUGHNESS_MAP
+	sa.Parent = mesh
+	mesh.CFrame = root.CFrame * CFrame.Angles(0, math.pi, 0) * CFrame.new(0, 0, -mesh.Size.Z * CUTTER_CENTER_Z)
+	mesh.Parent = m
+	return true
 end
 
 function Builder.build(parent)
