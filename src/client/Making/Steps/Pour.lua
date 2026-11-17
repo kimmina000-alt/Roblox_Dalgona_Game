@@ -277,6 +277,11 @@ function Pour.run(ctx)
 					local foam = ladle:FindFirstChild("FxFoam")
 					if foam then
 						foam.Transparency = math.clamp(fill * 1.3, 0, 1)
+						for _, c in ipairs(foam:GetDescendants()) do -- 기포 구멍 등도 같이
+							if c:IsA("BasePart") then
+								c.Transparency = math.max(c.Transparency, foam.Transparency)
+							end
+						end
 					end
 					if poured >= total - 1e-4 then
 						-- 다 부음: 줄기가 실처럼 늘어나다 끊겨 떨어지고 반죽이 출렁이며 자리 잡음

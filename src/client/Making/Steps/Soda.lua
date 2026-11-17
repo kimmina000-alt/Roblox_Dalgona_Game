@@ -1,5 +1,6 @@
 -- 3. 소다: ① 분홍 숟가락을 국자로 끌어 한 번 털기 (양 = 기울인 시간)
---          ② 빠르게 젓기 (이번엔 FAST 쪽이 정답) → 0.5초 만에 불투명한 연갈색으로 부풀어 오름
+--          ② 빠르게 젓기 (이번엔 FAST 쪽이 정답) → 실제 영상처럼 3.5초 S곡선으로 부풀어 오름
+--             (docs/MOTION_REFERENCE_ANALYSIS.md 7장: 느린 시작 1.1초 → 빠른 상승 1.5초 → 멈춤 0.9초 → 유지)
 -- 점수: 넣은 타이밍(투명해진 직후) + 양 + 부푼 정도
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -46,6 +47,237 @@ local function bubbles(S, on)
 	att.Bubbles.Enabled = on
 end
 
+-- ── 부풀기 (YTN 사이언스 영상 30~35초 프레임 분석) ──
+-- 시계 u: 0 → 1 (빠르게 저으면 PUFF_TIME초). 높이는 S곡선: A(느린 시작) 15% · B(빠른 상승) 65% · C(멈춤) 20%
+local PUFF_TIME = 3.5
+local HOLD_TIME = 0.6
+local PUFF_DRIVE = { [1] = 0.08, [2] = 0.35, [3] = 1 } -- 젓는 속도 구간별 시계 속도
+local CURVE = { { 0, 0, 0 }, { 0.314, 0.15, 0.9 }, { 0.743, 0.80, 1.3 }, { 1, 1, 0 } } -- (u, 높이, 기울기)
+-- 영상 색 (가운데 평균 RGB)을 마지막 색에 대한 비율로: 29.4s → 30.6 → 31.4 → 32.2 → 33.0
+local COLOR_RAMP = {
+	{ 0, Vector3.new(121, 81, 28) / Vector3.new(162, 128, 63) },
+	{ 0.34, Vector3.new(135, 96, 39) / Vector3.new(162, 128, 63) },
+	{ 0.57, Vector3.new(149, 112, 50) / Vector3.new(162, 128, 63) },
+	{ 0.8, Vector3.new(160, 125, 62) / Vector3.new(162, 128, 63) },
+	{ 1, Vector3.one },
+}
+
+local function puffCurve(u)
+	u = math.clamp(u, 0, 1)
+	for i = 1, #CURVE - 1 do
+		local a, b = CURVE[i], CURVE[i + 1]
+		if u <= b[1] then
+			local dx = b[1] - a[1]
+			local t = (u - a[1]) / dx
+			local t2, t3 = t * t, t * t * t
+			return (2 * t3 - 3 * t2 + 1) * a[2] + (t3 - 2 * t2 + t) * dx * a[3] + (-2 * t3 + 3 * t2) * b[2] + (t3 - t2) * dx * b[3]
+		end
+	end
+	return 1
+end
+
+local function rampAt(u)
+	for i = 1, #COLOR_RAMP - 1 do
+		local a, b = COLOR_RAMP[i], COLOR_RAMP[i + 1]
+		if u <= b[1] then
+			return a[2]:Lerp(b[2], (u - a[1]) / (b[1] - a[1]))
+		end
+	end
+	return Vector3.one
+end
+
+local function scaleColor(c, v)
+	return Color3.new(math.min(1, c.R * v.X), math.min(1, c.G * v.Y), math.min(1, c.B * v.Z))
+end
+
+local function smooth01(x, a, b)
+	local t = math.clamp((x - a) / (b - a), 0, 1)
+	return t * t * (3 - 2 * t)
+end
+
+local function speck(parent, props)
+	local p = Instance.new("Part")
+	p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+	p.Material = Enum.Material.SmoothPlastic
+	p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+	for k, v in pairs(props) do
+		p[k] = v
+	end
+	p.Parent = parent
+	return p
+end
+
+local function newPuff(S, amount, baseThick)
+	local cfg = Config.Soda
+	local dark = math.clamp((amount - cfg.idealMax) / 0.85, 0, 1)
+	local final = FOAM:Lerp(CREAM, 0.3):Lerp(FOAM_DARK, dark)
+	local pf = { u = 0, hold = 0, done = false, final = final, yaw = math.random() * 6, baseThick = baseThick, holes = {}, gloss = {}, pops = {}, popAcc = 0 }
+	local start = scaleColor(final, COLOR_RAMP[1][2])
+	S:setContents({ Material = Enum.Material.SmoothPlastic, Transparency = 0, Color = start })
+	-- 시작 덩어리: 접힌 주름 언덕 (번들번들). 없으면 거품 돔만
+	pf.mass = Fx.mesh("DalgonaMound", S.Ladle, { Name = "FxFoamMass", Color = start, Material = Enum.Material.SmoothPlastic })
+	pf.foam = Fx.mesh("FoamPuff", S.Ladle, { Name = "FxFoam", Color = start, Material = Enum.Material.SmoothPlastic, Transparency = pf.mass and 1 or 0 })
+		or S:fxPart(S.Ladle, { Name = "FxFoam", Shape = Enum.PartType.Ball, Color = start, Size = Vector3.one * 0.1 })
+	if pf.mass then
+		pf.mass.Parent = pf.foam -- 붓기 때 FxFoam과 같이 사라지게
+	end
+	-- 바늘구멍·작은 분화구: 30.4초(u≈0.23)부터 생기기 시작, B에서 빠르게 늘어남
+	for i = 1, 42 do
+		local d = (i % 7 == 0) and math.random(70, 100) / 1000 or math.random(25, 60) / 1000
+		table.insert(pf.holes, {
+			u0 = 0.23 + 0.52 * math.random() ^ 0.7,
+			r = math.sqrt(math.random()) * 0.82,
+			a = math.random() * 2 * math.pi,
+			d = d,
+			part = speck(pf.foam, { Name = "Hole", Shape = Enum.PartType.Cylinder, Transparency = 1, Size = Vector3.new(0.008, d, d) }),
+		})
+	end
+	-- 처음의 번들거림: 밝은 하이라이트 점 몇 개, 무광이 되며 사라짐
+	for _ = 1, 6 do
+		local w = math.random(40, 90) / 1000
+		table.insert(pf.gloss, {
+			r = 0.15 + math.random() * 0.5,
+			a = math.random() * 2 * math.pi,
+			part = speck(pf.foam, { Name = "Gloss", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(255, 236, 200), Transparency = 1, Size = Vector3.new(0.006, w, w * 2.2) }),
+		})
+	end
+	return pf
+end
+
+-- 돔 표면 위 점 (r = 반지름 비율, a = 각도) → 위치, 법선
+local function surfaceAt(base, R, H, r, a)
+	r = math.min(r, 0.97)
+	local y = H * math.sqrt(1 - r * r)
+	local pos = base + Vector3.new(math.cos(a) * r * R, y + 0.004, math.sin(a) * r * R)
+	-- 타원 돔 법선
+	local n = Vector3.new(math.cos(a) * r / R, math.sqrt(1 - r * r) / H, math.sin(a) * r / R)
+	return pos, n.Unit
+end
+
+local function onSurface(part, pos, n)
+	part.CFrame = CFrame.lookAt(pos, pos + n) * CFrame.Angles(0, math.rad(90), 0)
+end
+
+local function popRate(u, done)
+	if done then
+		return 1.5
+	end
+	if u < 0.15 then
+		return 0
+	elseif u < 0.314 then
+		return 5
+	elseif u < 0.743 then
+		return 20
+	end
+	return 7
+end
+
+local function drawPuff(S, pf, dt, speed)
+	local u = pf.u
+	local h = puffCurve(u)
+	local R = S.bowlRadius - 0.08
+	local Hf = 2 * R * Fx.HEIGHT.FoamPuff
+	-- 덩어리 → 둥근 돔: 높이(Y)는 많이, 지름(X/Z)은 조금. 마지막엔 국자 테두리를 살짝 넘음. 튀거나 꺼지지 않음
+	local height = Hf * (0.42 + 0.58 * h)
+	local diam = 2 * R * (0.84 + 0.2 * h)
+	local base = Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.04, S.Bowl.Position.Z)
+	if not pf.done then
+		pf.yaw += math.min(speed, 20) * dt * 0.04
+	end
+	-- 색: 영상 비율 그대로 (+33% 밝아짐, 대부분 B 구간). 유지 단계에서 틈이 아주 살짝 진해짐
+	local col = scaleColor(pf.final, rampAt(u))
+	if pf.done then
+		col = col:Lerp(Color3.new(0, 0, 0), 0.03 * math.min(pf.hold / HOLD_TIME, 1))
+	end
+	S:setContents({ Color = col, thickness = pf.baseThick * (1 + 0.8 * h) })
+	local foam = pf.foam
+	-- 주름 언덕은 A~B 초반에 둥글게 뭉개지며 돔으로 바뀜
+	local massFade = smooth01(u, 0.2, 0.55)
+	if pf.mass then
+		foam.Transparency = 1 - smooth01(u, 0.08, 0.4)
+		pf.mass.Transparency = massFade
+		pf.mass.Color = col:Lerp(Color3.new(0, 0, 0), 0.06)
+		local mh = height * (1.15 - 0.2 * massFade)
+		pf.mass.Size = Vector3.new(diam * 0.95, math.max(mh, 0.01), diam * 0.85)
+		pf.mass.CFrame = CFrame.new(base + Vector3.new(0, mh / 2, 0)) * CFrame.Angles(0, pf.yaw, 0)
+	end
+	foam.Color = col
+	-- 광택 → 무광: B에 들어서면 결이 있는 재질로
+	foam.Material = u > 0.45 and Enum.Material.Sand or Enum.Material.SmoothPlastic
+	if foam:IsA("MeshPart") then
+		Fx.placeDome(foam, base, diam, height, pf.yaw)
+	else
+		foam.Size = Vector3.new(diam, height * 2, diam)
+		foam.CFrame = CFrame.new(base)
+	end
+	local H = height * 0.9 -- 메시 돔 표면 높이 (기포 혹 제외)
+	-- 바늘구멍: 생기면서 커지고, C에서 대비가 1/3 줄어듦 (더 고운 스펀지)
+	local soften = smooth01(u, 0.75, 1)
+	local holeCol = col:Lerp(Color3.fromRGB(70, 38, 14), 0.55 * (1 - soften / 3))
+	for _, ho in ipairs(pf.holes) do
+		local g = smooth01(u, ho.u0, ho.u0 + 0.08)
+		if g <= 0 then
+			ho.part.Transparency = 1
+		else
+			ho.part.Transparency = 0.15 + 0.85 * (1 - g)
+			ho.part.Color = holeCol
+			local d = ho.d * (0.4 + 0.6 * g) * (1 - 0.15 * soften)
+			ho.part.Size = Vector3.new(0.008, d, d)
+			local pos, n = surfaceAt(base, diam / 2, H, ho.r, ho.a + pf.yaw)
+			onSurface(ho.part, pos, n)
+		end
+	end
+	-- 번들거림: 처음엔 또렷, u 0.45까지 사라짐
+	local shine = 1 - smooth01(u, 0.05, 0.45)
+	for _, gl in ipairs(pf.gloss) do
+		gl.part.Transparency = 1 - 0.55 * shine
+		local pos, n = surfaceAt(base, diam / 2, (pf.mass and height * 1.1 or H), gl.r, gl.a + pf.yaw)
+		onSurface(gl.part, pos + Vector3.new(0, 0.01, 0), n)
+	end
+	-- 이산화탄소 기포: 표면에 작게 솟았다 톡 터짐 (B에서 가장 많음)
+	pf.popAcc += popRate(u, pf.done) * dt
+	while pf.popAcc >= 1 do
+		pf.popAcc -= 1
+		local d = math.random(30, 85) / 1000
+		table.insert(pf.pops, {
+			t = 0,
+			life = 0.25 + math.random() * 0.2,
+			d = d,
+			r = math.sqrt(math.random()) * 0.85,
+			a = math.random() * 2 * math.pi,
+			part = speck(foam, { Name = "Pop", Shape = Enum.PartType.Ball, Transparency = 1, Size = Vector3.one * 0.01 }),
+		})
+	end
+	for i = #pf.pops, 1, -1 do
+		local b = pf.pops[i]
+		b.t += dt
+		local k = b.t / b.life
+		if k >= 1 then
+			b.part:Destroy()
+			table.remove(pf.pops, i)
+		else
+			local pos, n = surfaceAt(base, diam / 2, H, b.r, b.a + pf.yaw)
+			local s, tr
+			if k < 0.7 then
+				s = b.d * (k / 0.7) ^ 0.6
+				tr = 0.2
+			else
+				local q = (k - 0.7) / 0.3
+				s = b.d * (1 + 0.4 * q)
+				tr = 0.2 + 0.8 * q
+			end
+			b.part.Size = Vector3.one * math.max(s, 0.005)
+			b.part.Color = col:Lerp(Color3.fromRGB(255, 240, 205), 0.35)
+			b.part.Transparency = tr
+			b.part.CFrame = CFrame.new(pos + n * s * 0.25)
+		end
+	end
+end
+
+-- 미리 보기·테스트용 (Studio Edit에서 부풀기 장면 세우기)
+Soda.newPuff = newPuff
+Soda.drawPuff = drawPuff
+
 function Soda.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
 	local cfg = Config.Soda
@@ -64,7 +296,8 @@ function Soda.run(ctx)
 	local firstDrop = nil
 	local mound = nil
 	local puffed = false
-	local foam, foamT, foamYaw = nil, 0, 0
+	local puff = nil
+	local drive, idle = 0, 0
 	local tStir, tFast = 0, 0
 	local sampleAcc = 0
 	local baseThick = S.Contents.Size.X
@@ -161,6 +394,7 @@ function Soda.run(ctx)
 			S:springTo(spoon, rest, dt, 22)
 			local speed = stir:update(dt)
 			local zone = Stir.zone(speed, mcfg.slow, cfg.fastMin)
+			local target = 0
 			if stir.active then
 				local y01 = stir:centerHeight01()
 				if y01 then
@@ -178,57 +412,47 @@ function Soda.run(ctx)
 					sampleAcc = 0
 					table.insert(rec.samples, { zone })
 				end
-				local gain = zone == 3 and 0.42 or (zone == 2 and 0.15 or 0.03)
-				rec.puff = math.min(1, rec.puff + gain * dt)
-				if zone < 3 then
+				target = PUFF_DRIVE[zone] or 0
+				if zone < 3 and not (puff and puff.done) then
 					ui:hint("더 빠르게! 쉬지 말고 저어요")
 				end
 				if not puffed and speed > 3 then
 					puffed = true
-					-- 0.5초 만에 불투명한 연갈색으로 부풀어 오름 (부피 1.5배)
-					local dark = math.clamp((rec.amount - cfg.idealMax) / 0.85, 0, 1)
-					local foamColor = FOAM:Lerp(FOAM_DARK, dark)
 					if mound then
 						TweenService:Create(mound, TweenInfo.new(0.3), { Transparency = 1 }):Play()
 					end
-					S:setContents({ Material = Enum.Material.SmoothPlastic, Transparency = 0, Color = foamColor })
-					local t = 0
-					task.spawn(function()
-						while t < 0.5 and not ctx.aborted do
-							t += task.wait()
-							local a = math.min(t / 0.5, 1)
-							S:setContents({ thickness = baseThick * (1 + 0.8 * (1 - (1 - a) ^ 2)) })
-						end
-					end)
-					bubbles(S, true)
 					ui:buzz(0.6, 0.12)
-					-- 3D 거품: 기포가 오톨도톨한 돔이 솟아오름
-					foam = Fx.mesh("FoamPuff", S.Ladle, { Name = "FxFoam", Color = foamColor, Material = Enum.Material.SmoothPlastic })
-					foamT = 0
+					puff = newPuff(S, rec.amount, baseThick)
 				end
-				if puffed then
-					local dark = math.clamp((rec.amount - cfg.idealMax) / 0.85, 0, 1)
-					local color = FOAM:Lerp(CREAM, rec.puff * 0.6):Lerp(FOAM_DARK, dark)
-					S:setContents({ Color = color })
-					if foam then
-						-- 0.6초 동안 살짝 넘치게(오버슈트) 솟았다가 자리 잡고, 저을 때마다 숨 쉬듯 부풀었다 가라앉음
-						foamT += dt
-						local a = math.min(foamT / 0.6, 1)
-						local back = 1 + 2.2 * (a - 1) ^ 3 + 1.2 * (a - 1) ^ 2
-						local R = S.bowlRadius - 0.08
-						local h = 2 * R * Fx.HEIGHT.FoamPuff * (0.35 + 0.65 * rec.puff) * back
-						h *= 1 + 0.05 * math.sin(foamT * 17) + 0.03 * math.sin(foamT * 29)
-						foamYaw += speed * dt * 0.15
-						foam.Color = color
-						Fx.placeDome(foam, Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.04, S.Bowl.Position.Z), 2 * R * (0.92 + 0.08 * a), h, foamYaw)
+			end
+			if puffed then
+				-- 젓는 세기가 부풀기 시계를 밀어 줌 (빠르게 = 3.5초, 느리면 늘어남)
+				drive += (target - drive) * (1 - math.exp(-dt / 0.3))
+				if not puff.done then
+					puff.u = math.min(1, puff.u + drive * dt / PUFF_TIME)
+					if target < 0.2 then
+						idle += dt
+					else
+						idle = 0
 					end
+					if puff.u >= 1 then
+						puff.done = true
+					elseif idle > 1.2 and puff.u > 0.25 then
+						-- 너무 일찍 멈춤: 덜 부푼 채로 굳음
+						puff.done = true
+						ui:hint("덜 부풀었어요… 더 오래 빠르게 저어야 해요")
+					end
+				else
+					puff.hold += dt
 				end
+				rec.puff = puffCurve(puff.u)
+				drawPuff(S, puff, dt, speed)
 			end
 			ui:setGauge(true, speed, mcfg.slow, cfg.fastMin, "STIR FAST! · 빠르게")
 			ui:setMeter(true, rec.puff, 0.95, 1, "거품")
 			rec.fastFrac = tStir > 0 and tFast / tStir or 0
 			ui:say("빠르게 저어요!", string.format("부풀기 %d%% · 크림처럼 될 때까지", math.floor(rec.puff * 100)))
-			if rec.puff >= 1 then
+			if puff and puff.done and puff.hold >= HOLD_TIME then
 				break
 			end
 		end
@@ -239,6 +463,12 @@ function Soda.run(ctx)
 	end
 
 	bubbles(S, false)
+	if puff then
+		for _, b in ipairs(puff.pops) do
+			b.part:Destroy()
+		end
+		puff.pops = {}
+	end
 	ui:setGauge(false)
 	ui:setMeter(false)
 	spoon:PivotTo(rest)
