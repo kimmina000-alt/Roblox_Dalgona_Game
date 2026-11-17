@@ -87,6 +87,12 @@
 - 손잡이가 테이블 밖으로 안 나가게 별 틀 자리(z 1.4 → 0.6)와 누름판 자리(z -1.1 → -1.35)를 옮김.
 - 확인: 한 판 Q 96 Perfect, 별 자국 정상, 우리 스크립트 오류 0. 스크린샷 `blender/`.
 
+### 도안 틀 18종 + 사용자 모형틀
+- `tools/blender/cutters.py` 한 번 실행으로 틀을 전부 만든다 → `dalgona_cutters.glb`(메시 이름 `Cutter_<id>`) + 미리보기 `blender/cutters_sheet.png` + `src/shared/CutterShapes.lua`(각인 외곽선 · 메시 중심, 자동 생성).
+- 사용자가 만든 모형틀(`레퍼런스/3D.blend`의 모형틀1~8)은 그대로 가져와서 게임 크기(모양 1.6 stud, 높이 0.28, 벽 두께 0.045)로 맞춤: 동그라미·세모·네모·별·하트·우산·꽃(벚꽃) + 기획서에 없는 뼈다귀(추가 도안). 외곽선은 `tools/blender/user_cutters.py`가 바닥 선에서 뽑음.
+- 나머지 11종(물고기·새·나비·비행기·십자가·칼·돛단배·문어·궁궐·호랑이·용)은 `tools/blender/shapes.py` 외곽선으로 생성.
+- 3D.blend의 Circle.010 / Plane.010은 모형틀3(네모)와 같은 자리에 겹친 조각이라 쓰지 않음.
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음.
