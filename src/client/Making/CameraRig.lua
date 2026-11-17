@@ -7,9 +7,9 @@ local CameraRig = {}
 
 -- 작업대 피벗 기준 { 보는 점, 카메라 위치 }
 local POSES = {
-	sugar = { Vector3.new(-1.7, 4.6, 0.4), Vector3.new(-1.7, 10.6, 8.0) },
-	melt = { Vector3.new(-3.2, 6.1, 0.1), Vector3.new(-3.2, 11.6, 4.6) },
-	soda = { Vector3.new(-2.6, 5.9, 0.0), Vector3.new(-2.6, 11.2, 5.4) },
+	sugar = { Vector3.new(-1.7, 5.0, 0.4), Vector3.new(-1.7, 10.6, 8.0) },
+	melt = { Vector3.new(-3.2, 6.6, 0.1), Vector3.new(-3.2, 11.6, 4.6) },
+	soda = { Vector3.new(-2.6, 6.4, 0.0), Vector3.new(-2.6, 11.2, 5.4) },
 	pour = { Vector3.new(0.3, 4.6, 0.0), Vector3.new(0.3, 11.8, 8.6) },
 	press = { Vector3.new(4.0, 4.0, 0.0), Vector3.new(4.0, 8.0, 6.4) },
 	stamp = { Vector3.new(5.0, 3.8, 0.2), Vector3.new(5.0, 9.6, 5.6) },
@@ -32,6 +32,17 @@ function CameraRig.poseFor(key)
 	local p = POSES[key] or POSES.sugar
 	local look = origin:PointToWorldSpace(p[1])
 	local pos = origin:PointToWorldSpace(p[2])
+	-- 가로 화면(PC, 폰)은 옆으로 넓게 보이니 더 가까이 다가감
+	local vp = workspace.CurrentCamera.ViewportSize
+	if vp.X / math.max(vp.Y, 1) > 1.2 then
+		pos = look + (pos - look) * 0.72
+	end
+	-- 폰 결과 화면: 팝업이 오른쪽이라 달고나를 왼쪽에 둠
+	if key == "result" and game:GetService("UserInputService").TouchEnabled then
+		local shift = Vector3.new(1.9, 0, 0)
+		look += shift
+		pos += shift
+	end
 	return CFrame.lookAt(pos, look)
 end
 

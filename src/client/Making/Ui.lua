@@ -52,7 +52,7 @@ function Ui.new(player, steps)
 	self.baseSub = ""
 	-- 폰: 기준 해상도를 작게 잡고 버튼을 키워서 실제 화면에서 64px 이상이 되게
 	self.touch = UserInputService.TouchEnabled
-	self.ref = self.touch and Vector2.new(960, 540) or Vector2.new(1280, 720)
+	self.ref = self.touch and Vector2.new(820, 460) or Vector2.new(1280, 720)
 	self.btn = self.touch and 96 or 76
 
 	local gui = new("ScreenGui", {
@@ -144,7 +144,7 @@ function Ui:_buildQuality()
 		Name = "Quality",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -20, 0, 84),
-		Size = UDim2.fromOffset(190, 232),
+		Size = UDim2.fromOffset(190, self.touch and 180 or 232),
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.08,
 		Parent = self.root,
@@ -170,7 +170,7 @@ function Ui:_buildQuality()
 	for i = 1, 3 do
 		self.stars[i] = label({ Text = "★", TextSize = 30, TextColor3 = GREY, Position = UDim2.new(0.5, (i - 2) * 36 - 15, 0, 140), Size = UDim2.fromOffset(30, 32), Parent = box })
 	end
-	label({ Text = "고르게 녹일수록\n황금 달고나 확률↑", TextSize = 13, Font = FONT_REG, TextColor3 = Color3.fromRGB(110, 100, 90), Position = UDim2.fromOffset(8, 180), Size = UDim2.new(1, -16, 0, 40), Parent = box })
+	label({ Text = "고르게 녹일수록\n황금 달고나 확률↑", Visible = not self.touch, TextSize = 13, Font = FONT_REG, TextColor3 = Color3.fromRGB(110, 100, 90), Position = UDim2.fromOffset(8, 180), Size = UDim2.new(1, -16, 0, 40), Parent = box })
 end
 
 function Ui:_buildBottom()
@@ -190,7 +190,7 @@ function Ui:_buildBottom()
 	self.sub = label({
 		Name = "Sub",
 		Text = "",
-		TextSize = 18,
+		TextSize = self.touch and 22 or 18,
 		TextColor3 = Color3.fromRGB(70, 66, 62),
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -24),
@@ -219,21 +219,27 @@ function Ui:_buildCorners()
 			self.onExit()
 		end
 	end)
+	local function vibText(on)
+		if self.touch then
+			return on and "📳" or "📴"
+		end
+		return on and "📳 진동 켜짐" or "📴 진동 꺼짐"
+	end
 	local v = new("TextButton", {
 		Name = "Vibration",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -20, 0, 16),
-		Size = UDim2.fromOffset(self.touch and 170 or 150, self.touch and 72 or 44),
+		Size = UDim2.fromOffset(self.touch and 72 or 150, self.touch and 72 or 44),
 		BackgroundColor3 = PAPER,
-		Text = "📳 진동 켜짐",
-		TextSize = 16,
+		Text = vibText(true),
+		TextSize = self.touch and 30 or 16,
 		Font = FONT,
 		TextColor3 = INK,
 		Parent = self.root,
 	}, { corner(22) })
 	v.Activated:Connect(function()
 		self.vibration = not self.vibration
-		v.Text = self.vibration and "📳 진동 켜짐" or "📴 진동 꺼짐"
+		v.Text = vibText(self.vibration)
 		v.TextColor3 = self.vibration and INK or GREY
 	end)
 end
@@ -271,9 +277,9 @@ end
 function Ui:_buildMeter()
 	local m = new("Frame", {
 		Name = "Meter",
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -60, 0.62, 0),
-		Size = UDim2.fromOffset(46, 200),
+		AnchorPoint = self.touch and Vector2.new(1, 1) or Vector2.new(1, 0.5),
+		Position = self.touch and UDim2.new(1, -20, 1, -20) or UDim2.new(1, -60, 0.62, 0),
+		Size = UDim2.fromOffset(46, self.touch and 150 or 200),
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.08,
 		Visible = false,
@@ -289,9 +295,9 @@ end
 function Ui:_buildResult()
 	local pop = new("Frame", {
 		Name = "Result",
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -24),
-		Size = UDim2.fromOffset(560, 224 + self.btn),
+		AnchorPoint = self.touch and Vector2.new(1, 0.5) or Vector2.new(0.5, 1),
+		Position = self.touch and UDim2.new(1, -16, 0.5, 0) or UDim2.new(0.5, 0, 1, -24),
+		Size = UDim2.fromOffset(self.touch and 420 or 560, 224 + self.btn),
 		BackgroundColor3 = PAPER,
 		Visible = false,
 		ZIndex = 10,
@@ -318,26 +324,27 @@ function Ui:_buildResult()
 		self.resStars[i] = label({ Text = "★", TextSize = 48, TextColor3 = GREY, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, (i - 2) * 64, 0, 102), Size = UDim2.fromOffset(56, 56), ZIndex = 11, Parent = pop })
 	end
 	self.resBreak = label({ Text = "", TextSize = 14, Font = FONT_REG, TextColor3 = Color3.fromRGB(110, 100, 90), Position = UDim2.fromOffset(0, 162), Size = UDim2.new(1, 0, 0, 20), ZIndex = 11, Parent = pop })
-	local row = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20), Size = UDim2.fromOffset(520, self.btn + 8), ZIndex = 11, Parent = pop }, {
+	local row = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20), Size = UDim2.fromOffset(self.touch and 400 or 520, self.btn + 8), ZIndex = 11, Parent = pop }, {
 		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
-	local function btn(text, primary, order)
+	local function btn(text, primary, order, name)
 		local b = new("TextButton", {
+			Name = name,
 			Text = text,
 			TextSize = 20,
 			Font = FONT,
 			TextColor3 = primary and Color3.new(1, 1, 1) or INK,
 			BackgroundColor3 = primary and INK or Color3.fromRGB(232, 226, 216),
-			Size = UDim2.fromOffset(primary and 200 or 140, self.btn),
+			Size = UDim2.fromOffset(self.touch and (primary and 170 or 105) or (primary and 200 or 140), self.btn),
 			LayoutOrder = order,
 			ZIndex = 12,
 			Parent = row,
 		}, { corner(18) })
 		return b
 	end
-	self.btnRetry = btn("다시 하기", true, 1)
-	self.btnOther = btn("다른 도안", false, 2)
-	self.btnLeave = btn("나가기", false, 3)
+	self.btnRetry = btn("다시 하기", true, 1, "Retry")
+	self.btnOther = btn("다른 도안", false, 2, "Other")
+	self.btnLeave = btn("나가기", false, 3, "Leave")
 	self.result = pop
 
 	self.toastLabel = label({
@@ -501,6 +508,13 @@ function Ui:showResult(res, shape, handlers)
 	}
 	self.gauge.Visible = false
 	self.meter.Visible = false
+	if self.touch then
+		-- 폰: 팝업을 오른쪽에 두고 카드·링을 숨겨 달고나가 보이게
+		self.root.NextCard.Visible = false
+		self.root.Quality.Visible = false
+		self.root.Instruction.Visible = false
+		self.sub.Visible = false
+	end
 	self.resTitle.Text = res.burnt and "앗, 타 버렸어요" or (res.cracked and "달고나 완성! (금이 갔어요)" or "달고나 완성!")
 	self.resGrade.Text = res.grade
 	self.resGrade.BackgroundColor3 = GradeColor[res.grade] or INK
@@ -541,6 +555,10 @@ end
 
 function Ui:hideResult()
 	self.result.Visible = false
+	self.root.NextCard.Visible = true
+	self.root.Quality.Visible = true
+	self.root.Instruction.Visible = true
+	self.sub.Visible = true
 end
 
 return Ui

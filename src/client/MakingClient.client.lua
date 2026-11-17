@@ -48,6 +48,11 @@ local function setControls(enabled)
 			end
 		end
 	end
+	-- 폰: 조이스틱과 점프 버튼은 제작 중에 숨김
+	local touchGui = player.PlayerGui:FindFirstChild("TouchGui")
+	if touchGui then
+		touchGui.Enabled = enabled
+	end
 	local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
 	if hum then
 		if enabled then
