@@ -42,7 +42,16 @@ function Scoring.soda(r)
 end
 
 function Scoring.pour(r)
-	return math.clamp(80 * c01(1 - r.dist / 1.4) + 20 * c01(1 - r.remain / 0.15), 0, 100)
+	local s = 80 * c01(1 - r.dist / 1.4) + 20 * c01(1 - r.remain / 0.15)
+	-- 한 곳에 모아 붓지 않고 끌면서 부으면 길쭉해져 감점 (1.15배까지는 괜찮음)
+	s *= c01(1 - ((r.spread or 1) - 1.15) / 0.65)
+	return math.clamp(s, 0, 100)
+end
+
+-- 일직선 등으로 길쭉하게 부어 틀이 안 맞음 = 실패
+function Scoring.misshaped(records)
+	local p = records.pour
+	return p ~= nil and (p.spread or 1) > Config.Pour.failSpread
 end
 
 function Scoring.pressOne(i, h)
@@ -119,8 +128,15 @@ function Scoring.compute(records, shape)
 	if burnt then
 		q = math.min(q, 20)
 	end
+	local misshaped = Scoring.misshaped(records)
+	if misshaped then
+		q = math.min(q, 15)
+	end
 	q = math.clamp(round(q), 0, 100)
 	local g = Scoring.gradeFor(q)
+	if misshaped and not burnt then
+		g = { name = "Fail", mult = 0.2 }
+	end
 	for k, v in pairs(s) do
 		s[k] = round(v)
 	end
@@ -135,6 +151,7 @@ function Scoring.compute(records, shape)
 		mult = g.mult,
 		stars = Scoring.starsFor(q),
 		burnt = burnt,
+		misshaped = misshaped,
 		cracked = (records.press ~= nil and records.press.cracked == true)
 			or (records.stamp ~= nil and records.stamp.hold > Config.Stamp.crackHold),
 		price = round((shape or Config.Shape).price * g.mult),

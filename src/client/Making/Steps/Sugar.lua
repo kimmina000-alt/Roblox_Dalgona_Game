@@ -14,7 +14,7 @@ local WHITE = Color3.fromRGB(252, 252, 252)
 local BROWN = Color3.fromRGB(214, 168, 92)
 local MAX_TILT = math.rad(78)
 local GRAINS = 16
-local CRYSTALS = 30 -- 3D 설탕 결정이 있을 때 더미 위에 흩어 놓는 낱알 수
+local CRYSTALS = 90 -- 3D 설탕 결정이 있을 때 더미 위에 흩어 놓는 낱알 수 (작고 많이 = 고운 설탕)
 
 -- 국자 속 설탕 더미(3D 결정 수백 개 메시). 없으면 예전처럼 모래 원판 + 공 알갱이
 local function updatePile(S, st, fill, color)
@@ -41,7 +41,7 @@ local function addGrain(S, list, st)
 		local top = S:contentsTopY() - 0.01 + st.pileH * (1 - (r / (st.pileD / 2)) ^ 2) ^ 0.6
 		local g = Fx.mesh("SugarCrystal", S.Ladle, {
 			Name = "FxGrain",
-			Size = Vector3.one * (0.05 + math.random() * 0.035),
+			Size = Vector3.one * (0.018 + math.random() * 0.016),
 			Color = WHITE,
 			Material = Enum.Material.SmoothPlastic,
 			Reflectance = 0.08,
@@ -71,7 +71,7 @@ local function spillGrain(S, at, color)
 	local origin = at + Vector3.new((math.random() - 0.5) * 0.3, 0, (math.random() - 0.5) * 0.3)
 	local hit = workspace:Raycast(origin, Vector3.new(0, -10, 0), params)
 	if hit and Fx.template("SugarCrystal") then
-		local s = 0.045 + math.random() * 0.03
+		local s = 0.018 + math.random() * 0.015
 		Fx.mesh("SugarCrystal", S.fx, {
 			Name = "Spill",
 			Size = Vector3.one * s,

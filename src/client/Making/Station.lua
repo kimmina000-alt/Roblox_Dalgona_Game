@@ -39,6 +39,13 @@ function Station.new()
 	for _, name in ipairs(MOVABLE) do
 		self.rest[name] = self[name]:GetPivot()
 	end
+	-- 젓가락은 부품마다 따로 움직여서(Stir) 모델째 되돌리면 테이블 위 포장 젓가락이 밀려남 → 부품별로 기억
+	self.chopRest = {}
+	for _, p in ipairs(self.Chopsticks:GetChildren()) do
+		if p:IsA("BasePart") then
+			self.chopRest[p] = p.CFrame
+		end
+	end
 	self.contentsRest = {
 		Size = self.Contents.Size,
 		CFrame = self.Bowl.CFrame:ToObjectSpace(self.Contents.CFrame),
@@ -138,8 +145,11 @@ end
 function Station:reset()
 	self:clearFx()
 	for name, cf in pairs(self.rest) do
-		self[name]:PivotTo(cf)
+		if name ~= "Chopsticks" then
+			self[name]:PivotTo(cf)
+		end
 	end
+	self:restChopsticks()
 	local c = self.Contents
 	local r = self.contentsRest
 	c.Size = r.Size
@@ -169,6 +179,19 @@ end
 function Station:presserSeeThrough(on)
 	for p, t in pairs(self.presserParts) do
 		p.Transparency = t
+	end
+end
+
+-- 젓가락 내려놓기: 부품마다 처음 자리로 (고른 한 짝은 Stick1 자리에)
+function Station:restChopsticks()
+	for p, cf in pairs(self.chopRest) do
+		if p.Parent then
+			p.CFrame = cf
+		end
+	end
+	local chosen = self.Chopsticks:FindFirstChild("Chosen")
+	if chosen then
+		chosen.CFrame = self.Chopsticks.Stick1.CFrame * CFrame.Angles(math.rad(90), 0, 0) * (chosen:GetAttribute("Fix") and CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.pi, 0, 0) or CFrame.new())
 	end
 end
 

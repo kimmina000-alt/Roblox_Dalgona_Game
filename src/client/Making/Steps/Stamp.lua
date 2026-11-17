@@ -177,7 +177,13 @@ function Stamp.run(ctx)
 		groove = dal:groove(wires, handleLine(wires, placed, c, dal:radius() * 0.98))
 	end
 	groove:setDepth(depthFor(rec.hold, cfg))
-	if rec.hold > cfg.crackHold then
+	if (dal.e or 0) + 1 > Config.Pour.failSpread then
+		-- 길쭉하게 부은 반죽: 틀이 원판을 벗어나 제대로 안 찍히고 갈라짐
+		groove:setDepth(0.35)
+		dal:crack(5, 0.8)
+		ui:hint("반죽이 길쭉해서 틀이 제대로 안 찍혀요")
+		ui:buzz(0.8, 0.15)
+	elseif rec.hold > cfg.crackHold then
 		dal:crack(4, 0.7)
 		ui:hint("너무 세게 눌러서 금이 갔어요")
 		ui:buzz(0.8, 0.15)

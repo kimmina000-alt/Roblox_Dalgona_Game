@@ -512,7 +512,9 @@ function Ui:showResult(res, shape, handlers)
 		self.root.Instruction.Visible = false
 		self.sub.Visible = false
 	end
-	self.resTitle.Text = res.burnt and "앗, 타 버렸어요" or (res.cracked and "달고나 완성! (금이 갔어요)" or "달고나 완성!")
+	self.resTitle.Text = res.burnt and "앗, 타 버렸어요"
+		or (res.misshaped and "실패 · 모양이 망가졌어요")
+		or (res.cracked and "달고나 완성! (금이 갔어요)" or "달고나 완성!")
 	self.resGrade.Text = res.grade
 	self.resGrade.BackgroundColor3 = GradeColor[res.grade] or INK
 	self.resLine.Text = string.format("%s 달고나 · 완성도 %d%%", shape.name, res.Q)

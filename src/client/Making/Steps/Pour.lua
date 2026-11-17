@@ -161,7 +161,7 @@ Pour.drawStream = drawStream
 
 function Pour.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
-	local rec = { t0 = ctx.now(), dist = 10, remain = REMAIN }
+	local rec = { t0 = ctx.now(), dist = 10, remain = REMAIN, spread = 1 }
 	local ladle = S.Ladle
 	local home = ladle:GetPivot()
 	local rot = S.rest.Ladle - S.rest.Ladle.Position
@@ -172,7 +172,7 @@ function Pour.run(ctx)
 	local volume = math.pi * 0.55 ^ 2 * Config.Press.h0
 
 	-- 젓가락은 내려놓음
-	S.Chopsticks:PivotTo(S.rest.Chopsticks)
+	S:restChopsticks()
 
 	local grabbing = false
 	local seenPress = P.presses
@@ -188,6 +188,11 @@ function Pour.run(ctx)
 	local stream = newStream(S, color)
 	local foldAcc, foldAng = 0, math.random() * 6
 	local contentsThick = S.Contents.Size.X
+	-- 붓는 자리 기록 (양으로 가중): 반죽 모양 = 부은 경로. 한 곳에 부으면 둥글고, 끌면서 부으면 그 방향으로 길쭉해짐
+	local sw, sx, sz, sxx, szz, sxz = 0, 0, 0, 0, 0, 0
+	local D0 = 2 * math.sqrt(volume * (1 - REMAIN) / (math.pi * Config.Press.h0)) -- 한 곳에 다 부었을 때 지름
+	local eRing = 0
+	local landNow = nil
 
 	-- 카메라가 철판 쪽으로 옮겨 가 있으니, 국자를 먼저 철판 왼쪽 위로 들고 옴 (0.4초)
 	local hover = CFrame.new(plate.X - half - 0.15, carryY, plate.Z + 0.9) * rot
@@ -232,13 +237,20 @@ function Pour.run(ctx)
 				if tilt > POUR_TILT and poured < total then
 					local rate = (tilt - POUR_TILT) / (MAX_TILT - POUR_TILT)
 					local amt = math.min(total - poured, total / POUR_TIME * (0.35 + 0.65 * rate) * dt)
+					local landing = Vector3.new(lip.X + 0.12, S.plateTop, lip.Z) -- 줄기가 실제로 떨어지는 곳
+					landNow = landing
+					sw += amt
+					sx += amt * landing.X
+					sz += amt * landing.Z
+					sxx += amt * landing.X * landing.X
+					szz += amt * landing.Z * landing.Z
+					sxz += amt * landing.X * landing.Z
 					if not blob then
-						-- 처음 닿는 곳에 반죽이 생김 (점수는 이 자리로)
-						local landing = Vector3.new(lip.X + 0.12, S.plateTop, lip.Z) -- 줄기가 실제로 떨어지는 곳
+						-- 처음 닿는 곳에 반죽이 생김 (점수는 부은 자리들의 가운데로)
 						local flat = Vector3.new(landing.X - S.ringCenter.X, 0, landing.Z - S.ringCenter.Z)
 						rec.dist = flat.Magnitude
-						local e = math.clamp((rec.dist - 0.9) / 1.0, 0, 0.5)
-						blob = Dalgona.new(S, landing, color, volume * 0.02, e)
+						eRing = math.clamp((rec.dist - 0.9) / 1.0, 0, 0.5)
+						blob = Dalgona.new(S, landing, color, volume * 0.02, eRing)
 						blob:setLook(look)
 						st.dalgona = blob
 						st.volume = volume
@@ -269,8 +281,26 @@ function Pour.run(ctx)
 					end
 					local fill = poured / total
 					blob.V = math.max(volume * 0.02, volume * (1 - REMAIN) * fill)
+					-- 반죽 모양: 부은 자리들의 가운데 + 퍼진 방향으로 길쭉하게 (일직선으로 쭉 부으면 일직선 모양)
+					if sw > 0 then
+						local mx, mz = sx / sw, sz / sw
+						local cxx, czz, cxz = sxx / sw - mx * mx, szz / sw - mz * mz, sxz / sw - mx * mz
+						local major = (cxx + czz) / 2 + math.sqrt(((cxx - czz) / 2) ^ 2 + cxz * cxz)
+						local spread = math.clamp(1 + math.max(0, 3 * math.sqrt(math.max(major, 0)) - 0.15) / D0, 1, 4)
+						blob.center = Vector3.new(mx, S.plateTop, mz)
+						blob.yaw = -0.5 * math.atan2(2 * cxz, cxx - czz)
+						rec.spread = spread
+						local flat = Vector3.new(mx - S.ringCenter.X, 0, mz - S.ringCenter.Z)
+						rec.dist = flat.Magnitude
+						eRing = math.clamp((rec.dist - 0.9) / 1.0, 0, 0.5)
+						blob.e = math.max(eRing, spread - 1)
+						if spread > 1.5 then
+							ui:hint("한 곳에 모아 부어요 (길쭉해지면 틀이 안 맞아요)")
+						end
+					end
 					blob:setThickness(Config.Press.h0 * (1.15 - 0.15 * fill) + 0.03 * math.sin(stream.t * 9) * stream.flow)
-					local land = Vector3.new(blob.center.X, blob:topY() + 0.05, blob.center.Z)
+					local at = landNow or blob.center
+					local land = Vector3.new(at.X, blob:topY() + 0.05, at.Z)
 					drawStream(stream, lip, out, land)
 					local remain = 1 - poured / volume
 					S:setContents({ thickness = math.max(0.06, contentsThick * remain / 1) })

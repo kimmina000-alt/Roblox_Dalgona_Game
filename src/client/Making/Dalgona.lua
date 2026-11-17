@@ -66,6 +66,7 @@ function Dalgona.new(station, center, color, volume, ellipse)
 	self.color = color
 	self.V = volume
 	self.e = ellipse or 0
+	self.yaw = 0 -- 길쭉할 때 긴 쪽 방향 (붓는 경로 따라, Pour가 정함)
 	self.h = Config.Press.h0
 	self.body = station:fxPart(station.fx, { Name = "Dalgona", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic })
 	-- 가장자리 띠 2겹 (본체보다 살짝 낮고 넓음 → 위에서 보면 진한 테두리 그러데이션)
@@ -117,7 +118,8 @@ function Dalgona:placeMeshes(h, d, k)
 				height = math.max(h * 0.75, 0.03)
 				p.Size = Vector3.new(d * k, height, d / k)
 			end
-			p.CFrame = CFrame.new(c.X, c.Y + height / 2, c.Z) * CFrame.Angles(0, self.spin, 0)
+			-- 길쭉하면 긴 쪽을 부은 방향으로, 둥글면 접힌 무늬가 천천히 돌아감
+			p.CFrame = CFrame.new(c.X, c.Y + height / 2, c.Z) * CFrame.Angles(0, self.e > 0.05 and self.yaw or self.spin, 0)
 		end
 	end
 	-- 표면 무늬(반점·얼룩·하이라이트)는 평평해진 뒤에만 (부푼 원판은 기포 구멍이 메시에 있음)
@@ -138,18 +140,21 @@ function Dalgona:setThickness(h)
 	local k = math.sqrt(1 + self.e)
 	local c = self.center
 	local w = self.rimW
+	local turn = CFrame.Angles(0, self.yaw or 0, 0)
+	local cy, sy = math.cos(self.yaw or 0), math.sin(self.yaw or 0)
 	self.rim.Size = Vector3.new(h * 0.75 - 0.008, d * k, d / k)
-	self.rim.CFrame = CFrame.new(c.X, c.Y + (h * 0.75 - 0.008) / 2, c.Z) * UP
+	self.rim.CFrame = CFrame.new(c.X, c.Y + (h * 0.75 - 0.008) / 2, c.Z) * turn * UP
 	self.rim2.Size = Vector3.new(h * 0.75 - 0.004, d * k * (1 - w), d / k * (1 - w))
-	self.rim2.CFrame = CFrame.new(c.X, c.Y + (h * 0.75 - 0.004) / 2, c.Z) * UP
+	self.rim2.CFrame = CFrame.new(c.X, c.Y + (h * 0.75 - 0.004) / 2, c.Z) * turn * UP
 	self.body.Size = Vector3.new(h * 0.75, d * k * (1 - 2 * w), d / k * (1 - 2 * w))
-	self.body.CFrame = CFrame.new(c.X, c.Y + h * 0.375, c.Z) * UP
+	self.body.CFrame = CFrame.new(c.X, c.Y + h * 0.375, c.Z) * turn * UP
 	-- 표면 무늬(결정 반점·기포·얼룩)는 반지름에 맞춰 따라 퍼짐
 	local top = c.Y + h * 0.75
 	local R = d / 2
 	for _, dt in ipairs(self.details) do
-		local x = c.X + math.cos(dt.a) * dt.rr * R * k
-		local z = c.Z + math.sin(dt.a) * dt.rr * R / k
+		local lx, lz = math.cos(dt.a) * dt.rr * R * k, math.sin(dt.a) * dt.rr * R / k
+		local x = c.X + lx * cy + lz * sy
+		local z = c.Z - lx * sy + lz * cy
 		if dt.kind == "flat" then
 			local size = dt.abs or dt.frac * R
 			dt.part.Size = Vector3.new(0.006, size, size * dt.squash)

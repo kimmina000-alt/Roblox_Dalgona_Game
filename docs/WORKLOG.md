@@ -181,6 +181,14 @@
 - 사용자가 고른 7개를 `C.Sounds`에 넣음 (`docs/SOUND_CANDIDATES.md` 위 표). AudioAnalyzer로 앞쪽 무음을 재서 `<키>Start`로 건너뜀, 젓기 소리 크기 맞춤.
 - Play 확인: 단계마다 들린 소리 — 설탕 붓기 sugarPour, 녹이기 fire + stirDry → stirCrystal → stirLiquid, 소다 fire + stirLiquid → stirCream, 세게 찍기 crack. 소다가 끝난 뒤에도 stirCream이 남는 문제를 찾아 `Sfx.stopStir()`로 고침 (고친 뒤 다시 돌려 보지는 않음).
 
+### 설탕·소다·붓기 다듬기 + 다시 하기 젓가락 (2026-11-18)
+- 가루: 동그라미 홈 삭제, 고운 점 220개 (젓가락이 지나가면 밀림). 숟가락으로 붓는 낱알 더 작고 많게.
+- 결정 300개 + 밑에 갈색 설탕물이 깔렸다가 녹을수록 차오름 (`SugarLook`). 녹기 시작하면 젓가락 끝에 설탕물이 맺혀 붙어 다님 (`FxTipCoat`, Chosen에 Weld).
+- 소다: 통을 누르면 젓가락 끝을 "쿡" 찍고 흰 소다가 묻음 → 국자 위에서 놓으면 툭 떨어져 흰 점. 부풀기는 표면 점(구멍·반짝이·기포) 없이 반죽 덩어리만 커짐.
+- 붓기: 붓는 자리를 양으로 가중해 반죽 가운데·길이 방향을 정함 (`Pour.lua`, `Dalgona.yaw`). 길이/폭 1.8 넘으면 실패 (`C.Pour.failSpread`, `Scoring.misshaped`, 서버 필드 `spread`) → 찍기 때 금, 결과 "Fail" Q 15 이하.
+- 다시 하기 때 젓가락이 사라지던 버그: 젓가락 모델 기준점이 Stick1이라 되돌릴 때 포장 젓가락이 밀려남 → 부품별 처음 자리로 되돌림 (`Station:restChopsticks`).
+- 확인 (Play): 젓가락 끝 설탕물·소다 위치 일치, 2번 찍기, 부풀기, 일직선 붓기 → Fail Q 15 (서버 판정), 다시 하기 후 포장 젓가락 보임. 설탕 단계별 모습은 Edit에서 세움. 장면 `docs/screenshots/2026-11-18/v3/`.
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음 → 도안 해금 없이 전부 열려 있음.
