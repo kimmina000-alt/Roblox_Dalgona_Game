@@ -11,6 +11,11 @@ local Builder = {}
 local ORIGIN = Vector3.new(0, 0, -14)
 local TABLE_TOP = 3.5
 local HANDLE_YAW = 205 -- 국자 손잡이 방향: 왼쪽 앞 (붓기는 오른쪽 철판 쪽으로 기울임)
+-- 연탄 화로: 처음 크기(높이 1.88)의 1.5배. 커진 만큼 왼쪽으로 옮겨 설탕 그릇과 안 닿게
+local BRAZIER_SCALE = 1.5
+local BRAZIER_X = -3.8
+local BRAZIER_HEIGHT = 1.88 * BRAZIER_SCALE
+local GRILL_Y = TABLE_TOP + BRAZIER_HEIGHT + 0.1 -- 철망: 화로 윗면 바로 위
 
 local WOOD = Color3.fromRGB(132, 92, 58)
 local LIGHT_WOOD = Color3.fromRGB(214, 176, 120)
@@ -87,10 +92,22 @@ local function buildTable(ws)
 	prompt.Parent = att
 end
 
+-- 철망 (화로 크기에 맞춰 늘어남). 속성 GrillTopY = 국자를 올려놓는 높이 (클라이언트 Heat가 씀)
+local function buildGrill(m, cx)
+	local k = BRAZIER_SCALE
+	for i = -2, 2 do
+		part(m, "Grill", Vector3.new(2.5 * k, 0.06, 0.06), CFrame.new(at(cx, GRILL_Y, i * 0.4 * k)), Color3.fromRGB(70, 70, 72), Enum.Material.Metal)
+	end
+	for _, x in ipairs({ -0.6, 0.6 }) do
+		part(m, "Grill", Vector3.new(0.06, 0.06, 2.0 * k), CFrame.new(at(cx + x * k, GRILL_Y, 0)), Color3.fromRGB(70, 70, 72), Enum.Material.Metal)
+	end
+	m:SetAttribute("GrillTopY", GRILL_Y + 0.03)
+end
+
 -- 예전 Part 화로 (메시 에셋이 없을 때)
 local function buildBrazierParts(ws)
 	local m = model(ws, "Brazier")
-	local cx = -3.2
+	local cx = BRAZIER_X
 	vcyl(m, "Body", 2.5, 1.8, at(cx, TABLE_TOP + 0.9, 0), Color3.fromRGB(168, 96, 62), Enum.Material.Concrete)
 	vcyl(m, "Band", 2.6, 0.22, at(cx, TABLE_TOP + 0.55, 0), Color3.fromRGB(60, 58, 56), Enum.Material.Metal)
 	vcyl(m, "Band2", 2.6, 0.22, at(cx, TABLE_TOP + 1.55, 0), Color3.fromRGB(60, 58, 56), Enum.Material.Metal)
@@ -103,14 +120,7 @@ local function buildBrazierParts(ws)
 	for i, o in ipairs(holes) do
 		vcyl(m, "Hole" .. i, 0.24, 0.21, at(cx, TABLE_TOP + 1.8, 0) + o, Color3.fromRGB(255, 120, 30), Enum.Material.Neon)
 	end
-	local grillY = TABLE_TOP + 1.98
-	for i = -2, 2 do
-		part(m, "Grill", Vector3.new(2.5, 0.06, 0.06), CFrame.new(at(cx, grillY, i * 0.4)), Color3.fromRGB(70, 70, 72), Enum.Material.Metal)
-	end
-	for _, x in ipairs({ -0.6, 0.6 }) do
-		part(m, "Grill", Vector3.new(0.06, 0.06, 2.0), CFrame.new(at(cx + x, grillY, 0)), Color3.fromRGB(70, 70, 72), Enum.Material.Metal)
-	end
-	m:SetAttribute("GrillTopY", grillY + 0.03)
+	buildGrill(m, cx)
 
 	local fire = Instance.new("Attachment")
 	fire.Name = "FireAtt"
@@ -138,7 +148,6 @@ end
 -- 사용자가 만든 화로·연탄 메시(레퍼런스/dalgona_wharo.glb → ServerStorage.Assets)
 -- glb 분석: 연탄과 연탄2(다 탄 연탄)는 바닥 높이가 같고, 연탄 바닥은 화로 바닥에서 화로 높이의 8.3% 위.
 local COAL_BOTTOM = 0.185 / 2.2193
-local BRAZIER_HEIGHT = 1.88 -- 화로 윗면이 철망(테이블 위 1.98) 바로 아래에 오게
 local COAL_BLACK = Color3.fromRGB(30, 28, 28)
 local COAL_ASH = Color3.fromRGB(196, 192, 186) -- 잿더미 같은 밝은 회색
 
@@ -181,7 +190,7 @@ end
 
 local function buildBrazierMesh(ws, bT, cT, c2T)
 	local m = model(ws, "Brazier")
-	local cx = -3.2
+	local cx = BRAZIER_X
 	local s = BRAZIER_HEIGHT / bT.Size.Y
 	local function clone(tpl, name)
 		local p = tpl:Clone()
@@ -214,14 +223,7 @@ local function buildBrazierMesh(ws, bT, cT, c2T)
 	local ember = vcyl(m, "Ember", coal.Size.X * 0.9, 0.02, coal.Position + Vector3.new(0, coal.Size.Y / 2 - 0.04, 0), Color3.fromRGB(255, 110, 30), Enum.Material.Neon, { Transparency = 0.35 })
 	ember.CastShadow = false
 	addFire(coal, Vector3.new(0, coal.Size.Y / 2 + 0.05, 0), Enum.NormalId.Top)
-	local grillY = TABLE_TOP + 1.98
-	for i = -2, 2 do
-		part(m, "Grill", Vector3.new(2.5, 0.06, 0.06), CFrame.new(at(cx, grillY, i * 0.4)), Color3.fromRGB(70, 70, 72), Enum.Material.Metal)
-	end
-	for _, x in ipairs({ -0.6, 0.6 }) do
-		part(m, "Grill", Vector3.new(0.06, 0.06, 2.0), CFrame.new(at(cx + x, grillY, 0)), Color3.fromRGB(70, 70, 72), Enum.Material.Metal)
-	end
-	m:SetAttribute("GrillTopY", grillY + 0.03)
+	buildGrill(m, cx)
 end
 
 local function buildBrazier(ws)
@@ -273,7 +275,7 @@ end
 
 local function buildLadle(ws)
 	local m = model(ws, "Ladle")
-	local center = at(-3.2, TABLE_TOP + 1.98 + 0.03 + 0.6 + 0.225, 0)
+	local center = at(BRAZIER_X, GRILL_Y + 0.03 + 0.6 + 0.225, 0)
 	local bowl = vcyl(m, "Bowl", 1.7, 0.45, center, COPPER, Enum.Material.Metal)
 	vcyl(m, "Inner", 1.5, 0.02, center + Vector3.new(0, 0.226, 0), Color3.fromRGB(120, 62, 32), Enum.Material.Metal)
 	vcyl(m, "Contents", 1.42, 0.05, center + Vector3.new(0, 0.25, 0), Color3.fromRGB(250, 250, 250), Enum.Material.Sand, { Transparency = 1 })
@@ -396,7 +398,7 @@ local function hideParts(m, keep)
 end
 
 -- 반환: 붙인 메시 (템플릿이 없으면 nil)
-local function attachProp(m, tplName, refCF, color, material, shine)
+local function attachProp(m, tplName, refCF, color, material, shine, scale)
 	local tpl = propTemplate(tplName)
 	if not tpl then
 		return nil
@@ -426,7 +428,10 @@ local function attachProp(m, tplName, refCF, color, material, shine)
 		sa.RoughnessMap = ROUGHNESS_MAP
 		sa.Parent = mesh
 	end
-	local c = PROP_CENTER[tplName] or Vector3.zero
+	local c = (PROP_CENTER[tplName] or Vector3.zero) * (scale or 1)
+	if scale then
+		mesh.Size = tpl.Size * scale
+	end
 	mesh.CFrame = refCF * CFrame.new(c.X, c.Z, -c.Y) * CFrame.Angles(0, math.pi, 0)
 	mesh.Parent = m
 	return mesh
@@ -466,21 +471,27 @@ local function buildWoodSpoon(ws)
 	att.Name = "PourAtt"
 	att.Parent = scoop
 	m.PrimaryPart = scoop
-	Builder.attachSpoonMesh(m, "WoodSpoonMesh", 0)
+	-- 설탕 숟가락: 쇠숟가락 (소다 티스푼 메시를 1.5배로 = 머리 0.6 × 0.78, 손잡이 약 2)
+	Builder.attachSpoonMesh(m, "TinSpoonMesh", 0, 1.5, "SteelSpoonMesh")
 end
 
--- 숟가락 메시: 머리 가운데 = Scoop 자리, 손잡이는 yaw 방향으로 (0 = 플레이어 쪽 +Z). 설탕 더미(Heap)는 그대로 보임
-function Builder.attachSpoonMesh(m, tplName, yaw)
+-- 숟가락 메시(쇠): 머리 가운데 = Scoop 자리, 손잡이는 yaw 방향으로 (0 = 플레이어 쪽 +Z). 설탕 더미(Heap)는 그대로 보임
+function Builder.attachSpoonMesh(m, tplName, yaw, scale, newName)
 	local scoop = m:FindFirstChild("Scoop")
 	if not scoop or not propTemplate(tplName) then
 		return false
 	end
 	hideParts(m, { Heap = true })
+	for _, name in ipairs({ "WoodSpoonMesh", "SteelSpoonMesh", newName or tplName }) do
+		local old = m:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
+	end
 	local ref = CFrame.new(scoop.Position + Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, math.rad(yaw), 0)
-	if tplName == "WoodSpoonMesh" then
-		attachProp(m, tplName, ref, LIGHT_WOOD, Enum.Material.Wood)
-	else
-		attachProp(m, tplName, ref, Color3.fromRGB(205, 207, 212), Enum.Material.Metal, Color3.fromRGB(214, 216, 222))
+	local mesh = attachProp(m, tplName, ref, Color3.fromRGB(205, 207, 212), Enum.Material.Metal, Color3.fromRGB(214, 216, 222), scale)
+	if mesh and newName then
+		mesh.Name = newName
 	end
 	return true
 end

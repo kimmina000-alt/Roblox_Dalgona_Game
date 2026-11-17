@@ -116,6 +116,12 @@
 - 작업대: `ServerStorage.Assets`에 메시가 있으면 Part 대신 보이고, 게임용 부품(Scoop·Heap·Bowl·Tub)은 투명하게 남김. 나무 숟가락 자리는 그릇 설탕 위로 내림(높이 0.75 → 0.5).
 - 사용자가 glb를 가져옴 → 메시 7개를 `ServerStorage.Assets`로 옮기고 Studio 작업대를 새로 만듦. 확인: 하트 한 판 Q 96 Perfect 31코인(서버 검증), 설탕 100점, 우리 스크립트 오류 0. 스크린샷 `props/`.
 
+### 화로 1.5배 · 쇠숟가락 · 나뭇결
+- 연탄 화로 1.5배(높이 1.88 → 2.82). 설탕 그릇과 안 닿게 중심을 x -3.2 → -3.8로, 철망·국자도 새 높이로. 왼쪽 화면 카메라는 (-3.1, 0.1) 높이 12.3으로 (화로가 QUALITY 창에 안 가림).
+- 설탕 숟가락을 쇠숟가락으로: 소다 티스푼 메시를 1.5배로 써서 다시 가져올 필요 없음 (`SteelSpoonMesh`).
+- 나무젓가락 나뭇결 90°: Roblox는 메시 UV대로 재질 무늬를 입혀서, `tools/blender/chopsticks_uv.py`로 젓가락 4개의 UV를 90° 돌린 `레퍼런스/dalgona_joggalack_uv90.glb`를 만듦 (가져오면 교체).
+- 확인: 별 한 판 Q 96 Perfect(서버 검증), 녹이기 정상, 오류 0. 스크린샷 `props/brazier_1_5x.jpg`, `props/left_view_big_brazier.jpg`.
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음 → 도안 해금 없이 전부 열려 있음.

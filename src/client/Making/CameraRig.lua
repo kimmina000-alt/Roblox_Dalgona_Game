@@ -14,7 +14,7 @@ local TILT = 0.12 -- 완전 수직이면 도구가 납작해 보여서 플레이
 
 -- 작업대 피벗 기준 { 화면 가운데에 올 테이블 위 점(x, z), 카메라 높이(y) }
 local POSES = {
-	left = { Vector2.new(-2.4, 0.1), 11.0 },
+	left = { Vector2.new(-3.1, 0.1), 12.3 }, -- 화로 1.5배: 화로가 QUALITY 창에 안 가리게 왼쪽·위로
 	right = { Vector2.new(4.3, 0.1), 10.8 },
 	result = { Vector2.new(3.6, 0.0), 9.6 },
 }
