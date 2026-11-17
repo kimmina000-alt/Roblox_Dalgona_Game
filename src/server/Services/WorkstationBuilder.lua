@@ -7,6 +7,7 @@ local Builder = {}
 
 local ORIGIN = Vector3.new(0, 0, -14)
 local TABLE_TOP = 3.5
+local HANDLE_YAW = 205 -- 국자 손잡이 방향: 왼쪽 앞 (붓기는 오른쪽 철판 쪽으로 기울임)
 
 local WOOD = Color3.fromRGB(132, 92, 58)
 local LIGHT_WOOD = Color3.fromRGB(214, 176, 120)
@@ -133,7 +134,7 @@ local function buildLadle(ws)
 	local bowl = vcyl(m, "Bowl", 1.7, 0.45, center, COPPER, Enum.Material.Metal)
 	vcyl(m, "Inner", 1.5, 0.02, center + Vector3.new(0, 0.226, 0), Color3.fromRGB(120, 62, 32), Enum.Material.Metal)
 	vcyl(m, "Contents", 1.42, 0.05, center + Vector3.new(0, 0.25, 0), Color3.fromRGB(250, 250, 250), Enum.Material.Sand, { Transparency = 1 })
-	local base = CFrame.new(center) * CFrame.Angles(0, math.rad(-25), 0)
+	local base = CFrame.new(center) * CFrame.Angles(0, math.rad(HANDLE_YAW), 0)
 	part(m, "Handle", Vector3.new(3.4, 0.12, 0.22), base * CFrame.new(0.85 + 1.6, 0.42, 0) * CFrame.Angles(0, 0, math.rad(14)), COPPER, Enum.Material.Metal)
 	part(m, "Grip", Vector3.new(1.1, 0.2, 0.3), base * CFrame.new(0.85 + 3.0, 0.78, 0) * CFrame.Angles(0, 0, math.rad(14)), Color3.fromRGB(80, 50, 30), Enum.Material.Wood)
 	m.PrimaryPart = bowl
@@ -168,12 +169,13 @@ function Builder.attachLadleMesh(m)
 	mesh.Anchored = true
 	mesh.CanCollide = false
 	mesh.CastShadow = true
-	mesh.Color = Color3.fromRGB(153, 106, 56) -- glb 재질 색(baseColor 0.32, 0.14, 0.04)을 sRGB로
+	-- glb의 금속(0.95)·광택(거칠기 0.25) 값은 Roblox로 안 넘어온다. 텍스처 없이 쓸 수 있는 것 중 Metal + 밝은 구리색이 가장 가깝다.
+	mesh.Color = Color3.fromRGB(196, 116, 58)
 	mesh.Material = Enum.Material.Metal
 	local scale = bowl.Size.Y / tpl.Size.X -- 그릇 지름을 판정용 원기둥과 같게
 	mesh.Size = tpl.Size * scale
 	local center = bowl.Position
-	local handleDir = (CFrame.Angles(0, math.rad(-25), 0)).RightVector -- 예전 손잡이 방향(오른쪽 앞)
+	local handleDir = (CFrame.Angles(0, math.rad(HANDLE_YAW), 0)).RightVector -- 손잡이 = 왼쪽 앞
 	local frame = CFrame.lookAt(center, center - handleDir) -- +Z = 손잡이 쪽
 	local rimAboveBowlTop = 0.08 -- 내용물(원기둥 윗면)이 그릇 가장자리보다 조금 아래에 보이게
 	local dy = bowl.Size.X / 2 + rimAboveBowlTop - mesh.Size.Y / 2

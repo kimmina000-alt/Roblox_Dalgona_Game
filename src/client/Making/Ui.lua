@@ -69,7 +69,6 @@ function Ui.new(player, steps)
 	self.root = root
 
 	self:_buildChips()
-	self:_buildCard()
 	self:_buildQuality()
 	self:_buildBottom()
 	self:_buildCorners()
@@ -94,28 +93,28 @@ end
 function Ui:_buildChips()
 	local bar = new("Frame", {
 		Name = "Chips",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 16),
-		Size = UDim2.fromOffset(0, 44),
-		AutomaticSize = Enum.AutomaticSize.X,
+		-- 작업 순서: 오른쪽 끝에 세로로
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -16, 0.5, 0),
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.1,
 		Parent = self.root,
 	}, {
-		corner(22),
-		new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
-		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+		corner(18),
+		new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }),
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	self.chips = {}
 	for i, step in ipairs(self.steps) do
 		if i > 1 then
-			label({ Text = "—", TextSize = 16, TextColor3 = GREY, Size = UDim2.fromOffset(16, 32), LayoutOrder = i * 2 - 1, Parent = bar })
+			label({ Text = "↓", TextSize = 12, TextColor3 = GREY, Size = UDim2.fromOffset(16, 12), LayoutOrder = i * 2 - 1, Parent = bar })
 		end
 		local chip = label({
 			Text = step.label,
 			TextSize = 18,
-			Size = UDim2.fromOffset(0, 32),
-			AutomaticSize = Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(96, 32),
 			BackgroundTransparency = 0,
 			BackgroundColor3 = PAPER,
 			LayoutOrder = i * 2,
@@ -127,26 +126,10 @@ function Ui:_buildChips()
 	end
 end
 
-function Ui:_buildCard()
-	local card = new("Frame", {
-		Name = "NextCard",
-		Position = UDim2.fromOffset(20, 84),
-		Size = UDim2.fromOffset(200, 172),
-		BackgroundColor3 = PAPER,
-		BackgroundTransparency = 0.08,
-		Parent = self.root,
-	}, { corner(18) })
-	label({ Text = "다음 단계", TextSize = 15, TextColor3 = GREY, Position = UDim2.fromOffset(16, 12), Size = UDim2.new(1, -32, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, Parent = card })
-	self.cardIcon = label({ Text = "", TextSize = 46, Position = UDim2.fromOffset(16, 36), Size = UDim2.new(1, -32, 0, 56), Parent = card })
-	self.cardTitle = label({ Text = "", TextSize = 20, Position = UDim2.fromOffset(16, 96), Size = UDim2.new(1, -32, 0, 26), Parent = card })
-	self.cardDesc = label({ Text = "", TextSize = 14, Font = FONT_REG, TextColor3 = Color3.fromRGB(90, 85, 80), TextWrapped = true, Position = UDim2.fromOffset(12, 124), Size = UDim2.new(1, -24, 0, 40), Parent = card })
-end
-
 function Ui:_buildQuality()
 	local box = new("Frame", {
 		Name = "Quality",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -20, 0, 84),
+		Position = UDim2.fromOffset(20, 16), -- 왼쪽 위
 		Size = UDim2.fromOffset(190, self.touch and 180 or 232),
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.08,
@@ -280,8 +263,7 @@ end
 function Ui:_buildMeter()
 	local m = new("Frame", {
 		Name = "Meter",
-		AnchorPoint = self.touch and Vector2.new(1, 1) or Vector2.new(1, 0.5),
-		Position = self.touch and UDim2.new(1, -20, 1, -20) or UDim2.new(1, -60, 0.62, 0),
+		Position = UDim2.fromOffset(222, 16), -- QUALITY 창 오른쪽 옆
 		Size = UDim2.fromOffset(46, self.touch and 150 or 200),
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.08,
@@ -395,6 +377,9 @@ function Ui:setStep(i)
 		end
 	end
 	local nxt = self.steps[i + 1]
+	if not self.cardIcon then
+		return -- 다음 단계 카드는 뺐음 (2026-11-17 사용자 요청)
+	end
 	if nxt then
 		self.cardIcon.Text = nxt.icon
 		self.cardTitle.Text = nxt.title
@@ -522,7 +507,7 @@ function Ui:showResult(res, shape, handlers)
 	self.meter.Visible = false
 	if self.touch then
 		-- 폰: 팝업을 오른쪽에 두고 카드·링을 숨겨 달고나가 보이게
-		self.root.NextCard.Visible = false
+		self.root.Chips.Visible = false
 		self.root.Quality.Visible = false
 		self.root.Instruction.Visible = false
 		self.sub.Visible = false
@@ -567,7 +552,7 @@ end
 
 function Ui:hideResult()
 	self.result.Visible = false
-	self.root.NextCard.Visible = true
+	self.root.Chips.Visible = true
 	self.root.Quality.Visible = true
 	self.root.Instruction.Visible = true
 	self.sub.Visible = true

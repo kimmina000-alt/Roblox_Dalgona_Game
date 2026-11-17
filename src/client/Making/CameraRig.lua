@@ -1,5 +1,7 @@
--- 단계마다 고정 카메라 = 테이블을 위에서 내려다보는 항공샷.
--- 단계가 바뀔 때만 컷 1프레임 + 0.25초 ease-out (MOTION_REFERENCE 5장)
+-- 테이블을 위에서 내려다보는 항공샷. 화면은 두 곳만 쓴다.
+--   왼쪽: 설탕 · 녹이기 · 소다 (설탕 그릇과 국자를 크게)
+--   오른쪽: 붓기 · 누르기 · 모양 (철판 위)
+-- 같은 화면 안에서는 카메라가 그대로이고, 화면이 바뀔 때만 컷 1프레임 + 0.25초 ease-out (MOTION_REFERENCE 5장)
 -- 제작 중에는 매 프레임 카메라를 잡아 둔다 (다른 스크립트나 도구가 카메라를 바꿔도 고정 유지).
 
 local RunService = game:GetService("RunService")
@@ -12,13 +14,18 @@ local TILT = 0.12 -- 완전 수직이면 도구가 납작해 보여서 플레이
 
 -- 작업대 피벗 기준 { 화면 가운데에 올 테이블 위 점(x, z), 카메라 높이(y) }
 local POSES = {
-	sugar = { Vector2.new(-1.3, 0.2), 12.5 },
-	melt = { Vector2.new(-3.0, 0.2), 12.0 },
-	soda = { Vector2.new(-2.4, 0.0), 12.0 },
-	pour = { Vector2.new(0.6, 0.0), 14.0 },
-	press = { Vector2.new(4.4, 0.0), 11.0 },
-	stamp = { Vector2.new(4.9, 0.2), 11.0 },
+	left = { Vector2.new(-2.4, 0.1), 11.0 },
+	right = { Vector2.new(4.3, 0.1), 10.8 },
 	result = { Vector2.new(3.6, 0.0), 9.6 },
+}
+local STEP_POSE = {
+	sugar = "left",
+	melt = "left",
+	soda = "left",
+	pour = "right",
+	press = "right",
+	stamp = "right",
+	result = "result",
 }
 
 local FOV = 70
@@ -26,6 +33,7 @@ local EASE = 0.25
 
 local origin = CFrame.new()
 local bound = false
+local current = nil
 local from, to = CFrame.new(), CFrame.new()
 local t0 = 0
 
@@ -34,7 +42,7 @@ function CameraRig.init(stationPivot)
 end
 
 function CameraRig.poseFor(key)
-	local p = POSES[key] or POSES.sugar
+	local p = POSES[STEP_POSE[key] or key] or POSES.left
 	local c, y = p[1], p[2]
 	-- 세로 화면은 옆이 좁으니 더 높이 올라감
 	local vp = workspace.CurrentCamera.ViewportSize
@@ -62,6 +70,11 @@ local function step()
 end
 
 function CameraRig.go(key, instant)
+	local pose = STEP_POSE[key] or key
+	if bound and pose == current and not instant then
+		return -- 같은 화면이면 카메라를 움직이지 않음
+	end
+	current = pose
 	local target = CameraRig.poseFor(key)
 	if instant then
 		from, to = target, target
@@ -82,6 +95,7 @@ function CameraRig.release()
 		bound = false
 		RunService:UnbindFromRenderStep("DalgonaCamera")
 	end
+	current = nil
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70

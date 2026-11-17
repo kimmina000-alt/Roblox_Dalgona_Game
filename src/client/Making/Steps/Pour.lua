@@ -38,6 +38,19 @@ function Pour.run(ctx)
 	local flickPress = nil
 	local landing = nil
 
+	-- 카메라가 철판 쪽으로 옮겨 가 있으니, 국자를 먼저 철판 왼쪽 위로 들고 옴 (0.4초)
+	local hover = CFrame.new(plate.X - half - 0.15, carryY, plate.Z + 0.9) * rot
+	local start = ladle:GetPivot()
+	local tc = 0
+	while tc < 0.4 do
+		local dt = ctx.frame()
+		if not dt then
+			return nil
+		end
+		tc += dt
+		ladle:PivotTo(start:Lerp(hover, 1 - (1 - math.min(tc / 0.4, 1)) ^ 3))
+	end
+	home = hover
 	ui:say("국자를 철판 위로 끌어 기울여요", "설탕 원 가운데에 덩어리째 부어요")
 
 	while true do
@@ -61,12 +74,12 @@ function Pour.run(ctx)
 				else
 					tilt += (0 - tilt) * (1 - math.exp(-14 * dt))
 				end
-				ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, tilt) * rot)
+				ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, -tilt) * rot)
 				if tilt > DROP_TILT then
-					-- 덩어리가 국자 가장자리(-X쪽)로 미끄러져 떨어짐
+					-- 덩어리가 국자 가장자리(+X쪽, 손잡이 반대)로 미끄러져 떨어짐
 					dropped = true
 					dropTime = os.clock()
-					landing = Vector3.new(w.X - 0.45, S.plateTop, w.Z)
+					landing = Vector3.new(w.X + 0.45, S.plateTop, w.Z)
 					local flat = Vector3.new(landing.X - S.ringCenter.X, 0, landing.Z - S.ringCenter.Z)
 					rec.dist = flat.Magnitude
 					local e = math.clamp((rec.dist - 0.9) / 1.0, 0, 0.5)
