@@ -133,6 +133,7 @@ function Station:reset()
 		h.part.Transparency = 0
 	end
 	self.Flame.Rate = 30
+	self.Presser.Disc.Transparency = 0
 end
 
 -- 프레임마다 목표 자세로 다가감 (rate 25 ≈ 0.12초에 95%)

@@ -1,4 +1,4 @@
--- 원 그리며 젓기: 손가락 각속도(0.3초 평균)와 원의 중심 높이를 잰다.
+-- 원 그리며 젓기: 손가락 각속도(0.45초 평균)와 원의 중심 높이를 잰다.
 -- 녹이기와 소다 젓기가 같이 쓴다. 나무젓가락이 손가락 위치를 따라감.
 
 local Pointer = require(script.Parent:WaitForChild("Pointer"))
@@ -40,7 +40,7 @@ function Stir:update(dt)
 			da += 2 * math.pi
 		end
 		local inst = math.min(math.abs(da) / dt, 40)
-		self.speed += (inst - self.speed) * (1 - math.exp(-dt / 0.3))
+		self.speed += (inst - self.speed) * (1 - math.exp(-dt / 0.45))
 	end
 	self.lastAngle = a
 	return self.speed

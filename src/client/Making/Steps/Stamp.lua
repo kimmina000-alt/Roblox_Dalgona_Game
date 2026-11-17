@@ -69,6 +69,7 @@ function Stamp.run(ctx)
 						placed = CFrame.new(w.X, top + HALF_WIRE - 0.02, w.Z) * CFrame.Angles(0, math.rad(yaw), 0)
 						cutter:PivotTo(placed)
 						phase = "press"
+						presser.Disc.Transparency = 0.55
 						pBottom = top + 0.6 + 0.8
 						seenPress = P.presses
 						ui:buzz(0.3, 0.05)
@@ -154,6 +155,7 @@ function Stamp.run(ctx)
 		end
 	end
 	presser:PivotTo(S.rest.Presser)
+	presser.Disc.Transparency = 0
 	cutter:PivotTo(S.rest.StarCutter)
 	rec.t1 = ctx.now()
 	return rec

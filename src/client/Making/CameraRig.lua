@@ -1,19 +1,24 @@
--- 단계마다 고정 카메라. 단계가 바뀔 때만 컷 1프레임 + 0.25초 ease-out (MOTION_REFERENCE 5장)
+-- 단계마다 고정 카메라 = 테이블을 위에서 내려다보는 항공샷.
+-- 단계가 바뀔 때만 컷 1프레임 + 0.25초 ease-out (MOTION_REFERENCE 5장)
 -- 제작 중에는 매 프레임 카메라를 잡아 둔다 (다른 스크립트나 도구가 카메라를 바꿔도 고정 유지).
 
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local CameraRig = {}
 
--- 작업대 피벗 기준 { 보는 점, 카메라 위치 }
+local TABLE_TOP = 3.5
+local TILT = 0.12 -- 완전 수직이면 도구가 납작해 보여서 플레이어 쪽으로 살짝 기울임
+
+-- 작업대 피벗 기준 { 화면 가운데에 올 테이블 위 점(x, z), 카메라 높이(y) }
 local POSES = {
-	sugar = { Vector3.new(-1.7, 5.0, 0.4), Vector3.new(-1.7, 10.6, 8.0) },
-	melt = { Vector3.new(-3.2, 6.6, 0.1), Vector3.new(-3.2, 11.6, 4.6) },
-	soda = { Vector3.new(-2.6, 6.4, 0.0), Vector3.new(-2.6, 11.2, 5.4) },
-	pour = { Vector3.new(0.3, 4.6, 0.0), Vector3.new(0.3, 11.8, 8.6) },
-	press = { Vector3.new(4.0, 4.0, 0.0), Vector3.new(4.0, 8.0, 6.4) },
-	stamp = { Vector3.new(5.0, 3.8, 0.2), Vector3.new(5.0, 9.6, 5.6) },
-	result = { Vector3.new(3.6, 3.7, 0.0), Vector3.new(3.6, 8.4, 4.4) },
+	sugar = { Vector2.new(-1.3, 0.2), 12.5 },
+	melt = { Vector2.new(-3.0, 0.2), 12.0 },
+	soda = { Vector2.new(-2.4, 0.0), 12.0 },
+	pour = { Vector2.new(0.6, 0.0), 14.0 },
+	press = { Vector2.new(4.4, 0.0), 11.0 },
+	stamp = { Vector2.new(4.9, 0.2), 11.0 },
+	result = { Vector2.new(3.6, 0.0), 9.6 },
 }
 
 local FOV = 70
@@ -30,20 +35,21 @@ end
 
 function CameraRig.poseFor(key)
 	local p = POSES[key] or POSES.sugar
-	local look = origin:PointToWorldSpace(p[1])
-	local pos = origin:PointToWorldSpace(p[2])
-	-- 가로 화면(PC, 폰)은 옆으로 넓게 보이니 더 가까이 다가감
+	local c, y = p[1], p[2]
+	-- 세로 화면은 옆이 좁으니 더 높이 올라감
 	local vp = workspace.CurrentCamera.ViewportSize
-	if vp.X / math.max(vp.Y, 1) > 1.2 then
-		pos = look + (pos - look) * 0.72
+	if vp.X / math.max(vp.Y, 1) < 1.2 then
+		y = TABLE_TOP + (y - TABLE_TOP) * 1.6
 	end
 	-- 폰 결과 화면: 팝업이 오른쪽이라 달고나를 왼쪽에 둠
-	if key == "result" and game:GetService("UserInputService").TouchEnabled then
-		local shift = Vector3.new(1.9, 0, 0)
-		look += shift
-		pos += shift
+	if key == "result" and UserInputService.TouchEnabled then
+		c += Vector2.new(1.9, 0)
 	end
-	return CFrame.lookAt(pos, look)
+	local h = y - TABLE_TOP
+	local look = origin:PointToWorldSpace(Vector3.new(c.X, TABLE_TOP, c.Y))
+	local pos = origin:PointToWorldSpace(Vector3.new(c.X, y, c.Y + h * TILT))
+	-- 화면 위쪽 = 테이블 안쪽(-Z)
+	return CFrame.lookAt(pos, look, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))
 end
 
 local function step()
@@ -60,8 +66,8 @@ function CameraRig.go(key, instant)
 	if instant then
 		from, to = target, target
 	else
-		-- 컷: 첫 프레임은 살짝 뒤에서, 그다음 0.25초 ease-out으로 다가감
-		from, to = target * CFrame.new(0, 0.4, 1.6), target
+		-- 컷: 첫 프레임은 살짝 높이서, 그다음 0.25초 ease-out으로 내려옴
+		from, to = target * CFrame.new(0, 0, 1.6), target
 	end
 	t0 = os.clock()
 	if not bound then

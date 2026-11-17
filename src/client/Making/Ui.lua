@@ -58,7 +58,7 @@ function Ui.new(player, steps)
 	local gui = new("ScreenGui", {
 		Name = "MakingScreen",
 		ResetOnSpawn = false,
-		IgnoreGuiInset = true,
+		IgnoreGuiInset = false, -- Roblox 위쪽 메뉴 줄 아래부터 그림 (폰에서 단계 칩과 겹치지 않게)
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		Enabled = false,
 		Parent = player:WaitForChild("PlayerGui"),
@@ -78,13 +78,16 @@ function Ui.new(player, steps)
 	self:_buildResult()
 
 	local function rescale()
-		local v = workspace.CurrentCamera.ViewportSize
+		local v = gui.AbsoluteSize
+		if v.X < 1 or v.Y < 1 then
+			v = workspace.CurrentCamera.ViewportSize
+		end
 		local s = math.clamp(math.min(v.X / self.ref.X, v.Y / self.ref.Y), 0.5, 1.25)
 		self.scale.Scale = s
 		root.Size = UDim2.fromOffset(v.X / s, v.Y / s)
 	end
 	rescale()
-	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
+	gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(rescale)
 	return self
 end
 
@@ -448,6 +451,7 @@ end
 function Ui:setGauge(visible, speed, slow, fast, title)
 	self.gauge.Visible = visible
 	if not visible then
+		self.needleX = nil
 		return
 	end
 	local maxS = fast * 1.6
@@ -456,7 +460,15 @@ function Ui:setGauge(visible, speed, slow, fast, title)
 	segs[1].Position, segs[1].Size = UDim2.fromScale(0, 0), UDim2.fromScale(a, 1)
 	segs[2].Position, segs[2].Size = UDim2.fromScale(a, 0), UDim2.fromScale(b - a, 1)
 	segs[3].Position, segs[3].Size = UDim2.fromScale(b, 0), UDim2.fromScale(1 - b, 1)
-	self.needle.Position = UDim2.fromScale(math.clamp(speed / maxS, 0, 1), 0.5)
+	-- 바늘은 부드럽게 따라감 (약 0.15초). 판정은 그대로 실제 속도로 함
+	local now = os.clock()
+	local dt = math.min(now - (self.needleT or now), 0.1)
+	self.needleT = now
+	local target = math.clamp(speed / maxS, 0, 1)
+	local x = self.needleX or target
+	x += (target - x) * (1 - math.exp(-7 * dt))
+	self.needleX = x
+	self.needle.Position = UDim2.fromScale(x, 0.5)
 	self.gaugeTitle.Text = title or "STIR SPEED"
 end
 

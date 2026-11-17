@@ -19,6 +19,7 @@ function Press.run(ctx)
 	local rot = S.rest.Presser - S.rest.Presser.Position
 	local discHalf = presser.Disc.Size.X / 2
 	local c = dal.center
+	presser.Disc.Transparency = 0.55 -- 위에서 내려다봐도 아래 반죽이 퍼지는 게 보이게
 
 	local function presserAt(bottomY)
 		return CFrame.new(c.X, bottomY + discHalf, c.Z) * rot
@@ -87,7 +88,8 @@ function Press.run(ctx)
 			presser:PivotTo(presserAt(bottom))
 			if not P.down then
 				holding = false
-				if hStart - h > 0.02 then
+				-- 이미 가장 얇아졌으면 더 줄지 않아도 누른 것으로 셈 (안 그러면 단계가 안 끝남)
+				if hStart - h > 0.02 or (contact and h <= cfg.crack * 0.81) then
 					count += 1
 					h = h * 1.04 -- 떼면 살짝 되돌아옴
 					dal:setThickness(h)
@@ -136,6 +138,7 @@ function Press.run(ctx)
 		end
 	end
 	presser:PivotTo(S.rest.Presser)
+	presser.Disc.Transparency = 0
 	rec.t1 = ctx.now()
 	return rec
 end
