@@ -1,0 +1,30 @@
+-- 서버 진입점 (Phase 1: 제작 프로토타입, 저장 없음)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Services = script.Parent:WaitForChild("Services")
+local WorkstationBuilder = require(Services:WaitForChild("WorkstationBuilder"))
+local ProductionService = require(Services:WaitForChild("ProductionService"))
+
+local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+if not remotes then
+	remotes = Instance.new("Folder")
+	remotes.Name = "Remotes"
+	remotes.Parent = ReplicatedStorage
+end
+for _, name in ipairs({ "StartProduction", "SubmitProduction" }) do
+	if not remotes:FindFirstChild(name) then
+		local rf = Instance.new("RemoteFunction")
+		rf.Name = name
+		rf.Parent = remotes
+	end
+end
+
+-- 맵은 스크립트로 만든다. Studio에 이미 저장된 작업대가 있으면 그대로 쓴다.
+if not workspace:FindFirstChild("DalgonaWorkstation") then
+	WorkstationBuilder.build(workspace)
+end
+
+ProductionService.init({
+	StartProduction = remotes.StartProduction,
+	SubmitProduction = remotes.SubmitProduction,
+})

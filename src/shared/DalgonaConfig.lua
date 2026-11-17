@@ -1,0 +1,89 @@
+-- 달고나 제작 미니게임 설정값 (DEVELOPMENT_PLAN.md 4장 v2)
+-- 서버와 클라이언트가 같이 쓴다. 숫자를 바꾸면 양쪽 판정이 같이 바뀐다.
+
+local C = {}
+
+C.Weights = { T = 0.25, M = 0.20, P = 0.25, S = 0.30 }
+
+-- 높은 점수부터. SYSTEMS_SPECIFICATION 2장 등급표
+C.Grades = {
+	{ min = 95, name = "Perfect", mult = 1.7, color = Color3.fromRGB(255, 196, 0) },
+	{ min = 85, name = "Excellent", mult = 1.3, color = Color3.fromRGB(120, 200, 90) },
+	{ min = 70, name = "Good", mult = 1.0, color = Color3.fromRGB(80, 160, 230) },
+	{ min = 50, name = "Normal", mult = 0.8, color = Color3.fromRGB(150, 150, 150) },
+	{ min = 30, name = "Poor", mult = 0.5, color = Color3.fromRGB(190, 120, 70) },
+	{ min = 0, name = "Burnt", mult = 0.2, color = Color3.fromRGB(60, 40, 30) },
+}
+
+-- 별 개수 (결과 화면, QUALITY 링 아래)
+C.StarCut = { 50, 70, 85 }
+
+C.Shape = { id = "Star", name = "별", price = 22 }
+
+C.Steps = {
+	{ key = "sugar", label = "설탕", icon = "🥄", title = "설탕 넣기", desc = "백설탕 2스푼 + 황설탕 1/4" },
+	{ key = "melt", label = "녹이기", icon = "🔥", title = "녹이기", desc = "불에서 살짝 띄워 저어요" },
+	{ key = "soda", label = "소다", icon = "🧂", title = "소다", desc = "투명해지면 바로 톡!" },
+	{ key = "pour", label = "붓기", icon = "🍯", title = "붓기", desc = "설탕 원 가운데에 부어요" },
+	{ key = "press", label = "누르기", icon = "⚪", title = "누르기", desc = "3번 나눠서 꾹" },
+	{ key = "stamp", label = "모양", icon = "⭐", title = "모양 찍기", desc = "별 틀을 올리고 살살" },
+}
+
+-- 단계 가중치 (QUALITY 링 실시간 표시용). T = 설탕 20% + 녹이기 80%, P = 붓기 30% + 누르기 70%
+C.LiveWeights = {
+	sugar = 0.25 * 0.2,
+	melt = 0.25 * 0.8,
+	soda = 0.20,
+	pour = 0.25 * 0.3,
+	press = 0.25 * 0.7,
+	stamp = 0.30,
+}
+
+C.Sugar = {
+	white = 2.0, -- 백설탕 2스푼
+	brown = 0.25, -- 황설탕 1/4스푼
+	scoopWhite = 1.0,
+	scoopBrown = 0.25,
+	pourRate = 1.8, -- 스푼/초 (완전히 기울였을 때)
+	tiltPour = 40, -- 이 각도를 넘으면 쏟아짐
+}
+
+C.Melt = {
+	slow = 4.0, -- rad/s 미만 = SLOW
+	fast = 11.0, -- rad/s 초과 = FAST
+	tempLow = 150,
+	tempHigh = 185,
+	burnTemp = 192,
+	rate = 0.11, -- 적정 온도 + 적정 젓기일 때 초당 녹는 양 (약 10초)
+	hMin = 0.15, -- 국자 높이 (철망 위 stud)
+	hMax = 1.6,
+}
+
+C.Soda = {
+	idealMin = 0.35,
+	idealMax = 0.65,
+	fastMin = 9.0, -- 소다 젓기는 이 속도 이상이 정답
+	bestDelay = 2.0, -- 다 녹고 이 시간 안에 넣으면 만점
+}
+
+C.Press = {
+	h0 = 0.45, -- 붓고 난 덩어리 두께
+	targets = { 0.25, 0.14, 0.08 }, -- 3번 나눠 누르기
+	crack = 0.055, -- 이보다 얇으면 가장자리 갈라짐
+	k = 1.25, -- 누르는 동안 두께 감소율 (dh/dt = -k*h)
+}
+
+C.Stamp = {
+	holdMin = 0.12,
+	holdMax = 0.5,
+	crackHold = 0.85,
+}
+
+C.Server = {
+	minStep = 1.5, -- 단계당 최소 시간 (초)
+	maxStep = 120,
+	maxTotal = 600,
+	maxSamples = 60,
+}
+
+return C

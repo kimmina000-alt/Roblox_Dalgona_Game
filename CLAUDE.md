@@ -1,0 +1,29 @@
+# 달고나 골목 (Dalgona Alley) — 작업 메모
+
+- 사용자는 한국어로 쓴다. 답도 한국어로.
+- 원본은 GitHub(`kimmina000-alt/Roblox_Dalgona_Game`). 기능마다 브랜치, 사용자가 승인하면 `main`에 머지한다.
+- `레퍼런스/`는 커밋하지 않는다.
+- 계획: `docs/DEVELOPMENT_PLAN.md` (4장 미니게임, 6장 개발 순서), 움직임 기준값: `docs/MOTION_REFERENCE_ANALYSIS.md`.
+
+## 코드 구조 (Rojo, `default.project.json`)
+| 폴더 | Studio 위치 | 내용 |
+|---|---|---|
+| `src/shared` | ReplicatedStorage.Shared | `DalgonaConfig`(수치), `Scoring`(Q 공식, 서버·클라 공용) |
+| `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수), `Services/WorkstationBuilder`(작업대를 Part로 생성) |
+| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona), `Making/Steps/`(단계마다 모듈 1개) |
+
+미니게임 단계는 모듈 하나씩 (Luau 로컬 변수 200개 제한).
+
+## Studio 동기화
+- Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).
+- 이 PC에는 Rojo가 없고, Studio Assistant의 HTTP 허용 목록 때문에 로컬 서버에서 받아 오는 방식도 막혀 있다.
+  그래서 지금은 Studio MCP(`multi_edit` / `execute_luau`로 `Source` 설정)로 넣는다. **`src/`와 Studio를 항상 같게 유지한다.**
+- 확인 방법: 양쪽에서 같은 체크섬(`x = (x*31 + byte) % 2147483647`)을 계산해 19개 스크립트가 모두 같은지 본다.
+- Rojo를 설치하면 `rojo serve`로 바꾼다 (프로젝트 파일은 이미 맞춰 둠).
+
+## 테스트
+- Play → 작업대 앞에서 E (또는 클라이언트에서 `MakingClient.StartMaking:Fire()`).
+- Studio에서만 `MakingClient.TestPointer:Fire(down, x, y)`로 손가락 입력을 프레임 단위로 넣을 수 있다 (자동 테스트용).
+  MCP 마우스 입력은 실제 속도보다 느리게 실행돼서 젓기 속도 판정 테스트에는 맞지 않는다.
+- MCP `screen_capture`는 카메라 위치를 꼭 넘긴다 (안 넘기면 플레이 카메라를 Custom으로 되돌림). 제작 중에는 CameraRig가 매 프레임 카메라를 다시 고정한다.
+- 결과는 출력창 `[Making] result ...`(클라)와 `[Production] ...`(서버)에 단계별 점수가 찍힌다.
