@@ -150,7 +150,7 @@ function Melt.run(ctx)
 
 	ui:setGauge(false)
 	ui:setMeter(false)
-	Sfx.stir(nil, 0, false)
+	Sfx.stopStir()
 	for _, g in ipairs(st.grains) do
 		g.Transparency = 1
 	end

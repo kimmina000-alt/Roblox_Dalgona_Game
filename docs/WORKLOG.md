@@ -177,6 +177,10 @@
 - 소리: 새 모듈 `Making/Sfx.lua` + `C.Sounds` 키 7개 (sugarPour, crack, fire, stirDry, stirCrystal, stirLiquid, stirCream). 설탕 붓기·금 가기·연탄불(국자 높이)·젓기(상태별, 속도 = 크기·재생 속도)에 연결. **ID는 비어 있음** → 사용자가 `docs/SOUND_CANDIDATES.md`에서 고르면 넣음.
 - 확인: 하트 한 판 Q 95 Perfect(서버 검증), 오류 없음. 장면 `docs/screenshots/2026-11-18/stamp/` (groove_good, groove_weak, play_heart).
 
+### 소리 ID 넣기 (2026-11-18)
+- 사용자가 고른 7개를 `C.Sounds`에 넣음 (`docs/SOUND_CANDIDATES.md` 위 표). AudioAnalyzer로 앞쪽 무음을 재서 `<키>Start`로 건너뜀, 젓기 소리 크기 맞춤.
+- Play 확인: 단계마다 들린 소리 — 설탕 붓기 sugarPour, 녹이기 fire + stirDry → stirCrystal → stirLiquid, 소다 fire + stirLiquid → stirCream, 세게 찍기 crack. 소다가 끝난 뒤에도 stirCream이 남는 문제를 찾아 `Sfx.stopStir()`로 고침 (고친 뒤 다시 돌려 보지는 않음).
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음 → 도안 해금 없이 전부 열려 있음.

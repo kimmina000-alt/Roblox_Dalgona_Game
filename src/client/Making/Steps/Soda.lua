@@ -469,7 +469,7 @@ function Soda.run(ctx)
 	end
 
 	bubbles(S, false)
-	Sfx.stir(nil, 0, false)
+	Sfx.stopStir()
 	Sfx.stop("fire") -- 소다 다음부터는 불을 안 씀
 	if puff then
 		for _, b in ipairs(puff.pops) do

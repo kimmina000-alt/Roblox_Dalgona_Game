@@ -90,7 +90,7 @@ end
 -- 젓는 소리: 상태마다 질감이 다름 (가루 = 사각사각, 결정 = 톡톡, 액체 = 부드럽게, 소다 뒤 = 둔한 거품)
 -- speed = 젓는 각속도 (rad/s). 빠를수록 크고 빠르게
 local STIR_KEYS = { "stirDry", "stirCrystal", "stirLiquid", "stirCream" }
-local STIR_VOL = { stirDry = 0.55, stirCrystal = 0.45, stirLiquid = 0.35, stirCream = 0.4 }
+local STIR_VOL = { stirDry = 1.6, stirCrystal = 1.0, stirLiquid = 1.4, stirCream = 0.4 } -- 원본 크기가 달라서 맞춤 (사각사각·시럽은 원본이 아주 작음)
 function Sfx.stir(kind, speed, active)
 	local k = math.clamp((speed or 0) / 10, 0, 1.3)
 	for _, key in ipairs(STIR_KEYS) do
@@ -99,6 +99,13 @@ function Sfx.stir(kind, speed, active)
 		else
 			Sfx.loop(key, 0, 1)
 		end
+	end
+end
+
+-- 단계가 끝날 때: 젓는 소리 바로 멈춤
+function Sfx.stopStir()
+	for _, key in ipairs(STIR_KEYS) do
+		Sfx.stop(key)
 	end
 end
 
