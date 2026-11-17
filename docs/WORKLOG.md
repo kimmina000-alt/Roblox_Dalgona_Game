@@ -52,6 +52,10 @@
 - 국자 광택: glb의 금속도 0.95 / 거칠기 0.25가 Roblox로 안 넘어와서 밋밋했음. 내장 텍스처로 SurfaceAppearance를 시도했으나 Roblox가 게임 안에서는 막음(경고 확인). 지금은 Metal + 밝은 구리색. 제대로 하려면 텍스처 2장(금속도·거칠기)을 Roblox에 올려야 함.
 - 확인(폰 에뮬레이션): 한 판 Q 87 Excellent, 서버 판정, 오류 0. 스크린샷 `phone-v4/`.
 
+### 국자 광택
+- 사용자 승인 후 64x64 단색 텍스처 2장을 Roblox에 올림: 금속도 0.95 `rbxassetid://75555295293901`, 거칠기 0.25 `rbxassetid://116334782975968` (Blender 재질과 같은 값).
+- `ServerStorage.Assets.LadleMesh`에 SurfaceAppearance `CopperShine`(색 214,132,72)으로 적용. Play에서 경고 0, 위에서 볼 때 테두리 하이라이트와 금속 그라데이션 확인. 스크린샷 `phone-v4/9_ladle_shine.jpg`.
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음.

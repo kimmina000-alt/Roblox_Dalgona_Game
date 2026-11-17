@@ -169,7 +169,7 @@ function Builder.attachLadleMesh(m)
 	mesh.Anchored = true
 	mesh.CanCollide = false
 	mesh.CastShadow = true
-	-- glb의 금속(0.95)·광택(거칠기 0.25) 값은 Roblox로 안 넘어온다. 텍스처 없이 쓸 수 있는 것 중 Metal + 밝은 구리색이 가장 가깝다.
+	-- 광택은 템플릿 안의 SurfaceAppearance "CopperShine"(금속도 0.95 · 거칠기 0.25 텍스처)이 낸다. 아래 색·재질은 그게 없을 때 대신 쓰는 값.
 	mesh.Color = Color3.fromRGB(196, 116, 58)
 	mesh.Material = Enum.Material.Metal
 	local scale = bowl.Size.Y / tpl.Size.X -- 그릇 지름을 판정용 원기둥과 같게

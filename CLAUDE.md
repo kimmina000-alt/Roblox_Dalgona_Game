@@ -17,7 +17,7 @@
 ## 에셋 (Rojo 밖, Studio에만 있음)
 - `ServerStorage.Assets.LadleMesh`: 사용자가 만든 구리 국자 (`레퍼런스/dalgona_gukja.glb`를 Studio에서 가져옴). `WorkstationBuilder.attachLadleMesh`가 투명한 판정용 원기둥 `Ladle.Bowl`에 맞춰 붙인다. 게임 코드는 계속 `Bowl` 기준으로 움직인다.
 - glb는 Roblox로 가져오면 앞뒤(Z)가 뒤집힌다. 다른 메시를 바꿀 때도 방향을 화면으로 먼저 확인한다.
-- glb의 금속도·거칠기 값(Principled BSDF 숫자)은 Roblox로 넘어오지 않는다. 지금은 Metal 재질 + 구리색으로 대신한다. 진짜 광택은 금속도/거칠기 텍스처가 있어야 한다 (SurfaceAppearance에 `rbxasset://` 내장 텍스처는 게임 안에서 막힘).
+- glb의 금속도·거칠기 값(Principled BSDF 숫자)은 Roblox로 넘어오지 않는다. 그래서 `LadleMesh` 안에 SurfaceAppearance `CopperShine`을 직접 넣었다: 금속도 텍스처 `rbxassetid://75555295293901`(0.95), 거칠기 텍스처 `rbxassetid://116334782975968`(0.25), 색 (214,132,72). `rbxasset://` 내장 텍스처는 게임 안에서 막혀서 쓸 수 없다.
 
 ## Studio 동기화
 - Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).
