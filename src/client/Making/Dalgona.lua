@@ -2,6 +2,14 @@
 -- 원 밖에 부으면 철판에 들러붙어 찌그러짐(타원). 갈라짐, 각인, Perfect 반짝임.
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DalgonaConfig"))
+local Fx = require(script.Parent:WaitForChild("Fx"))
+
+-- 3D 반죽 메시 (tools/blender/dalgona_mesh.py, 유튜브 쇼츠 영상 분석): 두께에 따라 바뀜
+--   붓는 중·막 부은 것(h ≥ 0.40): DalgonaMound  리본처럼 접히며 쌓인 주름진 언덕
+--   한두 번 누른 것(0.16 ≤ h < 0.40): DalgonaPuff  둥글게 부푼 가장자리 + 기포 구멍
+--   다 누른 것(h < 0.16): DalgonaFlat  얇고 평평, 고운 구멍 자국
+-- 메시가 없으면 예전 원기둥 + 봉우리 모양
+local MOUND_H, FLAT_H = 0.40, 0.16
 
 local Dalgona = {}
 Dalgona.__index = Dalgona
@@ -70,8 +78,52 @@ function Dalgona.new(station, center, color, volume, ellipse)
 		local a = i * math.pi / 2 + 0.4
 		self.lumps[i] = { part = station:fxPart(station.fx, { Name = "DalgonaLump", Shape = Enum.PartType.Ball, Color = color, Material = Enum.Material.SmoothPlastic }), a = a, r = 0.25 + 0.08 * (i % 2) }
 	end
+	if Fx.template("DalgonaPuff") then
+		self.meshes = {}
+		for _, name in ipairs({ "DalgonaMound", "DalgonaPuff", "DalgonaFlat" }) do
+			self.meshes[name] = Fx.mesh(name, station.fx, { Name = name, Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
+		end
+		self.spin = math.random() * 2 * math.pi
+		for _, p in ipairs({ self.body, self.rim, self.rim2, self.dome }) do
+			p.Transparency = 1
+		end
+		for _, l in ipairs(self.lumps) do
+			l.part.Transparency = 1
+		end
+	end
 	self:setThickness(self.h)
 	return self
+end
+
+-- 3D 메시 모드: 두께에 맞는 메시 하나만 보이고, 지름·높이를 맞춤
+function Dalgona:placeMeshes(h, d, k)
+	local c = self.center
+	local stage = h >= MOUND_H and "DalgonaMound" or (h >= FLAT_H and "DalgonaPuff" or "DalgonaFlat")
+	self.stage = stage
+	for name, p in pairs(self.meshes) do
+		if name ~= stage then
+			p.Transparency = 1
+		else
+			p.Transparency = 0
+			local height
+			if name == "DalgonaMound" then
+				height = h * 0.75 * 1.25 -- 접힌 언덕은 가운데가 솟음
+				p.Size = Vector3.new(d * k * 0.95, height, d / k * 0.85)
+			elseif name == "DalgonaPuff" then
+				height = h * 0.75 * 1.1
+				p.Size = Vector3.new(d * k, height, d / k)
+			else
+				height = math.max(h * 0.75, 0.03)
+				p.Size = Vector3.new(d * k, height, d / k)
+			end
+			p.CFrame = CFrame.new(c.X, c.Y + height / 2, c.Z) * CFrame.Angles(0, self.spin, 0)
+		end
+	end
+	-- 표면 무늬(반점·얼룩·하이라이트)는 평평해진 뒤에만 (부푼 원판은 기포 구멍이 메시에 있음)
+	local showDetails = stage == "DalgonaFlat"
+	for _, dt in ipairs(self.details) do
+		dt.part.LocalTransparencyModifier = showDetails and 0 or 1
+	end
 end
 
 function Dalgona:diameter(h)
@@ -105,6 +157,10 @@ function Dalgona:setThickness(h)
 			dt.part.Size = Vector3.new(dt.abs, dt.abs * 0.6, dt.abs)
 			dt.part.CFrame = CFrame.new(x, top + dt.abs * 0.12, z)
 		end
+	end
+	if self.meshes then
+		self:placeMeshes(h, d, k)
+		return
 	end
 	-- 언덕 모양: 두꺼울 때만 위에 둥근 봉우리와 덩어리
 	local s = math.clamp((h - 0.22) / (Config.Press.h0 - 0.22), 0, 1)
@@ -144,6 +200,12 @@ function Dalgona:setLook(look)
 	for _, p in ipairs({ self.body, self.dome }) do
 		p.Color = base
 		p.Reflectance = refl
+	end
+	if self.meshes then
+		-- 막 부은 반죽은 크림처럼 조금 밝고, 굳어 갈수록 본래 색
+		self.meshes.DalgonaMound.Color = base:Lerp(Color3.fromRGB(236, 178, 96), 0.3)
+		self.meshes.DalgonaPuff.Color = base
+		self.meshes.DalgonaFlat.Color = base
 	end
 	for _, l in ipairs(self.lumps) do
 		l.part.Color = base
@@ -203,6 +265,11 @@ end
 
 function Dalgona:setColor(c)
 	self.color = c
+	if self.meshes then
+		for _, p in pairs(self.meshes) do
+			p.Color = c
+		end
+	end
 	self.body.Color = c
 	self.dome.Color = c
 	for _, l in ipairs(self.lumps) do

@@ -189,7 +189,9 @@ function Station:useChopstick(pair, side)
 	end
 	local c = tpl:Clone()
 	c.Name = "Chosen"
-	c.CFrame = self.Chopsticks.Stick1.CFrame * CFrame.Angles(math.rad(90), 0, 0)
+	-- 길이를 X로 눕힌 메시(나뭇결용)는 90° 세워서 예전과 같은 방향으로
+	c:SetAttribute("Fix", c.Size.X > c.Size.Y * 2)
+	c.CFrame = self.Chopsticks.Stick1.CFrame * CFrame.Angles(math.rad(90), 0, 0) * (c:GetAttribute("Fix") and CFrame.Angles(0, 0, math.rad(90)) or CFrame.new())
 	c.Parent = self.Chopsticks
 end
 

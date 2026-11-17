@@ -12,6 +12,14 @@ local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Da
 
 local Picker = {}
 
+-- 나무젓가락 메시가 길이를 X축으로 눕힌 판(나뭇결이 X축을 따라감)이면 예전 판(길이 Y)처럼 세우는 보정
+local function stickFix(p)
+	if p.Size.X > p.Size.Y * 2 then
+		return CFrame.Angles(0, 0, math.rad(90))
+	end
+	return CFrame.new()
+end
+
 local TILT = -35 -- 사선 각도
 local STICK_RISE = 0.19 -- 포장지 안에서 젓가락 가운데 높이 (glb 기준)
 
@@ -106,14 +114,14 @@ function Picker.run(ctx)
 		local p = cs:FindFirstChild(name):Clone()
 		p.Transparency = transparency or 0
 		p.Parent = vpf
-		local it = { part = p, cf = localCf }
+		local it = { part = p, cf = localCf, fix = name:sub(1, 5) == "Stick" and stickFix(p) or CFrame.new() }
 		items[name] = it
 		return it
 	end
 	local function render()
 		local pivot = CFrame.Angles(0, 0, math.rad(angle))
 		for _, it in pairs(items) do
-			it.part.CFrame = pivot * it.cf
+			it.part.CFrame = pivot * it.cf * it.fix
 		end
 	end
 	local function animate(dur, fn)

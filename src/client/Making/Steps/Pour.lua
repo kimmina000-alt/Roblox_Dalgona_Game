@@ -10,6 +10,7 @@ local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 
 local Dalgona = require(script.Parent.Parent:WaitForChild("Dalgona"))
+local Fx = require(script.Parent.Parent:WaitForChild("Fx"))
 
 local Pour = {}
 
@@ -22,6 +23,11 @@ local SEGMENTS = 28
 -- 흘러내리는 반죽 줄기: 공 모양 조각을 이어 붙인 관. 국자 가장자리(lip) → 반죽 위(land)
 local function newStream(S, color)
 	local st = { parts = {}, head = 0, tail = 0, t = 0, flow = 0 }
+	-- 3D 리본 메시가 있으면 그것 하나로 (영상: 가는 줄기가 아니라 넓적한 반죽 띠가 접히며 미끄러져 나옴)
+	st.ribbon = Fx.mesh("PourRibbon", S.fx, { Name = "PourRibbon", Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
+	if st.ribbon then
+		return st
+	end
 	for i = 1, SEGMENTS do
 		st.parts[i] = S:fxPart(S.fx, {
 			Name = "PourStream",
@@ -39,6 +45,28 @@ end
 -- lip: 국자 가장자리, out: 흘러나가는 방향(수평), land: 떨어지는 곳(반죽 윗면)
 -- head/tail: 줄기의 위끝·아래끝 위치 (0 = 국자, 1 = 바닥). flow: 굵기 0~1
 local function drawStream(st, lip, out, land)
+	if st.ribbon then
+		local top = lip:Lerp(land, st.tail)
+		local bottom = lip:Lerp(land, math.min(st.head, 1))
+		local len = (bottom - top).Magnitude
+		if len < 0.03 or st.flow <= 0.01 then
+			st.ribbon.Transparency = 1
+			return
+		end
+		local up = (top - bottom).Unit
+		local right = out:Cross(Vector3.yAxis)
+		if right.Magnitude < 1e-3 then
+			right = Vector3.xAxis
+		end
+		right = (right - up * right:Dot(up)).Unit
+		local w = math.sqrt(st.flow) * (st.tail > 0 and (1 - st.tail * 0.6) or 1)
+		st.ribbon.Size = Vector3.new(0.5 * w, len + 0.08, 0.26 * w)
+		-- 출렁임: 띠가 살짝 비틀리고 흔들림
+		local wob = CFrame.Angles(0, math.sin(st.t * 5) * 0.35, math.sin(st.t * 7) * 0.06)
+		st.ribbon.CFrame = CFrame.fromMatrix((top + bottom) / 2, right, up) * wob
+		st.ribbon.Transparency = 0
+		return
+	end
 	local ctrl = lip + out * 0.2 + Vector3.new(0, -0.05, 0) -- 가장자리에서 살짝 밀려 나왔다 떨어짐
 	for i, p in ipairs(st.parts) do
 		local s = (i - 1) / (SEGMENTS - 1)
@@ -193,6 +221,9 @@ function Pour.run(ctx)
 								local a = math.min(t / 0.45, 1)
 								blob:setThickness(finalH * (1 + 0.08 * math.sin(a * math.pi * 2.5) * (1 - a)))
 							end
+							if stream.ribbon then
+								stream.ribbon.Transparency = 1
+							end
 							for _, p in ipairs(stream.parts) do
 								p.Transparency = 1
 							end
@@ -210,6 +241,9 @@ function Pour.run(ctx)
 					-- 붓다가 손을 떼면 줄기가 끊겨 떨어짐 (다시 기울이면 이어서 부음)
 					stream.flow = math.max(0, stream.flow - dt * 5)
 					if stream.flow <= 0.01 then
+						if stream.ribbon then
+							stream.ribbon.Transparency = 1
+						end
 						for _, p in ipairs(stream.parts) do
 							p.Transparency = 1
 						end
