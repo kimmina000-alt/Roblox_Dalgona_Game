@@ -83,6 +83,9 @@ C.Stamp = {
 C.Sounds = {
 	paperTear = "rbxassetid://9125724621", -- 종이 찢는 소리 1.1초
 	stickSnap = "rbxassetid://9113581974", -- 나무젓가락 쪼개는 소리 0.7초
+	-- 파일 앞쪽 무음 길이 (Studio에서 AudioAnalyzer로 잼). 여기서부터 재생해 누르는 순간 바로 들리게
+	paperTearStart = 0.06,
+	stickSnapStart = 0.09,
 }
 
 C.Server = {

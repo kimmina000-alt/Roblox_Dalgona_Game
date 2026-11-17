@@ -3,6 +3,7 @@
 -- → 누르면 나무젓가락 1 또는 2(랜덤)를 꺼냄 → 누르면 "뽀각" 두 짝으로 쪼개짐 → 누른 쪽 한 짝으로 제작 시작.
 -- 메시는 ReplicatedStorage.Assets.Chopsticks (사용자 Blender 모델 dalgona_joggalack.glb). 3D는 ViewportFrame 안에서 보여 준다.
 
+local ContentProvider = game:GetService("ContentProvider")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
@@ -14,15 +15,31 @@ local Picker = {}
 local TILT = -35 -- 사선 각도
 local STICK_RISE = 0.19 -- 포장지 안에서 젓가락 가운데 높이 (glb 기준)
 
-local function play(id)
-	local s = Instance.new("Sound")
-	s.SoundId = id
-	s.Volume = 0.9
-	s.Parent = SoundService
+-- 효과음은 게임 시작 때 미리 불러 두고(누를 때 만들면 불러오는 동안 늦게 들림),
+-- 파일 앞쪽 무음은 건너뛰고 재생한다.
+local sounds = {}
+local function getSound(key)
+	local s = sounds[key]
+	if not s then
+		s = Instance.new("Sound")
+		s.Name = "Picker_" .. key
+		s.SoundId = Config.Sounds[key]
+		s.Volume = 0.9
+		s.PlaybackRegionsEnabled = true
+		s.PlaybackRegion = NumberRange.new(Config.Sounds[key .. "Start"] or 0, 60)
+		s.Parent = SoundService
+		sounds[key] = s
+	end
+	return s
+end
+task.spawn(function()
+	ContentProvider:PreloadAsync({ getSound("paperTear"), getSound("stickSnap") })
+end)
+
+local function play(key)
+	local s = getSound(key)
+	s:Stop()
 	s:Play()
-	s.Ended:Connect(function()
-		s:Destroy()
-	end)
 end
 
 local function easeOut(a)
@@ -163,7 +180,7 @@ function Picker.run(ctx)
 	if not waitClick() then
 		return finish(nil)
 	end
-	play(Config.Sounds.paperTear)
+	play("paperTear")
 	ctx.ui:buzz(0.3, 0.06)
 	local w2start = wrap2.cf
 	if not animate(0.35, function(a)
@@ -208,7 +225,7 @@ function Picker.run(ctx)
 	if not waitClick() then
 		return finish(nil)
 	end
-	play(Config.Sounds.stickSnap)
+	play("stickSnap")
 	ctx.ui:buzz(0.5, 0.08)
 	aStart, bStart = a.cf, b.cf
 	if not animate(0.22, function(t)
