@@ -9,6 +9,41 @@ local Scoring = require(Shared:WaitForChild("Scoring"))
 local Press = {}
 
 local HOVER = 0.7
+local RING_COLOR = Color3.fromRGB(150, 255, 140) -- 연두색
+local RING_SEGMENTS = 48
+
+-- 누름판에 가려도 달고나가 퍼지는 크기가 보이게: 반투명 연두색 원 선.
+-- 얇은 네온 조각 48개를 누름판 원판 바로 위 높이에 띄움 (카메라가 위에서 보므로 누름판에 안 가림)
+local function makeRing(S)
+	local folder = Instance.new("Folder")
+	folder.Name = "PressRing"
+	for _ = 1, RING_SEGMENTS do
+		S:fxPart(folder, {
+			Name = "Seg",
+			Material = Enum.Material.Neon,
+			Color = RING_COLOR,
+			Transparency = 0.25,
+			Size = Vector3.new(0.09, 0.03, 0.1),
+		})
+	end
+	folder.Parent = S.fx
+	return folder
+end
+
+local function placeRing(S, ring, dal)
+	local r = dal:radius()
+	local c = dal.center
+	local disc = S.Presser.Disc
+	local y = math.max(dal:topY() + 0.02, disc.Position.Y + disc.Size.X / 2 + 0.03)
+	for i, seg in ipairs(ring:GetChildren()) do
+		local a0 = (i - 1) / RING_SEGMENTS * 2 * math.pi
+		local a1 = i / RING_SEGMENTS * 2 * math.pi
+		local p0 = Vector3.new(c.X + math.cos(a0) * r, y, c.Z + math.sin(a0) * r)
+		local p1 = Vector3.new(c.X + math.cos(a1) * r, y, c.Z + math.sin(a1) * r)
+		seg.Size = Vector3.new(0.09, 0.03, (p1 - p0).Magnitude + 0.02)
+		seg.CFrame = CFrame.lookAt((p0 + p1) / 2, p1)
+	end
+end
 
 function Press.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
@@ -19,7 +54,9 @@ function Press.run(ctx)
 	local rot = S.rest.Presser - S.rest.Presser.Position
 	local discHalf = presser.Disc.Size.X / 2
 	local c = dal.center
-	S:presserSeeThrough(true) -- 위에서 내려다봐도 아래 반죽이 퍼지는 게 보이게
+	S:presserSeeThrough(true)
+	local ring = makeRing(S)
+	placeRing(S, ring, dal)
 
 	local function presserAt(bottomY)
 		return CFrame.new(c.X, bottomY + discHalf, c.Z) * rot
@@ -113,6 +150,7 @@ function Press.run(ctx)
 			bottom += (hover - bottom) * (1 - math.exp(-22 * dt)) -- 떼면 0.1~0.2초 스프링 복귀
 			presser:PivotTo(presserAt(bottom))
 		end
+		placeRing(S, ring, dal)
 		local nextTarget = cfg.targets[math.min(count + 1, 3)]
 		ui:setMeter(true, h / cfg.h0, nextTarget * 0.82 / cfg.h0, nextTarget * 1.18 / cfg.h0, "두께")
 		local partial = { thick = {}, cracked = rec.cracked }
@@ -139,6 +177,7 @@ function Press.run(ctx)
 	end
 	presser:PivotTo(S.rest.Presser)
 	S:presserSeeThrough(false)
+	ring:Destroy()
 	rec.t1 = ctx.now()
 	return rec
 end

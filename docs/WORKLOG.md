@@ -133,6 +133,8 @@
   - 소다: 고운 가루 더미. 부풀기: 기포 돔이 0.6초 동안 살짝 넘치게 솟았다가 자리 잡고, 저을 때 숨 쉬듯 출렁임. 부으면 사라짐.
   - 쏟아지는 줄기: 알갱이 더 작고 많게(크기 0.03~0.045, 초당 260개).
 - 확인(효과 메시 가져오기 전): 하트 한 판 Q 94 Excellent(서버 검증), 오류 0.
+- 사용자가 `dalgona_fx.glb`를 가져옴 → `ReplicatedStorage.Assets.Fx`로. 게임에서 확인: 국자 속 결정 설탕 더미, 소다 가루 더미, 기포 거품이 부풀어 오름 (`fx/sugar_pile.jpg`, `soda_mound.jpg`, `foam_puff.jpg`).
+- 누르기: 달고나가 눌려 퍼지는 원을 반투명 연두색 선으로 표시 (`Steps/Press`). 처음엔 HandleAdornment로 했으나 위에서 보면 거의 안 보여서, 얇은 네온 조각 48개를 누름판 원판 바로 위에 띄우는 방식으로. 누르기가 끝나면 사라짐 (`fx/press_ring.jpg`).
 
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
