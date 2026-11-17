@@ -159,10 +159,6 @@ def sword():
     return _dedupe(_mirror(right))
 
 
-def sailboat():
-    return [(-0.92, -0.52), (-0.66, -0.86), (0.66, -0.86), (0.92, -0.52), (0.62, -0.44), (0.16, 0.6), (0.08, -0.4), (-0.02, 0.96), (-0.78, -0.44)]
-
-
 def octopus():
     pts = _arc(0, 0.18, 0.66, 0, math.pi, 30)  # 머리 (오른쪽 → 위 → 왼쪽)
     # 다리 4개: 왼쪽 → 오른쪽으로 아래로 늘어진 물결
@@ -184,40 +180,68 @@ def palace():
     return _dedupe(_mirror(right))
 
 
-def tiger():
-    def r(a):
-        base = 0.74
-        ear = 0.26 * (math.exp(-((a - math.radians(52)) / 0.2) ** 2) + math.exp(-((a - math.radians(128)) / 0.2) ** 2))
-        cheek = 0.0
-        for c in (205, 222, 318, 335):
-            cheek += 0.16 * max(0.0, 1 - abs(a - math.radians(c)) / 0.09)
-        return base + ear + cheek
+def _chaikin(pts, sharp=(), it=2):
+    """닫힌 다각형 모서리를 둥글게 (쿠키 틀 같은 부드러운 실루엣). sharp에 든 꼭짓점 번호는 뾰족하게 둔다."""
+    keep = [i in sharp for i in range(len(pts))]
+    for _ in range(it):
+        out, ok = [], []
+        n = len(pts)
+        for i in range(n):
+            p, q = pts[i], pts[(i + 1) % n]
+            if keep[i]:
+                out.append(p); ok.append(True)
+            else:
+                out.append((0.75 * p[0] + 0.25 * q[0], 0.75 * p[1] + 0.25 * q[1])); ok.append(False)
+            if not keep[(i + 1) % n]:
+                out.append((0.25 * p[0] + 0.75 * q[0], 0.25 * p[1] + 0.75 * q[1])); ok.append(False)
+        pts, keep = out, ok
+    return pts
 
-    return _polar(r, 180)
+
+# 호랑이·용·범선은 실제 달고나 틀(레퍼런스 사진: 공룡·말·곰 등 옆모습 실루엣)처럼
+# 통통하고 단순한 옆모습 외곽선 + 둥근 모서리로 그린다.
+def tiger():
+    # 오른쪽을 보고 걷는 호랑이 옆모습: 귀 2개, 앞·뒷다리, 위로 말린 꼬리
+    pts = [
+        (-0.55, 0.26), (0.0, 0.32), (0.32, 0.3), (0.42, 0.42), (0.44, 0.56), (0.49, 0.72), (0.58, 0.6), (0.68, 0.61),
+        (0.78, 0.73), (0.83, 0.56), (0.91, 0.48), (0.99, 0.34), (0.96, 0.21), (0.82, 0.14), (0.68, 0.08), (0.62, -0.05),
+        (0.64, -0.66), (0.75, -0.72), (0.75, -0.84), (0.42, -0.84), (0.42, -0.26), (0.1, -0.3), (-0.28, -0.26),
+        (-0.3, -0.7), (-0.21, -0.75), (-0.21, -0.84), (-0.6, -0.84), (-0.62, -0.32), (-0.71, -0.02), (-0.68, 0.16),
+        (-0.78, 0.24), (-0.9, 0.42), (-0.95, 0.62), (-0.86, 0.73), (-0.79, 0.58), (-0.75, 0.43), (-0.64, 0.31),
+    ]
+    return _chaikin(pts, sharp={5, 8})
 
 
 def dragon():
-    # S자로 휜 몸 + 머리(오른쪽 위, 뿔 2개) + 뾰족한 꼬리(왼쪽 아래)
-    center = _bezier((-0.85, -0.75), (0.2, -0.95), (-0.6, 0.2), (0.45, 0.35), 40)
-    left, right = [], []
-    n = len(center)
-    for i in range(n):
-        x, y = center[i]
-        x0, y0 = center[max(i - 1, 0)]
-        x1, y1 = center[min(i + 1, n - 1)]
-        dx, dy = x1 - x0, y1 - y0
-        L = math.hypot(dx, dy) or 1
-        nx, ny = -dy / L, dx / L
-        t = i / (n - 1)
-        w = 0.03 + 0.17 * t
-        spike = 0.11 if (0.25 < t < 0.9 and i % 5 == 0) else 0.0  # 등의 가시
-        left.append((x + nx * (w + spike), y + ny * (w + spike)))
-        right.append((x - nx * w, y - ny * w))
-    hx, hy = center[-1]
-    head = [(hx + 0.14, hy + 0.24), (hx + 0.08, hy + 0.5), (hx + 0.26, hy + 0.3), (hx + 0.34, hy + 0.55), (hx + 0.4, hy + 0.27),
-            (hx + 0.6, hy + 0.18), (hx + 0.58, hy + 0.04), (hx + 0.4, hy + 0.02), (hx + 0.55, hy - 0.1), (hx + 0.32, hy - 0.16), (hx + 0.14, hy - 0.2)]
-    pts = right + list(reversed(head)) + list(reversed(left))
-    return _dedupe(pts)
+    # 일어선 용 옆모습 (공룡 틀처럼): 등 가시 5개, 뿔, 벌린 입, 팔, 굵은 다리, 길게 끌리는 꼬리
+    pts, sharp = [(-1.0, -0.76)], {0}
+    pts.append((-0.68, -0.56))
+    ax, ay, bx, by = -0.44, -0.3, 0.06, 0.48
+    dx, dy = bx - ax, by - ay
+    L = math.hypot(dx, dy)
+    nx, ny = -dy / L, dx / L
+    for k in range(5):
+        t0, tm, t1 = (k + 0.1) / 5, (k + 0.5) / 5, (k + 0.9) / 5
+        pts.append((ax + dx * t0, ay + dy * t0))
+        sharp.add(len(pts))
+        pts.append((ax + dx * tm + nx * 0.17, ay + dy * tm + ny * 0.17))
+        pts.append((ax + dx * t1, ay + dy * t1))
+    pts += [(0.1, 0.62)]
+    sharp.add(len(pts)); pts.append((0.1, 0.9))  # 뿔
+    pts += [(0.26, 0.72), (0.48, 0.74), (0.82, 0.62), (0.94, 0.5)]
+    sharp.add(len(pts)); pts.append((0.62, 0.45))  # 입 안쪽
+    pts += [(0.84, 0.36), (0.74, 0.27), (0.42, 0.26), (0.42, 0.1), (0.62, 0.08)]
+    sharp.add(len(pts)); pts.append((0.68, -0.02))  # 발톱
+    pts += [(0.4, -0.04), (0.32, -0.28), (0.32, -0.7), (0.5, -0.76), (0.5, -0.87), (-0.12, -0.87), (-0.14, -0.62), (-0.44, -0.64), (-0.72, -0.74)]
+    return _chaikin(pts, sharp=sharp)
+
+
+def sailboat():
+    # 배 몸통 + 큰 돛(오른쪽) + 작은 돛(왼쪽) + 돛대 끝 깃발
+    return [
+        (-0.62, -0.86), (0.62, -0.86), (0.92, -0.46), (0.06, -0.46), (0.06, -0.33), (0.72, -0.33), (0.06, 0.86),
+        (0.06, 1.0), (-0.3, 0.92), (-0.04, 0.84), (-0.04, 0.6), (-0.62, -0.31), (-0.04, -0.31), (-0.04, -0.46), (-0.92, -0.46),
+    ]
 
 
 # 기획서 순서: (id, 한국어 이름, 등급, 함수)
