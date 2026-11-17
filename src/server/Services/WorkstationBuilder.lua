@@ -367,6 +367,71 @@ function Builder.attachWrappedChopsticks(m)
 	return true
 end
 
+-- Claude가 Blender 스크립트(tools/blender/props.py → 레퍼런스/dalgona_props.glb)로 만든 소품 메시.
+-- ServerStorage.Assets에 있으면 Part 대신 보이고, 게임용 부품(Scoop·Heap·Bowl 등)은 투명하게 남겨 둔다.
+-- center = Blender에서 기준점(그릇 바닥 가운데 / 숟가락 머리 가운데) → 메시 경계 상자 가운데 (x, y, z)
+-- Roblox: 메시 = 기준 CFrame * (x, z, -y) * 180° 회전 (glb는 앞뒤가 뒤집혀 들어옴)
+local PROP_CENTER = {
+	SugarBowlMesh = Vector3.new(0, 0, 0.2273),
+	SugarHeapMesh = Vector3.new(0, 0, 0.2313),
+	SodaCanMesh = Vector3.new(0, 0, 0.3189),
+	SodaLabelMesh = Vector3.new(0, 0, 0.31),
+	SodaPowderMesh = Vector3.new(0, 0, 0.5297),
+	WoodSpoonMesh = Vector3.new(0, -0.9401, 0.1765),
+	TinSpoonMesh = Vector3.new(0, -0.6423, 0.1083),
+}
+
+local function propTemplate(name)
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	return assets and assets:FindFirstChild(name)
+end
+
+local function hideParts(m, keep)
+	for _, p in ipairs(m:GetChildren()) do
+		if p:IsA("BasePart") and not p:IsA("MeshPart") and not (keep and keep[p.Name]) then
+			p.Transparency = 1
+			p.CastShadow = false
+		end
+	end
+end
+
+-- 반환: 붙인 메시 (템플릿이 없으면 nil)
+local function attachProp(m, tplName, refCF, color, material, shine)
+	local tpl = propTemplate(tplName)
+	if not tpl then
+		return nil
+	end
+	local old = m:FindFirstChild(tplName)
+	if old then
+		old:Destroy()
+	end
+	local mesh = tpl:Clone()
+	mesh.Name = tplName
+	mesh.Anchored = true
+	mesh.CanCollide = false
+	mesh.CanQuery = false
+	mesh.CanTouch = false
+	mesh.Color = color
+	mesh.Material = material
+	for _, c in ipairs(mesh:GetChildren()) do
+		if c:IsA("SurfaceAppearance") then
+			c:Destroy()
+		end
+	end
+	if shine then
+		local sa = Instance.new("SurfaceAppearance")
+		sa.Name = "MetalShine"
+		sa.Color = shine
+		sa.MetalnessMap = METALNESS_MAP
+		sa.RoughnessMap = ROUGHNESS_MAP
+		sa.Parent = mesh
+	end
+	local c = PROP_CENTER[tplName] or Vector3.zero
+	mesh.CFrame = refCF * CFrame.new(c.X, c.Z, -c.Y) * CFrame.Angles(0, math.pi, 0)
+	mesh.Parent = m
+	return mesh
+end
+
 local function buildSugarBowl(ws, name, x, sugarColor)
 	local m = model(ws, name)
 	local pos = at(x, TABLE_TOP + 0.35, 1.3)
@@ -374,11 +439,26 @@ local function buildSugarBowl(ws, name, x, sugarColor)
 	vcyl(m, "Stripe", 1.42, 0.08, pos + Vector3.new(0, 0.2, 0), Color3.fromRGB(70, 110, 190), Enum.Material.SmoothPlastic)
 	vcyl(m, "Sugar", 1.22, 0.05, pos + Vector3.new(0, 0.34, 0), sugarColor, Enum.Material.Sand)
 	m.PrimaryPart = bowl
+	Builder.attachSugarBowlMesh(m, sugarColor)
+end
+
+-- 양은 그릇 + 설탕 더미 (레퍼런스 사진의 납작한 노점 그릇)
+function Builder.attachSugarBowlMesh(m, sugarColor)
+	local bowl = m:FindFirstChild("Bowl")
+	local sugar = m:FindFirstChild("Sugar")
+	if not bowl or not propTemplate("SugarBowlMesh") then
+		return false
+	end
+	local base = CFrame.new(bowl.Position - Vector3.new(0, bowl.Size.X / 2, 0))
+	hideParts(m)
+	attachProp(m, "SugarBowlMesh", base, Color3.fromRGB(214, 196, 140), Enum.Material.Metal, Color3.fromRGB(232, 214, 160))
+	attachProp(m, "SugarHeapMesh", base, sugarColor or (sugar and sugar.Color) or Color3.fromRGB(252, 252, 252), Enum.Material.Sand)
+	return true
 end
 
 local function buildWoodSpoon(ws)
 	local m = model(ws, "WoodSpoon")
-	local cf = CFrame.new(at(-0.8, TABLE_TOP + 0.75, 1.3))
+	local cf = CFrame.new(at(-0.8, TABLE_TOP + 0.5, 1.3)) -- 양은 그릇 설탕 위에 얹힘
 	local scoop = vcyl(m, "Scoop", 0.62, 0.1, cf.Position, LIGHT_WOOD, Enum.Material.Wood)
 	ball(m, "Heap", 0.5, cf.Position + Vector3.new(0, 0.1, 0), Color3.fromRGB(252, 252, 252), Enum.Material.Sand)
 	part(m, "Handle", Vector3.new(0.13, 0.07, 1.8), cf * CFrame.new(0, 0.28, 1.15) * CFrame.Angles(math.rad(18), 0, 0), LIGHT_WOOD, Enum.Material.Wood)
@@ -386,6 +466,23 @@ local function buildWoodSpoon(ws)
 	att.Name = "PourAtt"
 	att.Parent = scoop
 	m.PrimaryPart = scoop
+	Builder.attachSpoonMesh(m, "WoodSpoonMesh", 0)
+end
+
+-- 숟가락 메시: 머리 가운데 = Scoop 자리, 손잡이는 yaw 방향으로 (0 = 플레이어 쪽 +Z). 설탕 더미(Heap)는 그대로 보임
+function Builder.attachSpoonMesh(m, tplName, yaw)
+	local scoop = m:FindFirstChild("Scoop")
+	if not scoop or not propTemplate(tplName) then
+		return false
+	end
+	hideParts(m, { Heap = true })
+	local ref = CFrame.new(scoop.Position + Vector3.new(0, 0.05, 0)) * CFrame.Angles(0, math.rad(yaw), 0)
+	if tplName == "WoodSpoonMesh" then
+		attachProp(m, tplName, ref, LIGHT_WOOD, Enum.Material.Wood)
+	else
+		attachProp(m, tplName, ref, Color3.fromRGB(205, 207, 212), Enum.Material.Metal, Color3.fromRGB(214, 216, 222))
+	end
+	return true
 end
 
 local function buildSoda(ws)
@@ -405,6 +502,22 @@ local function buildSoda(ws)
 	att.Name = "PourAtt"
 	att.Parent = scoop
 	m.PrimaryPart = scoop
+	Builder.attachSodaMeshes(tub, m)
+end
+
+-- 소다 깡통(빨간 띠) + 소다 가루 + 쇠 티스푼 (분홍 플라스틱 통·숟가락 대신)
+function Builder.attachSodaMeshes(tub, spoon)
+	local b = tub:FindFirstChild("Tub")
+	if not b or not propTemplate("SodaCanMesh") then
+		return false
+	end
+	local base = CFrame.new(b.Position - Vector3.new(0, b.Size.X / 2, 0))
+	hideParts(tub)
+	attachProp(tub, "SodaCanMesh", base, Color3.fromRGB(200, 202, 206), Enum.Material.Metal, Color3.fromRGB(214, 216, 222))
+	attachProp(tub, "SodaLabelMesh", base, Color3.fromRGB(210, 40, 46), Enum.Material.SmoothPlastic)
+	attachProp(tub, "SodaPowderMesh", base, Color3.fromRGB(250, 250, 250), Enum.Material.Sand)
+	Builder.attachSpoonMesh(spoon, "TinSpoonMesh", 45)
+	return true
 end
 
 local function buildPlate(ws)
