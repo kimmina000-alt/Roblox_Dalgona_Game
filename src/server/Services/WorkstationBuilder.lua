@@ -13,6 +13,9 @@ local WOOD = Color3.fromRGB(132, 92, 58)
 local LIGHT_WOOD = Color3.fromRGB(214, 176, 120)
 local COPPER = Color3.fromRGB(190, 110, 60)
 local STEEL = Color3.fromRGB(196, 198, 204)
+-- 금속 광택 텍스처 (금속도 0.95 · 거칠기 0.25, 사용자 승인 후 올림)
+local METALNESS_MAP = "rbxassetid://75555295293901"
+local ROUGHNESS_MAP = "rbxassetid://116334782975968"
 
 local function at(x, y, z)
 	return ORIGIN + Vector3.new(x, y, z)
@@ -327,6 +330,38 @@ local function buildChopsticks(ws)
 	local s1 = part(m, "Stick1", Vector3.new(0.07, 0.07, 2.6), cf, LIGHT_WOOD, Enum.Material.Wood)
 	part(m, "Stick2", Vector3.new(0.07, 0.07, 2.6), cf * CFrame.new(0.13, 0, 0), LIGHT_WOOD, Enum.Material.Wood)
 	m.PrimaryPart = s1
+	Builder.attachWrappedChopsticks(m)
+end
+
+-- 사용자가 만든 나무젓가락·포장지 메시(dalgona_joggalack.glb → ReplicatedStorage.Assets.Chopsticks)가 있으면
+-- 테이블 위에는 포장된 나무젓가락(포장지1 + 포장지2)을 눕혀 두고, Stick1/Stick2는 보이지 않는 판정용으로만 쓴다.
+-- 실제로 젓는 젓가락은 제작 시작 때 고른 한 짝 (클라이언트 Station:useChopstick).
+function Builder.attachWrappedChopsticks(m)
+	local assets = game:GetService("ReplicatedStorage"):FindFirstChild("Assets")
+	local cs = assets and assets:FindFirstChild("Chopsticks")
+	if not cs then
+		return false
+	end
+	local s1 = m:FindFirstChild("Stick1")
+	s1.Transparency = 1
+	m:FindFirstChild("Stick2").Transparency = 1
+	for _, p in ipairs(m:GetChildren()) do
+		if p.Name:sub(1, 7) == "Wrapped" then
+			p:Destroy()
+		end
+	end
+	-- 메시 길이(Y) = 테이블 위 젓가락 방향, 두께(Z) = 위
+	local d = s1.CFrame.LookVector
+	local up = Vector3.yAxis
+	local rot = CFrame.fromMatrix(Vector3.zero, d:Cross(up), d, up)
+	local base = CFrame.new(s1.Position.X, TABLE_TOP + cs.Wrap1.Size.Z / 2, s1.Position.Z) * rot
+	for _, name in ipairs({ "Wrap1", "Wrap2" }) do
+		local p = cs[name]:Clone()
+		p.Name = "Wrapped" .. name:sub(5)
+		p.CFrame = base * CFrame.new(p:GetAttribute("Offset"))
+		p.Parent = m
+	end
+	return true
 end
 
 local function buildSugarBowl(ws, name, x, sugarColor)
@@ -383,6 +418,42 @@ local function buildPresser(ws)
 	vcyl(m, "Handle", 0.32, 1.0, pos + Vector3.new(0, 0.55, 0), LIGHT_WOOD, Enum.Material.Wood)
 	ball(m, "Knob", 0.5, pos + Vector3.new(0, 1.1, 0), LIGHT_WOOD, Enum.Material.Wood)
 	m.PrimaryPart = disc
+	Builder.attachPresserMesh(m)
+end
+
+-- 사용자가 만든 누름판 메시(dalgona_nulumpan.glb → ServerStorage.Assets.PresserMesh), 금속 재질.
+-- 판정용 원판 Disc(지름 2.2)는 투명하게 두고 메시를 원판 지름에 맞춰 붙인다 (메시 맨 아래 = 원판 아랫면).
+function Builder.attachPresserMesh(m)
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	local tpl = assets and assets:FindFirstChild("PresserMesh")
+	if not tpl then
+		return false
+	end
+	local disc = m:FindFirstChild("Disc")
+	for _, name in ipairs({ "Mesh", "Handle", "Knob" }) do
+		local p = m:FindFirstChild(name)
+		if p then
+			p:Destroy()
+		end
+	end
+	disc.Transparency = 1
+	local mesh = tpl:Clone()
+	mesh.Name = "Mesh"
+	mesh.Anchored = true
+	mesh.CanCollide = false
+	mesh.Size = tpl.Size * (disc.Size.Y / tpl.Size.X)
+	mesh.Material = Enum.Material.Metal
+	mesh.Color = Color3.fromRGB(205, 207, 212)
+	local sa = Instance.new("SurfaceAppearance")
+	sa.Name = "SteelShine"
+	sa.Color = Color3.fromRGB(214, 216, 222)
+	sa.MetalnessMap = METALNESS_MAP
+	sa.RoughnessMap = ROUGHNESS_MAP
+	sa.Parent = mesh
+	local bottom = disc.Position.Y - disc.Size.X / 2
+	mesh.CFrame = CFrame.new(disc.Position.X, bottom + mesh.Size.Y / 2, disc.Position.Z)
+	mesh.Parent = m
+	return true
 end
 
 local function buildStarCutter(ws)

@@ -86,6 +86,11 @@ function Ui.new(player, steps)
 		self.scale.Scale = s
 		-- 작업 순서 줄은 Roblox 위쪽 메뉴 줄 높이까지 올림 (메뉴 버튼은 왼쪽 끝이라 안 겹침)
 		self.topRow.Position = UDim2.new(0.5, 0, 0, -GuiService:GetGuiInset().Y / s + 6)
+		-- QUALITY 창과 세로 막대는 위 줄 아래 왼쪽에 (위쪽 여백이 0인 기기에서도 안 겹치게)
+		local rowBottom = -GuiService:GetGuiInset().Y / s + 6 + (self.touch and 52 or 44)
+		local qy = math.max(16, rowBottom + 10)
+		self.qualityBox.Position = UDim2.fromOffset(20, qy)
+		self.meter.Position = UDim2.fromOffset(20, qy + self.qualityBox.Size.Y.Offset + 10)
 		root.Size = UDim2.fromOffset(v.X / s, v.Y / s)
 	end
 	rescale()
@@ -149,6 +154,7 @@ function Ui:_buildQuality()
 		BackgroundTransparency = 0.08,
 		Parent = self.root,
 	}, { corner(18) })
+	self.qualityBox = box
 	local ring = new("Frame", { Name = "Ring", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), Size = UDim2.fromOffset(120, 120), BackgroundTransparency = 1, Parent = box })
 	self.dots = {}
 	local n = 40

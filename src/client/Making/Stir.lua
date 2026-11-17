@@ -80,6 +80,11 @@ function Stir.placeChopsticks(station, world)
 	local m = station.Chopsticks
 	m.Stick1.CFrame = cf
 	m.Stick2.CFrame = cf * CFrame.new(0.12, 0, 0.02)
+	-- 고른 나무젓가락 메시 (길이 축 Y를 젓가락 방향으로, 아래쪽 끝이 국자 안)
+	local chosen = m:FindFirstChild("Chosen")
+	if chosen then
+		chosen.CFrame = cf * CFrame.new(0, 0, 0.1) * CFrame.Angles(math.rad(90), 0, 0)
+	end
 	return tip
 end
 

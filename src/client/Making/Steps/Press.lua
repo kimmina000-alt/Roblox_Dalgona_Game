@@ -19,7 +19,7 @@ function Press.run(ctx)
 	local rot = S.rest.Presser - S.rest.Presser.Position
 	local discHalf = presser.Disc.Size.X / 2
 	local c = dal.center
-	presser.Disc.Transparency = 0.55 -- 위에서 내려다봐도 아래 반죽이 퍼지는 게 보이게
+	S:presserSeeThrough(true) -- 위에서 내려다봐도 아래 반죽이 퍼지는 게 보이게
 
 	local function presserAt(bottomY)
 		return CFrame.new(c.X, bottomY + discHalf, c.Z) * rot
@@ -138,7 +138,7 @@ function Press.run(ctx)
 		end
 	end
 	presser:PivotTo(S.rest.Presser)
-	presser.Disc.Transparency = 0
+	S:presserSeeThrough(false)
 	rec.t1 = ctx.now()
 	return rec
 end

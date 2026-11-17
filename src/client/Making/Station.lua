@@ -1,6 +1,8 @@
 -- 작업대 부품 찾기, 제자리 자세 기억, 리셋, 스프링 복귀 도우미
 -- 클라이언트에서 바꾸는 위치·색은 이 플레이어 화면에서만 보인다 (Phase 1 혼자 테스트용).
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local Station = {}
 Station.__index = Station
 
@@ -49,6 +51,14 @@ function Station.new()
 	for _, h in pairs(self.heaps) do
 		h.size = h.part.Size
 		h.color = h.part.Color
+	end
+
+	-- 누름판 반투명용: 원래 보이는 부품과 투명도
+	self.presserParts = {}
+	for _, p in ipairs(self.Presser:GetDescendants()) do
+		if p:IsA("BasePart") and p.Transparency < 1 then
+			self.presserParts[p] = p.Transparency
+		end
 	end
 
 	local fx = workspace:FindFirstChild("MakingFx")
@@ -133,7 +143,46 @@ function Station:reset()
 		h.part.Transparency = 0
 	end
 	self.Flame.Rate = 30
-	self.Presser.Disc.Transparency = 0
+	self:presserSeeThrough(false)
+	local chosen = self.Chopsticks:FindFirstChild("Chosen")
+	if chosen then
+		chosen:Destroy()
+	end
+	for _, p in ipairs(self.Chopsticks:GetChildren()) do
+		if p.Name:sub(1, 7) == "Wrapped" then
+			p.LocalTransparencyModifier = 0
+		end
+	end
+end
+
+-- 누르는 동안 누름판을 반투명하게 (위에서 내려다봐도 아래 반죽이 보이게)
+function Station:presserSeeThrough(on)
+	for p, t in pairs(self.presserParts) do
+		p.Transparency = on and math.max(t, 0.55) or t
+	end
+end
+
+-- 고른 나무젓가락 한 짝으로 젓기 (테이블 위 포장된 젓가락은 숨김)
+function Station:useChopstick(pair, side)
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local cs = assets and assets:FindFirstChild("Chopsticks")
+	local tpl = cs and cs:FindFirstChild(("Stick%d%s"):format(pair, side))
+	if not tpl then
+		return
+	end
+	for _, p in ipairs(self.Chopsticks:GetChildren()) do
+		if p.Name:sub(1, 7) == "Wrapped" then
+			p.LocalTransparencyModifier = 1
+		end
+	end
+	local old = self.Chopsticks:FindFirstChild("Chosen")
+	if old then
+		old:Destroy()
+	end
+	local c = tpl:Clone()
+	c.Name = "Chosen"
+	c.CFrame = self.Chopsticks.Stick1.CFrame * CFrame.Angles(math.rad(90), 0, 0)
+	c.Parent = self.Chopsticks
 end
 
 -- 프레임마다 목표 자세로 다가감 (rate 25 ≈ 0.12초에 95%)

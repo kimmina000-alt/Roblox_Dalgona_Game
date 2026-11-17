@@ -79,6 +79,12 @@ C.Stamp = {
 	crackHold = 0.85,
 }
 
+-- 효과음 (Roblox 무료 효과음, Pro Sound Effects)
+C.Sounds = {
+	paperTear = "rbxassetid://9125724621", -- 종이 찢는 소리 1.1초
+	stickSnap = "rbxassetid://9113581974", -- 나무젓가락 쪼개는 소리 0.7초
+}
+
 C.Server = {
 	minStep = 1.5, -- 단계당 최소 시간 (초)
 	maxStep = 120,

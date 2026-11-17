@@ -17,6 +17,7 @@ local Pointer = require(Making:WaitForChild("Pointer"))
 local Station = require(Making:WaitForChild("Station"))
 local CameraRig = require(Making:WaitForChild("CameraRig"))
 local Ui = require(Making:WaitForChild("Ui"))
+local ChopstickPicker = require(Making:WaitForChild("ChopstickPicker"))
 local StepsFolder = Making:WaitForChild("Steps")
 
 local STEP_MODULES = {}
@@ -138,6 +139,16 @@ local function runSession()
 	ui:show(true)
 	Pointer.reset()
 	Pointer.enabled = true
+
+	-- 0. 나무젓가락 고르기 (포장지 찢기 → 꺼내기 → 쪼개기 → 한 짝 고르기)
+	ui:setStep(1)
+	CameraRig.go("sugar")
+	local pick = ChopstickPicker.run(ctx)
+	if ctx.aborted or not pick then
+		return
+	end
+	station:useChopstick(pick.pair, pick.side)
+	ctx.state.chopstick = pick
 
 	local okStart, sessionId = pcall(function()
 		return Remotes.StartProduction:InvokeServer()
