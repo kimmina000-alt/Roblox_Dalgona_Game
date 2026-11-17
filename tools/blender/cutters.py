@@ -1,4 +1,4 @@
-# 달고나 도안 틀 18종(+사용자 추가 도안)을 한 번에 만든다.
+# 달고나 도안 틀 22종(+사용자 추가 도안)을 한 번에 만든다.
 # 사용자가 만든 모형틀(레퍼런스/3D.blend, user_cutters.py)이 있는 도안은 그 모델을 게임 크기로 맞춰 쓰고,
 # 나머지는 shapes.py 외곽선으로 만든다. 3D.blend가 없으면 전부 생성.
 # 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/cutters.py -- <출력 폴더> <저장소 루트>
@@ -52,12 +52,17 @@ def round_corners(pts):
     return out
 
 
-def strip_mesh(bm, pts, height, thickness):
+def strip_mesh(bm, pts, height, thickness, closed=True):
+    """외곽선을 따라 세운 얇은 띠. closed=False면 열린 선(장식선)이고 양 끝을 막는다."""
     n = len(pts)
     P = [Vector((x, y, 0)) for (x, y) in pts]
     inner, outer = [], []
     for i in range(n):
         p0, p1, p2 = P[i - 1], P[i], P[(i + 1) % n]
+        if not closed and i == 0:
+            p0 = p1 - (p2 - p1)
+        if not closed and i == n - 1:
+            p2 = p1 + (p1 - p0)
         d0 = (p1 - p0).normalized()
         d1 = (p2 - p1).normalized()
         n0 = Vector((d0.y, -d0.x, 0))  # 반시계 외곽선의 바깥쪽
@@ -73,7 +78,10 @@ def strip_mesh(bm, pts, height, thickness):
     for loop in (outer, inner):
         rings.append(([bm.verts.new((v.x, v.y, 0)) for v in loop], [bm.verts.new((v.x, v.y, height)) for v in loop]))
     (ob, ot), (ib, it) = rings
-    for i in range(n):
+    if not closed:
+        bm.faces.new((ib[0], ob[0], ot[0], it[0]))
+        bm.faces.new((ob[-1], ib[-1], it[-1], ot[-1]))
+    for i in range(n if closed else n - 1):
         j = (i + 1) % n
         bm.faces.new((ob[i], ob[j], ot[j], ot[i]))
         bm.faces.new((ib[j], ib[i], it[i], it[j]))
@@ -164,7 +172,7 @@ def build_from_user(sid, src):
 user_objs = load_user_cutters()
 ALL = list(shapes.SHAPES) + [(sid, n, g, None) for (sid, n, g) in user_cutters.EXTRA_SHAPES if sid in user_objs]
 
-def finish(obj, idx, sid, name_ko, grade, outline, src):
+def finish(obj, idx, sid, name_ko, grade, outline, src, holes=(), deco=()):
     vs = [v.co for v in obj.data.vertices]
     minx, maxx = min(v.x for v in vs), max(v.x for v in vs)
     miny, maxy = min(v.y for v in vs), max(v.y for v in vs)
@@ -174,7 +182,8 @@ def finish(obj, idx, sid, name_ko, grade, outline, src):
     obj.location = (col * GRID_X, -row * GRID_Y, 0)
     print(f"[cutters] {sid:10s} {src} tris={tris:4d} size=({maxx - minx:.2f}, {maxy - miny:.2f})")
     return {"id": sid, "name": name_ko, "grade": grade, "outline": outline, "center": ((minx + maxx) / 2, (miny + maxy) / 2),
-            "size": (maxx - minx, maxy - miny), "tris": tris, "src": src}
+            "size": (maxx - minx, maxy - miny), "tris": tris, "src": src,
+            "holes": list(holes), "lines": list(deco)}
 
 
 made = []
@@ -191,7 +200,13 @@ for idx, (sid, name_ko, grade, _) in enumerate(ALL):
     outline = shapes.outline(sid)
     pts = round_corners(outline)
     bm = bmesh.new()
-    strip_mesh(bm, pts, STRIP_H, STRIP_T)
+    t = STRIP_T * (0.6 if grade == "Master" else 1.0)  # Master 도안은 다리·가지가 가늘어서 띠도 얇게
+    strip_mesh(bm, pts, STRIP_H, t)
+    holes, deco = shapes.details(sid)
+    for h in holes:  # 같이 뚫는 안쪽 구멍: 바깥 띠와 같은 높이
+        strip_mesh(bm, round_corners(h), STRIP_H, t)
+    for ln, closed in deco:  # 각인 장식선: 조금 얇고 낮게 (누르면 자국만 남음)
+        strip_mesh(bm, ln, STRIP_H * 0.85, t * 0.7, closed)
     mesh = bpy.data.meshes.new("Cutter_" + sid)
     bm.normal_update()
     bm.to_mesh(mesh)
@@ -223,7 +238,7 @@ for idx, (sid, name_ko, grade, _) in enumerate(ALL):
     mod.split_angle = math.radians(40)
     bpy.ops.object.modifier_apply(modifier="Edges")
     obj.data.materials.append(steel)
-    made.append(finish(obj, idx, sid, name_ko, grade, outline, "gen"))
+    made.append(finish(obj, idx, sid, name_ko, grade, outline, "gen", holes, deco))
 
 for o in list(user_objs.values()):
     bpy.data.objects.remove(o)
@@ -235,15 +250,21 @@ bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "dalgona_cutters.glb"), exp
 # 게임용 Luau 모듈 생성
 lines = [
     "-- 자동 생성: tools/blender/cutters.py (직접 고치지 말고 shapes.py를 고친 뒤 다시 실행)",
-    "-- 도안 틀 18종 + 사용자 추가 도안. source = \"user\"(레퍼런스/3D.blend 모형틀) / \"gen\"(shapes.py). outline = 각인 외곽선 (stud, x 오른쪽 · y 위 = 화면 위쪽, 틀 중심 기준)",
+    "-- 도안 틀 22종 + 사용자 추가 도안. source = \"user\"(레퍼런스/3D.blend 모형틀) / \"gen\"(shapes.py). outline = 각인 외곽선 (stud, x 오른쪽 · y 위 = 화면 위쪽, 틀 중심 기준)",
+    "-- holes = 같이 잘라 내야 하는 안쪽 구멍(닫힌 선), lines = 각인만 되는 장식선 ({ closed = 닫힘 여부, 점들... }). 없으면 nil",
     "-- center = 메시(손잡이 포함) 경계 상자 중심이 틀 중심에서 떨어진 거리 (Blender x, y)",
     "-- Roblox에 붙일 때: mesh.CFrame = root.CFrame * CFrame.new(center.X, 0, -center.Y) * CFrame.Angles(0, math.pi, 0)",
     "",
     "return {",
 ]
 for m in made:
-    pts = ", ".join(f"{{{x:.3f}, {y:.3f}}}" for (x, y) in m["outline"])
-    lines.append(f'\t{{ id = "{m["id"]}", name = "{m["name"]}", grade = "{m["grade"]}", source = "{m["src"]}", center = Vector2.new({m["center"][0]:.4f}, {m["center"][1]:.4f}), outline = {{ {pts} }} }},')
+    pts = ", ".join(f"{{{x:.2f}, {y:.2f}}}" for (x, y) in m["outline"])
+    extra = ""
+    if m["holes"]:
+        extra += ", holes = { " + ", ".join("{ " + ", ".join(f"{{{x:.2f}, {y:.2f}}}" for (x, y) in h) + " }" for h in m["holes"]) + " }"
+    if m["lines"]:
+        extra += ", lines = { " + ", ".join("{ closed = " + ("true" if c else "false") + ", " + ", ".join(f"{{{x:.2f}, {y:.2f}}}" for (x, y) in ln) + " }" for (ln, c) in m["lines"]) + " }"
+    lines.append(f'\t{{ id = "{m["id"]}", name = "{m["name"]}", grade = "{m["grade"]}", source = "{m["src"]}", center = Vector2.new({m["center"][0]:.4f}, {m["center"][1]:.4f}), outline = {{ {pts} }}{extra} }},')
 lines.append("}")
 with open(os.path.join(REPO, "src", "shared", "CutterShapes.lua"), "w", encoding="utf-8", newline="\n") as f:
     f.write("\n".join(lines) + "\n")
@@ -273,7 +294,7 @@ cam.location = (cx, cy, 20)
 scene.collection.objects.link(cam)
 scene.camera = cam
 scene.render.engine = "BLENDER_EEVEE"
-scene.render.resolution_x, scene.render.resolution_y = 1500, int(1500 * (rows * GRID_Y + 0.6) / 21.5)
+scene.render.resolution_x, scene.render.resolution_y = 2400, int(2400 * (rows * GRID_Y + 0.6) / 21.5)
 scene.view_settings.view_transform = "Standard"
 scene.render.filepath = os.path.join(OUT, "cutters_sheet.png")
 bpy.ops.render.render(write_still=True)

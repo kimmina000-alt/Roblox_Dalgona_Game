@@ -159,27 +159,6 @@ def sword():
     return _dedupe(_mirror(right))
 
 
-def octopus():
-    pts = _arc(0, 0.18, 0.66, 0, math.pi, 30)  # 머리 (오른쪽 → 위 → 왼쪽)
-    # 다리 4개: 왼쪽 → 오른쪽으로 아래로 늘어진 물결
-    n = 64
-    for i in range(1, n):
-        t = i / n
-        x = -0.66 - 0.22 * math.sin(math.pi * t) * (1 - 2 * t) + 1.32 * t
-        y = 0.18 - 0.2 - 0.74 * (math.sin(4 * math.pi * t) ** 2) ** 0.45 * (0.65 + 0.35 * math.sin(math.pi * t))
-        pts.append((x, y))
-    return _dedupe(pts)
-
-
-def palace():
-    right = [
-        (0.0, -0.95), (0.86, -0.95), (0.86, -0.8), (0.56, -0.8), (0.56, -0.02),  # 기단 · 벽
-        (0.92, 0.06), (1.0, 0.2), (0.74, 0.2), (0.34, 0.3),  # 아래 지붕 처마 (끝이 들림)
-        (0.34, 0.46), (0.64, 0.52), (0.7, 0.64), (0.44, 0.66), (0.28, 0.8), (0.0, 0.8),  # 위 지붕
-    ]
-    return _dedupe(_mirror(right))
-
-
 def _chaikin(pts, sharp=(), it=2):
     """닫힌 다각형 모서리를 둥글게 (쿠키 틀 같은 부드러운 실루엣). sharp에 든 꼭짓점 번호는 뾰족하게 둔다."""
     keep = [i in sharp for i in range(len(pts))]
@@ -198,50 +177,27 @@ def _chaikin(pts, sharp=(), it=2):
     return pts
 
 
-# 호랑이·용·범선은 실제 달고나 틀(레퍼런스 사진: 공룡·말·곰 등 옆모습 실루엣)처럼
-# 통통하고 단순한 옆모습 외곽선 + 둥근 모서리로 그린다.
-def tiger():
-    # 오른쪽을 보고 걷는 호랑이 옆모습: 귀 2개, 앞·뒷다리, 위로 말린 꼬리
-    pts = [
-        (-0.55, 0.26), (0.0, 0.32), (0.32, 0.3), (0.42, 0.42), (0.44, 0.56), (0.49, 0.72), (0.58, 0.6), (0.68, 0.61),
-        (0.78, 0.73), (0.83, 0.56), (0.91, 0.48), (0.99, 0.34), (0.96, 0.21), (0.82, 0.14), (0.68, 0.08), (0.62, -0.05),
-        (0.64, -0.66), (0.75, -0.72), (0.75, -0.84), (0.42, -0.84), (0.42, -0.26), (0.1, -0.3), (-0.28, -0.26),
-        (-0.3, -0.7), (-0.21, -0.75), (-0.21, -0.84), (-0.6, -0.84), (-0.62, -0.32), (-0.71, -0.02), (-0.68, 0.16),
-        (-0.78, 0.24), (-0.9, 0.42), (-0.95, 0.62), (-0.86, 0.73), (-0.79, 0.58), (-0.75, 0.43), (-0.64, 0.31),
-    ]
-    return _chaikin(pts, sharp={5, 8})
-
-
-def dragon():
-    # 일어선 용 옆모습 (공룡 틀처럼): 등 가시 5개, 뿔, 벌린 입, 팔, 굵은 다리, 길게 끌리는 꼬리
-    pts, sharp = [(-1.0, -0.76)], {0}
-    pts.append((-0.68, -0.56))
-    ax, ay, bx, by = -0.44, -0.3, 0.06, 0.48
-    dx, dy = bx - ax, by - ay
-    L = math.hypot(dx, dy)
-    nx, ny = -dy / L, dx / L
-    for k in range(5):
-        t0, tm, t1 = (k + 0.1) / 5, (k + 0.5) / 5, (k + 0.9) / 5
-        pts.append((ax + dx * t0, ay + dy * t0))
-        sharp.add(len(pts))
-        pts.append((ax + dx * tm + nx * 0.17, ay + dy * tm + ny * 0.17))
-        pts.append((ax + dx * t1, ay + dy * t1))
-    pts += [(0.1, 0.62)]
-    sharp.add(len(pts)); pts.append((0.1, 0.9))  # 뿔
-    pts += [(0.26, 0.72), (0.48, 0.74), (0.82, 0.62), (0.94, 0.5)]
-    sharp.add(len(pts)); pts.append((0.62, 0.45))  # 입 안쪽
-    pts += [(0.84, 0.36), (0.74, 0.27), (0.42, 0.26), (0.42, 0.1), (0.62, 0.08)]
-    sharp.add(len(pts)); pts.append((0.68, -0.02))  # 발톱
-    pts += [(0.4, -0.04), (0.32, -0.28), (0.32, -0.7), (0.5, -0.76), (0.5, -0.87), (-0.12, -0.87), (-0.14, -0.62), (-0.44, -0.64), (-0.72, -0.74)]
-    return _chaikin(pts, sharp=sharp)
-
-
+# 범선은 실제 달고나 틀 사진처럼 단순한 실루엣으로 그린다.
 def sailboat():
     # 배 몸통 + 큰 돛(오른쪽) + 작은 돛(왼쪽) + 돛대 끝 깃발
     return [
         (-0.62, -0.86), (0.62, -0.86), (0.92, -0.46), (0.06, -0.46), (0.06, -0.33), (0.72, -0.33), (0.06, 0.86),
         (0.06, 1.0), (-0.3, 0.92), (-0.04, 0.84), (-0.04, 0.6), (-0.62, -0.31), (-0.04, -0.31), (-0.04, -0.46), (-0.92, -0.46),
     ]
+
+
+
+# 안쪽 선이 있는 도안(문어·호랑이·공룡·궁전·Master 4종)은 design_shapes.py가 OpenCV로 그려 shape_data.json에 저장한다.
+# outline = 바깥 외곽선, holes = 같이 뚫어야 하는 안쪽 구멍, lines = 각인만 되는 장식선.
+import json as _json
+import os as _os
+
+with open(_os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "shape_data.json"), encoding="utf-8") as _f:
+    DATA = _json.load(_f)
+
+
+def _data(sid):
+    return lambda: [tuple(p) for p in DATA[sid]["outline"]]
 
 
 # 기획서 순서: (id, 한국어 이름, 등급, 함수)
@@ -260,10 +216,15 @@ SHAPES = [
     ("Cross", "십자가", "Epic", cross),
     ("Sword", "검", "Legendary", sword),
     ("Sailboat", "범선", "Legendary", sailboat),
-    ("Octopus", "문어", "Legendary", octopus),
-    ("Palace", "궁궐", "Mythic", palace),
-    ("Tiger", "호랑이", "Mythic", tiger),
-    ("Dragon", "용", "Mythic", dragon),
+    ("Octopus", "문어", "Legendary", _data("Octopus")),
+    ("Palace", "궁전", "Mythic", _data("Palace")),
+    ("Tiger", "호랑이", "Mythic", _data("Tiger")),
+    ("Dinosaur", "공룡", "Mythic", _data("Dinosaur")),  # 기획서의 용 → 사용자 요청으로 공룡(티라노)
+    # Master: 기획서 위 최고 등급 (사용자 요청). 안쪽 구멍·가는 선이 많아 가장 어렵다
+    ("Spider", "거미", "Master", _data("Spider")),
+    ("Sierpinski", "삼각형 속 삼각형", "Master", _data("Sierpinski")),
+    ("Snowflake", "눈꽃", "Master", _data("Snowflake")),
+    ("Lotus", "연꽃 문양", "Master", _data("Lotus")),
 ]
 
 
@@ -277,6 +238,24 @@ def outline(shape_id):
                 pts.reverse()
             return [(x * SCALE, y * SCALE) for (x, y) in pts]
     raise KeyError(shape_id)
+
+
+def _ccw(pts):
+    area = sum(pts[i][0] * pts[(i + 1) % len(pts)][1] - pts[(i + 1) % len(pts)][0] * pts[i][1] for i in range(len(pts)))
+    return pts if area >= 0 else pts[::-1]
+
+
+def details(shape_id):
+    """(holes, lines): 구멍 = 닫힌 외곽선 목록(반시계), lines = [(점들, 닫힘 여부)]. 게임 크기."""
+    d = DATA.get(shape_id)
+    if not d:
+        return [], []
+    holes = [_ccw([(x * SCALE, y * SCALE) for (x, y) in h]) for h in d["holes"]]
+    lines = []
+    for ln in d["lines"]:
+        pts = [(x * SCALE, y * SCALE) for (x, y) in ln["pts"]]
+        lines.append((_ccw(pts) if ln["closed"] else pts, ln["closed"]))
+    return holes, lines
 
 
 def self_intersects(pts):
