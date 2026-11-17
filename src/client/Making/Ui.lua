@@ -91,30 +91,41 @@ function Ui.new(player, steps)
 end
 
 function Ui:_buildChips()
-	local bar = new("Frame", {
-		Name = "Chips",
-		-- 작업 순서: 오른쪽 끝에 세로로
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.new(1, -16, 0.5, 0),
+	-- 위 가운데 줄: [작업 순서 칩] [X]
+	self.topRow = new("Frame", {
+		Name = "TopRow",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 16),
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
-		BackgroundColor3 = PAPER,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 1,
 		Parent = self.root,
 	}, {
-		corner(18),
-		new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8) }),
-		new("UIListLayout", { FillDirection = Enum.FillDirection.Vertical, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
+	local bar = new("Frame", {
+		Name = "Chips",
+		Size = UDim2.fromOffset(0, 44),
+		AutomaticSize = Enum.AutomaticSize.X,
+		BackgroundColor3 = PAPER,
+		BackgroundTransparency = 0.1,
+		LayoutOrder = 1,
+		Parent = self.topRow,
+	}, {
+		corner(22),
+		new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
+		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
 	self.chips = {}
 	for i, step in ipairs(self.steps) do
 		if i > 1 then
-			label({ Text = "↓", TextSize = 12, TextColor3 = GREY, Size = UDim2.fromOffset(16, 12), LayoutOrder = i * 2 - 1, Parent = bar })
+			label({ Text = "—", TextSize = 16, TextColor3 = GREY, Size = UDim2.fromOffset(16, 32), LayoutOrder = i * 2 - 1, Parent = bar })
 		end
 		local chip = label({
 			Text = step.label,
 			TextSize = 18,
-			Size = UDim2.fromOffset(96, 32),
+			Size = UDim2.fromOffset(0, 32),
+			AutomaticSize = Enum.AutomaticSize.X,
 			BackgroundTransparency = 0,
 			BackgroundColor3 = PAPER,
 			LayoutOrder = i * 2,
@@ -129,7 +140,7 @@ end
 function Ui:_buildQuality()
 	local box = new("Frame", {
 		Name = "Quality",
-		Position = UDim2.fromOffset(20, 16), -- 왼쪽 위
+		Position = UDim2.fromOffset(20, 84), -- 왼쪽 위 (위 줄 아래)
 		Size = UDim2.fromOffset(190, self.touch and 180 or 232),
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.08,
@@ -188,46 +199,26 @@ function Ui:_buildBottom()
 end
 
 function Ui:_buildCorners()
+	-- X는 작업 순서 칩 바로 오른쪽 (2026-11-17 사용자 요청). 폰에서도 64px 이상
+	local size = self.touch and 84 or 52
 	local x = new("TextButton", {
 		Name = "Exit",
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 20, 1, -20),
-		Size = UDim2.fromOffset(self.btn, self.btn),
+		Size = UDim2.fromOffset(size, size),
 		BackgroundColor3 = PAPER,
+		BackgroundTransparency = 0.1,
 		Text = "X",
-		TextSize = 30,
+		TextSize = self.touch and 34 or 26,
 		Font = FONT,
 		TextColor3 = INK,
-		Parent = self.root,
-	}, { corner(self.btn / 2) })
+		LayoutOrder = 2,
+		Parent = self.topRow,
+	}, { corner(size / 2) })
 	x.Activated:Connect(function()
 		if self.onExit then
 			self.onExit()
 		end
 	end)
-	local function vibText(on)
-		if self.touch then
-			return on and "📳" or "📴"
-		end
-		return on and "📳 진동 켜짐" or "📴 진동 꺼짐"
-	end
-	local v = new("TextButton", {
-		Name = "Vibration",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -20, 0, 16),
-		Size = UDim2.fromOffset(self.touch and 72 or 150, self.touch and 72 or 44),
-		BackgroundColor3 = PAPER,
-		Text = vibText(true),
-		TextSize = self.touch and 30 or 16,
-		Font = FONT,
-		TextColor3 = INK,
-		Parent = self.root,
-	}, { corner(22) })
-	v.Activated:Connect(function()
-		self.vibration = not self.vibration
-		v.Text = vibText(self.vibration)
-		v.TextColor3 = self.vibration and INK or GREY
-	end)
+	-- 진동 켜기/끄기 버튼은 뺐음 (진동은 항상 켜짐, 나중에 설정 메뉴로)
 end
 
 function Ui:_buildGauge()
@@ -263,7 +254,7 @@ end
 function Ui:_buildMeter()
 	local m = new("Frame", {
 		Name = "Meter",
-		Position = UDim2.fromOffset(222, 16), -- QUALITY 창 오른쪽 옆
+		Position = UDim2.fromOffset(222, 84), -- QUALITY 창 오른쪽 옆
 		Size = UDim2.fromOffset(46, self.touch and 150 or 200),
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.08,
@@ -507,7 +498,7 @@ function Ui:showResult(res, shape, handlers)
 	self.meter.Visible = false
 	if self.touch then
 		-- 폰: 팝업을 오른쪽에 두고 카드·링을 숨겨 달고나가 보이게
-		self.root.Chips.Visible = false
+		self.topRow.Visible = false
 		self.root.Quality.Visible = false
 		self.root.Instruction.Visible = false
 		self.sub.Visible = false
@@ -552,7 +543,7 @@ end
 
 function Ui:hideResult()
 	self.result.Visible = false
-	self.root.Chips.Visible = true
+	self.topRow.Visible = true
 	self.root.Quality.Visible = true
 	self.root.Instruction.Visible = true
 	self.sub.Visible = true

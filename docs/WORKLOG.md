@@ -56,6 +56,12 @@
 - 사용자 승인 후 64x64 단색 텍스처 2장을 Roblox에 올림: 금속도 0.95 `rbxassetid://75555295293901`, 거칠기 0.25 `rbxassetid://116334782975968` (Blender 재질과 같은 값).
 - `ServerStorage.Assets.LadleMesh`에 SurfaceAppearance `CopperShine`(색 214,132,72)으로 적용. Play에서 경고 0, 위에서 볼 때 테두리 하이라이트와 금속 그라데이션 확인. 스크린샷 `phone-v4/9_ladle_shine.jpg`.
 
+### HUD 다시 정리 (사용자 스케치대로)
+- 진동 켜기/끄기 버튼 삭제 (진동은 항상 켜짐).
+- 작업 순서 칩을 원래 자리(위 가운데 가로)로 되돌리고, X 버튼을 칩 바로 오른쪽에 둠 (폰에서 65px).
+- QUALITY 창과 세로 막대는 위 줄 아래(왼쪽)로 내림. 폰 결과 화면에서는 위 줄 전체를 숨김.
+- 확인(폰 에뮬레이션): X 탭으로 정상 종료, 오류 0. 스크린샷 `phone-v4/10_hud_top_row.jpg`.
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음.
