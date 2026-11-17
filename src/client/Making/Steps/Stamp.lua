@@ -10,6 +10,46 @@ local Stamp = {}
 
 local HALF_WIRE = 0.14
 
+-- 누른 시간 → 홈 깊이 (0 안 보임 · 1 또렷 · 1.3 너무 깊어 금 감)
+local function depthFor(hold, cfg)
+	if hold < cfg.holdMin then
+		return 0.6 * hold / cfg.holdMin
+	elseif hold <= cfg.holdMax then
+		return 0.6 + 0.4 * (hold - cfg.holdMin) / (cfg.holdMax - cfg.holdMin)
+	end
+	return 1 + 0.3 * math.clamp((hold - cfg.holdMax) / (cfg.crackHold - cfg.holdMax), 0, 1)
+end
+
+-- 틀 손잡이 자국: 손잡이 쪽(틀의 +Z)으로 가장 튀어나온 철사 끝에서 원판 가장자리까지 곧은 홈
+local function handleLine(wires, placed, c, R)
+	local d = placed:VectorToWorldSpace(Vector3.zAxis)
+	d = Vector3.new(d.X, 0, d.Z).Unit
+	local best, bestDot = nil, -math.huge
+	for _, w in ipairs(wires) do
+		for _, sgn in ipairs({ -1, 1 }) do
+			local p = w.Position + w.CFrame.LookVector * (w.Size.Z / 2) * sgn
+			local dot = (p - placed.Position):Dot(d)
+			if dot > bestDot then
+				best, bestDot = p, dot
+			end
+		end
+	end
+	if not best then
+		return nil
+	end
+	local rel = Vector3.new(best.X - c.X, 0, best.Z - c.Z)
+	local b = rel:Dot(d)
+	local disc = b * b - (rel:Dot(rel) - R * R)
+	if disc <= 0 then
+		return nil
+	end
+	local t = -b + math.sqrt(disc)
+	if t < 0.05 then
+		return nil
+	end
+	return { a = best, b = best + d * t }
+end
+
 function Stamp.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
 	local cfg = Config.Stamp
@@ -37,6 +77,7 @@ function Stamp.run(ctx)
 	local placed = nil -- 놓은 자리 CFrame (틀 Root)
 	local holding, contact, holdT = false, false, 0
 	local pBottom = 0
+	local groove = nil
 
 	ui:say(shapeName .. " 틀을 끌어 원판 가운데에 놓아요", "가운데에, 반듯하게")
 
@@ -100,9 +141,14 @@ function Stamp.run(ctx)
 					if pBottom <= contactY then
 						pBottom = contactY
 						contact = true
+						if not groove then
+							-- 닿는 순간부터 홈이 파이기 시작 (누를수록 깊고 또렷)
+							groove = dal:groove(wires, handleLine(wires, placed, c, dal:radius() * 0.98))
+						end
 					end
 				else
 					holdT += dt
+					groove:setDepth(depthFor(holdT, cfg))
 					local depth = math.min(holdT / 1.0, 1) * 0.2
 					cutter:PivotTo(placed - Vector3.new(0, depth, 0))
 					pBottom = contactY - depth
@@ -127,8 +173,10 @@ function Stamp.run(ctx)
 	end
 
 	-- 결과: 틀 아래로 선이 파이고, 틀을 들면 자국이 남음
-	local clarity = Scoring.stampForce(rec.hold) / 100
-	dal:engrave(wires, clarity)
+	if not groove then
+		groove = dal:groove(wires, handleLine(wires, placed, c, dal:radius() * 0.98))
+	end
+	groove:setDepth(depthFor(rec.hold, cfg))
 	if rec.hold > cfg.crackHold then
 		dal:crack(4, 0.7)
 		ui:hint("너무 세게 눌러서 금이 갔어요")

@@ -3,6 +3,8 @@
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DalgonaConfig"))
 
+local Sfx = require(script.Parent:WaitForChild("Sfx"))
+
 local Heat = {}
 
 local WHITE = Color3.fromRGB(250, 250, 250)
@@ -70,6 +72,8 @@ function Heat.flame(station, h)
 	local cfg = Config.Melt
 	local f = 1 - (h - cfg.hMin) / (cfg.hMax - cfg.hMin)
 	station.Flame.Rate = 18 + 40 * f
+	-- 불 소리: 국자가 불에 가까울수록 크고 조금 높게
+	Sfx.loop("fire", 0.15 + 0.45 * f, 0.9 + 0.2 * f)
 end
 
 return Heat

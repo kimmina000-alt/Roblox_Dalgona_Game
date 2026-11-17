@@ -171,6 +171,12 @@
 - 소리 후보: `docs/SOUND_CANDIDATES.md` (아직 안 넣음, 사용자가 골라야 함).
 - 아직: 판 설탕 코팅, 부은 뒤 둥글게 다듬기, 한 번 길게 누르기, 틀 손잡이 자국, 헤라, 실패 연출 3가지, 소리 넣기.
 
+### 틀 자국 입체감 + 소리 연결 (2026-11-18)
+- 참고 사진 `docs/images/stamp_reference.jpg`. 틀 자국이 이제 깊이 있는 V자 홈: 진한 바닥 + 빛 쪽 벽 그림자 + 반대쪽 가는 밝은 줄 → 모양이 도드라져 보임 (`Dalgona:groove`, `Groove:setDepth`).
+- 누름판이 닿는 순간부터 홈이 파이고 누를수록 깊어짐 (0.12초 미만 흐림 → 0.12~0.5초 또렷 → 그 이상 넓고 진해짐, 0.85초 넘으면 금). 틀 손잡이 쪽 철사 끝에서 원판 가장자리까지 손잡이 자국. 모든 도안에 같은 방식 (별·하트 확인).
+- 소리: 새 모듈 `Making/Sfx.lua` + `C.Sounds` 키 7개 (sugarPour, crack, fire, stirDry, stirCrystal, stirLiquid, stirCream). 설탕 붓기·금 가기·연탄불(국자 높이)·젓기(상태별, 속도 = 크기·재생 속도)에 연결. **ID는 비어 있음** → 사용자가 `docs/SOUND_CANDIDATES.md`에서 고르면 넣음.
+- 확인: 하트 한 판 Q 95 Perfect(서버 검증), 오류 없음. 장면 `docs/screenshots/2026-11-18/stamp/` (groove_good, groove_weak, play_heart).
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음 → 도안 해금 없이 전부 열려 있음.

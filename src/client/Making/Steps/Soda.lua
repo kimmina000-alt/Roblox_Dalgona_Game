@@ -13,6 +13,7 @@ local Making = script.Parent.Parent
 local Stir = require(Making:WaitForChild("Stir"))
 local Heat = require(Making:WaitForChild("Heat"))
 local Fx = require(Making:WaitForChild("Fx"))
+local Sfx = require(Making:WaitForChild("Sfx"))
 
 local Soda = {}
 
@@ -452,6 +453,7 @@ function Soda.run(ctx)
 				rec.puff = puffCurve(puff.u)
 				drawPuff(S, puff, dt, speed)
 			end
+			Sfx.stir(puffed and "stirCream" or "stirLiquid", speed, stir.active)
 			ui:setGauge(true, speed, mcfg.slow, cfg.fastMin, "STIR FAST! · 빠르게")
 			ui:setMeter(true, rec.puff, 0.95, 1, "거품")
 			rec.fastFrac = tStir > 0 and tFast / tStir or 0
@@ -467,6 +469,8 @@ function Soda.run(ctx)
 	end
 
 	bubbles(S, false)
+	Sfx.stir(nil, 0, false)
+	Sfx.stop("fire") -- 소다 다음부터는 불을 안 씀
 	if puff then
 		for _, b in ipairs(puff.pops) do
 			b.part:Destroy()

@@ -11,6 +11,7 @@ local Making = script.Parent.Parent
 local Stir = require(Making:WaitForChild("Stir"))
 local Heat = require(Making:WaitForChild("Heat"))
 local SugarLook = require(Making:WaitForChild("SugarLook"))
+local Sfx = require(Making:WaitForChild("Sfx"))
 
 local Melt = {}
 
@@ -124,6 +125,7 @@ function Melt.run(ctx)
 		-- 보이는 변화 4단계: 가루 → 결정 → 반쯤 녹음 → 맑은 호박색 액체 (SugarLook). 타면 갈색 → 검정 + 연기
 		local p = st.melt
 		stage = look:update(dt, p, tip, st.burn)
+		Sfx.stir(stage == "가루" and "stirDry" or (stage == "결정" and "stirCrystal" or "stirLiquid"), speed, stir.active)
 		Heat.smoke(S, st.burn > 0.2, st.burn)
 
 		ui:setGauge(true, speed, cfg.slow, cfg.fast)
@@ -148,6 +150,7 @@ function Melt.run(ctx)
 
 	ui:setGauge(false)
 	ui:setMeter(false)
+	Sfx.stir(nil, 0, false)
 	for _, g in ipairs(st.grains) do
 		g.Transparency = 1
 	end

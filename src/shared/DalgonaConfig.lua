@@ -86,6 +86,14 @@ C.Sounds = {
 	-- 파일 앞쪽 무음 길이 (Studio에서 AudioAnalyzer로 잼). 여기서부터 재생해 누르는 순간 바로 들리게
 	paperTearStart = 0.06,
 	stickSnapStart = 0.09,
+	-- 제작 소리 (사용자가 docs/SOUND_CANDIDATES.md에서 골라 채움. 비어 있으면 소리 없음)
+	sugarPour = "", -- 숟가락에서 설탕 쏟아지는 "사르르" (반복, 쏟는 양 = 크기)
+	crack = "", -- 달고나 금 가는 "쩌적" (한 번)
+	fire = "", -- 연탄불 (반복, 국자가 가깝고 뜨거울수록 큼)
+	stirDry = "", -- 마른 설탕 젓기 "사각사각" (반복, 젓는 속도 = 재생 속도·크기)
+	stirCrystal = "", -- 결정 부딪히는 "톡톡"
+	stirLiquid = "", -- 녹은 시럽 젓기 (부드러움)
+	stirCream = "", -- 소다 넣은 뒤 걸쭉한 거품 젓기 (둔함)
 }
 
 C.Server = {

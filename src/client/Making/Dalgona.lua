@@ -3,6 +3,7 @@
 
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DalgonaConfig"))
 local Fx = require(script.Parent:WaitForChild("Fx"))
+local Sfx = require(script.Parent:WaitForChild("Sfx"))
 
 -- 3D 반죽 메시 (tools/blender/dalgona_mesh.py, 유튜브 쇼츠 영상 분석): 두께에 따라 바뀜
 --   붓는 중·막 부은 것(h ≥ 0.40): DalgonaMound  리본처럼 접히며 쌓인 주름진 언덕
@@ -279,6 +280,7 @@ end
 
 -- 가장자리 갈라짐 (진한 선)
 function Dalgona:crack(count, inward)
+	Sfx.play("crack", 0.7)
 	local r = self:radius()
 	local y = self:topY() + 0.006
 	for i = 1, count or 5 do
@@ -296,21 +298,77 @@ function Dalgona:crack(count, inward)
 	end
 end
 
--- 모양 틀 자국: 철사 부품들을 반죽 윗면에 진하게 복사
-function Dalgona:engrave(wires, clarity)
-	local y = self:topY() + 0.008
-	local dark = self.color:Lerp(Color3.fromRGB(80, 44, 16), 0.65)
-	for _, w in ipairs(wires) do
-		local cf = w.CFrame
-		self.S:fxPart(self.S.fx, {
-			Name = "Engrave",
-			Size = Vector3.new((w:GetAttribute("Width") or 0.07) * 0.45, 0.01, w.Size.Z), -- 틀 철사보다 가는 자국
-			CFrame = cf + Vector3.new(0, y - cf.Position.Y, 0),
-			Color = dark,
-			Transparency = 0.6 * (1 - math.clamp(clarity, 0, 1)),
-			Material = Enum.Material.SmoothPlastic,
-		})
+-- 모양 틀 자국 = 깊이가 있는 V자 홈 (참고 사진 docs/images/stamp_reference.jpg)
+--   홈 바닥(진한 갈색) + 빛 쪽 벽(그림자, 더 진함) + 반대쪽 벽(가는 밝은 줄) → 모양이 도드라져 보임
+--   depth: 0 = 안 보임, 1 = 알맞게 또렷, 1 이상 = 너무 깊음 (더 넓고 진함)
+-- wires = 틀의 Outline 철사 부품들, handle = { a = Vector3, b = Vector3 } 틀 손잡이 자국 (없어도 됨)
+local LIGHT_DIR = Vector3.new(-0.55, 0, -0.83).Unit -- 빛이 오는 쪽 (화면 왼쪽 위)
+local GROOVE_DARK = Color3.fromRGB(92, 50, 20)
+local GROOVE_SHADOW = Color3.fromRGB(56, 28, 10)
+local GROOVE_LIGHT = Color3.fromRGB(255, 243, 215)
+
+local Groove = {}
+Groove.__index = Groove
+
+function Dalgona:groove(wires, handle)
+	local g = setmetatable({ dal = self, segs = {} }, Groove)
+	local y = self:topY()
+	local function add(mid, look, len, width)
+		look = Vector3.new(look.X, 0, look.Z)
+		if look.Magnitude < 1e-4 or len < 1e-3 then
+			return
+		end
+		look = look.Unit
+		local right = look:Cross(Vector3.yAxis).Unit
+		local side = right:Dot(LIGHT_DIR) >= 0 and 1 or -1 -- 빛 쪽 벽에 그림자
+		local seg = { mid = Vector3.new(mid.X, y, mid.Z), look = look, right = right * side, len = len, w = width }
+		local function part(name)
+			return self.S:fxPart(self.S.fx, { Name = name, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(0.01, 0.008, len) })
+		end
+		seg.floor, seg.shadow, seg.light = part("Engrave"), part("EngraveShadow"), part("EngraveLight")
+		table.insert(g.segs, seg)
 	end
+	for _, w in ipairs(wires) do
+		add(w.Position, w.CFrame.LookVector, w.Size.Z, w:GetAttribute("Width") or 0.07)
+	end
+	if handle then
+		local d = handle.b - handle.a
+		add((handle.a + handle.b) / 2, d, d.Magnitude, 0.055)
+	end
+	g:setDepth(0)
+	return g
+end
+
+function Groove:setDepth(k)
+	local base = self.dal.color
+	local kk = math.clamp(k, 0, 1)
+	local over = math.clamp(k - 1, 0, 0.5)
+	for _, s in ipairs(self.segs) do
+		local fw = s.w * (0.3 + 0.25 * kk + 0.3 * over)
+		local sw = s.w * (0.12 + 0.3 * kk + 0.2 * over)
+		local lw = s.w * (0.08 + 0.12 * kk)
+		local function place(p, width, offset, lift)
+			p.Size = Vector3.new(math.max(width, 0.004), 0.008, s.len)
+			local pos = s.mid + s.right * offset + Vector3.new(0, lift, 0)
+			p.CFrame = CFrame.lookAt(pos, pos + s.look)
+		end
+		place(s.floor, fw, 0, 0.005)
+		place(s.shadow, sw, fw / 2 + sw / 2 - 0.002, 0.006)
+		place(s.light, lw, -(fw / 2 + lw / 2 - 0.002), 0.006)
+		s.floor.Color = base:Lerp(GROOVE_DARK, 0.35 + 0.4 * kk + 0.3 * over)
+		s.floor.Transparency = 0.9 - 0.85 * kk
+		s.shadow.Color = base:Lerp(GROOVE_SHADOW, 0.45 + 0.45 * kk)
+		s.shadow.Transparency = 0.92 - 0.88 * kk
+		s.light.Color = base:Lerp(GROOVE_LIGHT, 0.55)
+		s.light.Transparency = 0.95 - 0.6 * kk
+	end
+end
+
+-- 예전 호출용: 바로 최종 깊이로
+function Dalgona:engrave(wires, clarity, handle)
+	local g = self:groove(wires, handle)
+	g:setDepth(clarity)
+	return g
 end
 
 function Dalgona:sparkle()

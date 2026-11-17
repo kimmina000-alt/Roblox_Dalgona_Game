@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 local Fx = require(script.Parent.Parent:WaitForChild("Fx"))
+local Sfx = require(script.Parent.Parent:WaitForChild("Sfx"))
 
 local Sugar = {}
 
@@ -163,6 +164,8 @@ function Sugar.run(ctx)
 			end
 		end
 		emitter.Enabled = pouring
+		-- 설탕 쏟아지는 "사르르": 기울인 만큼 크게
+		Sfx.loop("sugarPour", pouring and 0.25 + 0.5 * (tilt / MAX_TILT) or 0, 0.9 + 0.25 * (tilt / MAX_TILT))
 
 		local scoop = phase == "white" and cfg.scoopWhite or cfg.scoopBrown
 		S:setHeap("WoodSpoon", onSpoon / scoop, phase == "white" and WHITE or BROWN)
@@ -212,6 +215,7 @@ function Sugar.run(ctx)
 	end
 
 	emitter.Enabled = false
+	Sfx.stop("sugarPour")
 	ui:buzz(0.4, 0.08)
 	ui:say("좋아요! 이제 녹여요", "")
 	local t = 0

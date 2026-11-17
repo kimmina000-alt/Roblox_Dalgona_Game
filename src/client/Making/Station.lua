@@ -8,6 +8,7 @@ Station.__index = Station
 
 local MOVABLE = { "Ladle", "WoodSpoon", "SodaSpoon", "Presser", "Cutter", "Chopsticks" }
 local CutterRig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CutterRig"))
+local Sfx = require(script.Parent:WaitForChild("Sfx"))
 
 function Station.new()
 	local m = workspace:WaitForChild("DalgonaWorkstation")
@@ -125,6 +126,7 @@ function Station:setHeap(name, amount01, color)
 end
 
 function Station:clearFx()
+	Sfx.stopAll()
 	self.fx:ClearAllChildren()
 	for _, d in ipairs(self.Ladle:GetChildren()) do
 		if d.Name:sub(1, 2) == "Fx" then
