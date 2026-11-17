@@ -150,6 +150,12 @@
 - 달고나(`Dalgona.lua`): 메시가 있으면 두께에 따라 언덕 → 부푼 원판 → 눌린 원판. 반점·얼룩 무늬는 눌린 원판에서만. 붓기(`Pour.lua`): 공 줄기 대신 넓적한 리본 하나가 국자 가장자리 → 반죽 사이에서 비틀리며 흔들림.
 - 사용자가 `dalgona_batter.glb`를 가져옴 → 반죽 메시 4개는 `ReplicatedStorage.Assets.Fx`, 젓가락 4개는 `Assets.Chopsticks` 교체(Offset·색 유지). 결이 길이 방향인 것 확인 (`fx/grain_fixed.jpg`, `picker_sticks_grain.jpg`). 한 판 Q 79(서버 검증), 결과는 눌린 원판 메시 + 별 자국 (`fx/result_flat_mesh.jpg`). 누르기 2점은 테스트 중 멈춘 사이 붓기 단계가 시간 초과로 넘어가고, 자동 입력의 탭이 첫 누름으로 잡힌 것.
 
+### 젓가락 안쪽 면, 가는 틀 자국, 붓기 다듬기
+- 쪼갠 젓가락 두 짝: 길이 축으로 180° 더 돌려 붙어 있던 안쪽 면이 서로 마주 보게 (`ChopstickPicker`, `Station.useChopstick`, `Stir`). 무게중심이 안쪽으로 오는 것으로 확인.
+- 틀 찍은 자국 선: 틀 철사 굵기의 45%, 높이 0.01로 더 가늘게 (`Dalgona.lua`, `fx/engrave_before.jpg` → `fx/engrave_thin.jpg`).
+- 붓기(`Pour.lua`): 리본을 곡선(베지어)을 따라 2조각으로, 국자 쪽은 넓고 아래로 갈수록 가늘어지며 맥박치듯 굵기가 변함. 0.22초마다 떨어진 띠가 반죽 위에 접혀 눕고 0.75초 동안 가라앉음, 반죽 언덕은 천천히 돎 (`fx/pour_ribbon_folds.jpg`, Edit에서 세운 장면).
+- 확인: 한 판 별 Q 96 Perfect(서버 검증), 붓기 95, 누르기 92, 오류 없음.
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음 → 도안 해금 없이 전부 열려 있음.

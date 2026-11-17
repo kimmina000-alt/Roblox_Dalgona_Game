@@ -15,7 +15,8 @@ local Picker = {}
 -- 나무젓가락 메시가 길이를 X축으로 눕힌 판(나뭇결이 X축을 따라감)이면 예전 판(길이 Y)처럼 세우는 보정
 local function stickFix(p)
 	if p.Size.X > p.Size.Y * 2 then
-		return CFrame.Angles(0, 0, math.rad(90))
+		-- 90° 세운 뒤 길이 축으로 180° 뒤집음: 쪼개진 두 짝의 안쪽(붙어 있던) 면이 서로 마주 보게
+		return CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.pi, 0, 0)
 	end
 	return CFrame.new()
 end

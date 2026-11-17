@@ -83,7 +83,7 @@ function Stir.placeChopsticks(station, world)
 	-- 고른 나무젓가락 메시 (길이 축 Y를 젓가락 방향으로, 아래쪽 끝이 국자 안)
 	local chosen = m:FindFirstChild("Chosen")
 	if chosen then
-		chosen.CFrame = cf * CFrame.new(0, 0, 0.1) * CFrame.Angles(math.rad(90), 0, 0) * (chosen:GetAttribute("Fix") and CFrame.Angles(0, 0, math.rad(90)) or CFrame.new())
+		chosen.CFrame = cf * CFrame.new(0, 0, 0.1) * CFrame.Angles(math.rad(90), 0, 0) * (chosen:GetAttribute("Fix") and CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.pi, 0, 0) or CFrame.new())
 	end
 	return tip
 end

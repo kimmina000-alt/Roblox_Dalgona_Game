@@ -19,13 +19,51 @@ local POUR_TILT = math.rad(48) -- 이 각도부터 흘러내리기 시작
 local REMAIN = 0.15
 local POUR_TIME = 1.8 -- 최대로 기울였을 때 다 붓는 데 걸리는 시간 (걸쭉해서 천천히)
 local SEGMENTS = 28
+local RIBBON_PIECES = 2 -- 리본 메시를 곡선 따라 이어 붙인 조각 수 (메시가 아래로 좁아져서, 아래 조각은 위 조각 끝 너비에 맞춤)
+
+local function hideRibbons(st)
+	for _, rb in ipairs(st.ribbons or {}) do
+		rb.Transparency = 1
+	end
+end
+
+-- 쌓이는 반죽 위로 리본이 접혀 내려앉음 (영상: 띠가 똬리 틀듯 겹겹이 쌓이다 녹아듦)
+local function spawnFold(S, blob, color, ang)
+	local f = Fx.mesh("PourRibbon", S.fx, { Name = "PourFold", Color = color, Material = Enum.Material.SmoothPlastic, Reflectance = 0.04 })
+	if not f then
+		return
+	end
+	task.spawn(function()
+		local t = 0
+		while t < 0.75 and f.Parent do
+			t += task.wait()
+			local a = math.min(t / 0.75, 1)
+			local r = blob:radius()
+			local c = blob.center
+			local topY = c.Y + blob.h * 0.85
+			local len = math.max(r * 1.05, 0.2) * (1 - 0.2 * a)
+			local off = r * 0.22
+			-- 얹힌 띠가 점점 납작해지며 언덕 속으로 가라앉음
+			f.Size = Vector3.new(0.34 * (1 - 0.35 * a), len, (0.2 * (1 - a) + 0.02))
+			f.CFrame = CFrame.new(c.X + math.cos(ang) * off, topY + 0.05 * (1 - a) - 0.06 * a, c.Z + math.sin(ang) * off)
+				* CFrame.Angles(0, ang, 0)
+				* CFrame.Angles(0, 0, math.rad(90))
+				* CFrame.Angles(0, math.rad(25) * (1 - a), 0)
+		end
+		f:Destroy()
+	end)
+end
 
 -- 흘러내리는 반죽 줄기: 공 모양 조각을 이어 붙인 관. 국자 가장자리(lip) → 반죽 위(land)
 local function newStream(S, color)
 	local st = { parts = {}, head = 0, tail = 0, t = 0, flow = 0 }
 	-- 3D 리본 메시가 있으면 그것 하나로 (영상: 가는 줄기가 아니라 넓적한 반죽 띠가 접히며 미끄러져 나옴)
-	st.ribbon = Fx.mesh("PourRibbon", S.fx, { Name = "PourRibbon", Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
-	if st.ribbon then
+	if Fx.template("PourRibbon") then
+		st.ribbons = {}
+		for i = 1, RIBBON_PIECES do
+			st.ribbons[i] = Fx.mesh("PourRibbon", S.fx, { Name = "PourRibbon", Color = color, Material = Enum.Material.SmoothPlastic, Reflectance = 0.04, Transparency = 1 })
+		end
+		st.ribbon = st.ribbons[1]
 		return st
 	end
 	for i = 1, SEGMENTS do
@@ -46,25 +84,49 @@ end
 -- head/tail: 줄기의 위끝·아래끝 위치 (0 = 국자, 1 = 바닥). flow: 굵기 0~1
 local function drawStream(st, lip, out, land)
 	if st.ribbon then
-		local top = lip:Lerp(land, st.tail)
-		local bottom = lip:Lerp(land, math.min(st.head, 1))
-		local len = (bottom - top).Magnitude
-		if len < 0.03 or st.flow <= 0.01 then
-			st.ribbon.Transparency = 1
+		-- 국자 가장자리에서 밖으로 살짝 밀려 나왔다가 떨어지는 곡선 위에 리본 조각을 이어 붙임
+		local ctrl = lip + out * 0.3 + Vector3.new(0, -0.02, 0)
+		local function bez(t)
+			local u = 1 - t
+			return lip * u * u + ctrl * 2 * u * t + land * t * t
+		end
+		local s0, s1 = st.tail, math.min(st.head, 1)
+		if s1 - s0 < 0.02 or st.flow <= 0.01 then
+			hideRibbons(st)
 			return
 		end
-		local up = (top - bottom).Unit
-		local right = out:Cross(Vector3.yAxis)
-		if right.Magnitude < 1e-3 then
-			right = Vector3.xAxis
+		local side = out:Cross(Vector3.yAxis)
+		side = side.Magnitude > 1e-3 and side.Unit or Vector3.zAxis
+		local n = #st.ribbons
+		for i, rb in ipairs(st.ribbons) do
+			-- 조각 경계: 위 조각이 조금 더 길고, 서로 살짝 겹침
+			local split = s0 + (s1 - s0) * 0.48
+			local a = i == 1 and s0 or split - 0.04
+			local b = i == n and s1 or split + 0.02
+			-- 아래로 갈수록 좌우로 더 흔들림 (점성 있는 띠가 늘어지며 출렁)
+			local pa = bez(a) + side * math.sin(st.t * 6 + a * 7) * 0.045 * a
+			local pb = bez(b) + side * math.sin(st.t * 6 + b * 7) * 0.045 * b
+			local len = (pa - pb).Magnitude
+			local up = (pa - pb).Unit
+			local right = (side - up * side:Dot(up)).Unit
+			local sm = (a + b) / 2
+			-- 국자 쪽은 넓적하고 아래로 갈수록 좁고 가늘어짐, 굵기는 흐르는 양을 따라 맥박치듯
+			local pulse = 1 + 0.06 * math.sin(st.t * 9 - sm * 8)
+			-- 리본 메시는 위가 아래의 2배 넓음 → 아래 조각은 위 조각 아래끝 너비에서 시작
+			local scale = i == 1 and 1 or 0.52
+			local w = math.sqrt(st.flow) * 0.62 * scale * pulse
+			local th = math.sqrt(st.flow) * 0.26 * scale * pulse
+			if st.tail > 0 then
+				-- 끊어질 때: 위쪽부터 실처럼 가늘어짐
+				local k = math.clamp((sm - st.tail) / 0.4, 0.15, 1)
+				w *= k
+				th *= k
+			end
+			rb.Size = Vector3.new(math.max(w, 0.02), len + 0.04, math.max(th, 0.02))
+			-- 아래로 갈수록 띠가 비틀림
+			rb.CFrame = CFrame.fromMatrix((pa + pb) / 2, right, up) * CFrame.Angles(0, sm * 0.35 + math.sin(st.t * 4 + sm * 5) * 0.15, 0)
+			rb.Transparency = 0
 		end
-		right = (right - up * right:Dot(up)).Unit
-		local w = math.sqrt(st.flow) * (st.tail > 0 and (1 - st.tail * 0.6) or 1)
-		st.ribbon.Size = Vector3.new(0.5 * w, len + 0.08, 0.26 * w)
-		-- 출렁임: 띠가 살짝 비틀리고 흔들림
-		local wob = CFrame.Angles(0, math.sin(st.t * 5) * 0.35, math.sin(st.t * 7) * 0.06)
-		st.ribbon.CFrame = CFrame.fromMatrix((top + bottom) / 2, right, up) * wob
-		st.ribbon.Transparency = 0
 		return
 	end
 	local ctrl = lip + out * 0.2 + Vector3.new(0, -0.05, 0) -- 가장자리에서 살짝 밀려 나왔다 떨어짐
@@ -124,6 +186,7 @@ function Pour.run(ctx)
 	local look = Dalgona.lookFor(ctx.records, st)
 	color = Dalgona.colorFor(look) -- 줄기·반죽 색 = 탄 정도에 맞춘 색
 	local stream = newStream(S, color)
+	local foldAcc, foldAng = 0, math.random() * 6
 	local contentsThick = S.Contents.Size.X
 
 	-- 카메라가 철판 쪽으로 옮겨 가 있으니, 국자를 먼저 철판 왼쪽 위로 들고 옴 (0.4초)
@@ -194,6 +257,16 @@ function Pour.run(ctx)
 					-- 줄기 머리가 중력처럼 점점 빨리 내려감, 철판 반죽은 부은 양만큼 퍼짐 (가운데가 볼록한 채로)
 					stream.head = math.min(1, stream.head + dt * (2.5 + 9 * stream.head))
 					stream.t += dt
+					if stream.ribbon and stream.flow > 0.2 then
+						-- 리본이 접히며 쌓임: 일정 간격으로 띠 하나가 돌아가며 내려앉고, 언덕은 천천히 돌아감
+						foldAcc += dt * (0.7 + stream.flow)
+						if foldAcc > 0.22 then
+							foldAcc = 0
+							foldAng += 2.1
+							spawnFold(S, blob, color, foldAng)
+						end
+						blob.spin = (blob.spin or 0) + dt * 0.7
+					end
 					local fill = poured / total
 					blob.V = math.max(volume * 0.02, volume * (1 - REMAIN) * fill)
 					blob:setThickness(Config.Press.h0 * (1.15 - 0.15 * fill) + 0.03 * math.sin(stream.t * 9) * stream.flow)
@@ -221,9 +294,7 @@ function Pour.run(ctx)
 								local a = math.min(t / 0.45, 1)
 								blob:setThickness(finalH * (1 + 0.08 * math.sin(a * math.pi * 2.5) * (1 - a)))
 							end
-							if stream.ribbon then
-								stream.ribbon.Transparency = 1
-							end
+							hideRibbons(stream)
 							for _, p in ipairs(stream.parts) do
 								p.Transparency = 1
 							end
@@ -241,9 +312,7 @@ function Pour.run(ctx)
 					-- 붓다가 손을 떼면 줄기가 끊겨 떨어짐 (다시 기울이면 이어서 부음)
 					stream.flow = math.max(0, stream.flow - dt * 5)
 					if stream.flow <= 0.01 then
-						if stream.ribbon then
-							stream.ribbon.Transparency = 1
-						end
+						hideRibbons(stream)
 						for _, p in ipairs(stream.parts) do
 							p.Transparency = 1
 						end
