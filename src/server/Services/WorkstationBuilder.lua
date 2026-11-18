@@ -12,8 +12,8 @@ local ORIGIN = Vector3.new(0, 0, -14)
 local TABLE_TOP = 3.5
 local HANDLE_YAW = 205 -- 국자 손잡이 방향: 왼쪽 앞 (붓기는 오른쪽 철판 쪽으로 기울임)
 -- 연탄 화로: 처음 크기(높이 1.88)의 1.5배. 커진 만큼 왼쪽으로 옮겨 설탕 그릇과 안 닿게
-local BRAZIER_SCALE = 1.5
-local BRAZIER_X = -3.8
+local BRAZIER_SCALE = 1.95 -- 1.5배에서 다시 1.3배 (사용자 요청 2026-11-18)
+local BRAZIER_X = -4.4 -- 폭 5.1: 설탕 그릇(왼쪽 끝 x -1.57)과 안 닿게
 local BRAZIER_HEIGHT = 1.88 * BRAZIER_SCALE
 local GRILL_Y = TABLE_TOP + BRAZIER_HEIGHT + 0.1 -- 철망: 화로 윗면 바로 위
 
@@ -602,6 +602,19 @@ function Builder.buildCutter(ws)
 	m.PrimaryPart = root
 	CutterRig.apply(m, "Star")
 	return m
+end
+
+-- 화로·국자만 다시 만들기 (화로 크기를 바꿨을 때 Studio에서 한 번 부름. 철망 높이가 바뀌어 국자도 같이)
+function Builder.rebuildBrazier(ws)
+	for _, name in ipairs({ "Brazier", "Ladle" }) do
+		local old = ws:FindFirstChild(name)
+		if old then
+			old:Destroy()
+		end
+	end
+	buildBrazier(ws)
+	buildLadle(ws)
+	Builder.setCoal(ws, ws:GetAttribute("CoalLeft") or 1)
 end
 
 function Builder.build(parent)

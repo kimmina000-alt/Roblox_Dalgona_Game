@@ -253,7 +253,7 @@ function Station:attachHand(player)
 	if side.Z < 0 then
 		side = -side
 	end
-	local dir = (ax * 0.8 + up * 0.45 + side * 0.55).Unit
+	local dir = (ax * 0.8 + up * 0.18 + side * 0.55).Unit -- 거의 수평으로 (카메라 쪽으로 솟으면 화면을 가림)
 	local xAxis = (up - dir * up:Dot(dir)).Unit
 	local function put(p, center)
 		p.CFrame = CFrame.fromMatrix(center, xAxis, dir)

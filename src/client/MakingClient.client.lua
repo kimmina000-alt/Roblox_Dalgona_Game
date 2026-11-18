@@ -139,7 +139,6 @@ local function runSession()
 	end
 
 	station:reset()
-	station:attachHand(player) -- 국자 손잡이를 잡은 손 (국자와 같이 움직임)
 	ui:hideResult()
 	ui:setQuality(100, Config.StarCut)
 	ui:show(true)
@@ -161,11 +160,13 @@ local function runSession()
 	ctx.state.shape = shape
 
 	-- 0. 나무젓가락 고르기 (포장지 찢기 → 꺼내기 → 쪼개기 → 한 짝 고르기)
+	CameraRig.go("pick") -- 테이블 왼쪽 끝 젓가락 쪽으로
 	local pick = ChopstickPicker.run(ctx)
 	if ctx.aborted or not pick then
 		return
 	end
 	station:useChopstick(pick.pair, pick.side)
+	station:attachHand(player) -- 국자 손잡이를 잡은 캐릭터 팔 (젓가락 고르기 화면을 가리지 않게 그 뒤에 붙임)
 	ctx.state.chopstick = pick
 
 	local okStart, sessionId = pcall(function()
