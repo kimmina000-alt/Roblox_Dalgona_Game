@@ -400,6 +400,145 @@ def era4_tools():
     return objs
 
 
+
+# ─────────────────────────── 5단계(최고 등급): 공장식 달고나 기계 ───────────────────────────
+# 사용자 결정 (2026-11-18): 가장 높은 등급 = 진짜 기계로 뽑아내는 공장식. 기계를 눌러 도안을 고르면 그 모양만 뽑아냄.
+# 레퍼런스: 사용자 사진(자판기 속: 투명 설탕 통 + 아래 나사식 공급기·흰 손잡이, 아날로그 계기판이 달린 제어판, 배선),
+# 사탕 공장 디포지터 라인(설탕 통 → 끓이는 솥 → 노즐로 틀에 떨어뜨림 → 컨베이어 → 눌러 찍기 → 나오는 곳).
+# 왼쪽부터: 투명 설탕 통 → 스테인리스 솥(빨간 가열 띠) + 노즐 → 컨베이어 위 틀 쟁반 → 가운데 찍는 프레스(문) →
+# 오른쪽 제어판(계기판·도안 고르는 버튼 6개·시작/정지·경고등) → 끝의 미끄럼판 → 받는 쟁반.
+GLASS = ("Glass", (220, 236, 240), 0.0, 0.05, "Glass")
+BELT = ("Belt", (46, 46, 50), 0.0, 0.8, "Rubber")
+GREEN_BTN = ("GreenButton", (60, 190, 90), 0.0, 0.4, "SmoothPlastic")
+AMBER = ("Amber", (255, 170, 30), 0.0, 0.3, "Neon")
+GAUGE = ("GaugeFace", (246, 244, 236), 0.0, 0.5, "SmoothPlastic")
+DALGONA = ("Dalgona", (214, 150, 70), 0.0, 0.6, "SmoothPlastic")
+
+
+def era5():
+    W, D = 8.6, 3.8
+    BASE_H = 2.4
+    BELT_Z = BASE_H + 0.12
+    objs = []
+    bm = bmesh.new()  # 스테인리스 받침 몸통 + 다리
+    add_box(bm, (0, 0, 0.3 + (BASE_H - 0.3) / 2), (W, D, BASE_H - 0.3), bevel=0.05)
+    for x in (-W / 2 + 0.3, W / 2 - 0.3):
+        for y in (-D / 2 + 0.3, D / 2 - 0.3):
+            add_box(bm, (x, y, 0.15), (0.3, 0.3, 0.3))
+    objs.append(finish("Era5_Base", bm, STEEL))
+    bm = bmesh.new()  # 앞면 문 손잡이·환기구 줄 (어두운 쇠)
+    for x in (-2.8, -0.9, 1.0, 2.9):
+        add_box(bm, (x, -D / 2 - 0.02, 1.4), (1.6, 0.04, 1.6), bevel=0.02)
+    objs.append(finish("Era5_Doors", bm, STEEL_DARK))
+    # 컨베이어: 고무 벨트 + 양 끝 롤러 + 옆 테두리
+    bm = bmesh.new()
+    add_box(bm, (0.3, -0.5, BELT_Z), (W - 1.2, 1.6, 0.08))
+    objs.append(finish("Era5_Belt", bm, BELT))
+    bm = bmesh.new()
+    for x in (-W / 2 + 0.9, W / 2 - 0.3):
+        add_cyl(bm, (x, -0.5, BELT_Z - 0.05), 0.16, 1.7, seg=24, axis="Y")
+    for y in (-1.38, 0.38):
+        add_box(bm, (0.3, y, BELT_Z + 0.08), (W - 1.0, 0.08, 0.3))
+    objs.append(finish("Era5_Rails", bm, STEEL_DARK))
+    # 틀 쟁반 4개 (둥근 홈 2개씩) + 그 위 달고나 몇 개
+    bm = bmesh.new()
+    trays = [-2.7, -0.9, 0.9, 2.7]
+    for x in trays:
+        add_box(bm, (x, -0.5, BELT_Z + 0.1), (1.5, 1.4, 0.12), bevel=0.02)
+    objs.append(finish("Era5_Trays", bm, STEEL))
+    bm = bmesh.new()
+    for x in trays[1:]:
+        for y in (-0.82, -0.18):
+            add_cyl(bm, (x, y, BELT_Z + 0.18), 0.28, 0.05, seg=24)
+    objs.append(finish("Era5_Dalgona", bm, DALGONA, smooth=True))
+    # 왼쪽: 투명 설탕 통 (아래가 좁아지는 깔때기) + 흰 손잡이 공급기 + 솥
+    hx = -W / 2 + 1.2
+    bm = bmesh.new()
+    add_box(bm, (hx, 0.6, BASE_H + 3.9), (1.7, 1.5, 1.6), bevel=0.06)
+    add_lathe(bm, [(0.15, 0.0), (0.75, 0.9)], center=(hx, 0.6, BASE_H + 2.2), seg=4)
+    objs.append(finish("Era5_Hopper", bm, GLASS))
+    bm = bmesh.new()  # 통 속 설탕
+    add_box(bm, (hx, 0.6, BASE_H + 3.55), (1.5, 1.3, 0.85))
+    objs.append(finish("Era5_Sugar", bm, WHITE))
+    bm = bmesh.new()  # 공급기(나사 통) + 흰 손잡이
+    add_cyl(bm, (hx, 0.6, BASE_H + 2.05), 0.16, 0.35, seg=20)
+    add_cyl(bm, (hx + 0.35, 0.6, BASE_H + 2.05), 0.13, 0.16, seg=20, axis="X")
+    objs.append(finish("Era5_Feeder", bm, CREAM, smooth=True))
+    bm = bmesh.new()  # 설탕 통 받침대: 기둥 4개 + 통 아래 테
+    for dx in (-0.75, 0.75):
+        for dy in (-0.05, 1.25):
+            add_box(bm, (hx + dx, dy, BASE_H + 1.55), (0.12, 0.12, 3.1))
+    add_box(bm, (hx, 0.6, BASE_H + 3.1), (1.8, 1.6, 0.1))
+    objs.append(finish("Era5_HopperStand", bm, STEEL_DARK))
+    bm = bmesh.new()  # 솥: 원통 + 아래 원뿔, 노즐이 컨베이어 쪽으로
+    add_lathe(bm, [(0.0, 0.0), (0.12, 0.0), (0.12, 0.25), (0.65, 0.75), (0.7, 1.6), (0.74, 1.65), (0.0, 1.65)], center=(hx + 0.3, -0.35, BASE_H + 0.2), seg=40)
+    add_box(bm, (hx + 0.3, 0.1, BASE_H + 1.45), (0.12, 0.9, 0.12))  # 통 → 솥 관
+    objs.append(finish("Era5_Kettle", bm, STEEL, smooth=True))
+    bm = bmesh.new()  # 솥 가열 띠
+    add_lathe(bm, [(0.72, 0.9), (0.76, 0.92), (0.76, 1.25), (0.72, 1.27)], center=(hx + 0.3, -0.35, BASE_H + 0.2), seg=40)
+    objs.append(finish("Era5_Heater", bm, RED_BODY, smooth=True))
+    # 가운데 찍는 프레스: 기둥 2개 + 위 들보 + 피스톤 + 도장판(고른 도안이 끼워짐)
+    px = 0.9
+    bm = bmesh.new()
+    for y in (-1.5, 0.5):
+        add_box(bm, (px, y, BELT_Z + 1.3), (0.25, 0.25, 2.6))
+    add_box(bm, (px, -0.5, BELT_Z + 2.65), (1.0, 2.3, 0.4), bevel=0.04)
+    objs.append(finish("Era5_PressFrame", bm, STEEL_DARK))
+    bm = bmesh.new()
+    add_cyl(bm, (px, -0.5, BELT_Z + 1.95), 0.16, 1.1, seg=24)
+    add_box(bm, (px, -0.5, BELT_Z + 1.3), (1.3, 1.25, 0.18), bevel=0.03)
+    objs.append(finish("Era5_PressHead", bm, STEEL, smooth=True))
+    bm = bmesh.new()  # 도장판 아래 도안 자국 (예시 별 2개, 게임에서 고른 도안으로 바꿈)
+    for y in (-0.82, -0.18):
+        add_star(bm, (px, y, BELT_Z + 1.2), 0.24, 0.1, 0.04)
+    objs.append(finish("Era5_Stamp", bm, GOLD))
+    # 오른쪽 제어판: 기울어진 상자 + 계기판 + 도안 버튼 6개 + 시작·정지 + 경고등
+    cx = W / 2 - 0.9
+    bm = bmesh.new()
+    add_box(bm, (cx, 0.9, BASE_H + 1.5), (1.4, 1.2, 3.0), bevel=0.05)
+    objs.append(finish("Era5_Panel", bm, STEEL_DARK))
+    bm = bmesh.new()
+    add_cyl(bm, (cx, 0.28, BASE_H + 2.5), 0.38, 0.06, seg=40, axis="Y")
+    objs.append(finish("Era5_Gauge", bm, GAUGE, smooth=True))
+    bm = bmesh.new()  # 계기 바늘
+    add_box(bm, (cx + 0.1, 0.23, BASE_H + 2.58), (0.32, 0.03, 0.04))
+    objs.append(finish("Era5_Needle", bm, BLACK))
+    bm = bmesh.new()  # 도안 고르는 버튼 6개 (금색 도형은 따로)
+    for i in range(6):
+        add_cyl(bm, (cx - 0.4 + (i % 3) * 0.4, 0.28, BASE_H + 1.75 - (i // 3) * 0.42), 0.15, 0.08, seg=24, axis="Y")
+    objs.append(finish("Era5_ShapeButtons", bm, WHITE, smooth=True))
+    bm = bmesh.new()  # 버튼 위 도형 (별·하트·원·세모·우산 대신 단순 모양)
+    for i in range(6):
+        c = (cx - 0.4 + (i % 3) * 0.4, 0.22, BASE_H + 1.75 - (i // 3) * 0.42)
+        k = i % 3
+        if k == 0:
+            add_star(bm, (0, 0, 0), 0.09, 0.04, 0.02)
+        elif k == 1:
+            add_heart(bm, (0, 0, 0), 0.08, 0.02)
+        else:
+            add_star(bm, (0, 0, 0), 0.09, 0.045, 0.02, points=3)
+        vs = [v for v in bm.verts if v.co.length < 0.2 and abs(v.co.z) < 0.02]
+        bmesh.ops.rotate(bm, verts=vs, cent=(0, 0, 0), matrix=Matrix.Rotation(math.pi / 2, 3, "X"))
+        bmesh.ops.translate(bm, verts=vs, vec=c)
+    objs.append(finish("Era5_ShapeIcons", bm, GOLD))
+    bm = bmesh.new()
+    add_cyl(bm, (cx - 0.3, 0.28, BASE_H + 0.75), 0.18, 0.1, seg=24, axis="Y")
+    objs.append(finish("Era5_Start", bm, GREEN_BTN, smooth=True))
+    bm = bmesh.new()
+    add_cyl(bm, (cx + 0.3, 0.28, BASE_H + 0.75), 0.18, 0.1, seg=24, axis="Y")
+    objs.append(finish("Era5_Stop", bm, REDB, smooth=True))
+    bm = bmesh.new()  # 경고등
+    add_lathe(bm, [(0.0, 0.0), (0.16, 0.0), (0.16, 0.25), (0.12, 0.33), (0.0, 0.36)], center=(cx, 0.9, BASE_H + 3.0), seg=24)
+    objs.append(finish("Era5_Beacon", bm, AMBER, smooth=True))
+    # 끝: 미끄럼판 + 받는 쟁반
+    bm = bmesh.new()
+    add_box(bm, (W / 2 + 0.55, -0.5, BELT_Z - 0.6), (1.3, 1.6, 0.06))
+    vs = [v for v in bm.verts]
+    bmesh.ops.rotate(bm, verts=vs, cent=(W / 2 + 0.55, -0.5, BELT_Z - 0.6), matrix=Matrix.Rotation(-0.6, 3, "Y"))
+    add_box(bm, (W / 2 + 1.4, -0.5, 0.35), (1.4, 1.9, 0.7), bevel=0.03)
+    objs.append(finish("Era5_Chute", bm, STEEL))
+    return objs
+
 groups = {
     "Era2": (era2(), (-12, 0, 0)),
     "Era2Tools": (era2_ladle(), (-12, -5, 0.4)),  # 국자 기준점 = 그릇 테두리 가운데라 미리 보기에선 띄움
@@ -407,6 +546,7 @@ groups = {
     "Era3Tools": (era3_cup(), (-4, -5, 0)),
     "Era4": (era4(), (4, 0, 0)),
     "Era4Tools": (era4_tools(), (4, -5, 0)),
+    "Era5": (era5(), (14.5, 0, 0)),
 }
 
 # 내보내기 전: 모두 원점(0,0,0)에 둔 채로 내보냄 (게임에서 위치를 정함). 크기·기준점 기록
@@ -444,12 +584,12 @@ sun.rotation_euler = (math.radians(50), math.radians(-15), math.radians(25))
 scene.collection.objects.link(sun)
 cam = bpy.data.objects.new("Cam", bpy.data.cameras.new("Cam"))
 cam.data.lens = 35
-cam.location = (-4, -24, 13)
-cam.rotation_euler = (Vector((-4, -1.5, 2.2)) - cam.location).to_track_quat("-Z", "Y").to_euler()
+cam.location = (2.5, -32, 18)
+cam.rotation_euler = (Vector((3.0, -1.5, 2.8)) - cam.location).to_track_quat("-Z", "Y").to_euler()
 scene.collection.objects.link(cam)
 scene.camera = cam
 scene.render.engine = "BLENDER_EEVEE"
-scene.render.resolution_x, scene.render.resolution_y = 1800, 900
+scene.render.resolution_x, scene.render.resolution_y = 2200, 950
 scene.view_settings.view_transform = "Standard"
 scene.render.filepath = os.path.abspath(os.path.join(OUT, "machines_preview.png"))
 bpy.ops.render.render(write_still=True)
