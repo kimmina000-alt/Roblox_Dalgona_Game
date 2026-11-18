@@ -13,6 +13,7 @@ local Sugar = {}
 local WHITE = Color3.fromRGB(252, 252, 252)
 local BROWN = Color3.fromRGB(214, 168, 92)
 local MAX_TILT = math.rad(78)
+local SPOON_GRIP = 2.0 -- 손가락(손잡이 끝)에서 숟가락 머리까지 수평 거리 (숟가락 길이 2.7)
 local GRAINS = 16
 local CRYSTALS = 90 -- 3D 설탕 결정이 있을 때 더미 위에 흩어 놓는 낱알 수 (작고 많이 = 고운 설탕)
 
@@ -80,6 +81,56 @@ local function addGrain(S, list, st)
 	table.insert(list, g)
 end
 
+-- 숟가락 생김새 (처음 자리에서 잼): 피벗 기준 머리 위치·손잡이 방향·길이
+local function measureSpoon(spoon)
+	local mesh, best = nil, 0
+	for _, p in ipairs(spoon:GetDescendants()) do
+		if p:IsA("BasePart") and p.Transparency < 1 then
+			local m = math.max(p.Size.X, p.Size.Y, p.Size.Z)
+			if m > best then
+				best, mesh = m, p
+			end
+		end
+	end
+	local scoop = spoon:FindFirstChild("Scoop")
+	if not mesh or not scoop then
+		return nil
+	end
+	local cf, s = mesh.CFrame, mesh.Size
+	local axis, len = cf.RightVector, s.X
+	if s.Y > len then
+		axis, len = cf.UpVector, s.Y
+	end
+	if s.Z > len then
+		axis, len = cf.LookVector, s.Z
+	end
+	local a, b = cf.Position + axis * len / 2, cf.Position - axis * len / 2
+	local hend = ((a - scoop.Position).Magnitude > (b - scoop.Position).Magnitude) and a or b
+	local pv = spoon:GetPivot()
+	return {
+		scoopLocal = pv:PointToObjectSpace(scoop.Position),
+		handleLocal = pv:VectorToObjectSpace((hend - scoop.Position).Unit),
+		len = (hend - scoop.Position).Magnitude,
+	}
+end
+
+-- 손잡이를 잡은 숟가락: 머리 = head, 손잡이 끝 = 손가락 시선 위 (머리에서 len 떨어진 점), 기울기 = 손잡이 축으로 굴림
+local function gripSpoonCFrame(geo, restRot, head, tilt, P)
+	local cam = workspace.CurrentCamera
+	local ray = cam:ScreenPointToRay(P.pos.X, P.pos.Y)
+	local o, u = ray.Origin, ray.Direction.Unit
+	local w = o - head
+	local b = w:Dot(u)
+	local disc = b * b - (w:Dot(w) - geo.len * geo.len)
+	local hand = disc > 0 and (o + u * (-b - math.sqrt(disc))) or (head + Vector3.new(0, 0.6, SPOON_GRIP))
+	local hd = (hand - head).Unit
+	local hr = restRot:VectorToWorldSpace(geo.handleLocal)
+	local ax = hr:Cross(hd)
+	local align = ax.Magnitude > 1e-4 and CFrame.fromAxisAngle(ax.Unit, math.acos(math.clamp(hr:Dot(hd), -1, 1))) or CFrame.new()
+	local rot = CFrame.fromAxisAngle(hd, tilt) * align * restRot
+	return rot + (head - rot:VectorToWorldSpace(geo.scoopLocal))
+end
+
 local function spillGrain(S, at, color)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
@@ -116,6 +167,7 @@ function Sugar.run(ctx)
 	local restBrown = restWhite + (S.BrownBowl:GetPivot().Position - S.WhiteBowl:GetPivot().Position)
 	local rest = restWhite
 	local restRot = restWhite - restWhite.Position
+	local spoonGeo = measureSpoon(spoon)
 	local emitter = S:pourEmitter(spoon, WHITE)
 	local carryY = S.Bowl.Position.Y + S.bowlHalf + 0.9
 	local ladle = S.Bowl.Position
@@ -146,14 +198,19 @@ function Sugar.run(ctx)
 
 		local pouring = false
 		if grabbing then
-			local w = P.toPlane(carryY)
+			-- 손잡이를 잡고 끌기: 손가락 = 손잡이, 숟가락 머리는 화면 위쪽(-Z)으로 떨어진 곳 (손가락이 국자를 안 가림)
+			local w = P.toPlane(carryY) - Vector3.new(0, 0, SPOON_GRIP)
 			local flat = Vector3.new(ladle.X - w.X, 0, ladle.Z - w.Z)
 			local d = flat.Magnitude
 			local target = MAX_TILT * math.clamp((1.6 - d) / 0.7, 0, 1)
 			tilt += (target - tilt) * (1 - math.exp(-18 * dt))
 			local toward = d > 0.05 and flat.Unit or Vector3.new(-1, 0, 0)
 			local axis = Vector3.yAxis:Cross(toward)
-			spoon:PivotTo(CFrame.new(w) * CFrame.fromAxisAngle(axis, tilt) * restRot)
+			if spoonGeo then
+				spoon:PivotTo(gripSpoonCFrame(spoonGeo, restRot, w, tilt, P))
+			else
+				spoon:PivotTo(CFrame.new(w) * CFrame.fromAxisAngle(axis, tilt) * restRot)
+			end
 			if math.deg(tilt) > cfg.tiltPour and onSpoon > 0 then
 				local amt = math.min(onSpoon, cfg.pourRate * dt * (tilt / MAX_TILT))
 				onSpoon -= amt

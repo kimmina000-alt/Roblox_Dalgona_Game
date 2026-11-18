@@ -78,7 +78,8 @@ function Melt.run(ctx)
 		S.Ladle:PivotTo(S:ladleAt(st.h))
 		tip = nil
 		if stir.active then
-			tip = Stir.placeChopsticks(S, P.toPlane(S:contentsTopY()))
+			local t, hnd = Stir.grip(S:contentsTopY())
+			tip = Stir.placeChopsticks(S, t, hnd)
 		elseif started then
 			Stir.placeChopsticks(S, S.Chopsticks.Stick1.Position + S.Chopsticks.Stick1.CFrame.LookVector * 1.3)
 		end

@@ -129,7 +129,8 @@ function SugarLook:coatTip(tip, amount, burn)
 	end
 	local coat = st.tipCoat
 	if not coat or not coat.Parent then
-		local center = tip + STICK_DIR * 0.05
+		local dir = S.stickDir or STICK_DIR
+		local center = tip + dir * 0.05
 		coat = Instance.new("Part")
 		coat.Name = "FxTipCoat"
 		coat.Shape = Enum.PartType.Ball
@@ -139,7 +140,7 @@ function SugarLook:coatTip(tip, amount, burn)
 		coat.Massless = true
 		coat.Anchored = false
 		coat.Size = Vector3.new(0.02, 0.02, 0.05)
-		coat.CFrame = CFrame.lookAt(center, center + STICK_DIR)
+		coat.CFrame = CFrame.lookAt(center, center + dir)
 		local weld = Instance.new("WeldConstraint")
 		weld.Part0 = stick
 		weld.Part1 = coat

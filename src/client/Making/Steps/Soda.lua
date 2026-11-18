@@ -211,7 +211,8 @@ function Soda.run(ctx)
 			if P.down and P.presses ~= seenPress then
 				seenPress = P.presses
 				local w = P.toPlane(tubPos.Y)
-				local onTub = Vector3.new(w.X - tubPos.X, 0, w.Z - tubPos.Z).Magnitude < 1.1
+				local wt = w - Vector3.new(0, 0, Stir.GRIP) -- 손잡이를 잡았으니 젓가락 끝 자리도 봄
+				local onTub = Vector3.new(w.X - tubPos.X, 0, w.Z - tubPos.Z).Magnitude < 1.1 or Vector3.new(wt.X - tubPos.X, 0, wt.Z - tubPos.Z).Magnitude < 1.1
 				if onTub and dips < MAX_DIPS then
 					carrying = true
 					dipT = 0
@@ -224,21 +225,21 @@ function Soda.run(ctx)
 			if carrying then
 				-- ① 소다 통에 젓가락 끝을 "쿡" 찍음 (0.22초) → 설탕물 묻은 끝에 흰 소다가 묻음 ② 끌고 감
 				dipT += dt
-				local tip
+				local tip, hnd
 				if dipT < DIP_TIME then
 					local k = math.sin(math.pi * dipT / DIP_TIME)
 					tip = Vector3.new(tubPos.X, tubPos.Y + 0.3 - 0.32 * k, tubPos.Z)
 				else
-					tip = P.toPlane(S:contentsTopY() + 0.35)
+					tip, hnd = Stir.grip(S:contentsTopY() + 0.35) -- 손잡이를 잡고 끌기
 				end
-				Stir.placeChopsticksAt(S, tip)
+				Stir.placeChopsticksAt(S, tip, hnd)
 				if dipT >= DIP_TIME * 0.5 then
 					if not tipPowder then
 						tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.07, 0.06, 0.07) })
 						ui:buzz(0.15, 0.03)
 					end
 					tipPowder.Transparency = 0
-					tipPowder.CFrame = CFrame.new(tip + STICK_DIR * 0.025)
+					tipPowder.CFrame = CFrame.new(tip + (S.stickDir or STICK_DIR) * 0.025)
 				end
 				if not P.down and dipT >= DIP_TIME then
 					carrying = false
@@ -310,7 +311,8 @@ function Soda.run(ctx)
 			local zone = Stir.zone(speed, mcfg.slow, cfg.fastMin)
 			local target = 0
 			if stir.active then
-				Stir.placeChopsticks(S, P.toPlane(S:contentsTopY()))
+				local t, hnd = Stir.grip(S:contentsTopY())
+				Stir.placeChopsticks(S, t, hnd)
 				tStir += dt
 				if zone == 3 then
 					tFast += dt

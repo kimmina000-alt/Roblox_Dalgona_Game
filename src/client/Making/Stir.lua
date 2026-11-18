@@ -65,8 +65,30 @@ function Stir:centerHeight01()
 	return math.clamp(self.center.Y / vh, 0, 1)
 end
 
--- 나무젓가락 끝을 국자 안 world 위치에 둔다
-function Stir.placeChopsticks(station, world)
+-- 손잡이를 잡고 젓기 (사용자 요청 2026-11-18: 손가락이 국자를 가리지 않게)
+-- 손가락 = 젓가락 손잡이 끝. 젓는 끝은 손가락 아래 평면에서 화면 위쪽(-Z)으로 GRIP만큼 떨어진 곳
+Stir.GRIP = 1.2
+local HANDLE_LEN = 2.6 -- 젓는 끝 ~ 손잡이 끝 (placeChopsticksAt 배치 기준: 중심이 끝에서 1.2 + 반 길이)
+
+-- 끝이 닿을 높이 y → (끝 위치, 손잡이 끝 위치). 손잡이 끝은 손가락 시선 위에서 끝과 HANDLE_LEN 떨어진 점
+-- → 화면에서 손가락이 정확히 젓가락 손잡이 끝을 잡고 있음
+function Stir.grip(y)
+	local cam = workspace.CurrentCamera
+	local ray = cam:ScreenPointToRay(Pointer.pos.X, Pointer.pos.Y)
+	local o, u = ray.Origin, ray.Direction.Unit
+	local f = Pointer.toPlane(y)
+	local tip = f - Vector3.new(0, 0, Stir.GRIP)
+	local w = o - tip
+	local b = w:Dot(u)
+	local disc = b * b - (w:Dot(w) - HANDLE_LEN * HANDLE_LEN)
+	if disc <= 0 then
+		return tip, Pointer.toPlane(y + 1.0)
+	end
+	return tip, o + u * (-b - math.sqrt(disc)) -- 카메라 쪽 교점
+end
+
+-- 나무젓가락 끝을 국자 안 world 위치에 둔다 (handle: 손잡이 쪽 점, 없으면 기본 기울기)
+function Stir.placeChopsticks(station, world, handle)
 	local bowl = station.Bowl.Position
 	local top = station:contentsTopY()
 	local flat = Vector3.new(world.X - bowl.X, 0, world.Z - bowl.Z)
@@ -74,20 +96,28 @@ function Stir.placeChopsticks(station, world)
 	if flat.Magnitude > r then
 		flat = flat.Unit * r
 	end
-	return Stir.placeChopsticksAt(station, Vector3.new(bowl.X, top - 0.04, bowl.Z) + flat)
+	return Stir.placeChopsticksAt(station, Vector3.new(bowl.X, top - 0.04, bowl.Z) + flat, handle)
 end
 
 -- 나무젓가락 끝을 아무 world 위치에 둔다 (국자 밖도: 소다 찍기)
-function Stir.placeChopsticksAt(station, tip)
+function Stir.placeChopsticksAt(station, tip, handle)
 	local dir = Vector3.new(0.35, 1, 0.55).Unit
-	local cf = CFrame.lookAt(tip + dir * 1.3, tip)
+	if handle then
+		local d = handle - tip
+		if d.Magnitude > 0.2 and d.Y > 0.3 then
+			dir = d.Unit -- 끝에서 손가락(손잡이) 쪽으로 기울어짐
+		end
+	end
+	station.stickDir = dir
+	local cf = CFrame.lookAt(tip + dir * 1.3, tip) -- 젓가락 메시 중심은 끝에서 1.2, 길이 2.8 → 손잡이 끝은 끝에서 약 2.6
 	local m = station.Chopsticks
 	m.Stick1.CFrame = cf
 	m.Stick2.CFrame = cf * CFrame.new(0.12, 0, 0.02)
-	-- 고른 나무젓가락 메시 (길이 축 Y를 젓가락 방향으로, 아래쪽 끝이 국자 안)
+	-- 고른 나무젓가락 메시 (길이 축을 젓가락 방향으로). 가는 끝이 국자 안, 굵은 손잡이 쪽이 손가락 쪽
+	-- (예전엔 거꾸로 들어가 손잡이 쪽으로 저었음 → 길이 방향으로 180° 뒤집음)
 	local chosen = m:FindFirstChild("Chosen")
 	if chosen then
-		chosen.CFrame = cf * CFrame.new(0, 0, 0.1) * CFrame.Angles(math.rad(90), 0, 0) * (chosen:GetAttribute("Fix") and CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.pi, 0, 0) or CFrame.new())
+		chosen.CFrame = cf * CFrame.new(0, 0, 0.1) * CFrame.Angles(math.pi, 0, 0) * CFrame.Angles(math.rad(90), 0, 0) * (chosen:GetAttribute("Fix") and CFrame.Angles(0, 0, math.rad(90)) * CFrame.Angles(math.pi, 0, 0) or CFrame.new())
 	end
 	return tip
 end
