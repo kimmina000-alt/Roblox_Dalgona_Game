@@ -97,6 +97,7 @@ local function finish()
 	setControls(true)
 	setCharacterHidden(false)
 	station:reset()
+	station:removeHand()
 	station.Prompt.Enabled = true
 end
 
@@ -138,6 +139,7 @@ local function runSession()
 	end
 
 	station:reset()
+	station:attachHand(player) -- 국자 손잡이를 잡은 손 (국자와 같이 움직임)
 	ui:hideResult()
 	ui:setQuality(100, Config.StarCut)
 	ui:show(true)

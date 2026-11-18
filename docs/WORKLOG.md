@@ -203,6 +203,11 @@
 - Play 확인: 숟가락·젓가락 손잡이 끝이 입력 지점과 겹침 (젓가락 10px 안). 장면 `docs/screenshots/2026-11-18/v5/`.
 - 테스트 메모: TestPointer에는 `WorldToScreenPoint` 좌표를 그대로 넣는다 (인셋을 빼면 58px 어긋남).
 
+### 국자 손잡이를 잡은 손 (2026-11-18)
+- `Station:attachHand(player)`: 아바타 피부색 손(둥근 손등 + 손잡이를 감은 네 손가락 + 엄지) + 손목·팔(소매)을 국자 모델 안에 넣어 국자와 같이 움직임. 제작 시작 때 붙이고 끝날 때 뗌 (`MakingClient`).
+- 손잡이 위치는 LadleMesh 꼭짓점으로 잼: 손잡이는 두께 0.04·폭 0.45의 납작한 띠, 끝은 메시 로컬 (0, 0.2, 1.95). 손 가운데 (0, 0.2, 1.45), 크기 1.8배.
+- 장면 `docs/screenshots/2026-11-18/v5/ladle_hand_game.jpg`(게임 화면), `ladle_hand_close.jpg`(가까이).
+
 ### 아직 안 한 것 / 다음
 - 사용자 손맛 테스트 10번 (Phase 1 완료 조건) → 수치 조정: `src/shared/DalgonaConfig.lua`.
 - 뽑기(선택 단계)는 아직. 저장 없음 → 도안 해금 없이 전부 열려 있음.

@@ -175,6 +175,109 @@ function Station:reset()
 	end
 end
 
+-- 국자 손잡이를 잡은 플레이어 손 (사용자 요청 2026-11-18). 국자 모델 안에 넣어서 국자와 같이 움직임.
+-- 손등이 손잡이 위, 네 손가락은 먼 쪽으로 감아 아래로, 엄지는 위쪽 가까운 쪽, 팔은 손잡이 끝에서 화면 앞쪽으로 빠짐.
+-- 색은 아바타 피부색. 손잡이 위치는 국자 메시(LadleMesh) 꼭짓점으로 잰 값: 메시 로컬 (0, 0.2, 1.6~1.95)
+local HAND_GRIP = Vector3.new(0, 0.2, 1.45) -- 손바닥 가운데 (국자 메시 로컬)
+local HS = 1.8 -- 손 크기 (손잡이 폭 0.45에 맞춤)
+local SLEEVE = Color3.fromRGB(238, 234, 226)
+
+local function skinColor(player)
+	local ch = player and player.Character
+	local hand = ch and (ch:FindFirstChild("RightHand") or ch:FindFirstChild("Right Arm"))
+	if hand and hand:IsA("BasePart") then
+		return hand.Color
+	end
+	local bc = ch and ch:FindFirstChildOfClass("BodyColors")
+	if bc then
+		return bc.RightArmColor3
+	end
+	return Color3.fromRGB(234, 184, 146)
+end
+
+function Station:attachHand(player)
+	self:removeHand()
+	local mesh = self.Ladle:FindFirstChild("Mesh")
+	local frame
+	if mesh then
+		frame = mesh.CFrame * CFrame.new(HAND_GRIP)
+	else
+		-- 메시가 없으면 손잡이 부품(Grip/Handle) 기준
+		local g = self.Ladle:FindFirstChild("Grip") or self.Ladle:FindFirstChild("Handle")
+		if not g then
+			return
+		end
+		frame = g.CFrame * CFrame.Angles(0, math.rad(-90), 0)
+	end
+	-- 손 좌표: X = 손잡이 끝 쪽, Y = 위, Z = 화면 앞(카메라) 쪽
+	local ax = frame.LookVector * -1 -- 메시 로컬 +Z (손잡이 끝 방향)
+	if mesh then
+		ax = mesh.CFrame:VectorToWorldSpace(Vector3.zAxis)
+	end
+	ax = Vector3.new(ax.X, 0, ax.Z).Unit
+	local up = Vector3.yAxis
+	local side = ax:Cross(up)
+	if side.Z < 0 then
+		side = -side
+	end
+	local o = frame.Position
+	local skin = skinColor(player)
+	local model = Instance.new("Model")
+	model.Name = "PlayerHand"
+	local function at(x, y, z)
+		return o + (ax * x + up * y + side * z) * HS
+	end
+	local function part(shape, size, cf, color)
+		local p = Instance.new("Part")
+		p.Shape = shape
+		p.Size = size
+		p.CFrame = cf
+		p.Color = color or skin
+		p.Material = Enum.Material.SmoothPlastic
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch = true, false, false, false
+		p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+		p.Parent = model
+		return p
+	end
+	-- 원기둥을 두 점 사이에 (원기둥 축 = 부품 X)
+	local function rod(a, b, d, color)
+		local len = (b - a).Magnitude
+		return part(Enum.PartType.Cylinder, Vector3.new(len, d, d), CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.rad(90), 0), color)
+	end
+	local basis = CFrame.fromMatrix(o, ax, up)
+	-- 손등 (둥근 타원체)
+	part(Enum.PartType.Ball, Vector3.new(0.72, 0.26, 0.58) * HS, basis + up * 0.13 * HS)
+	-- 네 손가락: 손등 먼 쪽 끝에서 손잡이를 감아 아래로, 끝은 손잡이 밑
+	for i, x in ipairs({ -0.24, -0.08, 0.08, 0.23 }) do
+		local d = ((i == 4) and 0.11 or 0.13) * HS
+		local top = at(x, 0.15, -0.24)
+		local bend = at(x, -0.02, -0.3)
+		local tip = at(x * 0.95, -0.1, -0.12)
+		rod(top, bend, d)
+		rod(bend, tip, d * 0.92)
+		part(Enum.PartType.Ball, Vector3.one * d * 0.95, CFrame.new(tip))
+	end
+	-- 엄지: 손잡이 위 가까운 쪽, 그릇 쪽을 향해
+	local t0 = at(0.12, 0.16, 0.2)
+	local t1 = at(-0.22, 0.1, 0.24)
+	rod(t0, t1, 0.15 * HS)
+	part(Enum.PartType.Ball, Vector3.one * 0.15 * HS, CFrame.new(t1))
+	-- 손목·팔: 손잡이 끝 너머로, 화면 앞쪽 위로 빠짐 (손목 쪽은 피부, 그 뒤는 소매)
+	local wrist = at(0.38, 0.14, 0.04)
+	local dir = (ax * 0.8 + up * 0.35 + side * 0.55).Unit
+	rod(wrist - dir * 0.1, wrist + dir * 1.6, 0.36 * HS)
+	rod(wrist + dir * 1.5, wrist + dir * 4.5, 0.44 * HS, SLEEVE)
+	model.Parent = self.Ladle
+	self.hand = model
+end
+
+function Station:removeHand()
+	if self.hand then
+		self.hand:Destroy()
+		self.hand = nil
+	end
+end
+
 -- 누름판은 누를 때도 금속 그대로 보인다 (사용자 요청: 반투명 안 함). 부르는 쪽은 그대로 둠
 function Station:presserSeeThrough(on)
 	for p, t in pairs(self.presserParts) do
