@@ -40,6 +40,7 @@
 - 생산 라인 (왼→오): 설탕 저장 탑(투명 통 2개·철골·사다리·공급관) → 끓이는 솥 2개(스테인리스 + 빨간 가열 자켓·계기·밸브) → 반죽 노즐대(노즐 6개) → 컨베이어(벨트 24 길이, 2×3칸 틀 쟁반) → 찍는 프레스(위험 줄무늬 기둥, 유압 실린더 2개, 도장판 `Line_PressStamps`) → 식히는 터널(환풍기·비닐 커튼) → 미끄럼판 → 받는 상자 3개.
 - 제어대 `Line_ConsolePanel`: 계기판 3개 + 도안 고르기 버튼 6개(별·하트·원·세모·우산·네모) + 표시줄, 시작(초록)·정지(빨강) 버튼, 3색 경고탑. 이 판을 누르면 도안 고르기.
 - 텍스처 (스크립트가 numpy로 그려 glb에 넣음): 솔질 스테인리스, 위험 줄무늬, 고무 벨트, 콘크리트 바닥 줄눈, 벽 칠(아래 초록 띠), 창문, 제어판 면. Roblox로 가져오면 MeshPart TextureID로 들어옴. 금속감은 빌더가 `Material`을 `factory_parts.txt` 대로 칠함.
+- Studio: `ServerStorage.Assets.Factory`로 가져옴(2026-11-18). 서버 시작 때 `FactoryBuilder.place(workspace, CFrame.new(0,0,30))`가 스폰 뒤에 공장을 놓음(제어대가 스폰 쪽). 재질·색·투명도·천장 조명 6개는 `FactoryBuilder.style`이 넣음.
 - 도안을 바꾸면 `Line_PressStamps`·`Line_Dalgona`(프레스 지난 것)·`Line_CrateDalgona`를 고른 도안 모양으로 바꿔 끼움 (지금은 별).
 
 ## 3D 파일

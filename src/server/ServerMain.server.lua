@@ -4,6 +4,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Services = script.Parent:WaitForChild("Services")
 local WorkstationBuilder = require(Services:WaitForChild("WorkstationBuilder"))
 local ProductionService = require(Services:WaitForChild("ProductionService"))
+local FactoryBuilder = require(Services:WaitForChild("FactoryBuilder"))
 
 local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not remotes then
@@ -27,6 +28,9 @@ end
 if ws:GetAttribute("CoalLeft") == nil then
 	WorkstationBuilder.setCoal(ws, 1)
 end
+
+-- Lv5 달고나 공장: 스폰 뒤쪽(+Z)에 앞(제어대)이 스폰을 보게 놓는다. 자동 생산 연결은 다음 단계.
+FactoryBuilder.place(workspace, CFrame.new(0, 0, 30))
 
 ProductionService.init({
 	StartProduction = remotes.StartProduction,

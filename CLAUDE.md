@@ -9,7 +9,7 @@
 | 폴더 | Studio 위치 | 내용 |
 |---|---|---|
 | `src/shared` | ReplicatedStorage.Shared | `DalgonaConfig`(수치), `Scoring`(Q 공식, 서버·클라 공용), `CutterShapes`(도안 외곽선, 자동 생성), `ShapeCatalog`(도안 목록·가격), `CutterRig`(작업대 틀에 도안 끼우기) |
-| `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수), `Services/WorkstationBuilder`(작업대를 Part로 생성) |
+| `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수), `Services/WorkstationBuilder`(작업대를 Part로 생성), `Services/FactoryBuilder`(Lv5 공장 배치·색칠) |
 | `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker), `Making/Steps/`(단계마다 모듈 1개) |
 
 미니게임 단계는 모듈 하나씩 (Luau 로컬 변수 200개 제한).
@@ -19,6 +19,7 @@
 - `ServerStorage.Assets.BrazierMesh / CoalMesh / CoalBurntMesh`: 사용자가 만든 화로·연탄·다 탄 연탄 (`레퍼런스/dalgona_wharo.glb`). 화로는 CorrodedMetal(낡은 금속). 연탄은 `WorkstationBuilder.setCoal(ws, 남은 양)`으로 높이·색이 바뀌고, 작업대 속성 `CoalLeft`에 남는다. 한 판 끝날 때마다 서버가 0.1씩 줄이고, 0이면 다음 판 시작 때 새 연탄.
 - `ServerStorage.Assets.PresserMesh`: 누름판 (`dalgona_nulumpan.glb`), 금속 + 국자와 같은 광택 텍스처.
 - `ReplicatedStorage.Assets.Chopsticks`: 나무젓가락·포장지 7조각 (`dalgona_joggalack.glb`). 클라이언트도 써야 해서 ReplicatedStorage. 조각마다 속성 `Offset`(짝 안에서 상대 위치). 포장지 = 흰 종이, 젓가락 = 연한 나무. 제작 시작 때 `Making/ChopstickPicker`가 고르기 연출을 하고, 고른 한 짝(`Chosen`)으로 젓는다.
+- `ServerStorage.Assets.Factory`: Lv5 달고나 공장 (Claude가 `tools/blender/factory.py`로 만든 `레퍼런스/factory/dalgona_factory.glb`, 부품 45개, 텍스처 포함). `FactoryBuilder.place`가 복제해 (0,0,30)에 놓고 재질·색·조명을 넣음. 가져온 방향: Blender (x,y,z) → 모델 (-x, z, y), 앞 = -Z.
 - `ServerStorage.Assets.StarCutterMesh`: 예전 별 틀 (지금은 안 씀, 도안 틀 전체로 바뀜).
 - 도안 틀 전체 (`ReplicatedStorage.Assets.Cutters` — 클라이언트 미리 보기·교체에 필요, 메시 이름 `Cutter_<id>`, 금속 광택 SteelShine 넣어 둠): `tools/blender/cutters.py` → `레퍼런스/dalgona_cutters.glb`(Cutter_<id>, 23개). 사용자 모형틀(3D.blend 모형틀1~8)이 있는 도안은 그 모델, 없는 도안은 `shapes.py`로 생성. 안쪽 선이 있는 도안(문어·호랑이·공룡·궁전·Master 4종)은 먼저 `python tools/blender/design_shapes.py`(OpenCV) → `shape_data.json`. `src/shared/CutterShapes.lua`는 자동 생성.
 - `ServerStorage.Assets.SugarBowlMesh / SugarHeapMesh / SodaCanMesh / SodaLabelMesh / SodaPowderMesh / WoodSpoonMesh / TinSpoonMesh`: Claude가 `tools/blender/props.py`로 만든 양은 설탕 그릇·소다 깡통·숟가락 (`레퍼런스/dalgona_props.glb`). 빌더가 붙이고 게임용 부품은 투명하게 남김. 스크립트를 다시 돌리면 `PROP_CENTER` 값도 같이 고친다.
