@@ -1,4 +1,4 @@
--- 1. 설탕 넣기: 나무 숟가락을 그릇에서 국자 위로 끌면 기울어지며 쏟아짐 (40° 넘으면 알갱이)
+-- 1. 설탕 넣기: 나무 숟가락 손잡이를 잡고 국자 위로 옮긴 뒤 잠깐 멈추면 기울어지며 쏟아짐 (40° 넘으면 알갱이)
 -- 백설탕 2스푼 → 황설탕 1/4스푼. 국자 위에 쏟은 양만 센다. 밖에 흘리면 알갱이가 남음(감점).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -15,6 +15,7 @@ local BROWN = Color3.fromRGB(214, 168, 92)
 local MAX_TILT = math.rad(78)
 local SPOON_GRIP = 2.0 -- 손가락(손잡이 끝)에서 숟가락 머리까지 수평 거리 (숟가락 길이 2.7)
 local GRAINS = 16
+local STILL_SPEED = 140 -- 손가락이 이보다 느리면(픽셀/초) 멈춘 것으로 봄 → 숟가락이 기울어짐
 local CRYSTALS = 90 -- 3D 설탕 결정이 있을 때 더미 위에 흩어 놓는 낱알 수 (작고 많이 = 고운 설탕)
 
 -- 국자 속 설탕 더미: 설탕 그릇에 담긴 더미(SugarHeapMesh)와 똑같은 모양·재질 (사용자 요청 2026-11-18).
@@ -69,7 +70,7 @@ local function addGrain(S, list, st)
 		return
 	end
 	local r = math.sqrt(math.random()) * (S.bowlRadius - 0.25)
-	local top = S.Bowl.Position.Y + S.bowlHalf + 0.15
+	local top = S.Bowl.Position.Y + S.floor + 0.15
 	local g = S:fxPart(S.Ladle, {
 		Name = "FxGrain",
 		Shape = Enum.PartType.Ball,
@@ -178,9 +179,10 @@ function Sugar.run(ctx)
 	local seenPress = P.presses
 	local tilt = 0
 	local spillAcc = 0
+	local lastFinger, fingerSpeed, dwell = nil, 0, 0
 	st.grains = {}
 
-	ui:say("숟가락을 국자 위로 끌어 기울여요", "백설탕 2스푼 (0 / 2)")
+	ui:say("숟가락을 국자 위로 옮겨 잠깐 멈춰요", "멈춰 있으면 기울어져 쏟아져요 · 백설탕 2스푼 (0 / 2)")
 
 	while true do
 		local dt = ctx.frame()
@@ -195,6 +197,9 @@ function Sugar.run(ctx)
 		if grabbing and not P.down then
 			grabbing = false
 		end
+		if not grabbing then
+			lastFinger, fingerSpeed, dwell = nil, 0, 0
+		end
 
 		local pouring = false
 		if grabbing then
@@ -202,8 +207,21 @@ function Sugar.run(ctx)
 			local w = P.toPlane(carryY) - Vector3.new(0, 0, SPOON_GRIP)
 			local flat = Vector3.new(ladle.X - w.X, 0, ladle.Z - w.Z)
 			local d = flat.Magnitude
-			local target = MAX_TILT * math.clamp((1.6 - d) / 0.7, 0, 1)
-			tilt += (target - tilt) * (1 - math.exp(-18 * dt))
+			-- 기울이기 (사용자 요청 2026-11-18: 국자까지 가기 전에 다 흘림 → 끌 때는 수평으로 들고 감).
+			-- 숟가락 머리가 국자 위에 있고 손가락을 잠깐 멈추면(꾹 대고 있기) 천천히 기울어져 쏟아짐.
+			-- 다시 움직이면 바로 수평으로 돌아옴 → 원하는 만큼만 붓고, 옮기는 동안엔 안 흘림.
+			-- (모바일 요리 게임의 "대고 있으면 붓기" 방식. 손목 돌리기·두 손가락 돌리기는 한 손 조작에 어려움)
+			local fv = lastFinger and (P.pos - lastFinger).Magnitude / math.max(dt, 1e-3) or 0
+			lastFinger = P.pos
+			fingerSpeed += (fv - fingerSpeed) * (1 - math.exp(-dt / 0.08))
+			local overLadle = d < S.bowlRadius * 0.85
+			if overLadle and fingerSpeed < STILL_SPEED then
+				dwell += dt
+			else
+				dwell = math.max(0, dwell - dt * 4)
+			end
+			local target = overLadle and MAX_TILT * math.clamp((dwell - 0.12) / 0.55, 0, 1) or math.rad(6) -- 옮길 땐 살짝만 (흔들림)
+			tilt += (target - tilt) * (1 - math.exp(-(target < tilt and 14 or 7) * dt))
 			local toward = d > 0.05 and flat.Unit or Vector3.new(-1, 0, 0)
 			local axis = Vector3.yAxis:Cross(toward)
 			if spoonGeo then
@@ -226,7 +244,7 @@ function Sugar.run(ctx)
 						spillAcc -= 0.08
 						spillGrain(S, w, phase == "white" and WHITE or BROWN)
 					end
-					ui:hint("국자 위에서 기울여요")
+					ui:hint("국자 위에서 멈춰서 부어요")
 				end
 			end
 		else
@@ -268,7 +286,7 @@ function Sugar.run(ctx)
 		end
 
 		if phase == "white" then
-			ui:say("숟가락을 국자 위로 끌어 기울여요", string.format("백설탕 2스푼 (%.1f / 2)", rec.white))
+			ui:say("숟가락을 국자 위로 옮겨 잠깐 멈춰요", string.format("멈춰 있으면 기울어져 쏟아져요 · 백설탕 2스푼 (%.1f / 2)", rec.white))
 			if rec.white >= cfg.white - 1e-3 then
 				phase = "brown"
 				rest = restBrown

@@ -13,6 +13,9 @@ local METALNESS_MAP = "rbxassetid://75555295293901"
 local ROUGHNESS_MAP = "rbxassetid://116334782975968"
 local WIRE_H = 0.28
 local MIN_SEG = 0.05 -- 이보다 짧은 마디는 합쳐서 부품 수를 줄인다
+-- 틀 크기 배율 (사용자 요청 2026-11-18: 달고나 반죽에 비해 너무 큼 → 전체 65%). 바닥 크기만 줄이고 높이는 그대로
+local SCALE = 0.65
+Rig.SCALE = SCALE
 
 local function find(id)
 	for _, s in ipairs(CutterShapes) do
@@ -47,8 +50,8 @@ local function addWires(m, root, pts, closed, width, visible)
 	local last = closed and n or n - 1
 	for i = 1, last do
 		local a, b = pts[i], pts[i % n + 1]
-		local wa = root.CFrame:PointToWorldSpace(Vector3.new(a[1], 0, -a[2]))
-		local wb = root.CFrame:PointToWorldSpace(Vector3.new(b[1], 0, -b[2]))
+		local wa = root.CFrame:PointToWorldSpace(Vector3.new(a[1] * SCALE, 0, -a[2] * SCALE))
+		local wb = root.CFrame:PointToWorldSpace(Vector3.new(b[1] * SCALE, 0, -b[2] * SCALE))
 		local len = (wb - wa).Magnitude
 		if len > 1e-3 then
 			local w = Instance.new("Part")
@@ -107,7 +110,8 @@ function Rig.apply(m, id)
 			sa.Parent = mesh
 		end
 		local c = shape.center
-		mesh.CFrame = root.CFrame * CFrame.new(c.X, 0, -c.Y) * CFrame.Angles(0, math.pi, 0)
+		mesh.Size = Vector3.new(mesh.Size.X * SCALE, mesh.Size.Y, mesh.Size.Z * SCALE)
+		mesh.CFrame = root.CFrame * CFrame.new(c.X * SCALE, 0, -c.Y * SCALE) * CFrame.Angles(0, math.pi, 0)
 		mesh.Parent = m
 	end
 	m:SetAttribute("ShapeId", id)

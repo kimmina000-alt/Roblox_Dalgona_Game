@@ -34,6 +34,10 @@ function Station.new()
 	self.ringRadius = self.Ring.Size.Y / 2
 	self.bowlRadius = self.Bowl.Size.Y / 2
 	self.bowlHalf = self.Bowl.Size.X / 2
+	-- 국자 속 내용물(설탕·설탕물·거품)이 깔리는 높이 (Bowl 중심 기준, 위로 +).
+	-- Bowl 원기둥 윗면(테두리 높이)이 아니라 국자 메시 그릇 안쪽 중간 깊이: 메시 그릇 바닥이 Bowl 중심보다 0.33 아래,
+	-- 테두리 반지름 0.85 → 이 높이에서 안쪽 반지름 약 0.72 = 내용물 원판(1.42)과 맞음 (사용자 지적 2026-11-18: 설탕과 국자 위치가 안 맞음)
+	self.floor = self.bowlHalf - 0.25
 
 	self.rest = {}
 	for _, name in ipairs(MOVABLE) do
@@ -94,7 +98,7 @@ end
 function Station:contentsTopY()
 	local c = self.Contents
 	if c.Transparency >= 1 then
-		return self.Bowl.Position.Y + self.bowlHalf + 0.03
+		return self.Bowl.Position.Y + self.floor + 0.03
 	end
 	return c.Position.Y + c.Size.X / 2
 end
@@ -114,7 +118,7 @@ function Station:setContents(props)
 			local s = c.Size
 			c.Size = Vector3.new(v, s.Y, s.Z)
 			-- 바닥(국자 윗면)을 기준으로 위로 쌓이게
-			local base = self.Bowl.CFrame * CFrame.new(0.226 + v / 2, 0, 0)
+			local base = self.Bowl.CFrame * CFrame.new(self.floor + v / 2, 0, 0)
 			c.CFrame = base
 		else
 			c[k] = v
@@ -198,6 +202,21 @@ end
 -- 플레이어 캐릭터의 진짜 오른팔(손·아래팔·위팔)을 복제해 국자 손잡이에 얹음 (사용자 요청: 만든 손 말고 캐릭터 손).
 -- 캐릭터째 복제해서 피부색·셔츠가 그대로 보이고, 오른팔 말고는 숨김. 실패하면 부품으로 만든 손.
 local ARM_KEEP = { RightUpperArm = true, RightLowerArm = true, RightHand = true, ["Right Arm"] = true }
+
+-- 국자 손잡이 잡는 자리를 국자 피벗 회전만 뺀 기준(제자리 회전 rest 기준)으로: 붓기에서 손가락이 이 점을 잡음
+function Station:ladleGripLocal()
+	local mesh = self.Ladle:FindFirstChild("Mesh")
+	local pv = self.Ladle:GetPivot()
+	local world
+	if mesh then
+		world = (mesh.CFrame * CFrame.new(HAND_GRIP)).Position
+	else
+		local g = self.Ladle:FindFirstChild("Grip") or self.Ladle:FindFirstChild("Handle")
+		world = g and g.Position or (pv.Position - Vector3.new(1.6, 0, 0))
+	end
+	local rot = self.rest.Ladle - self.rest.Ladle.Position
+	return rot:VectorToObjectSpace(world - pv.Position)
+end
 
 function Station:attachHand(player)
 	self:removeHand()

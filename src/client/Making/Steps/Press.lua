@@ -1,10 +1,11 @@
--- 5. 누르기: 꾹 누르고 있으면 누름판이 내려가고, 떼면 올라감. "확! 누르지 말고 3번 나눠서"
+-- 5. 누르기: 누름판을 잡아 반죽 위로 가져와 꾹 멈추고 있으면 내려가고, 떼거나 옆으로 끌면 올라감. "확! 누르지 말고 3번 나눠서"
 -- 매번 원판이 넓어지고 얇아짐. 점수: 3번 모두 목표 두께 구간에 멈췄는지. 너무 얇으면 가장자리가 갈라짐.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
+local PresserGrab = require(script.Parent.Parent:WaitForChild("PresserGrab"))
 
 local Press = {}
 
@@ -51,43 +52,30 @@ function Press.run(ctx)
 	local rec = { t0 = ctx.now(), thick = {}, cracked = false }
 	local dal = st.dalgona
 	local presser = S.Presser
-	local rot = S.rest.Presser - S.rest.Presser.Position
 	local discHalf = presser.Disc.Size.X / 2
 	local c = dal.center
 	S:presserSeeThrough(true)
 	local ring = makeRing(S)
 	placeRing(S, ring, dal)
 
-	-- 누른 뒤 떼면 누름판이 옆으로 살짝 비켜 올라가 눌린 모양이 보임 (사용자 요청 2026-11-18).
-	-- 다시 누르면 가운데로 돌아와 내려감. aside: 0 = 가운데, 1 = 비킨 자리
-	local discR = math.max(presser.Disc.Size.Y, presser.Disc.Size.Z) / 2
-	local asideOffset = Vector3.new(discR * 1.35, 0.6, -discR * 0.55)
-	local aside = 0
-	local function presserAt(bottomY)
-		return CFrame.new(Vector3.new(c.X, bottomY + discHalf, c.Z) + asideOffset * aside) * rot
-	end
-
-	-- 누름판이 반죽 위로 날아옴
-	local t = 0
-	while t < 0.3 do
-		local dt = ctx.frame()
-		if not dt then
-			return nil
-		end
-		t += dt
-		S:springTo(presser, presserAt(dal:topY() + HOVER), dt, 18)
+	-- 누름판은 손으로 가져와서 누름 (사용자 요청 2026-11-18, PresserGrab): 잡아서 반죽 위로 끌고 와
+	-- 손가락을 꾹 멈추면 내려가 누르고, 떼거나 옆으로 끌면 올라옴. 누르는 횟수는 예전처럼 3번
+	local pv = presser:GetPivot()
+	local grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0))
+	local function canPress(pos)
+		return Vector3.new(pos.X - c.X, 0, pos.Z - c.Z).Magnitude < math.max(dal:radius() * 0.7, 0.35)
 	end
 
 	local count = 0
-	local seenPress = P.presses
-	local holding = false
+	local wasPressing = false
 	local contact = false
 	local hStart = dal.h
-	local bottom = dal:topY() + HOVER
+	local bottom = grab.bottom
 	local overHinted = false
 	local h = dal.h
+	local everGrabbed = false
 
-	ui:say("꾹 눌렀다 떼요 (1 / 3)", "확! 누르지 말고 3번 나눠서")
+	ui:say("누름판을 잡아 반죽 위로 가져와요", "반죽 위에서 꾹 누르고 있으면 눌려요 (1 / 3)")
 
 	while count < 3 do
 		local dt = ctx.frame()
@@ -95,21 +83,25 @@ function Press.run(ctx)
 			return nil
 		end
 		local target = cfg.targets[count + 1]
-		if P.down and not holding and P.presses ~= seenPress then
-			seenPress = P.presses
-			holding = true
+		local carryY = dal:topY() + HOVER
+		local ended, why = grab:update(dt, carryY, canPress)
+		if why == "miss" then
+			ui:hint("누름판을 눌러 잡아요")
+		end
+		if grab.grabbed then
+			everGrabbed = true
+		end
+		if grab.pressing and not wasPressing then
 			contact = false
 			hStart = h
 			overHinted = false
 		end
-		-- 누르는 중엔 가운데로 빠르게, 뗀 뒤(한 번이라도 누른 뒤)엔 옆으로 천천히 비킴
-		local asideTarget = (not holding and count > 0) and 1 or 0
-		aside += (asideTarget - aside) * (1 - math.exp(-(holding and 25 or 7) * dt))
-		if holding then
+		wasPressing = grab.pressing
+		if grab.pressing then
 			local surface = c.Y + h * 0.75
 			if not contact then
-				bottom = math.max(bottom - 7 * dt, surface) -- 옆에서 돌아오는 동안엔 반죽 위에서 기다림
-				if bottom <= surface and aside < 0.05 then
+				bottom = math.max(bottom - 7 * dt, surface)
+				if bottom <= surface then
 					bottom = surface
 					contact = true
 					ui:buzz(0.3, 0.05)
@@ -130,34 +122,40 @@ function Press.run(ctx)
 					ui:buzz(0.8, 0.15)
 				end
 			end
-			presser:PivotTo(presserAt(bottom))
-			if not P.down then
-				holding = false
-				-- 이미 가장 얇아졌으면 더 줄지 않아도 누른 것으로 셈 (안 그러면 단계가 안 끝남)
-				if hStart - h > 0.02 or (contact and h <= cfg.crack * 0.81) then
-					count += 1
-					h = h * 1.04 -- 떼면 살짝 되돌아옴
-					dal:setThickness(h)
-					rec.thick[count] = h
-					print(string.format("[Press] %d번째 두께 %.3f (목표 %.3f)", count, h, target))
-					local s = Scoring.pressOne(count, h)
-					if h > target * 1.25 then
-						ui:hint("조금 더 길게 꾹 눌러요")
-					elseif s >= 80 then
-						ui:toast(count < 3 and "좋아요!" or "딱 좋아요!", 0.8)
-					end
-					ui:buzz(0.3, 0.05)
-					if count < 3 then
-						ui:say(string.format("꾹 눌렀다 떼요 (%d / 3)", count + 1), count == 1 and "두꺼운 원판 → 조금 더" or "마지막! 넓고 얇게")
-					end
-				elseif contact then
-					ui:hint("조금 더 길게 꾹 눌러요")
-				end
-			end
 		else
-			local hover = dal:topY() + HOVER
-			bottom += (hover - bottom) * (1 - math.exp(-22 * dt)) -- 떼면 0.1~0.2초 스프링 복귀
-			presser:PivotTo(presserAt(bottom))
+			-- 들고 있거나 놓아 둔 누름판은 반죽 위 높이에 떠 있음 (떼면 0.1~0.2초 스프링으로 올라옴)
+			bottom += (carryY - bottom) * (1 - math.exp(-22 * dt))
+		end
+		if ended then
+			-- 이미 가장 얇아졌으면 더 줄지 않아도 누른 것으로 셈 (안 그러면 단계가 안 끝남)
+			if hStart - h > 0.02 or (contact and h <= cfg.crack * 0.81) then
+				count += 1
+				h = h * 1.04 -- 떼면 살짝 되돌아옴
+				dal:setThickness(h)
+				rec.thick[count] = h
+				print(string.format("[Press] %d번째 두께 %.3f (목표 %.3f)", count, h, target))
+				local sc = Scoring.pressOne(count, h)
+				if h > target * 1.25 then
+					ui:hint("조금 더 길게 꾹 눌러요")
+				elseif sc >= 80 then
+					ui:toast(count < 3 and "좋아요!" or "딱 좋아요!", 0.8)
+				end
+				ui:buzz(0.3, 0.05)
+			elseif contact then
+				ui:hint("조금 더 길게 꾹 눌러요")
+			end
+			contact = false
+		end
+		grab.bottom = bottom
+		grab:draw()
+		if count < 3 then
+			if not everGrabbed then
+				ui:say("누름판을 잡아 반죽 위로 가져와요", string.format("반죽 위에서 꾹 누르고 있으면 눌려요 (%d / 3)", count + 1))
+			elseif grab.pressing then
+				ui:say(string.format("꾹! (%d / 3)", count + 1), "떼거나 옆으로 끌면 올라와요")
+			else
+				ui:say(string.format("반죽 위에서 꾹 멈춰요 (%d / 3)", count + 1), count == 0 and "확! 누르지 말고 3번 나눠서" or (count == 1 and "두꺼운 원판 → 조금 더" or "마지막! 넓고 얇게"))
+			end
 		end
 		placeRing(S, ring, dal)
 		local nextTarget = cfg.targets[math.min(count + 1, 3)]
@@ -171,18 +169,14 @@ function Press.run(ctx)
 
 	ui:setMeter(false)
 	ui:say("넓고 얇게 잘 펴졌어요!", "")
-	t = 0
+	local t = 0
 	while t < 0.4 do
 		local dt = ctx.frame()
 		if not dt then
 			return nil
 		end
 		t += dt
-		if t > 0.15 then
-			S:springTo(presser, S.rest.Presser, dt, 16)
-		else
-			presser:PivotTo(presserAt(dal:topY() + HOVER * (t / 0.15)))
-		end
+		S:springTo(presser, S.rest.Presser, dt, 16)
 	end
 	presser:PivotTo(S.rest.Presser)
 	S:presserSeeThrough(false)

@@ -1,10 +1,11 @@
--- 6. 모양: ① 고른 도안 틀을 끌어서 원판 가운데에 놓기 ② 누름판을 살살 짧게 누르기
+-- 6. 모양: ① 고른 도안 틀을 끌어서 원판 가운데에 놓기 ② 누름판을 잡아 틀 위로 가져와 꾹 짧게 누르기
 -- 점수: 중심 거리 + 각도 + 누른 세기(적당). 세게 누르면 틀이 끝까지 박혀 금이 감.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
+local PresserGrab = require(script.Parent.Parent:WaitForChild("PresserGrab"))
 
 local Stamp = {}
 
@@ -58,7 +59,6 @@ function Stamp.run(ctx)
 	local cutter = S.Cutter
 	local shapeName = st.shape and st.shape.name or "별"
 	local presser = S.Presser
-	local pRot = S.rest.Presser - S.rest.Presser.Position
 	local discHalf = presser.Disc.Size.X / 2
 	local top = dal:topY()
 	local c = dal.center
@@ -75,8 +75,8 @@ function Stamp.run(ctx)
 	local yaw = 0
 	local lastPos = nil
 	local placed = nil -- 놓은 자리 CFrame (틀 Root)
-	local holding, contact, holdT = false, false, 0
-	local pBottom = 0
+	local contact, holdT = false, 0
+	local grab = nil -- 누름판 손으로 들기 (PresserGrab)
 	local groove = nil
 
 	ui:say(shapeName .. " 틀을 끌어 원판 가운데에 놓아요", "가운데에, 반듯하게")
@@ -112,13 +112,13 @@ function Stamp.run(ctx)
 						cutter:PivotTo(placed)
 						phase = "press"
 						S:presserSeeThrough(true)
-						pBottom = top + 0.6 + 0.8
-						seenPress = P.presses
+						local pv = presser:GetPivot()
+						grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0))
 						ui:buzz(0.3, 0.05)
 						if rec.dist > 0.3 then
 							ui:hint("가운데에서 조금 벗어났어요")
 						end
-						ui:say("누름판으로 살살 눌러요", "짧게 톡! 세게 누르면 금이 가요")
+						ui:say("누름판을 잡아 틀 위로 가져와요", "틀 위에서 꾹 멈추면 눌려요 · 짧게! 오래 누르면 금이 가요")
 					else
 						ui:hint("달고나 위에 올려요")
 					end
@@ -128,19 +128,22 @@ function Stamp.run(ctx)
 				S:springTo(cutter, S.rest.Cutter, dt, 22)
 			end
 		elseif phase == "press" then
+			-- 누름판은 손으로 가져와 틀 위에서 꾹 멈춰야 눌림 (사용자 요청 2026-11-18). 떼거나 옆으로 끌면 끝
 			local contactY = placed.Position.Y + 0.42 + 0.05
-			if P.down and not holding and P.presses ~= seenPress then
-				seenPress = P.presses
-				holding = true
-				contact = false
-				holdT = 0
+			local hover = contactY + 0.6
+			local ended, why = grab:update(dt, hover, function(pos)
+				return Vector3.new(pos.X - placed.X, 0, pos.Z - placed.Z).Magnitude < 0.6
+			end)
+			if why == "miss" then
+				ui:hint("누름판을 눌러 잡아요")
 			end
-			if holding then
+			if grab.pressing then
 				if not contact then
-					pBottom -= 8 * dt
-					if pBottom <= contactY then
-						pBottom = contactY
+					grab.bottom -= 8 * dt
+					if grab.bottom <= contactY then
+						grab.bottom = contactY
 						contact = true
+						holdT = 0
 						if not groove then
 							-- 닿는 순간부터 홈이 파이기 시작 (누를수록 깊고 또렷)
 							groove = dal:groove(wires, handleLine(wires, placed, c, dal:radius() * 0.98))
@@ -151,22 +154,21 @@ function Stamp.run(ctx)
 					groove:setDepth(depthFor(holdT, cfg))
 					local depth = math.min(holdT / 1.0, 1) * 0.2
 					cutter:PivotTo(placed - Vector3.new(0, depth, 0))
-					pBottom = contactY - depth
-				end
-				if not P.down then
-					holding = false
-					if contact and holdT > 0.03 then
-						rec.hold = holdT
-						phase = "lift"
-					else
-						ui:hint("조금만 더 꾹")
-					end
+					grab.bottom = contactY - depth
 				end
 			else
-				local hover = contactY + 0.6
-				pBottom += (hover - pBottom) * (1 - math.exp(-22 * dt))
+				grab.bottom += (hover - grab.bottom) * (1 - math.exp(-22 * dt))
 			end
-			presser:PivotTo(CFrame.new(placed.X, pBottom + discHalf, placed.Z) * pRot)
+			if ended then
+				if contact and holdT > 0.03 then
+					rec.hold = holdT
+					phase = "lift"
+				else
+					contact = false
+					ui:hint("틀 위에서 꾹 멈춰요")
+				end
+			end
+			grab:draw()
 		else
 			break
 		end

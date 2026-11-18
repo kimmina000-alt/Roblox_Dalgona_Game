@@ -1,4 +1,4 @@
--- 3. 소다: ① 나무젓가락 끝에 소다를 묻혀(소다 통 → 국자로 끌기) 톡. 넣은 횟수 = 양 (2~3번이 알맞음, 실제 영상 YqKNy2l802c 1:17)
+-- 3. 소다: ① 나무젓가락 손잡이를 잡고 끌어 끝을 소다 통에 넣었다 빼서 묻히고, 국자로 끌고 와 놓으면 톡. 넣은 횟수 = 양 (2~3번이 알맞음, 실제 영상 YqKNy2l802c 1:17)
 --          ② 불에서 떼고 빠르게 젓기 (이번엔 FAST 쪽이 정답, 불 가까이 저으면 금방 탐) → 실제 영상처럼 3.5초 S곡선으로 부풀어 오름
 --             (docs/MOTION_REFERENCE_ANALYSIS.md 7장: 느린 시작 1.1초 → 빠른 상승 1.5초 → 멈춤 0.9초 → 유지)
 -- 점수: 넣은 타이밍(투명해진 직후) + 양 + 부푼 정도
@@ -20,7 +20,7 @@ local Soda = {}
 local HEAP_MAX = 1.2
 local DIP_AMOUNT = 0.21 -- 한 번 찍을 때 양: 1번 0.21(적음) · 2~3번 0.42~0.63(알맞음) · 4번 0.84(많음)
 local MAX_DIPS = 5
-local DIP_TIME = 0.22 -- 소다 통에 젓가락을 "쿡" 찍는 시간
+local TUB_R = 0.75 -- 젓가락 끝이 소다 통 가운데에서 이만큼 안이면 통 위 (쿡 잠김)
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit
 local FOAM = Color3.fromRGB(214, 160, 92)
 local FOAM_DARK = Color3.fromRGB(140, 86, 40)
@@ -165,7 +165,7 @@ function Soda.run(ctx)
 	local dips = 0
 	local spots = {}
 	local tipPowder = nil
-	local dipT = 0
+	local dipK = 0 -- 젓가락 끝이 소다에 잠긴 정도 0~1
 	local falling = {}
 	local firstDrop = nil
 	local puffed = false
@@ -175,7 +175,7 @@ function Soda.run(ctx)
 	local sampleAcc = 0
 	local baseThick = S.Contents.Size.X
 
-	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "소다 통에서 국자로 끌어요 · 2~3번")
+	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "젓가락을 끌어 끝을 소다 통에 넣었다가 국자로 · 2~3번")
 	P.sideZone = Heat.sideZone -- 왼쪽 구역 위아래로 끌기 = 국자 높이 (녹이기와 같음)
 
 	while true do
@@ -206,71 +206,67 @@ function Soda.run(ctx)
 		Heat.smoke(S, st.burn > 0.03, st.burn)
 
 		if phase == "drop" then
-			-- 나무젓가락 끝에 소다를 묻혀(소다 통에서 끌어) 국자 위에서 놓으면 톡. 넣은 횟수 = 양 (실제 영상: "2~3번")
+			-- 나무젓가락 손잡이를 잡고 끌어서(사용자 요청 2026-11-18) 끝을 소다 통에 넣었다 빼면 흰 소다가 묻고,
+			-- 그대로 국자 위로 끌고 와서 놓으면 톡. 넣은 횟수 = 양 (실제 영상: "2~3번").
+			-- 다 넣었으면 국자 안에서 그대로 원을 그리면 젓기로 넘어감
 			local tubPos = S.SodaTub.Soda.Position
 			if P.down and P.presses ~= seenPress then
 				seenPress = P.presses
-				local w = P.toPlane(tubPos.Y)
-				local wt = w - Vector3.new(0, 0, Stir.GRIP) -- 손잡이를 잡았으니 젓가락 끝 자리도 봄
-				local onTub = Vector3.new(w.X - tubPos.X, 0, w.Z - tubPos.Z).Magnitude < 1.1 or Vector3.new(wt.X - tubPos.X, 0, wt.Z - tubPos.Z).Magnitude < 1.1
-				if onTub and dips < MAX_DIPS then
-					carrying = true
-					dipT = 0
-					ui:buzz(0.2, 0.04)
-				elseif dips > 0 then
-					phase = "stir" -- 국자를 누르면 젓기 시작
-					ui:say("빠르게 저어요!", "FAST 쪽이 정답 · 불에서 떼고 저어요")
-				end
+				carrying = true
+				dipK = 0
+				stir = Stir.new()
+				ui:buzz(0.2, 0.04)
 			end
 			if carrying then
-				-- ① 소다 통에 젓가락 끝을 "쿡" 찍음 (0.22초) → 설탕물 묻은 끝에 흰 소다가 묻음 ② 끌고 감
-				dipT += dt
-				local tip, hnd
-				if dipT < DIP_TIME then
-					local k = math.sin(math.pi * dipT / DIP_TIME)
-					tip = Vector3.new(tubPos.X, tubPos.Y + 0.3 - 0.32 * k, tubPos.Z)
-				else
-					tip, hnd = Stir.grip(S:contentsTopY() + 0.35) -- 손잡이를 잡고 끌기
-				end
+				local liftY = S:contentsTopY() + 0.35
+				local surface = tubPos.Y + 0.02
+				-- 끝이 소다 통 위에 있으면 쑥 내려가 소다에 잠김 (손가락은 그대로 손잡이)
+				local probe = Stir.grip(liftY)
+				local overTub = Vector3.new(probe.X - tubPos.X, 0, probe.Z - tubPos.Z).Magnitude < TUB_R
+				dipK += ((overTub and 1 or 0) - dipK) * (1 - math.exp(-14 * dt))
+				local tip, hnd = Stir.grip(liftY - dipK * (liftY - surface))
 				Stir.placeChopsticksAt(S, tip, hnd)
-				if dipT >= DIP_TIME * 0.5 then
-					if not tipPowder then
-						tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.07, 0.06, 0.07) })
-						ui:buzz(0.15, 0.03)
-					end
+				if dipK > 0.8 and not tipPowder and dips < MAX_DIPS then
+					tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.07, 0.06, 0.07) })
+					ui:buzz(0.15, 0.03)
+				end
+				if tipPowder then
 					tipPowder.Transparency = 0
 					tipPowder.CFrame = CFrame.new(tip + (S.stickDir or STICK_DIR) * 0.025)
 				end
-				if not P.down and dipT >= DIP_TIME then
+				local bowl = S.Bowl.Position
+				local flat = Vector3.new(tip.X - bowl.X, 0, tip.Z - bowl.Z)
+				local inLadle = flat.Magnitude < S.bowlRadius
+				-- 소다를 다 넣은 뒤: 빈 젓가락으로 국자 안에서 원을 그리면 젓기 시작
+				local spd = stir:update(dt)
+				if dips > 0 and not tipPowder and inLadle and spd > 2.5 then
+					phase = "stir"
 					carrying = false
-					local bowl = S.Bowl.Position
-					local flat = Vector3.new(tip.X - bowl.X, 0, tip.Z - bowl.Z)
-					if flat.Magnitude < S.bowlRadius then
+					ui:say("빠르게 저어요!", "FAST 쪽이 정답 · 불에서 떼고 저어요")
+				end
+				if not P.down then
+					carrying = false
+					if tipPowder and inLadle then
 						dips += 1
 						rec.amount = math.min(HEAP_MAX, dips * DIP_AMOUNT)
 						if not firstDrop then
 							firstDrop = ctx.now()
 							rec.delay = firstDrop - (st.meltDoneAt or firstDrop)
 						end
-						-- 액체 위에 떠 있는 흰 소다 점
 						if flat.Magnitude > S.bowlRadius - 0.3 then
 							flat = flat.Unit * (S.bowlRadius - 0.3)
 						end
 						-- 젓가락 끝의 소다가 설탕물 위로 툭 떨어짐 (떨어진 뒤 흰 점이 됨)
-						if tipPowder then
-							table.insert(falling, { part = tipPowder, from = tipPowder.Position, to = Vector3.new(bowl.X + flat.X, S:contentsTopY(), bowl.Z + flat.Z), t = 0 })
-							tipPowder = nil
-						end
+						table.insert(falling, { part = tipPowder, from = tipPowder.Position, to = Vector3.new(bowl.X + flat.X, S:contentsTopY(), bowl.Z + flat.Z), t = 0 })
+						tipPowder = nil
 						ui:buzz(0.35, 0.06)
 						if dips >= 4 then
 							ui:hint("소다가 너무 많아요 (쓴맛)")
 						end
-					else
+					elseif tipPowder then
 						ui:hint("국자 위에서 놓아요")
-						if tipPowder then
-							tipPowder:Destroy()
-							tipPowder = nil
-						end
+						tipPowder:Destroy()
+						tipPowder = nil
 					end
 				end
 			elseif dips > 0 then
@@ -295,7 +291,7 @@ function Soda.run(ctx)
 					table.insert(spots, spot)
 				end
 			end
-			ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", dips == 0 and "소다 통에서 국자로 끌어요 · 2~3번" or string.format("%d번 넣었어요 · 2~3번이 알맞아요 · 다 넣었으면 국자를 눌러 저어요", dips))
+			ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", dips == 0 and "젓가락을 끌어 끝을 소다 통에 넣었다가 국자로 · 2~3번" or string.format("%d번 넣었어요 · 2~3번이 알맞아요 · 다 넣었으면 국자 안에서 저어요", dips))
 			ui:setMeter(true, rec.amount / HEAP_MAX, cfg.idealMin / HEAP_MAX, cfg.idealMax / HEAP_MAX, "소다")
 		else
 			if tipPowder then

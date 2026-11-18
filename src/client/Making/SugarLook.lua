@@ -19,8 +19,17 @@ local DOT_COLORS = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(236, 233, 228
 local LUMP = Color3.fromRGB(250, 250, 248)
 local SYRUP_BROWN = Color3.fromRGB(118, 60, 20)
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit -- Stir.placeChopsticksAt와 같은 젓가락 방향
-local DOTS = 220
+local DOTS = 340
 local LUMPS = 300
+-- 가루 → 결정은 녹은 정도 TRANS_A ~ TRANS_B 사이에서 서서히 (사용자 요청 2026-11-18: 너무 갑자기 바뀜).
+-- 점 하나하나·결정 하나하나가 자기 차례(문턱)에 천천히 사라지고/생겨서, 가루 사이로 결정이 조금씩 늘어남
+local TRANS_A, TRANS_B = 0.2, 0.48
+local FADE = 0.07 -- 점·결정 하나가 사라지거나 자라는 데 걸리는 녹은 정도 폭
+-- 젓는 자국: 가루 위에 젓가락이 지나간 골 (잠깐 남았다가 가루가 덮음)
+local FURROW_MAX = 70
+local FURROW_STEP = 0.035
+local FURROW_LIFE = 0.9
+local FURROW_COLOR = Color3.fromRGB(214, 206, 196)
 
 local function smooth01(x, a, b)
 	local t = math.clamp((x - a) / (b - a), 0, 1)
@@ -68,6 +77,8 @@ function SugarLook.new(S, st)
 			part = part(self.folder, { Name = "Dot", Shape = Enum.PartType.Ball, Color = DOT_COLORS[i % 3 + 1], Transparency = 1, Size = Vector3.new(s, s * 0.6, s) }),
 			x = math.cos(a) * r,
 			z = math.sin(a) * r,
+			h = 0, -- 젓가락에 튀어 오른 높이 (금방 가라앉음)
+			out = TRANS_A + (TRANS_B - FADE - TRANS_A) * math.random(), -- 이 녹은 정도부터 사라짐
 		})
 	end
 	-- 설탕물 (국자 바닥 전체, 원기둥 축 = X = 위). 결정 단계부터 얇게 깔렸다가 차오름
@@ -93,6 +104,7 @@ function SugarLook.new(S, st)
 			squash = 0.6 + math.random() * 0.4,
 			rot = CFrame.Angles(math.random() * 6, math.random() * 6, math.random() * 6),
 			pm = 0.52 + 0.3 * math.random() + 0.12 * (r / self.Ri),
+			ap = TRANS_A + 0.02 + (TRANS_B - FADE - TRANS_A - 0.02) * math.random() ^ 0.8, -- 이 녹은 정도부터 자라남
 			extra = 0,
 		})
 	end
@@ -107,12 +119,48 @@ function SugarLook.new(S, st)
 			spin = (math.random() - 0.5) * 0.6,
 		})
 	end
+	-- 젓는 자국 조각 (재사용)
+	self.furrows = {}
+	self.furrowNext = 1
+	self.furrowDist = 0
+	for _ = 1, FURROW_MAX do
+		table.insert(self.furrows, { part = part(self.folder, { Name = "Furrow", Color = FURROW_COLOR, Transparency = 1, Size = Vector3.new(0.05, 0.004, 0.05) }), t = math.huge })
+	end
+	-- 젓가락 끝에서 피어오르는 고운 가루 (빠르게 저을 때)
+	self.dust = part(self.folder, { Name = "DustAnchor", Transparency = 1, Size = Vector3.one * 0.05 })
+	local pe = Instance.new("ParticleEmitter")
+	pe.Name = "Dust"
+	pe.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+	pe.LightEmission = 0.2
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.025), NumberSequenceKeypoint.new(1, 0.06) })
+	pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 1) })
+	pe.Lifetime = NumberRange.new(0.25, 0.5)
+	pe.Speed = NumberRange.new(0.15, 0.4)
+	pe.SpreadAngle = Vector2.new(70, 70)
+	pe.Acceleration = Vector3.new(0, -0.6, 0)
+	pe.EmissionDirection = Enum.NormalId.Top
+	pe.Rate = 0
+	pe.Parent = self.dust
+	self.dustPe = pe
 	return self
+end
+
+-- 젓는 자국 하나 (from → to, 가루 윗면 y)
+function SugarLook:addFurrow(from, to, y)
+	local f = self.furrows[self.furrowNext]
+	self.furrowNext = self.furrowNext % FURROW_MAX + 1
+	local len = (to - from).Magnitude
+	if len < 1e-3 then
+		return
+	end
+	f.t = 0
+	f.len = len + 0.03
+	f.cf = CFrame.lookAt(Vector3.new((from.X + to.X) / 2, y, (from.Z + to.Z) / 2), Vector3.new(to.X, y, to.Z))
 end
 
 function SugarLook:base()
 	local b = self.S.Bowl.Position
-	return Vector3.new(b.X, b.Y + self.S.bowlHalf, b.Z)
+	return Vector3.new(b.X, b.Y + self.S.floor, b.Z)
 end
 
 function SugarLook:center()
@@ -169,7 +217,7 @@ function SugarLook:update(dt, p, tip, burn)
 	end
 	-- A: 저을수록 쌓인 더미가 평평한 가루가 되고, 떨어진 알갱이도 가루에 섞임
 	local flat = smooth01(self.stirred, 0, 2.5)
-	local toLumps = smooth01(p, 0.28, 0.36) -- A → B 결정으로 뭉침
+	local toLumps = smooth01(p, TRANS_A, TRANS_B) -- A → B 결정으로 서서히 뭉침
 	if st.pile and st.pileD then
 		local k = (1 - flat * 0.85) * (1 - toLumps)
 		Fx.placeDome(st.pile, Vector3.new(c.X, c.Y - 0.01, c.Z), st.pileD * (1 + 0.15 * flat), math.max(st.pileH * k, 0.005), 0.7)
@@ -178,37 +226,86 @@ function SugarLook:update(dt, p, tip, burn)
 			st.pile.Color = POWDER:Lerp(Heat.meltColor(0.3, burn), math.min(1, burn * 1.5))
 		end
 	end
-	local visible = math.ceil(#st.grains * (1 - flat))
+	local visible = math.ceil(#st.grains * (1 - flat) * (1 - toLumps))
 	for i, g in ipairs(st.grains) do
-		g.Transparency = (i <= visible and toLumps < 0.5) and 0 or 1
+		g.Transparency = i <= visible and 0 or 1
 	end
 	S:setContents({
 		Color = POWDER:Lerp(Heat.meltColor(0.3, burn), burn > 0 and 0.6 or 0),
 		Material = Enum.Material.Sand,
 		Transparency = math.min(0.999, toLumps), -- 1이면 국자 위치 계산이 바뀌어서 0.999까지만
 	})
-	-- 가루 점: 젓가락이 지나가면 젓는 방향으로 밀려남 (동그라미 홈 없음)
+	-- 가루 점: 젓가락이 지나가면 앞쪽 가루는 밀려 나가고 옆으로 갈라져 쌓임(쟁기질), 살짝 튀었다 가라앉음.
+	-- 지나간 자리에는 골(젓는 자국)이 잠깐 남음. 빠르게 저으면 고운 가루가 피어오름
+	local speed = dt > 0 and vel.Magnitude / dt or 0
+	local inPowder = toLumps < 0.8
+	if tip and inPowder then
+		if self.lastFurrow then
+			local seg = Vector3.new(tip.X - self.lastFurrow.X, 0, tip.Z - self.lastFurrow.Z)
+			if seg.Magnitude >= FURROW_STEP then
+				self:addFurrow(self.lastFurrow, tip, c.Y + 0.002)
+				self.lastFurrow = tip
+			end
+		else
+			self.lastFurrow = tip
+		end
+		self.dust.CFrame = CFrame.new(tip.X, c.Y + 0.02, tip.Z)
+		self.dustPe.Rate = math.clamp((speed - 0.8) * 25, 0, 60) * (1 - toLumps)
+	else
+		self.lastFurrow = nil
+		self.dustPe.Rate = 0
+	end
+	for _, f in ipairs(self.furrows) do
+		if f.t < FURROW_LIFE then
+			f.t += dt
+			local k = f.t / FURROW_LIFE
+			f.part.Transparency = math.min(1, 0.3 + 0.7 * k + toLumps)
+			f.part.Size = Vector3.new(0.055 * (1 - 0.4 * k), 0.004, f.len)
+			f.part.CFrame = f.cf
+		elseif f.part.Transparency < 1 then
+			f.part.Transparency = 1
+		end
+	end
+	local vmag = vel.Magnitude
+	local vdir = vmag > 1e-4 and vel / vmag or nil
+	local parts, cfs = {}, {}
 	for _, d in ipairs(self.dots) do
-		if toLumps >= 1 then
+		local gone = smooth01(p, d.out, d.out + FADE)
+		if gone >= 1 then
 			d.part.Transparency = 1
 		else
 			if tip then
 				local dx, dz = c.X + d.x - tip.X, c.Z + d.z - tip.Z
 				local dist = math.sqrt(dx * dx + dz * dz)
-				if dist < 0.13 then
-					local f = (0.13 - dist) / 0.13
-					d.x += vel.X * f * 0.8 + (dist > 1e-3 and dx / dist or 0) * f * 0.01
-					d.z += vel.Z * f * 0.8 + (dist > 1e-3 and dz / dist or 0) * f * 0.01
+				local R0 = 0.17
+				if dist < R0 then
+					local f = (R0 - dist) / R0
+					local nx, nz = dist > 1e-3 and dx / dist or 1, dist > 1e-3 and dz / dist or 0
+					if vdir then
+						-- 앞에 있는 가루는 같이 밀리고, 옆의 가루는 바깥으로 갈라짐
+						local ahead = nx * vdir.X + nz * vdir.Z
+						local sx, sz = nx - ahead * vdir.X, nz - ahead * vdir.Z
+						local push = math.min(vmag, 0.12)
+						d.x += vdir.X * push * f * (0.5 + 0.5 * math.max(ahead, 0)) + sx * push * f * 1.1
+						d.z += vdir.Z * push * f * (0.5 + 0.5 * math.max(ahead, 0)) + sz * push * f * 1.1
+						d.h = math.max(d.h, f * math.min(speed, 4) * 0.012)
+					else
+						d.x += nx * f * 0.004
+						d.z += nz * f * 0.004
+					end
 					local rr = math.sqrt(d.x * d.x + d.z * d.z)
 					if rr > self.Ri * 0.97 then
 						d.x, d.z = d.x / rr * self.Ri * 0.97, d.z / rr * self.Ri * 0.97
 					end
 				end
 			end
-			d.part.Transparency = math.max(flat < 0.05 and 0.6 or 0, toLumps)
-			d.part.CFrame = CFrame.new(c.X + d.x, c.Y + 0.003, c.Z + d.z)
+			d.h *= math.exp(-dt * 12)
+			d.part.Transparency = math.max(flat < 0.05 and 0.6 or 0, gone)
+			table.insert(parts, d.part)
+			table.insert(cfs, CFrame.new(c.X + d.x, c.Y + 0.003 + d.h, c.Z + d.z))
 		end
 	end
+	workspace:BulkMoveTo(parts, cfs, Enum.BulkMoveMode.FireCFrameChanged)
 	-- 설탕물: 결정 단계부터 바닥에 얇게 → 녹을수록 차오름
 	local base = self:base()
 	local level = self.fullThick * (0.12 + 0.88 * smooth01(p, 0.32, 1))
@@ -242,13 +339,14 @@ function SugarLook:update(dt, p, tip, burn)
 			end
 		end
 		local g = smooth01(p + l.extra, l.pm - 0.14, l.pm)
-		if toLumps <= 0 or g >= 1 then
+		local grow = smooth01(p, l.ap, l.ap + FADE) -- 자기 차례에 작게 생겨 천천히 커짐
+		if grow <= 0 or g >= 1 then
 			l.part.Transparency = 1
 		else
-			l.part.Transparency = math.max(1 - toLumps, 0.55 * g)
+			l.part.Transparency = math.max(1 - grow, 0.55 * g)
 			l.part.Material = g > 0.15 and Enum.Material.Glass or Enum.Material.SmoothPlastic
 			l.part.Color = lumpCol:Lerp(syrup, 0.45 * g)
-			local s = l.s * (0.6 + 0.4 * toLumps) * (1 - 0.85 * g)
+			local s = l.s * (0.25 + 0.75 * grow) * (1 - 0.85 * g)
 			l.part.Size = Vector3.new(s, s * l.squash, s)
 			l.part.CFrame = CFrame.new(c.X + l.x, base.Y + s * l.squash * 0.5, c.Z + l.z) * l.rot
 		end

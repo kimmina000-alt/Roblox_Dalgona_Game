@@ -10,6 +10,7 @@ local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 
 local Dalgona = require(script.Parent.Parent:WaitForChild("Dalgona"))
+local Stir = require(script.Parent.Parent:WaitForChild("Stir"))
 local Fx = require(script.Parent.Parent:WaitForChild("Fx"))
 
 local Pour = {}
@@ -155,6 +156,86 @@ local function drawStream(st, lip, out, land)
 	end
 end
 
+-- 부은 뒤 모양 다듬기 (사용자 요청 2026-11-18): 길쭉하게 부었으면 나무젓가락 손잡이를 잡고 끝을 끌어
+-- 길쭉한 쪽 끝을 가운데로 모아 덜 길쭉하게. 완전히 동그랗게는 못 하고 조금 나아지는 정도(최대 RESHAPE_MAX만큼).
+-- 끝(긴 축 바깥 절반)에 닿은 채 가운데 쪽으로 끈 거리만큼 줄어듦. 손을 떼고 RESHAPE_IDLE초 지나거나 충분히 둥글면 끝
+local RESHAPE_FROM = 1.15 -- 이보다 길쭉하면 다듬기 단계
+local RESHAPE_MAX = 0.6 -- 다듬어서 줄일 수 있는 길쭉함 최대
+local RESHAPE_GAIN = 0.9 -- 가운데로 끈 거리(stud) → 줄어드는 길쭉함
+local RESHAPE_IDLE = 2.2
+
+local function reshape(ctx, rec, blob, eRing)
+	local S, P, ui = ctx.station, ctx.pointer, ctx.ui
+	local spread0 = rec.spread or 1
+	if spread0 <= RESHAPE_FROM then
+		return true
+	end
+	local floor = math.max(1.08, spread0 - RESHAPE_MAX)
+	ui:say("젓가락으로 모양을 다듬어요", "길쭉한 끝을 가운데로 끌어 모아요")
+	ui:hint("반죽이 길쭉해요! 끝을 가운데로 모아요")
+	local seenPress = P.presses
+	local holding = false
+	local lastTip = nil
+	local idle = 0
+	local touched = false
+	while true do
+		local dt = ctx.frame()
+		if not dt then
+			return nil
+		end
+		if P.down and not holding and P.presses ~= seenPress then
+			seenPress = P.presses
+			holding = true
+			lastTip = nil
+		end
+		if holding then
+			idle = 0
+			local tip, hnd = Stir.grip(blob:topY() + 0.02)
+			Stir.placeChopsticksAt(S, tip, hnd)
+			-- 긴 축(yaw) 좌표: 반죽 가운데에서 긴 쪽으로 얼마나 나가 있나
+			local cy, sy = math.cos(blob.yaw or 0), math.sin(blob.yaw or 0)
+			local function major(v)
+				local dx, dz = v.X - blob.center.X, v.Z - blob.center.Z
+				return dx * cy - dz * sy, dx * sy + dz * cy
+			end
+			if lastTip then
+				local a0 = major(lastTip)
+				local a1, b1 = major(tip)
+				local R = blob:radius()
+				local k = math.sqrt(1 + blob.e)
+				local L = R * k -- 긴 쪽 반지름
+				-- 끝 쪽(긴 축 바깥 절반, 반죽 안이나 바로 바깥)에서 가운데로 끌면 줄어듦
+				local nearEnd = math.abs(a1) > L * 0.45 and math.abs(a1) < L * 1.15 and math.abs(b1) < R / k * 1.1
+				local inward = math.abs(a0) - math.abs(a1)
+				if nearEnd and inward > 0 and rec.spread > floor then
+					touched = true
+					rec.spread = math.max(floor, rec.spread - inward * RESHAPE_GAIN)
+					blob.e = math.max(eRing, rec.spread - 1)
+					blob:setThickness(blob.h)
+				end
+			end
+			lastTip = tip
+			if not P.down then
+				holding = false
+			end
+		else
+			idle += dt
+			S:restChopsticks()
+		end
+		ctx.live("pour", Scoring.pour(rec))
+		ui:say("젓가락으로 모양을 다듬어요", string.format("길쭉한 끝을 가운데로 끌어 모아요 · 길쭉함 %d%%", math.floor((rec.spread - 1) * 100 + 0.5)))
+		if rec.spread <= RESHAPE_FROM or rec.spread <= floor + 1e-3 or (idle > RESHAPE_IDLE and (touched or idle > RESHAPE_IDLE * 2.5)) then
+			break
+		end
+	end
+	S:restChopsticks()
+	if rec.spread <= floor + 1e-3 and floor > RESHAPE_FROM then
+		ui:hint("더는 동그랗게 안 돼요 (붓는 것부터 한 곳에)")
+	end
+	return true
+end
+Pour.reshape = reshape
+
 -- 미리 보기·테스트용 (Studio에서 줄기 모양 확인)
 Pour.newStream = newStream
 Pour.drawStream = drawStream
@@ -170,6 +251,8 @@ function Pour.run(ctx)
 	local half = S.Plate.Size.X / 2
 	local color = st.batterColor or S.Contents.Color
 	local volume = math.pi * 0.55 ^ 2 * Config.Press.h0
+	-- 국자 손잡이 잡는 자리 (국자 피벗 기준, 기울이기 전 자세). 메시 손잡이 = 손 붙이는 자리와 같음
+	local gripLocal = S:ladleGripLocal()
 
 	-- 젓가락은 내려놓음
 	S:restChopsticks()
@@ -223,14 +306,22 @@ function Pour.run(ctx)
 				grabbing = false
 			end
 			if grabbing then
-				local w = P.toPlane(carryY)
+				-- 손가락 = 국자 손잡이 (사용자 요청 2026-11-18: 동그란 그릇이 아니라 손잡이를 잡고 옮김).
+				-- 그릇 자리 = 손가락 자리에서 손잡이→그릇 만큼 옮긴 곳. 기울여도 손잡이는 손가락에 붙어 있음
+				local f = P.toPlane(carryY + rot:VectorToWorldSpace(gripLocal).Y)
+				local w = f - rot:VectorToWorldSpace(gripLocal)
+				w = Vector3.new(w.X, carryY, w.Z)
 				local over = math.abs(w.X - plate.X) < half and math.abs(w.Z - plate.Z) < half
 				if over then
 					tilt = math.min(MAX_TILT, tilt + math.rad(150) * dt)
 				else
 					tilt += (0 - tilt) * (1 - math.exp(-14 * dt))
 				end
-				ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, -tilt) * rot)
+				local cfT = CFrame.new(w) * CFrame.Angles(0, 0, -tilt) * rot
+				local hw = cfT:PointToWorldSpace(gripLocal)
+				cfT += Vector3.new(f.X - hw.X, 0, f.Z - hw.Z)
+				w = cfT.Position
+				ladle:PivotTo(cfT)
 				-- 국자 가장자리(손잡이 반대쪽 +X)와 흘러나가는 방향
 				local out = Vector3.new(1, 0, 0)
 				local lip = (CFrame.new(w) * CFrame.Angles(0, 0, -tilt)):PointToWorldSpace(Vector3.new(S.bowlRadius - 0.04, S.bowlHalf, 0))
@@ -398,6 +489,10 @@ function Pour.run(ctx)
 	end
 	ladle:PivotTo(S.rest.Ladle)
 	S:setContents({ Transparency = 1 })
+	if st.dalgona and not reshape(ctx, rec, st.dalgona, eRing) then
+		return nil
+	end
+	ctx.live("pour", Scoring.pour(rec))
 	rec.t1 = ctx.now()
 	return rec
 end

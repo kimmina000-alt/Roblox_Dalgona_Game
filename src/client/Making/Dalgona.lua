@@ -315,6 +315,16 @@ local GROOVE_LIGHT = Color3.fromRGB(255, 243, 215)
 local Groove = {}
 Groove.__index = Groove
 
+-- 점이 반죽 윗면 안에 있나 (길쭉한 타원 + 가장자리 띠 조금 안쪽까지)
+function Dalgona:inside(p, margin)
+	local R = self:radius() * (margin or 0.97)
+	local k = math.sqrt(1 + self.e)
+	local cy, sy = math.cos(self.yaw or 0), math.sin(self.yaw or 0)
+	local dx, dz = p.X - self.center.X, p.Z - self.center.Z
+	local lx, lz = dx * cy - dz * sy, dx * sy + dz * cy
+	return (lx / (R * k)) ^ 2 + (lz / (R / k)) ^ 2 <= 1
+end
+
 function Dalgona:groove(wires, handle)
 	local g = setmetatable({ dal = self, segs = {} }, Groove)
 	local y = self:topY()
@@ -322,6 +332,42 @@ function Dalgona:groove(wires, handle)
 		look = Vector3.new(look.X, 0, look.Z)
 		if look.Magnitude < 1e-4 or len < 1e-3 then
 			return
+		end
+		-- 반죽 밖으로 나가는 부분은 선을 그리지 않음 (사용자 요청 2026-11-18): 선분을 반죽 안쪽 부분만 남기도록 자름
+		do
+			local u = look.Unit
+			local a, b = mid - u * len / 2, mid + u * len / 2
+			local ina, inb = self:inside(a), self:inside(b)
+			if not ina and not inb then
+				-- 양 끝이 다 밖이어도 가운데가 안이면 양쪽을 자름, 아니면 버림
+				if not self:inside(mid) then
+					return
+				end
+			end
+			local function cut(inP, outP)
+				local lo, hi = inP, outP
+				for _ = 1, 12 do
+					local m = (lo + hi) / 2
+					if self:inside(m) then
+						lo = m
+					else
+						hi = m
+					end
+				end
+				return lo
+			end
+			local a0, b0 = a, b
+			if not ina then
+				a = cut(inb and b0 or mid, a0)
+			end
+			if not inb then
+				b = cut(ina and a0 or mid, b0)
+			end
+			len = (b - a).Magnitude
+			if len < 0.01 then
+				return
+			end
+			mid = (a + b) / 2
 		end
 		look = look.Unit
 		local right = look:Cross(Vector3.yAxis).Unit
