@@ -288,11 +288,17 @@ function Dalgona:crack(count, inward)
 	Sfx.play("crack", 0.7)
 	local r = self:radius()
 	local y = self:topY() + 0.006
+	-- 길쭉한 반죽이면 원이 아니라 타원 가장자리에서 시작해 가운데 쪽으로 (반죽 밖으로 선이 나가지 않게)
+	local k = math.sqrt(1 + (self.e or 0))
+	local cy, sy = math.cos(self.yaw or 0), math.sin(self.yaw or 0)
 	for i = 1, count or 5 do
 		local a = math.random() * 2 * math.pi
-		local len = 0.3 + math.random() * (inward or 0.4)
-		local from = Vector3.new(self.center.X + math.cos(a) * r, y, self.center.Z + math.sin(a) * r)
-		local to = from - Vector3.new(math.cos(a + (math.random() - 0.5) * 0.6), 0, math.sin(a + (math.random() - 0.5) * 0.6)) * len
+		local lx, lz = math.cos(a) * r * k * 0.97, math.sin(a) * r / k * 0.97
+		local from = Vector3.new(self.center.X + lx * cy + lz * sy, y, self.center.Z - lx * sy + lz * cy)
+		local toC = Vector3.new(self.center.X - from.X, 0, self.center.Z - from.Z)
+		local len = math.min(0.3 + math.random() * (inward or 0.4), toC.Magnitude * 0.8)
+		local ang = math.atan2(toC.Z, toC.X) + (math.random() - 0.5) * 0.6
+		local to = from + Vector3.new(math.cos(ang), 0, math.sin(ang)) * len
 		self.S:fxPart(self.S.fx, {
 			Name = "Crack",
 			Size = Vector3.new(0.035, 0.012, len),

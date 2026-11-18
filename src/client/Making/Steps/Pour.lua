@@ -167,6 +167,7 @@ local RESHAPE_IDLE = 2.2
 local function reshape(ctx, rec, blob, eRing)
 	local S, P, ui = ctx.station, ctx.pointer, ctx.ui
 	local spread0 = rec.spread or 1
+	print(string.format("[Pour] 부은 모양 길쭉함 %.2f (다듬기 %s)", spread0, spread0 > RESHAPE_FROM and "함" or "안 함"))
 	if spread0 <= RESHAPE_FROM then
 		return true
 	end
@@ -224,11 +225,12 @@ local function reshape(ctx, rec, blob, eRing)
 		end
 		ctx.live("pour", Scoring.pour(rec))
 		ui:say("젓가락으로 모양을 다듬어요", string.format("길쭉한 끝을 가운데로 끌어 모아요 · 길쭉함 %d%%", math.floor((rec.spread - 1) * 100 + 0.5)))
-		if rec.spread <= RESHAPE_FROM or rec.spread <= floor + 1e-3 or (idle > RESHAPE_IDLE and (touched or idle > RESHAPE_IDLE * 2.5)) then
+		if rec.spread <= RESHAPE_FROM or rec.spread <= floor + 1e-3 or (idle > RESHAPE_IDLE and (touched or idle > RESHAPE_IDLE * 4)) then
 			break
 		end
 	end
 	S:restChopsticks()
+	print(string.format("[Pour] 다듬은 뒤 길쭉함 %.2f", rec.spread))
 	if rec.spread <= floor + 1e-3 and floor > RESHAPE_FROM then
 		ui:hint("더는 동그랗게 안 돼요 (붓는 것부터 한 곳에)")
 	end
