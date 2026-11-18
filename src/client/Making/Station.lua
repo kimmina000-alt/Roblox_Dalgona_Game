@@ -195,7 +195,91 @@ local function skinColor(player)
 	return Color3.fromRGB(234, 184, 146)
 end
 
+-- 플레이어 캐릭터의 진짜 오른팔(손·아래팔·위팔)을 복제해 국자 손잡이에 얹음 (사용자 요청: 만든 손 말고 캐릭터 손).
+-- 캐릭터째 복제해서 피부색·셔츠가 그대로 보이고, 오른팔 말고는 숨김. 실패하면 부품으로 만든 손.
+local ARM_KEEP = { RightUpperArm = true, RightLowerArm = true, RightHand = true, ["Right Arm"] = true }
+
 function Station:attachHand(player)
+	self:removeHand()
+	local ch = player and player.Character
+	local mesh = self.Ladle:FindFirstChild("Mesh")
+	if not ch or not mesh or not ch:FindFirstChildOfClass("Humanoid") then
+		return self:attachPartHand(player)
+	end
+	local was = ch.Archivable
+	ch.Archivable = true
+	local ok, copy = pcall(function()
+		return ch:Clone()
+	end)
+	ch.Archivable = was
+	if not ok or not copy then
+		return self:attachPartHand(player)
+	end
+	copy.Name = "PlayerHand"
+	for _, d in ipairs(copy:GetDescendants()) do
+		if d:IsA("LuaSourceContainer") or d:IsA("Sound") or d:IsA("JointInstance") or d:IsA("WeldConstraint") or d:IsA("ForceField") then
+			d:Destroy()
+		end
+	end
+	for _, c in ipairs(copy:GetChildren()) do
+		if c:IsA("Accessory") then
+			c:Destroy()
+		elseif c:IsA("BasePart") then
+			c.Anchored, c.CanCollide, c.CanQuery, c.CanTouch, c.Massless = true, false, false, false, true
+			c.CastShadow = ARM_KEEP[c.Name] == true
+			if not ARM_KEEP[c.Name] then
+				c.Transparency = 1
+				for _, d in ipairs(c:GetChildren()) do
+					if d:IsA("Decal") then
+						d:Destroy() -- 얼굴 등
+					end
+				end
+			end
+		end
+	end
+	local hum = copy:FindFirstChildOfClass("Humanoid")
+	if hum then
+		hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+		hum.RequiresNeck = false
+		hum.BreakJointsOnDeath = false
+	end
+	-- 배치: 손바닥이 손잡이 위에 엎어짐(손 -X = 아래), 팔은 손잡이 끝 너머 화면 앞쪽 위로 (손 Y = 어깨 쪽)
+	local grip = mesh.CFrame * CFrame.new(HAND_GRIP)
+	local ax = mesh.CFrame:VectorToWorldSpace(Vector3.zAxis)
+	ax = Vector3.new(ax.X, 0, ax.Z).Unit
+	local up = Vector3.yAxis
+	local side = ax:Cross(up)
+	if side.Z < 0 then
+		side = -side
+	end
+	local dir = (ax * 0.8 + up * 0.45 + side * 0.55).Unit
+	local xAxis = (up - dir * up:Dot(dir)).Unit
+	local function put(p, center)
+		p.CFrame = CFrame.fromMatrix(center, xAxis, dir)
+	end
+	local hand, lower, upper = copy:FindFirstChild("RightHand"), copy:FindFirstChild("RightLowerArm"), copy:FindFirstChild("RightUpperArm")
+	local base = grip.Position + up * 0.04
+	if hand and lower and upper then
+		local hc = base + xAxis * (hand.Size.X / 2) + dir * (hand.Size.Y * 0.15)
+		put(hand, hc)
+		local lc = hc + dir * (hand.Size.Y / 2 + lower.Size.Y / 2 - 0.12)
+		put(lower, lc)
+		put(upper, lc + dir * (lower.Size.Y / 2 + upper.Size.Y / 2 - 0.12))
+	else
+		local arm = copy:FindFirstChild("Right Arm") -- R6: 팔 한 덩어리
+		if not arm then
+			copy:Destroy()
+			return self:attachPartHand(player)
+		end
+		put(arm, base + xAxis * (arm.Size.X / 2) + dir * (arm.Size.Y / 2 - 0.25))
+	end
+	copy.Parent = self.Ladle
+	self.hand = copy
+end
+
+-- (대신) 부품으로 만든 손
+function Station:attachPartHand(player)
 	self:removeHand()
 	local mesh = self.Ladle:FindFirstChild("Mesh")
 	local frame
