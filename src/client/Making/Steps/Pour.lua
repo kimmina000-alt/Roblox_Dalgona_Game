@@ -307,7 +307,7 @@ function Pour.run(ctx)
 			end
 			if grabbing then
 				-- 손가락 = 국자 손잡이 (사용자 요청 2026-11-18: 동그란 그릇이 아니라 손잡이를 잡고 옮김).
-				-- 그릇 자리 = 손가락 자리에서 손잡이→그릇 만큼 옮긴 곳. 기울여도 손잡이는 손가락에 붙어 있음
+				-- 그릇 자리 = 손가락 자리에서 손잡이→그릇 만큼 옮긴 곳
 				local f = P.toPlane(carryY + rot:VectorToWorldSpace(gripLocal).Y)
 				local w = f - rot:VectorToWorldSpace(gripLocal)
 				w = Vector3.new(w.X, carryY, w.Z)
@@ -317,11 +317,9 @@ function Pour.run(ctx)
 				else
 					tilt += (0 - tilt) * (1 - math.exp(-14 * dt))
 				end
-				local cfT = CFrame.new(w) * CFrame.Angles(0, 0, -tilt) * rot
-				local hw = cfT:PointToWorldSpace(gripLocal)
-				cfT += Vector3.new(f.X - hw.X, 0, f.Z - hw.Z)
-				w = cfT.Position
-				ladle:PivotTo(cfT)
+				-- 기울일 때는 그릇 자리를 그대로 두고 그릇 가장자리 쪽으로 기울임 (손잡이를 손가락에 붙여 두면
+				-- 기울이는 만큼 그릇이 손 쪽으로 1.6 넘게 밀려 철판 밖에 부어짐 → 플레이 테스트에서 확인)
+				ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, -tilt) * rot)
 				-- 국자 가장자리(손잡이 반대쪽 +X)와 흘러나가는 방향
 				local out = Vector3.new(1, 0, 0)
 				local lip = (CFrame.new(w) * CFrame.Angles(0, 0, -tilt)):PointToWorldSpace(Vector3.new(S.bowlRadius - 0.04, S.bowlHalf, 0))

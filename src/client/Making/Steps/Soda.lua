@@ -220,11 +220,14 @@ function Soda.run(ctx)
 			if carrying then
 				local liftY = S:contentsTopY() + 0.35
 				local surface = tubPos.Y + 0.02
-				-- 끝이 소다 통 위에 있으면 쑥 내려가 소다에 잠김 (손가락은 그대로 손잡이)
-				local probe = Stir.grip(liftY)
-				local overTub = Vector3.new(probe.X - tubPos.X, 0, probe.Z - tubPos.Z).Magnitude < TUB_R
+				-- 끝이 소다 통 위에 있으면 쑥 내려가 소다에 잠김 (손가락은 그대로 손잡이).
+				-- 통은 국자보다 훨씬 낮아서, 통 높이에서 본 끝 자리(atTub)로 통 위인지 보고 그 자리로 곧게 내려감
+				local atLift = Stir.grip(liftY)
+				local atTub = Stir.grip(surface)
+				local overTub = Vector3.new(atTub.X - tubPos.X, 0, atTub.Z - tubPos.Z).Magnitude < TUB_R
 				dipK += ((overTub and 1 or 0) - dipK) * (1 - math.exp(-14 * dt))
-				local tip, hnd = Stir.grip(liftY - dipK * (liftY - surface))
+				local tip = atLift:Lerp(atTub, dipK)
+				local hnd = Stir.handleFor(tip)
 				Stir.placeChopsticksAt(S, tip, hnd)
 				if dipK > 0.8 and not tipPowder and dips < MAX_DIPS then
 					tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.07, 0.06, 0.07) })

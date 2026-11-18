@@ -75,18 +75,23 @@ local HANDLE_LEN = 2.75
 -- 끝이 닿을 높이 y → (끝 위치, 손잡이 끝 위치). 손잡이 끝은 손가락 시선 위에서 끝과 HANDLE_LEN 떨어진 점
 -- → 화면에서 손가락이 정확히 젓가락 손잡이 끝을 잡고 있음
 function Stir.grip(y)
+	local f = Pointer.toPlane(y)
+	local tip = f - Vector3.new(0, 0, Stir.GRIP)
+	return tip, Stir.handleFor(tip)
+end
+
+-- 끝 위치 tip → 손잡이 끝 (손가락 시선 위, 끝에서 HANDLE_LEN 떨어진 카메라 쪽 점)
+function Stir.handleFor(tip)
 	local cam = workspace.CurrentCamera
 	local ray = cam:ScreenPointToRay(Pointer.pos.X, Pointer.pos.Y)
 	local o, u = ray.Origin, ray.Direction.Unit
-	local f = Pointer.toPlane(y)
-	local tip = f - Vector3.new(0, 0, Stir.GRIP)
 	local w = o - tip
 	local b = w:Dot(u)
 	local disc = b * b - (w:Dot(w) - HANDLE_LEN * HANDLE_LEN)
 	if disc <= 0 then
-		return tip, Pointer.toPlane(y + 1.0)
+		return tip + Vector3.new(0, 1.0, Stir.GRIP)
 	end
-	return tip, o + u * (-b - math.sqrt(disc)) -- 카메라 쪽 교점
+	return o + u * (-b - math.sqrt(disc)) -- 카메라 쪽 교점
 end
 
 -- 나무젓가락 끝을 국자 안 world 위치에 둔다 (handle: 손잡이 쪽 점, 없으면 기본 기울기)
