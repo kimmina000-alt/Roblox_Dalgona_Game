@@ -1,5 +1,5 @@
 -- 도안 목록: 이름·외곽선은 CutterShapes(자동 생성), 가격·등급 순서는 여기서.
--- 가격: ECONOMY_BALANCE.md 3장. Master(최고 등급)와 뼈다귀는 문서에 없어서 임시 값 (승인 필요).
+-- 가격: ECONOMY_BALANCE.md 3장. Master(최고 등급) 4종과 뼈다귀 15는 사용자 확정 (2026-11-19, GAME_DESIGN_DOCUMENT D6).
 -- 저장이 아직 없어서 Phase 1에서는 전부 열려 있다 (해금은 Phase 4).
 
 local CutterShapes = require(script.Parent:WaitForChild("CutterShapes"))
@@ -23,7 +23,7 @@ local PRICE = {
 	Butterfly = 55, Airplane = 65, Cross = 60,
 	Sword = 80, Sailboat = 95, Octopus = 110,
 	Palace = 160, Tiger = 180, Dinosaur = 220,
-	Spider = 300, Sierpinski = 340, Snowflake = 380, Lotus = 420, -- 임시
+	Spider = 300, Sierpinski = 340, Snowflake = 380, Lotus = 420,
 }
 local GRADE_OVERRIDE = { Bone = "Common" } -- 사용자 추가 도안
 
