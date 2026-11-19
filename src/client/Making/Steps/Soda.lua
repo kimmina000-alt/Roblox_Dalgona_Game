@@ -194,6 +194,12 @@ local function foamStreaks(S, pf, tip, dt, state)
 		local r = Vector3.new(x - base.X, 0, z - base.Z).Magnitude / math.max(diam / 2, 1e-3)
 		return base.Y + height * math.sqrt(math.max(0, 1 - r * r)) + 0.004
 	end
+	-- 젓가락 끝이 국자(부푼 반죽) 밖이면 결을 남기지 않음 (2026-11-20: 결이 국자 밖 허공에 생김)
+	local bowlR = math.min(diam / 2, S.bowlRadius) * 0.88
+	local bowlC = S.Bowl.Position
+	if tip and Vector3.new(tip.X - bowlC.X, 0, tip.Z - bowlC.Z).Magnitude > bowlR then
+		tip = nil
+	end
 	if tip and state.last and (Vector3.new(tip.X - state.last.X, 0, tip.Z - state.last.Z)).Magnitude > 0.04 then
 		local a, b = state.last, tip
 		local part = state.parts[state.next]
@@ -262,7 +268,8 @@ function Soda.run(ctx)
 	local baseThick = S.Contents.Size.X
 
 	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "젓가락 손잡이를 끌어 끝을 소다 통에 대고 클릭해요")
-	P.sideZone = Heat.sideZone -- 왼쪽 구역 위아래로 끌기 = 국자 높이 (녹이기와 같음)
+	-- 소다 넣는 동안은 높이 막대만 (2026-11-20: 왼쪽 구역이 소다 통 근처 젓가락 손잡이 클릭을 가로챘음). 젓기부터는 왼쪽 구역도
+	P.sideZone = Heat.barZoneFor(ui)
 
 	while true do
 		local dt = ctx.frame()
@@ -278,7 +285,7 @@ function Soda.run(ctx)
 		Heat.flame(S, st.h)
 		Heat.step(st, dt)
 		if danger then
-			ui:hint("불에 너무 가까워요! 왼쪽을 위로 끌어 국자를 올려요")
+			ui:hint(phase == "drop" and "불에 너무 가까워요! 왼쪽 높이 막대를 위로 끌어요" or "불에 너무 가까워요! 왼쪽을 위로 끌어 국자를 올려요")
 		end
 		if st.burn >= 1 then
 			bubbles(S, false)
@@ -337,12 +344,12 @@ function Soda.run(ctx)
 				press0 = { pos = P.pos, t = os.clock(), moved = false, anchor = P.toPlane(hy), tip0 = stickTip }
 				stir = Stir.new()
 			end
-			if carrying and press0 and (P.pos - press0.pos).Magnitude > 14 then
+			if carrying and press0 and (P.pos - press0.pos).Magnitude > 22 then
 				press0.moved = true
 			end
 			if carrying and not P.down then
 				carrying = false
-				if press0 and not press0.moved and os.clock() - press0.t < 0.35 then
+				if press0 and not press0.moved and os.clock() - press0.t < 0.6 then
 					-- 클릭: 젓가락 끝이 있는 곳에서. 끝이 소다 통·국자 위가 아니면 누른 곳(화면 위치)으로 가서
 					if not tapAt(stickTip) then
 						local tubS = cam:WorldToScreenPoint(tubPos)
@@ -465,6 +472,7 @@ function Soda.run(ctx)
 				local spd = stir:update(dt)
 				if load <= 0.005 and dips > 0 and overLadle(stickTip) and spd > 2.5 then
 					phase = "stir"
+					P.sideZone = Heat.sideZoneFor(ui)
 					carrying = false
 					press0 = nil
 					ui:say("빠르게 저어요!", "FAST 쪽이 정답 · 불에서 떼고 저어요")

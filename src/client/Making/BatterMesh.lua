@@ -11,8 +11,11 @@ local AssetService = game:GetService("AssetService")
 local Batter = {}
 Batter.__index = Batter
 
-local SEG = 160 -- 둘레 조각 (삼각형 한도 약 2만 개 안: 160 × (2 × 47 + 2) = 15,360)
-local RINGS = 48 -- 가운데 → 가장자리 고리
+local SEG = 176 -- 둘레 조각 (삼각형 한도 약 2만 개 안: 176 × (2 × 53 + 2) = 19,008)
+local RINGS = 54 -- 가운데 → 가장자리 고리
+-- 정점 색 (MeshPart.Color에 곱해짐, 2026-11-20): 옆면은 두께만큼 그림자진 진한 갈색, 찍힌 홈은 조금 진하게
+local SIDE_SHADE = Vector3.new(0.6, 0.45, 0.32)
+local GROOVE_SHADE = Vector3.new(0.72, 0.58, 0.46)
 local TOP = 0.88 -- 기본 모양 꼭대기 높이 (찍은 모양 안쪽이 솟을 여유)
 local BOUND = 1.1 -- 메시 경계 상자 (MeshPart 크기 기준을 고정하려고 모서리 점 2개를 박아 둠)
 
@@ -41,27 +44,38 @@ local function build(parent, color, seed)
 		local a = (j - 1) / SEG * 2 * math.pi
 		self.cos[j], self.sin[j] = math.cos(a), math.sin(a)
 	end
-	-- 정점
+	-- 정점 (+ 정점마다 색 하나)
 	self.topCenter = em:AddVertex(Vector3.new(0, TOP, 0))
+	local white = Color3.new(1, 1, 1)
+	local topC = em:AddColor(white, 1)
 	self.rings = {}
+	self.cols = {}
 	for i = 1, RINGS do
-		local ring = {}
+		local ring, cring = {}, {}
 		for j = 1, SEG do
 			ring[j] = em:AddVertex(Vector3.zero)
+			cring[j] = em:AddColor(white, 1)
 		end
 		self.rings[i] = ring
+		self.cols[i] = cring
 	end
 	self.bottomCenter = em:AddVertex(Vector3.new(0, 0, 0))
+	local botC = em:AddColor(Color3.new(SIDE_SHADE.X, SIDE_SHADE.Y, SIDE_SHADE.Z), 1)
+	local R, C = self.rings, self.cols
 	for j = 1, SEG do
 		local j2 = j % SEG + 1
-		em:AddTriangle(self.topCenter, self.rings[1][j2], self.rings[1][j])
+		local f = em:AddTriangle(self.topCenter, R[1][j2], R[1][j])
+		em:SetFaceColors(f, { topC, C[1][j2], C[1][j] })
 		for i = 1, RINGS - 1 do
-			local a, b = self.rings[i][j], self.rings[i][j2]
-			local c, d = self.rings[i + 1][j], self.rings[i + 1][j2]
-			em:AddTriangle(a, b, d)
-			em:AddTriangle(a, d, c)
+			local a, b = R[i][j], R[i][j2]
+			local c, d = R[i + 1][j], R[i + 1][j2]
+			f = em:AddTriangle(a, b, d)
+			em:SetFaceColors(f, { C[i][j], C[i][j2], C[i + 1][j2] })
+			f = em:AddTriangle(a, d, c)
+			em:SetFaceColors(f, { C[i][j], C[i + 1][j2], C[i + 1][j] })
 		end
-		em:AddTriangle(self.bottomCenter, self.rings[RINGS][j], self.rings[RINGS][j2])
+		f = em:AddTriangle(self.bottomCenter, R[RINGS][j], R[RINGS][j2])
+		em:SetFaceColors(f, { botC, botC, botC })
 	end
 	-- 경계 고정용 아주 작은 삼각형 (바닥 아래 안 보이는 곳)
 	local p1 = em:AddVertex(Vector3.new(-BOUND, 0, -BOUND))
@@ -70,7 +84,7 @@ local function build(parent, color, seed)
 	local p4 = em:AddVertex(Vector3.new(BOUND - 0.001, 1, BOUND))
 	em:AddTriangle(p1, p2, p1)
 	em:AddTriangle(p3, p4, p3)
-	self.flat, self.swirl, self.stampK = 0, 0, 0
+	self.flat, self.swirl, self.stampK, self.turn = 0, 0, 0, 0
 	self.stamp = nil
 	self:rebuild()
 	local mp = AssetService:CreateMeshPartAsync(Content.fromObject(em))
@@ -128,16 +142,23 @@ function Batter:rebuild()
 	for i = 1, RINGS do
 		local t = self.ringT[i]
 		local ring = self.rings[i]
+		local cring = self.cols[i]
+		local base = i < RINGS and (1 - t ^ n) ^ p or 0
+		-- 옆면 그림자: 가장자리로 내려가는 만큼 진하게 (누를수록 또렷한 옆면)
+		local side = t > 0.4 and math.clamp((1 - base) / 0.75, 0, 1) or 0
+		side = side ^ 0.8 * (0.55 + 0.45 * flat)
 		for j = 1, SEG do
 			local r = t * edges[j]
 			local x, z = self.cos[j] * r, self.sin[j] * r
 			local y = 0
+			local shade = side
+			local gshade = 0
 			if i < RINGS then
-				y = (1 - t ^ n) ^ p
-				-- 부은 결: 가운데에서 바깥으로 도는 소용돌이 주름 (실제로 솟음)
+				y = base
+				-- 부은 결: 가운데에서 바깥으로 도는 소용돌이 주름 (실제로 솟음). turn = 붓는 동안 감기며 돎
 				if swirl > 0.001 then
 					local a = math.atan2(self.sin[j], self.cos[j])
-					y *= 1 + swirl * 0.09 * math.sin(22 * t - 2 * a + ph[4]) * (1 - t * 0.6)
+					y *= 1 + swirl * 0.09 * math.sin(22 * t - 2 * a + ph[4] + self.turn) * (1 - t * 0.6)
 				end
 				-- 모양 찍기: 틀 선을 따라 파인 홈 + 안쪽 봉긋
 				if st and k > 0.001 then
@@ -145,13 +166,18 @@ function Batter:rebuild()
 					local g = st.groove[idx]
 					local inn = st.inside[idx]
 					y = y - k * 0.62 * g * y + k * 0.1 * inn
+					gshade = g * math.min(k, 1.2) * 0.85
 				end
 				y = math.clamp(y, 0, 1.12) * TOP
+			else
+				shade = 1
 			end
 			em:SetPosition(ring[j], Vector3.new(x, y, z))
+			local m = Vector3.one:Lerp(SIDE_SHADE, math.clamp(shade, 0, 1)):Lerp(GROOVE_SHADE, math.clamp(gshade, 0, 1))
+			em:SetColor(cring[j], Color3.new(m.X, m.Y, m.Z))
 		end
 	end
-	local yc = TOP * (1 + swirl * 0.09 * math.sin(ph[4]))
+	local yc = TOP * (1 + swirl * 0.09 * math.sin(ph[4] + self.turn))
 	em:SetPosition(self.topCenter, Vector3.new(0, yc, 0))
 end
 
@@ -164,6 +190,34 @@ function Batter:setShape(flat, swirl)
 	end
 	self.flat, self.swirl = flat, swirl
 	self:rebuild()
+end
+
+-- 붓는 동안 소용돌이 결이 감기며 돎 (각도, 라디안)
+function Batter:setTurn(a)
+	if math.abs(a - self.turn) < 0.04 then
+		return
+	end
+	self.turn = a
+	if self.swirl > 0.001 then
+		self:rebuild()
+	end
+end
+
+-- 세계 좌표 점 아래 반죽 윗면 높이 (가장 가까운 정점, 금 같은 선을 표면에 얹을 때)
+function Batter:surfaceY(world)
+	local part = self.part
+	local size = part.Size
+	local lp = part.CFrame:PointToObjectSpace(world)
+	local lx, lz = lp.X / (size.X / (2 * BOUND)), lp.Z / (size.Z / (2 * BOUND))
+	local a = math.atan2(lz, lx) % (2 * math.pi)
+	local j = math.floor(a / (2 * math.pi) * SEG + 0.5) % SEG + 1
+	local t = math.sqrt(lx * lx + lz * lz) / self:edgeR(j)
+	if t >= 1 then
+		return nil
+	end
+	local i = math.clamp(math.floor(RINGS * (1 - (1 - t) ^ (2 / 3)) + 0.5), 1, RINGS)
+	local y = self.em:GetPosition(self.rings[i][j]).Y
+	return part.Position.Y - size.Y / 2 + y * size.Y
 end
 
 -- 정점 하나의 (메시 좌표) 위치 → 세계 좌표 (place로 정한 크기·자세 기준, 높이 무시)
@@ -199,12 +253,13 @@ function Batter:prepareStamp(segs, isInside)
 				end
 			end
 			local d = math.sqrt(best)
-			local gw = bw * 0.75
+			-- 홈은 가늘게 (2026-11-20: 눌린 선이 너무 두꺼움), 안쪽 봉긋은 예전 폭 그대로 둥글게
+			local gw = bw * 0.42
 			local idx = (i - 1) * SEG + j
 			groove[idx] = math.exp(-(d / gw) ^ 2)
 			if isInside(wp) then
 				-- 안쪽: 홈에서 멀어질수록 봉긋 (가장자리가 둥글게 내려감)
-				local q = math.clamp(d / (gw * 3.2), 0, 1)
+				local q = math.clamp(d / (bw * 2.2), 0, 1)
 				inside[idx] = q * q * (3 - 2 * q)
 			else
 				inside[idx] = 0

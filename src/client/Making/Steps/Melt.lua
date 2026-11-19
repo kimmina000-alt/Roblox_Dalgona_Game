@@ -64,7 +64,7 @@ function Melt.run(ctx)
 	local tip = nil
 
 	Stir.placeChopsticks(S, S.Bowl.Position)
-	P.sideZone = Heat.sideZone
+	P.sideZone = Heat.sideZoneFor(ui)
 	ui:say("국자 안에서 원을 그리며 저어요", "국자가 연탄 위에 놓여 있어요 · 왼쪽을 위로 끌어 들어 올려요")
 
 	while true do

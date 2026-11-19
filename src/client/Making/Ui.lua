@@ -304,6 +304,7 @@ function Ui:_buildHeight()
 	label({ Text = "▲ 멀리", TextSize = 12, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(1, 0, 0, 14), Parent = box })
 	label({ Text = "불 가까이", TextSize = 11, TextColor3 = RED, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -6), Size = UDim2.new(1, 0, 0, 14), Parent = box })
 	local track = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 26), Size = UDim2.new(0, 12, 1, -52), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Parent = box }, { corner(6) })
+	self.heightTrack = track
 	new("UIGradient", {
 		Rotation = 90,
 		Color = ColorSequence.new({
@@ -326,6 +327,59 @@ function Ui:_buildHeight()
 	self.heightKnob = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(30, 30), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 3, Parent = track }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
 	self.heightStroke = new("UIStroke", { Thickness = 3, Color = INK, Parent = self.heightKnob })
 	self.heightBox = box
+	-- 처음 하는 사람 안내 (사용자 요청 2026-11-20): 손가락이 막대를 따라 위로 끄는 모습 + 말풍선
+	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Position = UDim2.new(1, 8, 0, 0), Size = UDim2.new(0, 260, 1, 0), Visible = false, ZIndex = 6, Parent = box })
+	self.coachFinger = label({ Text = "👆", TextSize = 40, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, -40, 0.85, 0), Size = UDim2.fromOffset(44, 44), ZIndex = 7, Parent = coach })
+	local bubble = label({
+		Text = "여기를 잡고 위로 끌면\n국자가 올라가요!\n(왼쪽 팔을 잡고 끌어도 돼요)",
+		TextSize = 15,
+		TextColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.05,
+		BackgroundColor3 = Color3.fromRGB(40, 150, 60),
+		Position = UDim2.new(0, 30, 0, -6), -- 위쪽: 아래에서 올라오는 높이 안내 말풍선과 안 겹치게
+		Size = UDim2.fromOffset(0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ZIndex = 7,
+		Parent = coach,
+	})
+	corner(12).Parent = bubble
+	new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), Parent = bubble })
+	self.coach = coach
+end
+
+-- 처음 하는 사람에게 국자 높이 끄는 법 보여 주기 (손가락이 막대 아래 → 위로 반복)
+function Ui:setCoach(on)
+	if not self.coach or self.coach.Visible == on then
+		return
+	end
+	self.coach.Visible = on
+	if self.coachTween then
+		self.coachTween:Cancel()
+		self.coachTween = nil
+	end
+	if on then
+		self.coachFinger.Position = UDim2.new(0, -40, 0.85, 0)
+		self.coachTween = TweenService:Create(self.coachFinger, TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, false, 0.35), { Position = UDim2.new(0, -40, 0.2, 0) })
+		self.coachTween:Play()
+	end
+end
+
+-- 화면 점이 높이 막대 위인가 (막대 상자 + 둘레 여유, 막대를 직접 잡아 끌 수 있게)
+function Ui:heightHit(pos)
+	local box = self.heightBox
+	if not (box and box.Visible) then
+		return false
+	end
+	local p, s = box.AbsolutePosition, box.AbsoluteSize
+	local m = 24
+	return pos.X > p.X - m and pos.X < p.X + s.X + m and pos.Y > p.Y - m and pos.Y < p.Y + s.Y + m
+end
+
+-- 화면 높이 → 막대 위치 (1 = 맨 위 멀리, 0 = 불 가까이)
+function Ui:heightAt(y)
+	local t = self.heightTrack
+	return math.clamp(1 - (y - t.AbsolutePosition.Y) / math.max(t.AbsoluteSize.Y, 1), 0, 1)
 end
 
 -- h01: 1 = 가장 높이(불에서 멀리), 0 = 불 바로 위. danger면 빨갛게, active(끄는 중)면 크게

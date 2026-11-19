@@ -23,4 +23,19 @@ function Toon.apply(model)
 	end
 end
 
+-- 도구 하나에 외곽선 (반죽처럼 나중에 생기는 것, 2026-11-20 "얘는 왜 외곽선 없어")
+function Toon.outline(inst)
+	if inst:FindFirstChild("ToonOutline") then
+		return
+	end
+	local h = Instance.new("Highlight")
+	h.Name = "ToonOutline"
+	h.FillTransparency = 1
+	h.OutlineColor = OUTLINE
+	h.OutlineTransparency = 0.15
+	h.DepthMode = Enum.HighlightDepthMode.Occluded
+	h.Adornee = inst
+	h.Parent = inst
+end
+
 return Toon

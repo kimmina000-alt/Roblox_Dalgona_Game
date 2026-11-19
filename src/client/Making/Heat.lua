@@ -24,10 +24,33 @@ function Heat.sideZone(pos)
 	return pos.X < v.X * 0.24 and pos.Y > v.Y * 0.12
 end
 
+-- 왼쪽 구역(팔) 또는 높이 막대 자체 (사용자 요청 2026-11-20: 막대에서 직접 움직이기)
+function Heat.sideZoneFor(ui)
+	return function(pos)
+		return Heat.sideZone(pos) or ui:heightHit(pos)
+	end
+end
+
+-- 막대만 (소다 넣기: 왼쪽 위 소다 통 근처를 누르는 건 젓가락 쪽이라 왼쪽 구역 전체를 쓰지 않음)
+function Heat.barZoneFor(ui)
+	return function(pos)
+		return ui:heightHit(pos)
+	end
+end
+
+local coached = false -- 이번 접속에서 국자 높이를 한 번이라도 끌어 봤나 (처음 하는 사람 안내)
+
 function Heat.control(st, P, ui)
 	local cfg = Config.Melt
 	local d = P.takeSideDelta()
-	if d.Y ~= 0 then
+	if P.side.down then
+		coached = true
+	end
+	ui:setCoach(not coached)
+	if P.side.down and P.side.start and ui:heightHit(P.side.start) then
+		-- 막대를 잡고 끌면 손가락 자리 = 국자 높이 (바로 따라옴)
+		st.h = cfg.hMin + ui:heightAt(P.side.pos.Y) * (cfg.hMax - cfg.hMin)
+	elseif d.Y ~= 0 then
 		local vh = workspace.CurrentCamera.ViewportSize.Y
 		st.h = math.clamp(st.h - d.Y / (vh * 0.45) * (cfg.hMax - cfg.hMin), cfg.hMin, cfg.hMax)
 	end

@@ -342,6 +342,8 @@ if RunService:IsStudio() then
 		if down then
 			if Pointer.side.down then
 				Pointer.side.delta += pos - Pointer.side.pos
+			else
+				Pointer.side.start = pos
 			end
 			Pointer.side.down = true
 			Pointer.side.pos = pos

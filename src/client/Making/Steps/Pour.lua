@@ -20,11 +20,12 @@ local MAX_TILT = math.rad(95)
 local POUR_TILT = math.rad(48) -- 이 각도부터 흘러내리기 시작
 local REMAIN = 0.15
 local POUR_TIME = 1.8 -- 최대로 기울였을 때 다 붓는 데 걸리는 시간 (걸쭉해서 천천히)
-local SEGMENTS = 28
+local SEGMENTS = 44
 -- 실제 달고나 영상 (국자를 철판 바로 위에서 기울여 부음): 위에서 보면 줄기는 거의 안 보이고,
 -- 철판에 닿은 반죽이 가운데부터 둥글게 번지며 원이 점점 커짐 → 떨어지는 줄기는 그리지 않고 철판 위 반죽만 보여 줌
 -- (사용자 요청 2026-11-19: 판에 닿는 반죽만 보이게, 원이 점점 커지게)
-local SHOW_STREAM = false
+-- 2026-11-20: 다시 보이게 ("부을 때 부어지는 애니메이션 눈에 보이게"). 위에서 굵게 떨어지는 줄기 + 판 위에서 감기며 퍼지는 반죽
+local SHOW_STREAM = true
 local RIBBON_PIECES = 2 -- 리본 메시를 곡선 따라 이어 붙인 조각 수 (메시가 아래로 좁아져서, 아래 조각은 위 조각 끝 너비에 맞춤)
 
 local function hideRibbons(st)
@@ -67,7 +68,7 @@ end
 local function newStream(S, color)
 	local st = { parts = {}, head = 0, tail = 0, t = 0, flow = 0 }
 	-- 3D 리본 메시가 있으면 그것 하나로 (영상: 가는 줄기가 아니라 넓적한 반죽 띠가 접히며 미끄러져 나옴)
-	if Fx.template("PourRibbon") then
+	if false and Fx.template("PourRibbon") then -- 리본 조각은 이음매가 보여서 둥근 줄기로
 		st.ribbons = {}
 		for i = 1, RIBBON_PIECES do
 			st.ribbons[i] = Fx.mesh("PourRibbon", S.fx, { Name = "PourRibbon", Color = color, Material = Enum.Material.SmoothPlastic, Reflectance = 0.04, Transparency = 1 })
@@ -78,10 +79,10 @@ local function newStream(S, color)
 	for i = 1, SEGMENTS do
 		st.parts[i] = S:fxPart(S.fx, {
 			Name = "PourStream",
-			Shape = Enum.PartType.Ball,
+			Shape = Enum.PartType.Cylinder, -- 점 사이를 잇는 원통 (공을 이으면 구슬처럼 보임, 2026-11-20)
 			Color = color,
 			Material = Enum.Material.SmoothPlastic,
-			Reflectance = 0.12,
+			Reflectance = 0.03,
 			Size = Vector3.one * 0.05,
 			Transparency = 1,
 		})
@@ -146,26 +147,36 @@ local function drawStream(st, lip, out, land)
 		return
 	end
 	local ctrl = lip + out * 0.2 + Vector3.new(0, -0.05, 0) -- 가장자리에서 살짝 밀려 나왔다 떨어짐
+	local side = out:Cross(Vector3.yAxis)
+	local function at(s)
+		local u = 1 - s
+		return lip * u * u + ctrl * 2 * u * s + land * s * s + side * math.sin(st.t * 7 + s * 5) * 0.03 * s
+	end
+	local function radius(s)
+		-- 점성: 위는 굵고 아래로 갈수록 가늘어짐, 바닥에 닿는 곳은 살짝 똬리처럼 퍼짐
+		local r = (0.15 - 0.07 * s ^ 0.7) * math.sqrt(st.flow)
+		if s > 0.9 then
+			r *= 1 + (s - 0.9) * 4
+		end
+		-- 끊어질 때(tail이 내려올 때) 위쪽이 실처럼 가늘어짐
+		if st.tail > 0 then
+			r *= math.clamp((s - st.tail) / 0.35, 0.25, 1)
+		end
+		return r
+	end
+	local n = #st.parts
 	for i, p in ipairs(st.parts) do
-		local s = (i - 1) / (SEGMENTS - 1)
-		if s < st.tail or s > st.head or st.flow <= 0.01 then
+		local s0, s1 = (i - 1) / n, i / n
+		if s1 < st.tail or s0 > st.head or st.flow <= 0.01 then
 			p.Transparency = 1
 		else
-			local u = 1 - s
-			local pos = lip * u * u + ctrl * 2 * u * s + land * s * s
-			-- 점성: 위는 굵고 아래로 갈수록 가늘어짐, 바닥에 닿는 곳은 살짝 똬리처럼 퍼짐
-			local r = (0.17 - 0.09 * s ^ 0.7) * math.sqrt(st.flow)
-			if s > 0.9 then
-				r *= 1 + (s - 0.9) * 4
-			end
-			-- 끊어질 때(tail이 내려올 때) 위쪽이 실처럼 가늘어짐
-			if st.tail > 0 then
-				r *= math.clamp((s - st.tail) / 0.35, 0.25, 1)
-			end
-			local side = out:Cross(Vector3.yAxis)
-			pos += side * math.sin(st.t * 7 + s * 5) * 0.03 * s
-			p.Size = Vector3.one * math.max(r * 2, 0.03)
-			p.CFrame = CFrame.new(pos)
+			s0, s1 = math.max(s0, st.tail), math.min(s1, st.head)
+			local a, b = at(s0), at(s1)
+			local r = radius((s0 + s1) / 2)
+			local len = (b - a).Magnitude
+			-- 원통 축(X) = 줄기 방향, 이음매가 안 보이게 살짝 겹침
+			p.Size = Vector3.new(len + r * 0.6, math.max(r * 2, 0.03), math.max(r * 2, 0.03))
+			p.CFrame = CFrame.lookAt((a + b) / 2, b) * CFrame.Angles(0, math.rad(90), 0)
 			p.Transparency = 0
 		end
 	end
@@ -182,7 +193,7 @@ local RESHAPE_GAIN = 0.35 -- 가운데로 끈 거리(stud) → 줄어드는 길�
 local PICK_PX = 90 -- 누름판 화면 위치에서 이만큼 안을 누르면 누르기로
 
 -- 붓는 동안 국자·손을 숨기고 줄기를 HIDE_RISE만큼 위에서 시작 → 화면 밖 높은 곳에서 붓는 것처럼
-local HIDE_RISE = 2.4
+local HIDE_RISE = 5.5 -- 줄기 윗끝이 화면 밖에서 시작하게 (2026-11-20: 2.4면 윗끝이 막대처럼 보임)
 local function setLadleHidden(ladle, k)
 	for _, p in ipairs(ladle:GetDescendants()) do
 		if p:IsA("BasePart") then
@@ -492,6 +503,11 @@ function Pour.run(ctx)
 						end
 					end
 					blob:setThickness(Config.Press.h0 * (1.15 - 0.15 * fill) + 0.03 * math.sin(stream.t * 9) * stream.flow)
+					if blob.batter then
+						-- 떨어지는 줄기가 쌓이며 소용돌이 결이 감겨 돎 (붓는 세기만큼)
+						blob.turnA = (blob.turnA or 0) + dt * 3.2 * stream.flow
+						blob.batter:setTurn(blob.turnA)
+					end
 					local at = landNow or blob.center
 					local land = Vector3.new(at.X, blob:topY() + 0.05, at.Z)
 					drawStream(stream, lip + Vector3.new(0, HIDE_RISE * hideK, 0), out, land)

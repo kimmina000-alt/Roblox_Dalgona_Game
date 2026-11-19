@@ -5,6 +5,7 @@ local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared
 local Fx = require(script.Parent:WaitForChild("Fx"))
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
 local BatterMesh = require(script.Parent:WaitForChild("BatterMesh"))
+local Toon = require(script.Parent:WaitForChild("Toon"))
 
 -- 3D 반죽 메시 (tools/blender/dalgona_mesh.py, 유튜브 쇼츠 영상 분석): 두께에 따라 바뀜
 --   붓는 중·막 부은 것(h ≥ 0.40): DalgonaMound  리본처럼 접히며 쌓인 주름진 언덕
@@ -92,6 +93,7 @@ function Dalgona.new(station, center, color, volume, ellipse)
 	self.batter = BatterMesh.new(station.fx, color, math.random(1, 9999))
 	if self.batter then
 		self.swirlAmp = 1 -- 붓는 동안 소용돌이 결이 솟아 있음 (다 부으면 addSwirl로 낮아짐)
+		Toon.outline(self.batter.part) -- 다른 도구처럼 만화 외곽선
 		for _, p in ipairs({ self.body, self.rim, self.rim2, self.dome }) do
 			p.Transparency = 1
 		end
@@ -194,6 +196,15 @@ function Dalgona:setThickness(h)
 		self.batter:setShape(flat, self.swirlAmp or 0)
 		-- 두꺼울 때는 보이는 높이를 낮춰 퍼진 웅덩이처럼 (부피 계산·누름판 닿는 높이는 그대로)
 		self.batter:place(c, d * k, d / k, h * 0.75 * (1 - 0.3 * (1 - flat)), self.yaw or 0)
+		-- 금 선은 반죽 표면을 따라 (금 간 뒤 더 누르면 같이 내려감)
+		for _, ck in ipairs(self.cracks or {}) do
+			local ya, yb = self.batter:surfaceY(ck.a), self.batter:surfaceY(ck.b)
+			if ya and yb then
+				local a = Vector3.new(ck.a.X, ya + 0.022, ck.a.Z)
+				local b = Vector3.new(ck.b.X, yb + 0.022, ck.b.Z)
+				ck.part.CFrame = CFrame.lookAt((a + b) / 2, b)
+			end
+		end
 		for _, dt in ipairs(self.details) do
 			dt.part.LocalTransparencyModifier = flat > 0.6 and 0 or 1
 		end
@@ -339,9 +350,108 @@ function Dalgona:setColor(c)
 	end
 end
 
+-- 금 (참고 사진 2026-11-20): 가늘고 진한 틈이 들쭉날쭉 꺾이며 찍힌 모양 선을 따라 조금 가다가
+-- 바깥 가장자리까지 쭉 뻗음. 3D 반죽이면 표면 높이를 따라 얹음
+local CRACK = Color3.fromRGB(46, 26, 12)
+function Dalgona:crackLines(count)
+	local S = self.S
+	local bat = self.batter
+	local c = self.center
+	local R = self:radius()
+	local rng = Random.new()
+	local function surf(p)
+		local y = bat:surfaceY(p)
+		return y and Vector3.new(p.X, y + 0.022, p.Z) or nil
+	end
+	local function seg(a, b, w)
+		local d = b - a
+		if d.Magnitude < 1e-3 then
+			return
+		end
+		local part = S:fxPart(S.fx, {
+			Name = "Crack",
+			Size = Vector3.new(w, 0.012, d.Magnitude + w * 0.6),
+			CFrame = CFrame.lookAt((a + b) / 2, b),
+			Color = CRACK,
+			Material = Enum.Material.SmoothPlastic,
+		})
+		self.cracks = self.cracks or {}
+		table.insert(self.cracks, { part = part, a = a, b = b })
+	end
+	-- 한 줄: from에서 dir 쪽으로 들쭉날쭉 걸어 가장자리 밖에서 멈춤
+	local function walk(from, dir, w, maxLen)
+		local p = from
+		local len = 0
+		local d = Vector3.new(dir.X, 0, dir.Z).Unit
+		while len < maxLen do
+			-- 바깥쪽으로 가려는 힘 + 작은 꺾임
+			local out = Vector3.new(p.X - c.X, 0, p.Z - c.Z)
+			if out.Magnitude > 1e-3 then
+				d = (d + out.Unit * 0.25).Unit
+			end
+			local ang = rng:NextNumber(-0.45, 0.45)
+			d = Vector3.new(d.X * math.cos(ang) - d.Z * math.sin(ang), 0, d.X * math.sin(ang) + d.Z * math.cos(ang))
+			local step = rng:NextNumber(0.05, 0.11)
+			local q = p + d * step
+			local a3, b3 = surf(p), surf(q)
+			if not a3 or not b3 then
+				break -- 가장자리 밖
+			end
+			seg(a3, b3, w)
+			-- 가끔 가는 곁가지
+			if rng:NextNumber() < 0.06 and w > 0.014 then
+				local side = Vector3.new(-d.Z, 0, d.X) * (rng:NextNumber() < 0.5 and 1 or -1)
+				walk(q, (d + side).Unit, w * 0.6, rng:NextNumber(0.1, 0.35))
+			end
+			p = q
+			len += step
+		end
+	end
+	local segs = self.stampSegs
+	local first = segs and rng:NextInteger(1, #segs) or 1
+	for ci = 1, count do
+		local w = rng:NextNumber(0.016, 0.024)
+		if segs and #segs > 0 then
+			-- 찍힌 선 위 한 점에서: 선을 따라 조금 가다가(사진처럼 별 모서리를 타고) 바깥으로. 금마다 다른 선에서 (고루 퍼지게)
+			local s = segs[(first + math.floor((ci - 1) * #segs / count)) % #segs + 1]
+			local u = rng:NextNumber()
+			local p = s.a:Lerp(s.b, u)
+			local along = (s.b - s.a)
+			if along.Magnitude > 1e-3 then
+				along = along.Unit * (rng:NextNumber() < 0.5 and 1 or -1)
+				local q = p + along * rng:NextNumber(0.1, 0.3)
+				local a3, b3 = surf(p), surf(q)
+				if a3 and b3 then
+					seg(a3, b3, w)
+					p = q
+				end
+			end
+			local out = Vector3.new(p.X - c.X, 0, p.Z - c.Z)
+			if out.Magnitude < 1e-3 then
+				out = Vector3.new(1, 0, 0)
+			end
+			walk(p, out.Unit, w, R * 2)
+		else
+			-- 찍기 전(누르다 금): 가장자리에서 안쪽으로
+			local a = rng:NextNumber(0, 2 * math.pi)
+			local k = math.sqrt(1 + (self.e or 0))
+			local cy, sy = math.cos(self.yaw or 0), math.sin(self.yaw or 0)
+			local lx, lz = math.cos(a) * R * k * 0.9, math.sin(a) * R / k * 0.9
+			local p = Vector3.new(c.X + lx * cy + lz * sy, c.Y, c.Z - lx * sy + lz * cy)
+			-- 가운데 쪽으로 걷다가 되돌아 나오는 대신, 안쪽 점에서 바깥으로 걸음
+			local inPt = p:Lerp(Vector3.new(c.X, c.Y, c.Z), rng:NextNumber(0.25, 0.55))
+			walk(inPt, (p - inPt).Unit, w, R * 2)
+		end
+	end
+end
+
 -- 가장자리 갈라짐 (진한 선)
 function Dalgona:crack(count, inward)
 	Sfx.play("crack", 0.7)
+	if self.batter then
+		self:crackLines(math.max(3, math.floor((count or 5) * 0.8)))
+		return
+	end
 	local r = self:radius()
 	local y = self:topY() + 0.006
 	-- 길쭉한 반죽이면 원이 아니라 타원 가장자리에서 시작해 가운데 쪽으로 (반죽 밖으로 선이 나가지 않게)
@@ -425,6 +535,7 @@ function Dalgona:groove(wires, handle)
 			end
 			return cross % 2 == 1
 		end
+		self.stampSegs = closed -- 금이 틀 선을 따라 갈 때 씀
 		return setmetatable({ dal = self, segs = segs, isInside = isInside }, BatterGroove)
 	end
 	local g = setmetatable({ dal = self, segs = {} }, Groove)

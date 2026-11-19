@@ -35,6 +35,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		sideInput = isMouse and "mouse" or input
 		Pointer.side.down = true
 		Pointer.side.pos = pos
+		Pointer.side.start = pos
 		return
 	end
 	if input.UserInputType == Enum.UserInputType.Touch then
