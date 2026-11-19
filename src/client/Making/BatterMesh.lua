@@ -11,8 +11,8 @@ local AssetService = game:GetService("AssetService")
 local Batter = {}
 Batter.__index = Batter
 
-local SEG = 200 -- 둘레 조각
-local RINGS = 56 -- 가운데 → 가장자리 고리
+local SEG = 160 -- 둘레 조각 (삼각형 한도 약 2만 개 안: 160 × (2 × 47 + 2) = 15,360)
+local RINGS = 48 -- 가운데 → 가장자리 고리
 local TOP = 0.88 -- 기본 모양 꼭대기 높이 (찍은 모양 안쪽이 솟을 여유)
 local BOUND = 1.1 -- 메시 경계 상자 (MeshPart 크기 기준을 고정하려고 모서리 점 2개를 박아 둠)
 
@@ -114,8 +114,9 @@ end
 function Batter:rebuild()
 	local em = self.em
 	local flat = self.flat
-	local n = lerp(2.0, 10.0, flat)
-	local p = lerp(0.6, 0.3, flat)
+	-- 막 부은 반죽도 빵처럼 봉긋하지 않고 낮게 퍼진 웅덩이 (영상 9번: 윗면이 넓고 가장자리만 둥글게 내려감)
+	local n = lerp(3.2, 10.0, flat)
+	local p = lerp(0.45, 0.3, flat)
 	local swirl = self.swirl
 	local ph = self.ph
 	local st = self.stamp
@@ -136,7 +137,7 @@ function Batter:rebuild()
 				-- 부은 결: 가운데에서 바깥으로 도는 소용돌이 주름 (실제로 솟음)
 				if swirl > 0.001 then
 					local a = math.atan2(self.sin[j], self.cos[j])
-					y *= 1 + swirl * 0.11 * math.sin(22 * t - 2 * a + ph[4]) * (1 - t * 0.6)
+					y *= 1 + swirl * 0.09 * math.sin(22 * t - 2 * a + ph[4]) * (1 - t * 0.6)
 				end
 				-- 모양 찍기: 틀 선을 따라 파인 홈 + 안쪽 봉긋
 				if st and k > 0.001 then
@@ -150,7 +151,7 @@ function Batter:rebuild()
 			em:SetPosition(ring[j], Vector3.new(x, y, z))
 		end
 	end
-	local yc = TOP * (1 + swirl * 0.11 * math.sin(ph[4]))
+	local yc = TOP * (1 + swirl * 0.09 * math.sin(ph[4]))
 	em:SetPosition(self.topCenter, Vector3.new(0, yc, 0))
 end
 

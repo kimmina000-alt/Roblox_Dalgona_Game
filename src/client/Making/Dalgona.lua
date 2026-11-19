@@ -192,7 +192,8 @@ function Dalgona:setThickness(h)
 		local h0 = Config.Press.h0
 		local flat = math.clamp((h0 * 0.95 - h) / (h0 * 0.95 - 0.1), 0, 1)
 		self.batter:setShape(flat, self.swirlAmp or 0)
-		self.batter:place(c, d * k, d / k, h * 0.75, self.yaw or 0)
+		-- 두꺼울 때는 보이는 높이를 낮춰 퍼진 웅덩이처럼 (부피 계산·누름판 닿는 높이는 그대로)
+		self.batter:place(c, d * k, d / k, h * 0.75 * (1 - 0.3 * (1 - flat)), self.yaw or 0)
 		for _, dt in ipairs(self.details) do
 			dt.part.LocalTransparencyModifier = flat > 0.6 and 0 or 1
 		end
