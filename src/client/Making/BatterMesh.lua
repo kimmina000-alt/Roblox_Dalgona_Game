@@ -17,7 +17,7 @@ local RINGS = 54 -- 가운데 → 가장자리 고리
 local SIDE_SHADE = Vector3.new(0.6, 0.45, 0.32)
 local GROOVE_SHADE = Vector3.new(0.72, 0.58, 0.46)
 local TOP = 0.88 -- 기본 모양 꼭대기 높이 (찍은 모양 안쪽이 솟을 여유)
-local BOUND = 1.1 -- 메시 경계 상자 (MeshPart 크기 기준을 고정하려고 모서리 점 2개를 박아 둠)
+local BOUND = 1.8 -- 메시 경계 상자 (MeshPart 크기 기준을 고정하려고 모서리 점 2개를 박아 둠). 방울로 그린 모양(하트 끝 등)이 반지름 1 밖으로 나가도 들어가게
 
 local function lerp(a, b, t)
 	return a + (b - a) * t
@@ -85,6 +85,8 @@ local function build(parent, color, seed)
 	em:AddTriangle(p1, p2, p1)
 	em:AddTriangle(p3, p4, p3)
 	self.flat, self.swirl, self.stampK, self.turn = 0, 0, 0, 0
+	self.outline = nil -- 방울로 만든 모양: 각도 j마다 가장자리 반지름 (평균 반지름 1 기준), 없으면 원
+	self.bumps = nil -- 막 떨어진 방울 봉긋함 { {x, z, r, a}, ... } (메시 좌표)
 	self.stamp = nil
 	self:rebuild()
 	local mp = AssetService:CreateMeshPartAsync(Content.fromObject(em))
@@ -121,6 +123,10 @@ function Batter:edgeR(j)
 	local c, s = self.cos[j], self.sin[j]
 	local a = math.atan2(s, c)
 	local amp = lerp(0.025, 0.07, self.flat)
+	if self.outline then
+		amp *= 0.5 -- 방울 모양은 이미 울퉁불퉁
+		return self.outline[j] * (1 - amp + amp * (0.55 * math.sin(3 * a + ph[1]) + 0.3 * math.sin(5 * a + ph[2]) + 0.15 * math.sin(9 * a + ph[3])))
+	end
 	return 1 - amp + amp * (0.55 * math.sin(3 * a + ph[1]) + 0.3 * math.sin(5 * a + ph[2]) + 0.15 * math.sin(9 * a + ph[3]))
 end
 
@@ -135,6 +141,7 @@ function Batter:rebuild()
 	local ph = self.ph
 	local st = self.stamp
 	local k = self.stampK
+	local bumps = self.bumps
 	local edges = {}
 	for j = 1, SEG do
 		edges[j] = self:edgeR(j)
@@ -155,6 +162,18 @@ function Batter:rebuild()
 			local gshade = 0
 			if i < RINGS then
 				y = base
+				-- 막 떨어진 방울: 따로 봉긋한 동그라미 → 시간이 지나며 낮아져 경계가 흐려지고 하나로 이어짐
+				if bumps then
+					local add = 0
+					for _, b in ipairs(bumps) do
+						local dx, dz = x - b[1], z - b[2]
+						local q = (dx * dx + dz * dz) / (b[3] * b[3])
+						if q < 4 then
+							add += b[4] * math.exp(-q)
+						end
+					end
+					y *= 1 + add
+				end
 				-- 부은 결: 가운데에서 바깥으로 도는 소용돌이 주름 (실제로 솟음). turn = 붓는 동안 감기며 돎
 				if swirl > 0.001 then
 					local a = math.atan2(self.sin[j], self.cos[j])
@@ -191,6 +210,14 @@ function Batter:setShape(flat, swirl)
 	self.flat, self.swirl = flat, swirl
 	self:rebuild()
 end
+
+-- 방울로 만든 모양 (outline: SEG개 반지름, bumps: 막 떨어진 방울들) — nil이면 원
+function Batter:setDrops(outline, bumps)
+	self.outline = outline
+	self.bumps = bumps and #bumps > 0 and bumps or nil
+	self:rebuild()
+end
+Batter.SEG = SEG
 
 -- 붓는 동안 소용돌이 결이 감기며 돎 (각도, 라디안)
 function Batter:setTurn(a)

@@ -150,7 +150,182 @@ function Dalgona:placeMeshes(h, d, k)
 end
 
 function Dalgona:diameter(h)
-	return 2 * math.sqrt(self.V / (math.pi * h))
+	-- 방울로 그린 모양은 속이 채워져 넓음 (areaScale = 같은 부피 원 대비 평균 반지름).
+	-- 넓게 그린 만큼 처음부터 얇게 퍼진 것으로 보고, 그 두께보다 얇게 누를 때부터 넓어짐 (부피는 그대로 → 누른 크기는 원과 같음)
+	local s = self.areaScale or 1
+	local hEff = Config.Press.h0 / (s * s)
+	return 2 * math.sqrt(self.V / (math.pi * math.min(h, hEff))) * (s < 1 and s or 1)
+end
+
+-- ── 방울 붓기 (2026-11-20 사용자 메모): 한 방울씩 떨어지고, 떨어진 자리대로 모양이 됨 (하트를 그리며 떨어뜨리면 하트).
+-- 동그라미가 뚝뚝 떨어져 먼저 떨어진 것끼리 경계가 흐려지며 하나로 이어짐. 3D 반죽(BatterMesh)일 때만.
+local MERGE_R = 0.55 -- 기존 방울 반지름의 이 비율 안에 떨어지면 그 방울에 합쳐짐 (같은 자리에 계속 부으면 커지는 웅덩이)
+local MERGE_T = 2.2 -- 막 떨어진 방울이 봉긋하다가 낮아져 이어지는 시간
+local SOFT_K = 0.09 -- 방울 경계를 부드럽게 잇는 정도 (stud)
+local LOBE_H = 0.3 -- 떨어진 방울이 퍼지는 두께 (덩어리 h0보다 얇게 퍼져 옆 방울과 이어짐)
+function Dalgona:addDrop(pos, v)
+	if not self.batter then
+		return false
+	end
+	if not self.lobes then
+		self.lobes = {}
+		self.fresh = {}
+		self.V = 0
+		self.swirlAmp = 0 -- 소용돌이 결 대신 방울 자국
+	end
+	local h0 = Config.Press.h0
+	local best, bestD = nil, math.huge
+	for _, l in ipairs(self.lobes) do
+		local d = Vector3.new(pos.X - l.x, 0, pos.Z - l.z).Magnitude
+		local r = math.sqrt(l.v / (math.pi * LOBE_H))
+		if d < r * MERGE_R and d < bestD then
+			best, bestD = l, d
+		end
+	end
+	if best then
+		local w = best.v + v
+		best.x = (best.x * best.v + pos.X * v) / w
+		best.z = (best.z * best.v + pos.Z * v) / w
+		best.v = w
+	else
+		table.insert(self.lobes, { x = pos.X, z = pos.Z, v = v })
+	end
+	self.V += v
+	self.dropsDirty = true
+	table.insert(self.fresh, { x = pos.X, z = pos.Z, r = math.sqrt(v / (math.pi * LOBE_H)) * 1.4, born = os.clock() })
+	self:updateDrops()
+	if not self.dropConn then
+		self.dropConn = RunService.RenderStepped:Connect(function()
+			if not (self.batter and self.batter.part and self.batter.part.Parent) then
+				self.dropConn:Disconnect()
+				self.dropConn = nil
+				return
+			end
+			-- 봉긋함이 낮아지는 건 초당 20번이면 충분 (메시 다시 놓기가 무거움)
+			local now = os.clock()
+			if now - (self.dropT or 0) < 0.05 and #self.fresh > 0 then
+				return
+			end
+			self.dropT = now
+			self:updateDrops()
+			if #self.fresh == 0 then
+				self.dropConn:Disconnect()
+				self.dropConn = nil
+			end
+		end)
+	end
+	return true
+end
+
+-- 방울들 → 가장자리 모양(각도마다 반지름) + 막 떨어진 방울 봉긋함
+function Dalgona:updateDrops()
+	local lobes = self.lobes
+	if not lobes or #lobes == 0 then
+		return
+	end
+	if not self.dropsDirty and self.dropOutline then
+		-- 모양은 그대로, 막 떨어진 방울 봉긋함만 낮아짐
+		self:dropBumps(self.dropOutline)
+		return
+	end
+	self.dropsDirty = false
+	local h0 = Config.Press.h0
+	-- 가운데 = 방울들의 무게 중심
+	local cx, cz, vs = 0, 0, 0
+	for _, l in ipairs(lobes) do
+		cx += l.x * l.v
+		cz += l.z * l.v
+		vs += l.v
+	end
+	cx /= vs
+	cz /= vs
+	local radii = {}
+	local rmax = 0
+	for i, l in ipairs(lobes) do
+		radii[i] = math.sqrt(l.v / (math.pi * LOBE_H))
+		rmax = math.max(rmax, Vector3.new(l.x - cx, 0, l.z - cz).Magnitude + radii[i])
+	end
+	-- 부드러운 합집합 거리 (음수 = 반죽 안)
+	local function sdf(px, pz)
+		local sum = 0
+		for i, l in ipairs(lobes) do
+			local dx, dz = px - l.x, pz - l.z
+			sum += math.exp(-(math.sqrt(dx * dx + dz * dz) - radii[i]) / SOFT_K)
+		end
+		return -SOFT_K * math.log(math.max(sum, 1e-30))
+	end
+	local bat = self.batter
+	local SEG = bat.SEG
+	local R = {}
+	local area = 0
+	local mxx, mzz, mxz = 0, 0, 0
+	for j = 1, SEG do
+		local c, s = bat.cos[j], bat.sin[j]
+		-- 바깥에서 안으로 훑어 처음 반죽에 닿는 곳 → 그 사이를 반으로 나눠 정밀하게
+		local hi = rmax + 0.2
+		local lo = 0
+		local step = 0.12
+		local r = hi
+		while r > 0 do
+			if sdf(cx + c * r, cz + s * r) < 0 then
+				lo = r
+				break
+			end
+			hi = r
+			r -= step
+		end
+		for _ = 1, 7 do
+			local m = (lo + hi) / 2
+			if sdf(cx + c * m, cz + s * m) < 0 then
+				lo = m
+			else
+				hi = m
+			end
+		end
+		local rr = math.max((lo + hi) / 2, 0.05)
+		R[j] = rr
+		area += rr * rr
+		-- 넓이 2차 모멘트 (길쭉함): 부채꼴 조각 ∫r³dr = r⁴/4
+		local r4 = rr ^ 4 / 4
+		mxx += r4 * c * c
+		mzz += r4 * s * s
+		mxz += r4 * c * s
+	end
+	local dth = 2 * math.pi / SEG
+	area = area * dth / 2
+	local Req = math.sqrt(area / math.pi)
+	local outline = {}
+	for j = 1, SEG do
+		outline[j] = R[j] / Req
+	end
+	-- 길쭉함 (점수용): 주축 비
+	local a, b = (mxx + mzz) / 2, math.sqrt(((mxx - mzz) / 2) ^ 2 + mxz * mxz)
+	self.elong = math.sqrt((a + b) / math.max(a - b, 1e-9))
+	-- 부피를 유지한 원 반지름 대비 실제(속이 채워진) 모양 반지름
+	self.areaScale = Req / math.sqrt(vs / (math.pi * h0))
+	self.center = Vector3.new(cx, self.center.Y, cz)
+	self.e, self.yaw = 0, 0
+	self.Req = Req
+	self:dropBumps(outline)
+end
+
+function Dalgona:dropBumps(outline)
+	local cx, cz, Req = self.center.X, self.center.Z, self.Req
+	-- 막 떨어진 방울: 메시 좌표(평균 반지름 1)로
+	local bumps = {}
+	local now = os.clock()
+	for i = #self.fresh, 1, -1 do
+		local f = self.fresh[i]
+		local age = (now - f.born) / MERGE_T
+		if age >= 1 then
+			table.remove(self.fresh, i)
+		else
+			table.insert(bumps, { (f.x - cx) / Req, (f.z - cz) / Req, f.r / Req, 0.45 * (1 - age) ^ 2 })
+		end
+	end
+	self.dropOutline = outline
+	self.batter:setDrops(outline, bumps)
+	self:setThickness(self.h)
 end
 
 function Dalgona:setThickness(h)
@@ -662,6 +837,9 @@ end
 -- 부은 결 (영상 7~10번): 막 부으면 위에 소용돌이 결이 보이고, 몇 초에 걸쳐 퍼지며 매끈해짐
 local SWIRL_N, SWIRL_FADE = 44, 4.5
 function Dalgona:addSwirl()
+	if self.lobes then
+		return -- 방울로 부었으면 소용돌이 결 대신 방울이 낮아지며 이어짐 (updateDrops)
+	end
 	if self.batter then
 		-- 3D: 메시의 소용돌이 주름이 SWIRL_FADE초에 걸쳐 낮아짐 (그림을 덧그리지 않음)
 		self.swirlAmp = 1

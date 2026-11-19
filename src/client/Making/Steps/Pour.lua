@@ -385,6 +385,52 @@ function Pour.run(ctx)
 	local D0 = 2 * math.sqrt(volume * (1 - REMAIN) / (math.pi * Config.Press.h0)) -- 한 곳에 다 부었을 때 지름
 	local eRing = 0
 	local landNow = nil
+	-- 방울 붓기 (2026-11-20): 3D 반죽이면 줄기 대신 한 방울씩 뚝뚝. 떨어진 자리대로 모양이 됨 (3D가 안 되면 예전 줄기)
+	local dropMode = true
+	local drops = {} -- 떨어지는 중인 방울
+	local dropAcc = 0
+	local DROP_N = 36
+	local function landDrop(at, amt)
+		if not blob then
+			local flat = Vector3.new(at.X - S.ringCenter.X, 0, at.Z - S.ringCenter.Z)
+			rec.dist = flat.Magnitude
+			blob = Dalgona.new(S, at, color, amt, 0)
+			blob.simple = true
+			blob:setLook(look)
+			st.dalgona = blob
+			st.volume = volume
+			ui:buzz(0.4, 0.08)
+			if rec.dist > 1.0 then
+				ui:hint("원 밖에 떨어졌어요! 철판에 들러붙어요")
+			end
+			if not blob.batter then
+				dropMode = false -- 3D 반죽을 못 쓰면 예전 줄기 방식으로 이어서
+				return
+			end
+		end
+		blob:addDrop(at, amt)
+		Sfx.play("pop", 0.3, 0.75 + math.random() * 0.2)
+		local flat = Vector3.new(blob.center.X - S.ringCenter.X, 0, blob.center.Z - S.ringCenter.Z)
+		rec.dist = flat.Magnitude
+		rec.spread = math.clamp(blob.elong or 1, 1, 4)
+		blob:setThickness(Config.Press.h0 * (1.15 - 0.15 * poured / total))
+	end
+	local function stepDrops(dt)
+		for i = #drops, 1, -1 do
+			local d = drops[i]
+			d.t += dt
+			local k = math.min(d.t / 0.32, 1)
+			local y = d.from.Y + (d.to.Y - d.from.Y) * k * k -- 중력처럼 점점 빨리
+			local stretch = 1 + 0.6 * k -- 떨어질수록 길쭉
+			d.part.Size = Vector3.new(d.size / math.sqrt(stretch), d.size * stretch, d.size / math.sqrt(stretch))
+			d.part.CFrame = CFrame.new(d.to.X, y, d.to.Z)
+			if k >= 1 then
+				d.part:Destroy()
+				table.remove(drops, i)
+				landDrop(Vector3.new(d.to.X, S.plateTop, d.to.Z), d.amt)
+			end
+		end
+	end
 
 	-- 카메라가 철판 쪽으로 옮겨 가 있으니, 국자를 먼저 철판 왼쪽 위로 들고 옴 (0.4초)
 	local hover = CFrame.new(plate.X - half - 0.15, carryY, plate.Z + 0.9) * rot
@@ -406,6 +452,7 @@ function Pour.run(ctx)
 		if not dt then
 			return nil
 		end
+		stepDrops(dt)
 		if not dropped then
 			if P.down and not grabbing and P.presses ~= seenPress then
 				seenPress = P.presses
@@ -436,7 +483,23 @@ function Pour.run(ctx)
 				-- 국자 가장자리(손잡이 반대쪽 +X)와 흘러나가는 방향
 				local out = Vector3.new(1, 0, 0)
 				local lip = (CFrame.new(w) * CFrame.Angles(0, 0, -tilt)):PointToWorldSpace(Vector3.new(S.bowlRadius - 0.04, S.bowlHalf, 0))
-				if tilt > POUR_TILT and poured < total then
+				if dropMode and tilt > POUR_TILT and poured < total then
+					-- 한 방울씩: 많이 기울일수록 자주. 국자를 움직이며 떨어뜨리면 그 길대로 모양이 됨 (하트를 그리면 하트)
+					local rate = (tilt - POUR_TILT) / (MAX_TILT - POUR_TILT)
+					local landing = Vector3.new(lip.X + 0.12, S.plateTop, lip.Z)
+					landNow = landing
+					dropAcc += dt
+					if dropAcc >= 0.3 - 0.18 * rate then
+						dropAcc = 0
+						local amt = math.min(total - poured, total / DROP_N)
+						poured += amt
+						local size = 0.3
+						local part = Fx.ellipsoid(S:fxPart(S.fx, { Name = "PourDrop", Color = color, Material = Enum.Material.SmoothPlastic, Size = Vector3.one * size }))
+						local from = landing + Vector3.new(0, 6, 0) -- 화면 밖 높은 곳(숨긴 국자)에서
+						part.CFrame = CFrame.new(from)
+						table.insert(drops, { part = part, from = from, to = landing + Vector3.new(0, 0.12, 0), t = 0, amt = amt, size = size })
+					end
+				elseif not dropMode and tilt > POUR_TILT and poured < total then
 					local rate = (tilt - POUR_TILT) / (MAX_TILT - POUR_TILT)
 					local amt = math.min(total - poured, total / POUR_TIME * (0.35 + 0.65 * rate) * dt)
 					local landing = Vector3.new(lip.X + 0.12, S.plateTop, lip.Z) -- 줄기가 실제로 떨어지는 곳
@@ -484,9 +547,11 @@ function Pour.run(ctx)
 						blob.spin = (blob.spin or 0) + dt * 0.7
 					end
 					local fill = poured / total
-					blob.V = math.max(volume * 0.02, volume * (1 - REMAIN) * fill)
+					if not blob.lobes then
+						blob.V = math.max(volume * 0.02, volume * (1 - REMAIN) * fill)
+					end
 					-- 반죽 모양: 부은 자리들의 가운데 + 퍼진 방향으로 길쭉하게 (일직선으로 쭉 부으면 일직선 모양)
-					if sw > 0 then
+					if sw > 0 and not blob.lobes then
 						local mx, mz = sx / sw, sz / sw
 						local cxx, czz, cxz = sxx / sw - mx * mx, szz / sw - mz * mz, sxz / sw - mx * mz
 						local major = (cxx + czz) / 2 + math.sqrt(((cxx - czz) / 2) ^ 2 + cxz * cxz)
@@ -522,7 +587,7 @@ function Pour.run(ctx)
 							end
 						end
 					end
-					if poured >= total - 1e-4 then
+					if poured >= total - 1e-4 and #drops == 0 then
 						-- 다 부음: 줄기가 실처럼 늘어나다 끊겨 떨어지고 반죽이 출렁이며 자리 잡음
 						dropped = true
 						dropTime = os.clock()
@@ -555,6 +620,14 @@ function Pour.run(ctx)
 					setLadleHidden(ladle, hideK)
 				end
 				S:springTo(ladle, home, dt, 22)
+				if blob and blob.lobes and poured >= total - 1e-4 and #drops == 0 then
+					-- 방울을 다 떨어뜨린 뒤 손을 뗌: 다 부은 것으로
+					dropped = true
+					dropTime = os.clock()
+					blob:setThickness(Config.Press.h0)
+					S:setContents({ thickness = 0.03 })
+					seenPress = P.presses
+				end
 				if blob and not dropped then
 					-- 붓다가 손을 떼면 줄기가 끊겨 떨어짐 (다시 기울이면 이어서 부음)
 					stream.flow = math.max(0, stream.flow - dt * 5)

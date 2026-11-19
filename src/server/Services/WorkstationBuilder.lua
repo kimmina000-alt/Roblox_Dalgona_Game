@@ -572,10 +572,11 @@ function Builder.attachPresserMesh(m)
 	mesh.CanCollide = false
 	mesh.Size = tpl.Size * (disc.Size.Y / tpl.Size.X)
 	mesh.Material = Enum.Material.Metal
-	mesh.Color = Color3.fromRGB(205, 207, 212)
+	-- 2026-11-20 "누름판 메탈 너무 밝아 살짝 어둡게"
+	mesh.Color = Color3.fromRGB(158, 161, 168)
 	local sa = Instance.new("SurfaceAppearance")
 	sa.Name = "SteelShine"
-	sa.Color = Color3.fromRGB(214, 216, 222)
+	sa.Color = Color3.fromRGB(166, 169, 176)
 	sa.MetalnessMap = METALNESS_MAP
 	sa.RoughnessMap = ROUGHNESS_MAP
 	sa.Parent = mesh
