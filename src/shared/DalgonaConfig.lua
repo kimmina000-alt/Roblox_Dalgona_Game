@@ -99,6 +99,7 @@ C.Sounds = {
 	stirCrystal = "rbxassetid://9113381863", -- 결정 부딪히는 "톡톡"
 	stirLiquid = "rbxassetid://9116146746", -- 녹은 시럽 젓기 (부드러움)
 	stirCream = "rbxassetid://9126209045", -- 소다 넣은 뒤 걸쭉한 거품 젓기 (둔함)
+	pressSticky = "rbxassetid://137866583821455", -- 누름판이 반죽에 닿고 뗄 때 끈적한 "쩍" (2026-11-19 요청, 임시 후보: Creator Store "goop slime sound effect")
 	-- 앞쪽 무음 (AudioAnalyzer로 잼). 반복 소리도 이 구간부터 되풀이돼서 끊김이 없음
 	sugarPourStart = 0.08,
 	crackStart = 0.16,

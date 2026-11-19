@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 local PresserGrab = require(script.Parent.Parent:WaitForChild("PresserGrab"))
+local Sfx = require(script.Parent.Parent:WaitForChild("Sfx"))
 
 local Press = {}
 
@@ -111,6 +112,7 @@ function Press.run(ctx)
 					bottom = surface
 					contact = true
 					ui:buzz(0.3, 0.05)
+					Sfx.play("pressSticky", 0.7, 1.0) -- 반죽에 닿을 때 끈적한 "쩍"
 				end
 			else
 				h = math.max(h - cfg.k * h * dt, cfg.crack * 0.8) -- 더 눌러도 이 이상 얇아지지 않음
@@ -133,6 +135,9 @@ function Press.run(ctx)
 			bottom += (carryY - bottom) * (1 - math.exp(-22 * dt))
 		end
 		if ended then
+			if contact then
+				Sfx.play("pressSticky", 0.45, 1.3) -- 뗄 때 끈적하게 떨어지는 소리
+			end
 			-- 이미 가장 얇아졌으면 더 줄지 않아도 누른 것으로 셈 (안 그러면 단계가 안 끝남)
 			if hStart - h > 0.02 or (contact and h <= cfg.crack * 0.81) then
 				count += 1

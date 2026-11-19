@@ -20,6 +20,10 @@ local POUR_TILT = math.rad(48) -- 이 각도부터 흘러내리기 시작
 local REMAIN = 0.15
 local POUR_TIME = 1.8 -- 최대로 기울였을 때 다 붓는 데 걸리는 시간 (걸쭉해서 천천히)
 local SEGMENTS = 28
+-- 실제 달고나 영상 (국자를 철판 바로 위에서 기울여 부음): 위에서 보면 줄기는 거의 안 보이고,
+-- 철판에 닿은 반죽이 가운데부터 둥글게 번지며 원이 점점 커짐 → 떨어지는 줄기는 그리지 않고 철판 위 반죽만 보여 줌
+-- (사용자 요청 2026-11-19: 판에 닿는 반죽만 보이게, 원이 점점 커지게)
+local SHOW_STREAM = false
 local RIBBON_PIECES = 2 -- 리본 메시를 곡선 따라 이어 붙인 조각 수 (메시가 아래로 좁아져서, 아래 조각은 위 조각 끝 너비에 맞춤)
 
 local function hideRibbons(st)
@@ -30,6 +34,9 @@ end
 
 -- 쌓이는 반죽 위로 리본이 접혀 내려앉음 (영상: 띠가 똬리 틀듯 겹겹이 쌓이다 녹아듦)
 local function spawnFold(S, blob, color, ang)
+	if not SHOW_STREAM then
+		return -- 리본이 접혀 쌓이는 모습도 줄기와 함께 숨김
+	end
 	local f = Fx.mesh("PourRibbon", S.fx, { Name = "PourFold", Color = color, Material = Enum.Material.SmoothPlastic, Reflectance = 0.04 })
 	if not f then
 		return
@@ -84,6 +91,13 @@ end
 -- lip: 국자 가장자리, out: 흘러나가는 방향(수평), land: 떨어지는 곳(반죽 윗면)
 -- head/tail: 줄기의 위끝·아래끝 위치 (0 = 국자, 1 = 바닥). flow: 굵기 0~1
 local function drawStream(st, lip, out, land)
+	if not SHOW_STREAM then
+		hideRibbons(st)
+		for _, p in ipairs(st.parts) do
+			p.Transparency = 1
+		end
+		return
+	end
 	if st.ribbon then
 		-- 국자 가장자리에서 밖으로 살짝 밀려 나왔다가 떨어지는 곡선 위에 리본 조각을 이어 붙임
 		local ctrl = lip + out * 0.3 + Vector3.new(0, -0.02, 0)
@@ -428,6 +442,8 @@ function Pour.run(ctx)
 						rec.dist = flat.Magnitude
 						eRing = math.clamp((rec.dist - 0.9) / 1.0, 0, 0.5)
 						blob = Dalgona.new(S, landing, color, volume * 0.02, eRing)
+						-- 붓는 동안은 매끈한 원판 + 가운데 볼록 (접힌 주름 메시 대신) → 동그란 웅덩이가 번지는 모습
+						blob.simple = true
 						blob:setLook(look)
 						st.dalgona = blob
 						st.volume = volume
@@ -579,6 +595,10 @@ function Pour.run(ctx)
 	end
 	ladle:PivotTo(S.rest.Ladle)
 	setLadleHidden(ladle, 0)
+	if st.dalgona then
+		st.dalgona.simple = false
+		st.dalgona:setThickness(st.dalgona.h)
+	end
 	S:setContents({ Transparency = 1 })
 	if st.dalgona and not reshape(ctx, rec, st.dalgona, eRing) then
 		return nil

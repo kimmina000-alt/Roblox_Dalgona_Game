@@ -164,9 +164,24 @@ function Dalgona:setThickness(h)
 			dt.part.CFrame = CFrame.new(x, top + dt.abs * 0.12, z)
 		end
 	end
-	if self.meshes then
+	if self.meshes and not self.simple then
+		for _, p in ipairs({ self.body, self.rim, self.rim2, self.dome }) do
+			p.Transparency = 1 -- simple(붓는 동안)에서 돌아올 때 원판 부품 숨김
+		end
 		self:placeMeshes(h, d, k)
 		return
+	end
+	if self.meshes then
+		-- simple: 메시 대신 매끈한 원판(본체·가장자리 띠) + 가운데 볼록 (붓는 동안, Pour)
+		for _, p in pairs(self.meshes) do
+			p.Transparency = 1
+		end
+		for _, p in ipairs({ self.body, self.rim, self.rim2 }) do
+			p.Transparency = 0
+		end
+		for _, dt in ipairs(self.details) do
+			dt.part.LocalTransparencyModifier = 1
+		end
 	end
 	-- 언덕 모양: 두꺼울 때만 위에 둥근 봉우리와 덩어리
 	local s = math.clamp((h - 0.22) / (Config.Press.h0 - 0.22), 0, 1)
@@ -176,7 +191,7 @@ function Dalgona:setThickness(h)
 	self.dome.CFrame = CFrame.new(c.X, c.Y + h * 0.75, c.Z)
 	for _, l in ipairs(self.lumps) do
 		local ls = 0.35 * s
-		l.part.Transparency = s < 0.05 and 1 or 0
+		l.part.Transparency = (s < 0.05 or self.simple) and 1 or 0
 		l.part.Size = Vector3.one * math.max(ls, 0.01)
 		l.part.CFrame = CFrame.new(c.X + math.cos(l.a) * l.r * d, c.Y + h * 0.6, c.Z + math.sin(l.a) * l.r * d)
 	end

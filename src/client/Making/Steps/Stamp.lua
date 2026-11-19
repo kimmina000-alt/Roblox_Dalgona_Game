@@ -6,6 +6,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 local PresserGrab = require(script.Parent.Parent:WaitForChild("PresserGrab"))
+local Sfx = require(script.Parent.Parent:WaitForChild("Sfx"))
 
 local Stamp = {}
 
@@ -158,6 +159,7 @@ function Stamp.run(ctx)
 					grab.bottom = math.max(contactY, grab.bottom - 8 * dt)
 					if grab.bottom <= contactY + 1e-3 then
 						contact = true
+						Sfx.play("pressSticky", 0.5, 1.1)
 						holdT = 0
 						if not groove then
 							-- 닿는 순간부터 홈이 파이기 시작 (누를수록 깊고 또렷)

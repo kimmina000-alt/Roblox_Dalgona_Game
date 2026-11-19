@@ -20,7 +20,7 @@ local LUMP = Color3.fromRGB(250, 250, 248)
 local SYRUP_BROWN = Color3.fromRGB(118, 60, 20)
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit -- Stir.placeChopsticksAt와 같은 젓가락 방향
 local DOTS = 340
-local LUMPS = 300
+local LUMPS = 560 -- 결정 많이 (2026-11-19 "결정이 더 많으면 좋겠음")
 -- 가루 → 결정은 녹은 정도 TRANS_A ~ TRANS_B 사이에서 서서히 (사용자 요청 2026-11-18: 너무 갑자기 바뀜).
 -- 점 하나하나·결정 하나하나가 자기 차례(문턱)에 천천히 사라지고/생겨서, 가루 사이로 결정이 조금씩 늘어남
 local TRANS_A, TRANS_B = 0.2, 0.48

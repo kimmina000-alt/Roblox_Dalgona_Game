@@ -57,6 +57,7 @@ end
 -- ── 부풀기 (YTN 사이언스 영상 30~35초 프레임 분석) ──
 -- 시계 u: 0 → 1 (빠르게 저으면 PUFF_TIME초). 높이는 S곡선: A(느린 시작) 15% · B(빠른 상승) 65% · C(멈춤) 20%
 local PUFF_TIME = 3.5
+local INTRO_TIME = 1.4 -- 소다를 넣고 처음 부풀기 시작할 때 설탕물 → 거품으로 서서히 바뀌는 시간
 local HOLD_TIME = 0.6
 local PUFF_DRIVE = { [1] = 0.08, [2] = 0.35, [3] = 1 } -- 젓는 속도 구간별 시계 속도
 local CURVE = { { 0, 0, 0 }, { 0.314, 0.15, 0.9 }, { 0.743, 0.80, 1.3 }, { 1, 1, 0 } } -- (u, 높이, 기울기)
@@ -120,18 +121,23 @@ local function newPuff(S, amount, baseThick)
 		glossy = low > 0.3, -- 적으면 끝까지 번들번들
 	}
 	local start = scaleColor(final, COLOR_RAMP[1][2])
-	S:setContents({ Material = Enum.Material.SmoothPlastic, Transparency = 0, Color = start })
-	-- 국자 속 반죽 하나만 부풀어 오름 (표면에 붙는 점·동그라미 없음, 사용자 요청 2026-11-18)
-	-- 접힌 주름 언덕 메시가 번들거리다 무광이 되며 커짐. 없으면 거품 돔, 그것도 없으면 공
-	pf.foam = Fx.mesh("DalgonaMound", S.Ladle, { Name = "FxFoam", Color = start, Material = Enum.Material.SmoothPlastic })
-		or Fx.mesh("FoamPuff", S.Ladle, { Name = "FxFoam", Color = start, Material = Enum.Material.SmoothPlastic })
-		or S:fxPart(S.Ladle, { Name = "FxFoam", Shape = Enum.PartType.Ball, Color = start, Size = Vector3.one * 0.1 })
+	-- 서서히 바뀜 (사용자 요청 2026-11-19: 소다 넣고 너무 갑자기 변함): 처음 INTRO_TIME초 동안
+	-- 맑은 갈색 설탕물에서 거품 색으로 물들고, 거품 덩이는 작고 투명하게 시작해 차오름
+	pf.syrup = S.Contents.Color
+	pf.intro = 0
+	pf.t = 0
+	-- 둥근 공 하나가 국자 속에서 부풀어 오름 (사용자 요청 2026-11-19: 주름 언덕 메시는 동그라미가 줄지어 보임).
+	-- 공 가운데가 국자 안쪽 면에 있어서 위쪽 반구만 보임 = 매끈한 둥근 돔
+	pf.foam = S:fxPart(S.Ladle, { Name = "FxFoam", Shape = Enum.PartType.Ball, Color = pf.syrup, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.one * 0.1 })
 	return pf
 end
 
 local function drawPuff(S, pf, dt, speed)
 	local u = pf.u
 	local h = puffCurve(u)
+	pf.intro = math.min(1, (pf.intro or 1) + dt / INTRO_TIME)
+	pf.t = (pf.t or 0) + dt
+	local intro = pf.intro * pf.intro * (3 - 2 * pf.intro)
 	local R = S.bowlRadius - 0.08
 	local Hf = 2 * R * Fx.HEIGHT.FoamPuff
 	-- 덩어리 → 둥근 돔: 높이(Y)는 많이, 지름(X/Z)은 조금. 마지막엔 국자 테두리를 살짝 넘음. 튀거나 꺼지지 않음
@@ -152,9 +158,17 @@ local function drawPuff(S, pf, dt, speed)
 	if pf.done then
 		col = col:Lerp(Color3.new(0, 0, 0), 0.03 * math.min(pf.hold / HOLD_TIME, 1))
 	end
+	if pf.syrup then
+		col = pf.syrup:Lerp(col, intro)
+	end
 	S:setContents({ Color = col, thickness = pf.baseThick * (1 + 0.8 * h) })
 	local foam = pf.foam
 	foam.Color = col
+	foam.Transparency = 0.7 * (1 - intro)
+	-- 처음엔 작게, 다 부풀 때까지 살짝 숨 쉬듯 (부드러운 반죽 느낌)
+	local breathe = pf.done and 0 or 0.025 * math.sin(pf.t * 6)
+	height *= (0.35 + 0.65 * intro) * (1 + breathe)
+	diam *= (0.75 + 0.25 * intro) * (1 - breathe * 0.4)
 	-- 광택 → 무광: 빠르게 부풀기 시작하면 고운 결이 있는 재질로
 	foam.Material = (u > 0.45 and not pf.glossy) and Enum.Material.Sand or Enum.Material.SmoothPlastic
 	if foam:IsA("MeshPart") then
