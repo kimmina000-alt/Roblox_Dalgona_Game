@@ -61,10 +61,11 @@ def tex_brushed(base, size=256, streak=0.025):
 
 
 def tex_hazard(size=256, n=6):
+    """사탕 줄무늬 (분홍·흰색). 예전 노랑·검정 위험 줄무늬를 귀여운 느낌으로 (사용자 요청 2026-11-19)"""
     y, x = np.mgrid[0:size, 0:size]
     band = ((x + y) // (size // n)) % 2
-    yel = np.array([250, 200, 30]) / 255
-    blk = np.array([30, 30, 30]) / 255
+    yel = np.array([255, 150, 190]) / 255
+    blk = np.array([255, 250, 252]) / 255
     a = np.where(band[:, :, None] == 0, yel, blk)
     return a + rng.normal(0, 0.03, (size, size, 1))
 
@@ -72,27 +73,30 @@ def tex_hazard(size=256, n=6):
 def tex_belt(size=256):
     y, x = np.mgrid[0:size, 0:size]
     ribs = (np.sin(x / size * 2 * math.pi * 16) > 0.6).astype(float)
-    a = np.ones((size, size, 3)) * 0.18 - ribs[:, :, None] * 0.07
+    a = np.ones((size, size, 3)) * np.array([62, 70, 110]) / 255 - ribs[:, :, None] * 0.05  # 남색 벨트
     return a + rng.normal(0, 0.02, (size, size, 1))
 
 
 def tex_concrete(size=512):
-    a = np.ones((size, size, 3)) * np.array([150, 148, 142]) / 255
-    noise = rng.normal(0, 0.025, (size // 32, size // 32))
-    noise = np.kron(noise, np.ones((32, 32)))
-    a += noise[:, :, None] + rng.normal(0, 0.012, (size, size, 1))
-    # 바닥 줄눈 (4칸)
-    for k in range(0, size, size // 4):
-        a[k:k + 2, :, :] *= 0.75
-        a[:, k:k + 2, :] *= 0.75
+    """파스텔 타일 바닥: 연노랑·연분홍 바둑판 + 흰 줄눈"""
+    a = np.ones((size, size, 3))
+    t = size // 4
+    y, x = np.mgrid[0:size, 0:size]
+    check = ((x // t) + (y // t)) % 2
+    a[:] = np.array([255, 244, 214]) / 255
+    a[check == 1] = np.array([255, 232, 236]) / 255
+    a += rng.normal(0, 0.006, (size, size, 1))
+    for k in range(0, size, t):
+        a[k:k + 3, :, :] = np.array([255, 252, 245]) / 255
+        a[:, k:k + 3, :] = np.array([255, 252, 245]) / 255
     return a
 
 
 def tex_wall(size=256):
-    a = np.ones((size, size, 3)) * np.array([226, 220, 202]) / 255
-    a[size * 3 // 5:] = np.array([110, 150, 130]) / 255  # 아래쪽 초록 띠 (공장 벽 칠; 배열 0행 = 그림 위)
-    a[size * 3 // 5 - 4: size * 3 // 5] = np.array([60, 80, 70]) / 255
-    return a + rng.normal(0, 0.02, (size, size, 1))
+    a = np.ones((size, size, 3)) * np.array([196, 236, 218]) / 255  # 위: 민트
+    a[size * 3 // 5:] = np.array([255, 205, 222]) / 255  # 아래: 분홍 띠 (배열 0행 = 그림 위)
+    a[size * 3 // 5 - 5: size * 3 // 5] = np.array([255, 255, 255]) / 255
+    return a + rng.normal(0, 0.004, (size, size, 1))
 
 
 def disc(a, cx, cy, r, color):
@@ -137,7 +141,7 @@ def heart_pts(cx, cy, s):
 
 def tex_panel(W=512, H=276):
     """제어판 면 (판 비율 4.1 × 2.2): 계기판 3개(위) + 도안 고르기 칸 6개(가운데 한 줄, 금색 도형) + 아래 표시줄."""
-    a = np.ones((H, W, 3)) * np.array([58, 64, 72]) / 255 + rng.normal(0, 0.012, (H, W, 1))
+    a = np.ones((H, W, 3)) * np.array([96, 84, 140]) / 255 + rng.normal(0, 0.008, (H, W, 1))  # 보라 판
     gold, white, dark = (230, 186, 70), (240, 238, 230), (30, 30, 34)
     R = H * 0.15
     for i, cx in enumerate((W * 0.2, W * 0.5, W * 0.8)):
@@ -160,7 +164,7 @@ def tex_panel(W=512, H=276):
         cx = W * (0.1 + 0.16 * i)
         cy = H * 0.56
         r = H * 0.12
-        a[int(cy - r):int(cy + r), int(cx - r):int(cx + r)] = np.array((40, 44, 50)) / 255
+        disc(a, cx, cy, r, (70, 60, 110))
         ring(a, cx, cy, r * 0.88, r * 1.0, gold)
         s = r * 0.6
         if sh == "star":
@@ -189,8 +193,8 @@ def tex_window(size=256):
     y, x = np.mgrid[0:size, 0:size]
     a += ((x + y * 0.5) / size * 0.15)[:, :, None]  # 하늘 반사
     for k in range(0, size, size // 4):
-        a[k:k + 6, :, :] = np.array((70, 74, 80)) / 255
-        a[:, k:k + 6, :] = np.array((70, 74, 80)) / 255
+        a[k:k + 8, :, :] = np.array((255, 255, 255)) / 255  # 흰 창살
+        a[:, k:k + 8, :] = np.array((255, 255, 255)) / 255
     return a
 
 
@@ -237,33 +241,42 @@ def mat(key, rgb=None, metal=0.0, rough=0.5, tex=None, alpha=1.0, rbx="SmoothPla
 def M(name):
     """재질 목록: 이름 → (재질, Roblox 재질, 색)"""
     specs = {
-        "Steel": dict(rgb=(200, 203, 208), metal=1.0, rough=0.3, tex=image("BrushedSteel", lambda: tex_brushed((196, 200, 206))), rbx="Metal"),
-        "SteelDark": dict(rgb=(110, 114, 120), metal=1.0, rough=0.4, tex=image("BrushedDark", lambda: tex_brushed((104, 108, 114), streak=0.04)), rbx="Metal"),
-        "Frame": dict(rgb=(60, 92, 140), metal=0.6, rough=0.45, rbx="Metal"),  # 파란 칠 철골
-        "Hazard": dict(rgb=(250, 200, 30), rough=0.5, tex=image("Hazard", tex_hazard), rbx="SmoothPlastic"),
-        "Belt": dict(rgb=(46, 46, 50), rough=0.85, tex=image("Belt", tex_belt), rbx="Rubber"),
-        "Concrete": dict(rgb=(150, 148, 142), rough=0.9, tex=image("Concrete", tex_concrete), rbx="Concrete"),
-        "Wall": dict(rgb=(226, 220, 202), rough=0.8, tex=image("Wall", tex_wall), rbx="SmoothPlastic"),
-        "Window": dict(rgb=(170, 205, 225), rough=0.1, tex=image("Window", tex_window), rbx="Glass"),
-        "Panel": dict(rgb=(58, 64, 72), rough=0.5, tex=image("PanelFace", tex_panel), rbx="SmoothPlastic"),
-        "Glass": dict(rgb=(215, 235, 242), rough=0.05, alpha=0.35, rbx="Glass"),
-        "Sugar": dict(rgb=(250, 250, 248), rough=0.9, rbx="Sand"),
-        "Red": dict(rgb=(190, 40, 40), metal=0.3, rough=0.4, rbx="Metal"),
-        "Yellow": dict(rgb=(250, 200, 30), rough=0.4, rbx="SmoothPlastic"),
-        "Black": dict(rgb=(30, 30, 32), rough=0.5, rbx="SmoothPlastic"),
-        "Rubber": dict(rgb=(40, 40, 42), rough=0.8, rbx="Rubber"),
-        "Copper": dict(rgb=(196, 116, 58), metal=1.0, rough=0.35, rbx="Metal"),
-        "Dalgona": dict(rgb=(214, 150, 70), rough=0.6, rbx="SmoothPlastic"),
-        "Curtain": dict(rgb=(200, 220, 230), rough=0.2, alpha=0.4, rbx="Glass"),
-        "Crate": dict(rgb=(60, 120, 200), rough=0.5, rbx="SmoothPlastic"),
-        "LampOn": dict(rgb=(255, 236, 190), emit=True, rbx="Neon"),
-        "BeaconR": dict(rgb=(255, 60, 40), emit=True, rbx="Neon"),
-        "BeaconY": dict(rgb=(255, 190, 30), emit=True, rbx="Neon"),
-        "BeaconG": dict(rgb=(60, 220, 90), emit=True, rbx="Neon"),
-        "Green": dict(rgb=(50, 180, 80), rough=0.4, rbx="SmoothPlastic"),
-        "Paint": dict(rgb=(58, 128, 120), metal=0.3, rough=0.45, rbx="SmoothPlastic"),  # Lv4 기계 칠 (청록)
-        "Cream": dict(rgb=(232, 226, 204), rough=0.5, rbx="SmoothPlastic"),
-        "White": dict(rgb=(240, 238, 232), rough=0.5, rbx="SmoothPlastic"),
+        # 귀여운 파스텔 공장 (사용자 요청 2026-11-19: 둥글둥글하고 귀엽게). 금속은 은은한 펄 느낌, 칠은 파스텔
+        "Steel": dict(rgb=(236, 234, 246), metal=0.35, rough=0.35, tex=image("BrushedSteel", lambda: tex_brushed((236, 234, 246), streak=0.008)), rbx="SmoothPlastic"),
+        "SteelDark": dict(rgb=(196, 198, 240), metal=0.2, rough=0.45, tex=image("BrushedDark", lambda: tex_brushed((196, 198, 240), streak=0.006)), rbx="SmoothPlastic"),  # 연보라
+        "Frame": dict(rgb=(150, 205, 240), rough=0.45, rbx="SmoothPlastic"),  # 하늘색 기둥·들보
+        "Hazard": dict(rgb=(255, 150, 190), rough=0.45, tex=image("Hazard", tex_hazard), rbx="SmoothPlastic"),  # 사탕 줄무늬
+        "Belt": dict(rgb=(62, 70, 110), rough=0.8, tex=image("Belt", tex_belt), rbx="Rubber"),
+        "Concrete": dict(rgb=(252, 238, 190), rough=0.7, tex=image("Concrete", tex_concrete), rbx="SmoothPlastic"),
+        "Wall": dict(rgb=(196, 236, 218), rough=0.7, tex=image("Wall", tex_wall), rbx="SmoothPlastic"),
+        "Window": dict(rgb=(190, 225, 245), rough=0.1, tex=image("Window", tex_window), rbx="Glass"),
+        "Panel": dict(rgb=(96, 84, 140), rough=0.5, tex=image("PanelFace", tex_panel), rbx="SmoothPlastic"),
+        "Glass": dict(rgb=(225, 240, 255), rough=0.05, alpha=0.35, rbx="Glass"),
+        "Sugar": dict(rgb=(255, 252, 250), rough=0.9, rbx="Sand"),
+        "Red": dict(rgb=(255, 140, 170), rough=0.4, rbx="SmoothPlastic"),  # 분홍 (솥 띠·정지 버튼)
+        "Yellow": dict(rgb=(255, 228, 120), rough=0.4, rbx="SmoothPlastic"),
+        "Black": dict(rgb=(70, 60, 100), rough=0.5, rbx="SmoothPlastic"),
+        "Rubber": dict(rgb=(62, 70, 110), rough=0.8, rbx="Rubber"),
+        "Copper": dict(rgb=(255, 200, 120), metal=0.5, rough=0.35, rbx="SmoothPlastic"),
+        "Dalgona": dict(rgb=(232, 166, 80), rough=0.55, rbx="SmoothPlastic"),
+        "Curtain": dict(rgb=(220, 210, 255), rough=0.2, alpha=0.45, rbx="Glass"),
+        "Crate": dict(rgb=(214, 160, 110), rough=0.6, rbx="Wood"),  # 나무 상자
+        "LampOn": dict(rgb=(255, 244, 210), emit=True, rbx="Neon"),
+        "BeaconR": dict(rgb=(255, 120, 160), emit=True, rbx="Neon"),
+        "BeaconY": dict(rgb=(255, 220, 110), emit=True, rbx="Neon"),
+        "BeaconG": dict(rgb=(120, 230, 170), emit=True, rbx="Neon"),
+        "Green": dict(rgb=(120, 220, 160), rough=0.4, rbx="SmoothPlastic"),
+        "Paint": dict(rgb=(165, 228, 205), rough=0.45, rbx="SmoothPlastic"),  # 민트 칠
+        "Cream": dict(rgb=(255, 248, 228), rough=0.5, rbx="SmoothPlastic"),
+        "White": dict(rgb=(255, 255, 255), rough=0.5, rbx="SmoothPlastic"),
+        # 장식용 파스텔
+        "Pink": dict(rgb=(255, 182, 210), rough=0.45, rbx="SmoothPlastic"),
+        "Mint": dict(rgb=(165, 232, 200), rough=0.45, rbx="SmoothPlastic"),
+        "Sky": dict(rgb=(160, 210, 250), rough=0.45, rbx="SmoothPlastic"),
+        "Lemon": dict(rgb=(255, 235, 140), rough=0.45, rbx="SmoothPlastic"),
+        "Lilac": dict(rgb=(210, 180, 250), rough=0.45, rbx="SmoothPlastic"),
+        "Bush": dict(rgb=(150, 220, 150), rough=0.8, rbx="SmoothPlastic"),
+        "Grass": dict(rgb=(170, 225, 140), rough=0.9, rbx="Grass"),
     }
     return mat(name, **specs[name])
 
@@ -303,15 +316,44 @@ def finish(name, bm, mname, smooth=False, uvscale=0.25):
     return o
 
 
-def add_box(bm, center, size, bevel=0.0, rot=None):
+def add_box(bm, center, size, bevel=None, rot=None):
+    # 둥글둥글하게 (사용자 요청 2026-11-19): 따로 안 주면 가장 짧은 변의 22%(최대 0.35)만큼 모서리를 둥글림
+    if bevel is None:
+        bevel = min(min(size) * 0.22, 0.35)
     m = Matrix.Translation(Vector(center))
     if rot is not None:
         m = m @ rot
     m = m @ Matrix.Diagonal((size[0], size[1], size[2], 1))
     r = bmesh.ops.create_cube(bm, size=1.0, matrix=m)
-    if bevel > 0:
+    if bevel > 0.004:
         edges = list({e for v in r["verts"] for e in v.link_edges})
-        bmesh.ops.bevel(bm, geom=edges, offset=bevel, segments=2, affect="EDGES", clamp_overlap=True)
+        bmesh.ops.bevel(bm, geom=edges, offset=bevel, segments=3, affect="EDGES", clamp_overlap=True)
+
+
+def add_ball(bm, center, r, squash=1.0, seg=20):
+    bmesh.ops.create_uvsphere(bm, u_segments=seg, v_segments=max(6, seg * 3 // 5), radius=r, matrix=Matrix.Translation(Vector(center)) @ Matrix.Diagonal((1, 1, squash, 1)))
+
+
+def add_ring(bm, center, R, r, seg=32, tube=10):
+    """도넛 (가로로 누운 고리): 소용돌이 사탕 기둥에 씀"""
+    prof = [(R + math.cos(2 * math.pi * k / tube) * r, math.sin(2 * math.pi * k / tube) * r) for k in range(tube + 1)]
+    add_lathe(bm, prof, center=center, seg=seg)
+
+
+def lollipop(name_prefix, x, y, z0, h, r, color):
+    bm = bmesh.new()
+    add_rod(bm, (x, y, z0), (x, y, z0 + h), 0.07, seg=10)
+    finish(f"{name_prefix}_Stick", bm, "White", smooth=True)
+    bm = bmesh.new()
+    add_cyl(bm, (x, y, z0 + h + r * 0.95), r, r * 0.35, seg=28, axis="Y")
+    finish(f"{name_prefix}_Candy", bm, color, smooth=True)
+    bm = bmesh.new()  # 앞면 소용돌이 무늬 (흰 고리 2개)
+    for rr in (r * 0.62, r * 0.3):
+        add_lathe(bm, [(rr - 0.05, 0), (rr + 0.05, 0)], center=(0, 0, 0), seg=24)
+    bmesh.ops.rotate(bm, verts=bm.verts, cent=(0, 0, 0), matrix=Matrix.Rotation(math.pi / 2, 3, "X"))
+    for v in bm.verts:
+        v.co += Vector((x, y - r * 0.19, z0 + h + r * 0.95))
+    finish(f"{name_prefix}_Swirl", bm, "White", smooth=True)
 
 
 def add_cyl(bm, center, r, h, seg=32, axis="Z", r2=None):
@@ -394,13 +436,14 @@ def building():
     for x, y in lamps:
         add_cyl(bm, (x, y, FH - 4.55), 0.6, 0.06, seg=24)
     finish("Factory_LampLight", bm, "LampOn")
-    # 안전 난간 (앞쪽 통로 경계, 노랑)
+    # 흰 울타리 (앞쪽 통로 경계): 끝이 둥근 말뚝 + 가로대 2줄
     bm = bmesh.new()
-    for x in range(-18, 19, 3):
-        add_box(bm, (x, -6.0, 0.6), (0.14, 0.14, 1.2))
-    add_box(bm, (0, -6.0, 1.15), (36.2, 0.12, 0.12))
-    add_box(bm, (0, -6.0, 0.6), (36.2, 0.1, 0.1))
-    finish("Factory_Railing", bm, "Yellow")
+    for x in np.arange(-18, 18.1, 1.2):
+        add_box(bm, (x, -6.0, 0.55), (0.32, 0.16, 1.1), bevel=0.07)
+        add_ball(bm, (x, -6.0, 1.12), 0.17, seg=10)
+    add_box(bm, (0, -6.08, 0.85), (36.4, 0.12, 0.16), bevel=0.05)
+    add_box(bm, (0, -6.08, 0.35), (36.4, 0.12, 0.16), bevel=0.05)
+    finish("Factory_Railing", bm, "White", smooth=True)
 
 
 # ───────────── 생산 라인 ─────────────
@@ -620,6 +663,60 @@ def console():
         finish(f"Line_Tower{mname[-1]}", bm, mname, smooth=True)
 
 
+# ───────────── 귀여운 장식 (사용자 요청 2026-11-19: 둥글둥글하고 귀엽게, 파스텔 사탕 공장 느낌) ─────────────
+def cute_factory():
+    # 설탕 통·솥 위 사탕 공 (기계 머리 장식)
+    bm = bmesh.new()
+    for dx in (-1.1, 1.1):
+        add_ball(bm, (-17 + dx, 0.2, 11.55), 0.5)
+    finish("Deco_HopperBalls", bm, "Pink", smooth=True)
+    bm = bmesh.new()
+    for kx in (-11.8, -9.2):
+        add_ball(bm, (kx, 0.6, 6.55), 0.4)
+    finish("Deco_KettleBalls", bm, "Lemon", smooth=True)
+    bm = bmesh.new()
+    add_ball(bm, (1.5, 0, 10.45), 0.55)
+    finish("Deco_PressBall", bm, "Mint", smooth=True)
+    # 벽 장식: 커다란 막대사탕 (뒤 벽 앞)
+    lollipop("Deco_Lolli1", -20.5, 12.6, 0, 4.0, 1.3, "Pink")
+    lollipop("Deco_Lolli2", 20.5, 12.6, 0, 3.2, 1.1, "Sky")
+    lollipop("Deco_Lolli3", -9.0, 12.8, 0, 2.6, 0.9, "Lemon")
+    # 울타리 밖 둥근 덤불 + 앞쪽 잔디 띠
+    bm = bmesh.new()
+    add_box(bm, (0, -11.0, 0.05), (FW, 6.0, 0.1), bevel=0.04)
+    finish("Deco_Lawn", bm, "Grass")
+    bm = bmesh.new()
+    for i, x in enumerate(np.arange(-19, 19.5, 2.6)):
+        add_ball(bm, (x, -7.2, 0.45), 0.6 + 0.12 * (i % 3), squash=0.85)
+    finish("Deco_Bushes", bm, "Bush", smooth=True)
+    bm = bmesh.new()  # 덤불 사이 분홍·보라 꽃 덤불
+    for i, x in enumerate(np.arange(-17.7, 19, 5.2)):
+        add_ball(bm, (x, -7.6, 0.4), 0.45, squash=0.9)
+    finish("Deco_FlowerBushes", bm, "Lilac", smooth=True)
+    # 앞 모서리 소용돌이 사탕 기둥 2개 (무지개 고리 쌓기)
+    cols = ["Pink", "Lemon", "Mint", "Sky", "Lilac"]
+    for side, x in (("L", -20.0), ("R", 20.0)):
+        groups = {c: bmesh.new() for c in cols}
+        for k in range(14):
+            R = 1.15 - 0.03 * k
+            add_ring(groups[cols[k % 5]], (x, -9.4, 0.3 + k * 0.42), R, 0.24)
+        for c, bm in groups.items():
+            finish(f"Deco_Swirl{side}_{c}", bm, c, smooth=True)
+        bm = bmesh.new()
+        add_ball(bm, (x, -9.4, 0.3 + 14 * 0.42 + 0.1), 0.7)
+        finish(f"Deco_Swirl{side}_Top", bm, "White", smooth=True)
+
+
+def cute_line():
+    bm = bmesh.new()
+    add_ball(bm, (-4.4, 0.3, 6.4), 0.42)
+    finish("L4_DecoHopperBall", bm, "Pink", smooth=True)
+    bm = bmesh.new()
+    add_ball(bm, (0.4, 0, 5.85), 0.36)
+    finish("L4_DecoPressBall", bm, "Lemon", smooth=True)
+    lollipop("L4_DecoLolli", -5.0, -1.1, 2.35, 1.4, 0.5, "Pink")
+
+
 # ───────────── Lv4 연속 생산 설비 (컨베이어 라인 기계 한 대) ─────────────
 # 사용자 결정 2026-11-19 (docs/SHOP_GROWTH_PLAN.md 2-1·5장): 4단계 = 연속 생산 설비. 가정용 미니 메이커는 뺌.
 # 공장(Lv5)보다 작은 기계 한 대: 청록 칠 받침 위에 설탕 통 → 솥 1개 → 노즐 3개 → 짧은 컨베이어 → 작은 프레스 → 식힘 덮개 → 받는 상자.
@@ -793,6 +890,7 @@ def build_line():
 MODE = argv[1] if len(argv) > 1 else "factory"
 if MODE == "line":
     build_line()
+    cute_line()
 else:
     building()
     hopper_tower()
@@ -803,6 +901,7 @@ else:
     cooling_tunnel()
     output()
     console()
+    cute_factory()
 NAME = "line" if MODE == "line" else "factory"
 
 # 부품 목록 (Roblox에서 색·재질 칠할 때 씀)
