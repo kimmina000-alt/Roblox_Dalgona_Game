@@ -32,8 +32,10 @@ local FADE = 0.07 -- 점·결정 하나가 사라지거나 자라는 데 걸리�
 -- 젓는 자국: 가루 위에 젓가락이 지나간 골 (잠깐 남았다가 가루가 덮음)
 local FURROW_MAX = 70
 local FURROW_STEP = 0.035
-local FURROW_LIFE = 0.9
-local FURROW_COLOR = Color3.fromRGB(214, 206, 196)
+-- (2026-11-19 영상 분석) 가루를 저으면 젓가락 길이 또렷하게 한동안 남음, 녹은 설탕물에는 젓가락 결(밝은 줄)이 잠깐 남음
+local FURROW_LIFE = 3.0
+local STREAK_LIFE = 1.4
+local FURROW_COLOR = Color3.fromRGB(196, 184, 168)
 
 local function smooth01(x, a, b)
 	local t = math.clamp((x - a) / (b - a), 0, 1)
@@ -54,7 +56,8 @@ end
 
 -- 설탕물 색 (갈색 물, 탈수록 진함)
 function SugarLook.syrupColor(p, burn)
-	return Heat.meltColor(math.max(p, 0.85), burn):Lerp(SYRUP_BROWN, 0.6)
+	-- 영상 3번: 맑은 주황빛 호박색 (구리 국자가 비쳐 더 붉게 보임)
+	return Heat.meltColor(math.max(p, 0.85), burn):Lerp(SYRUP_BROWN, 0.3)
 end
 
 function SugarLook.new(S, st)
@@ -97,7 +100,8 @@ function SugarLook.new(S, st)
 	for i = 1, LUMPS do
 		local r = math.sqrt(math.random()) * self.Ri * 0.95
 		local a = math.random() * 2 * math.pi
-		local s = 0.06 + math.random() * 0.06
+		-- 결정 덩어리 크게 (영상: 국자 가득 하얀 덩어리)
+		local s = 0.07 + math.random() * 0.09
 		local p = Fx.mesh("SugarCrystal", self.folder, { Name = "Lump", Color = LUMP, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
 			or part(self.folder, { Name = "Lump", Color = LUMP, Transparency = 1 })
 		table.insert(self.lumps, {
@@ -150,8 +154,9 @@ function SugarLook.new(S, st)
 end
 
 -- 젓는 자국 하나 (from → to, 가루 윗면 y)
-function SugarLook:addFurrow(from, to, y)
+function SugarLook:addFurrow(from, to, y, kind)
 	local f = self.furrows[self.furrowNext]
+	f.kind = kind or "powder"
 	self.furrowNext = self.furrowNext % FURROW_MAX + 1
 	local len = (to - from).Magnitude
 	if len < 1e-3 then
@@ -265,11 +270,18 @@ function SugarLook:update(dt, p, tip, burn)
 	-- 지나간 자리에는 골(젓는 자국)이 잠깐 남음. 빠르게 저으면 고운 가루가 피어오름
 	local speed = dt > 0 and vel.Magnitude / dt or 0
 	local inPowder = toLumps < 0.8
-	if tip and inPowder then
+	local liquid = p > 0.5
+	local base0 = self:base()
+	local surface0 = base0.Y + self.fullThick * (0.12 + 0.88 * smooth01(p, 0.32, 1))
+	if tip and (inPowder or liquid) then
 		if self.lastFurrow then
 			local seg = Vector3.new(tip.X - self.lastFurrow.X, 0, tip.Z - self.lastFurrow.Z)
 			if seg.Magnitude >= FURROW_STEP then
-				self:addFurrow(self.lastFurrow, tip, c.Y + 0.002)
+				if inPowder then
+					self:addFurrow(self.lastFurrow, tip, c.Y + 0.002, "powder")
+				else
+					self:addFurrow(self.lastFurrow, tip, surface0 + 0.003, "syrup")
+				end
 				self.lastFurrow = tip
 			end
 		else
@@ -281,12 +293,25 @@ function SugarLook:update(dt, p, tip, burn)
 		self.lastFurrow = nil
 		self.dustPe.Rate = 0
 	end
+	local streakCol = SugarLook.syrupColor(p, burn):Lerp(Color3.fromRGB(255, 236, 200), 0.55)
 	for _, f in ipairs(self.furrows) do
-		if f.t < FURROW_LIFE then
+		local life = f.kind == "syrup" and STREAK_LIFE or FURROW_LIFE
+		if f.t < life then
 			f.t += dt
-			local k = f.t / FURROW_LIFE
-			f.part.Transparency = math.min(1, 0.3 + 0.7 * k + toLumps)
-			f.part.Size = Vector3.new(0.055 * (1 - 0.4 * k), 0.004, f.len)
+			local k = f.t / life
+			if f.kind == "syrup" then
+				-- 설탕물 위 젓가락 결: 밝게 비치는 가는 줄이 퍼지며 사라짐
+				f.part.Color = streakCol
+				f.part.Material = Enum.Material.Glass
+				f.part.Transparency = math.min(1, 0.35 + 0.65 * k)
+				f.part.Size = Vector3.new(0.035 + 0.05 * k, 0.004, f.len)
+			else
+				-- 가루 위 젓가락 길: 진한 골이 오래 남다가 흐려짐
+				f.part.Color = FURROW_COLOR
+				f.part.Material = Enum.Material.Sand
+				f.part.Transparency = math.min(1, 0.1 + 0.9 * k * k + toLumps)
+				f.part.Size = Vector3.new(0.085 * (1 - 0.3 * k), 0.006, f.len)
+			end
 			f.part.CFrame = f.cf
 		elseif f.part.Transparency < 1 then
 			f.part.Transparency = 1
@@ -339,7 +364,8 @@ function SugarLook:update(dt, p, tip, burn)
 	local level = self.fullThick * (0.12 + 0.88 * smooth01(p, 0.32, 1))
 	local syrup = SugarLook.syrupColor(p, burn)
 	if toLumps > 0 then
-		self.pool.Transparency = 1 - 0.85 * toLumps -- 구리 바닥이 살짝만 비치게 (갈색이 보이도록)
+		-- 맑은 호박색 설탕물: 구리 바닥이 비쳐 보임 (영상 3번)
+		self.pool.Transparency = 1 - 0.6 * toLumps
 		self.pool.Color = syrup
 		self.pool.Size = Vector3.new(level, self.Ri * 2, self.Ri * 2)
 		self.pool.CFrame = CFrame.new(base + Vector3.new(0, level / 2, 0)) * CFrame.Angles(0, 0, math.rad(90))

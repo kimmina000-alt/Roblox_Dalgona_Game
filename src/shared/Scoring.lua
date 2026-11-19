@@ -27,7 +27,7 @@ end
 
 function Scoring.soda(r)
 	local cfg = Config.Soda
-	local timing = 100 * c01(1 - (r.delay - cfg.bestDelay) / 8)
+	local timing = 100 * c01(1 - (r.delay - cfg.bestDelay) / 14)
 	local a = r.amount
 	local amountS
 	if a < cfg.idealMin then
@@ -182,7 +182,7 @@ function Scoring.explain(records)
 				local cfg = Config.Soda
 				local a = r.amount
 				local amountS = a < cfg.idealMin and 100 * a / cfg.idealMin or (a > cfg.idealMax and 100 * c01(1 - (a - cfg.idealMax) / 0.85) or 100)
-				table.insert(parts, { "넣은 때", round(100 * c01(1 - (r.delay - cfg.bestDelay) / 8)) })
+				table.insert(parts, { "넣은 때", round(100 * c01(1 - (r.delay - cfg.bestDelay) / 14)) })
 				table.insert(parts, { "양", round(amountS) })
 				table.insert(parts, { "부풀기", round(100 * c01(r.fastFrac) * c01(r.puff)) })
 			elseif step.key == "pour" then

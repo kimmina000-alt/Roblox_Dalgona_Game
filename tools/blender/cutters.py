@@ -27,7 +27,7 @@ REPO = argv[1] if len(argv) > 1 else os.path.dirname(os.path.dirname(HERE))
 
 STRIP_H, STRIP_T = 0.28, 0.045
 CORNER = 0.035
-HANDLE_LEN = 1.45
+HANDLE_LEN = 2.6  # 2026-11-19 손잡이 줄기를 길게 (손가락이 틀을 덜 가리게, 사용자 요청: 고리와 틀 사이를 늘림)
 WIRE_R = 0.028
 LOOP_R = 0.13
 GRID_X, GRID_Y = 3.4, 4.6
@@ -120,6 +120,7 @@ bsdf.inputs["Metallic"].default_value = 1.0
 bsdf.inputs["Roughness"].default_value = 0.28
 
 SPAN = 1.6  # 모양(손잡이 빼고) 가로·세로 중 긴 쪽 = 생성 도안과 같은 크기
+USER_HANDLE_EXTRA = 1.15  # 사용자 모형틀 손잡이도 생성 도안만큼 길게 (1.45 → 2.6과 같은 차이)
 
 
 def load_user_cutters():
@@ -141,7 +142,7 @@ def build_from_user(sid, src):
     mw = src.matrix_world
     V = [tuple(mw @ v.co) for v in src.data.vertices]
     E = [tuple(e.vertices) for e in src.data.edges]
-    pts, _ = user_cutters.extract(V, E)
+    pts, junction = user_cutters.extract(V, E)
     xs, ys = [p[0] for p in pts], [p[1] for p in pts]
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
     f = SPAN / max(max(xs) - min(xs), max(ys) - min(ys))
@@ -151,6 +152,11 @@ def build_from_user(sid, src):
     mesh.name = "Cutter_" + sid
     for v, w in zip(mesh.vertices, V):
         v.co = ((w[0] - cx) * f, (w[1] - cy) * f, (w[2] - zmin) * fz)
+    # 2026-11-19 손잡이 줄기를 길게: 모양 아래쪽보다 낮은 정점(손잡이 아랫부분·고리)을 통째로 내림 → 줄기만 늘어남
+    low = min((y - cy) * f for (_, y) in pts)
+    for v in mesh.vertices:
+        if v.co.y < low - 0.06:
+            v.co.y -= USER_HANDLE_EXTRA
     mesh.materials.clear()
     obj = bpy.data.objects.new("Cutter_" + sid, mesh)
     scene.collection.objects.link(obj)
@@ -166,13 +172,13 @@ def build_from_user(sid, src):
     sol.offset = 0
     bpy.ops.object.modifier_apply(modifier="Wall")
     outline = [((x - cx) * f, (y - cy) * f) for (x, y) in pts]
-    return obj, outline
+    return obj, outline, (junction[0] - cx) * f
 
 
 user_objs = load_user_cutters()
 ALL = list(shapes.SHAPES) + [(sid, n, g, None) for (sid, n, g) in user_cutters.EXTRA_SHAPES if sid in user_objs]
 
-def finish(obj, idx, sid, name_ko, grade, outline, src, holes=(), deco=()):
+def finish(obj, idx, sid, name_ko, grade, outline, src, holes=(), deco=(), handle_x=0.0):
     vs = [v.co for v in obj.data.vertices]
     minx, maxx = min(v.x for v in vs), max(v.x for v in vs)
     miny, maxy = min(v.y for v in vs), max(v.y for v in vs)
@@ -183,19 +189,19 @@ def finish(obj, idx, sid, name_ko, grade, outline, src, holes=(), deco=()):
     print(f"[cutters] {sid:10s} {src} tris={tris:4d} size=({maxx - minx:.2f}, {maxy - miny:.2f})")
     return {"id": sid, "name": name_ko, "grade": grade, "outline": outline, "center": ((minx + maxx) / 2, (miny + maxy) / 2),
             "size": (maxx - minx, maxy - miny), "tris": tris, "src": src,
-            "holes": list(holes), "lines": list(deco)}
+            "holes": list(holes), "lines": list(deco), "handle_x": handle_x}
 
 
 made = []
 for idx, (sid, name_ko, grade, _) in enumerate(ALL):
     if sid in user_objs:
-        obj, outline = build_from_user(sid, user_objs[sid])
+        obj, outline, hx = build_from_user(sid, user_objs[sid])
         bpy.ops.object.shade_smooth()
         mod = obj.modifiers.new("Edges", "EDGE_SPLIT")
         mod.split_angle = math.radians(40)
         bpy.ops.object.modifier_apply(modifier="Edges")
         obj.data.materials.append(steel)
-        made.append(finish(obj, idx, sid, name_ko, grade, outline, "user"))
+        made.append(finish(obj, idx, sid, name_ko, grade, outline, "user", handle_x=hx))
         continue
     outline = shapes.outline(sid)
     pts = round_corners(outline)
@@ -262,6 +268,8 @@ for m in made:
     extra = ""
     if m["holes"]:
         extra += ", holes = { " + ", ".join("{ " + ", ".join(f"{{{x:.2f}, {y:.2f}}}" for (x, y) in h) + " }" for h in m["holes"]) + " }"
+    if abs(m.get("handle_x", 0.0)) > 1e-4:
+        extra += f", handleX = {m['handle_x']:.4f}"
     if m["lines"]:
         extra += ", lines = { " + ", ".join("{ closed = " + ("true" if c else "false") + ", " + ", ".join(f"{{{x:.2f}, {y:.2f}}}" for (x, y) in ln) + " }" for (ln, c) in m["lines"]) + " }"
     lines.append(f'\t{{ id = "{m["id"]}", name = "{m["name"]}", grade = "{m["grade"]}", source = "{m["src"]}", center = Vector2.new({m["center"][0]:.4f}, {m["center"][1]:.4f}), outline = {{ {pts} }}{extra} }},')

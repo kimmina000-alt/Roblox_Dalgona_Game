@@ -569,6 +569,7 @@ function Pour.run(ctx)
 				st.dalgona:setThickness(st.dalgona.h)
 				rec.remain = 0.02
 				S:setContents({ Transparency = 1 })
+				st.dalgona:addSwirl() -- 막 부은 결이 보였다가 매끈해짐 (영상 7~10번)
 				break
 			end
 		end

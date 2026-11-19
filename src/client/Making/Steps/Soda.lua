@@ -25,9 +25,10 @@ local LOAD_MAX = DIP_LAYER * LAYERS_MAX
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit
 local STICK_LEAN = Vector3.new(0.45, 0.6, 0.66).Unit -- 소다 넣을 때 젓가락 기울기 (눕혀서 끝에 묻은 소다가 위에서 보이게)
 local TAP_PX = 110 -- 소다 통·국자 화면 위치에서 이만큼 안을 누르면 그 도구
-local FOAM = Color3.fromRGB(214, 160, 92)
+-- 영상 5·6번: 부푼 반죽은 밝은 땅콩버터 베이지, 젓가락이 지나간 자리에 결이 남음
+local FOAM = Color3.fromRGB(206, 152, 96)
 local FOAM_DARK = Color3.fromRGB(140, 86, 40)
-local CREAM = Color3.fromRGB(226, 182, 118)
+local CREAM = Color3.fromRGB(228, 190, 140)
 
 local function bubbles(S, on)
 	local att = S.Bowl:FindFirstChild("FxBubbleAtt")
@@ -112,7 +113,7 @@ local function newPuff(S, amount, baseThick)
 	local low = math.clamp((cfg.idealMin - amount) / cfg.idealMin, 0, 1)
 	local high = math.clamp((amount - cfg.idealMax) / 0.45, 0, 1)
 	local dark = math.max(high, 0.45 * low)
-	local final = FOAM:Lerp(CREAM, 0.3 * (1 - low)):Lerp(FOAM_DARK, dark)
+	local final = FOAM:Lerp(CREAM, 0.6 * (1 - low)):Lerp(FOAM_DARK, dark)
 	local pf = {
 		u = 0, hold = 0, done = false, final = final, yaw = math.random() * 6, baseThick = baseThick,
 		size = 1 - 0.45 * low + 0.25 * high, -- 높이 배율
@@ -182,6 +183,50 @@ local function drawPuff(S, pf, dt, speed)
 	end
 end
 
+-- 부푼 반죽 위 젓가락 결 (영상 5·6번): 젓가락이 지나간 자리에 진한 줄이 남았다가 1.5초에 걸쳐 메워짐
+local STREAK_N, STREAK_LIFE = 48, 1.5
+local function foamStreaks(S, pf, tip, dt, state)
+	local foam = pf.foam
+	local diam = foam.Size.X
+	local height = foam.Size.Y / 2
+	local base = foam.Position
+	local function surfaceY(x, z)
+		local r = Vector3.new(x - base.X, 0, z - base.Z).Magnitude / math.max(diam / 2, 1e-3)
+		return base.Y + height * math.sqrt(math.max(0, 1 - r * r)) + 0.004
+	end
+	if tip and state.last and (Vector3.new(tip.X - state.last.X, 0, tip.Z - state.last.Z)).Magnitude > 0.04 then
+		local a, b = state.last, tip
+		local part = state.parts[state.next]
+		if not part then
+			part = S:fxPart(S.fx, { Name = "FxFoamStreak", Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(0.04, 0.008, 0.05) })
+			state.parts[state.next] = part
+		end
+		local mid = (a + b) / 2
+		local y = surfaceY(mid.X, mid.Z)
+		part:SetAttribute("T", 0)
+		part.Size = Vector3.new(0.05, 0.008, (Vector3.new(b.X - a.X, 0, b.Z - a.Z)).Magnitude + 0.03)
+		part.CFrame = CFrame.lookAt(Vector3.new(mid.X, y, mid.Z), Vector3.new(b.X, y, b.Z))
+		state.next = state.next % STREAK_N + 1
+		state.last = tip
+	elseif tip and not state.last then
+		state.last = tip
+	elseif not tip then
+		state.last = nil
+	end
+	local dark = foam.Color:Lerp(Color3.fromRGB(120, 72, 32), 0.28)
+	for _, part in ipairs(state.parts) do
+		local t = (part:GetAttribute("T") or 99) + dt
+		part:SetAttribute("T", t)
+		if t < STREAK_LIFE then
+			local k = t / STREAK_LIFE
+			part.Color = dark
+			part.Transparency = 0.2 + 0.8 * k
+		elseif part.Transparency < 1 then
+			part.Transparency = 1
+		end
+	end
+end
+
 -- 미리 보기·테스트용 (Studio Edit에서 부풀기 장면 세우기)
 Soda.newPuff = newPuff
 Soda.drawPuff = drawPuff
@@ -205,6 +250,8 @@ function Soda.run(ctx)
 	local stickTip = nil -- 소다 넣을 때 젓가락 끝 자리
 	local anim = nil -- 찍기·털기 움직임
 	local press0 = nil -- 이번 누름 시작 (클릭인지 끌기인지)
+	local stirTip = nil
+	local streaks = { parts = {}, next = 1 }
 	local falling = {}
 	local firstDrop = nil
 	local puffed = false
@@ -426,7 +473,8 @@ function Soda.run(ctx)
 			end
 			-- 젓가락 끝에 묻은 흰 소다 (겹이 많을수록 두껍고 길게, 위에서도 잘 보이게 굵게)
 			if load > 0.005 and not tipPowder then
-				tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(255, 255, 255), Material = Enum.Material.Sand, Size = Vector3.new(0.1, 0.1, 0.1) })
+				-- 영상 4번: 젓가락 끝에 동글게 뭉쳐 붙은 하얀 소다 덩어리
+				tipPowder = Fx.ellipsoid(S:fxPart(S.fx, { Name = "FxSodaTip", Color = Color3.fromRGB(255, 255, 255), Material = Enum.Material.Sand, Size = Vector3.new(0.1, 0.1, 0.1) }))
 			end
 			if tipPowder then
 				local layers = load / DIP_LAYER
@@ -485,6 +533,7 @@ function Soda.run(ctx)
 			if stir.active then
 				local t, hnd = Stir.grip(S:contentsTopY())
 				Stir.placeChopsticks(S, t, hnd)
+				stirTip = t
 				tStir += dt
 				if zone == 3 then
 					tFast += dt
@@ -534,6 +583,7 @@ function Soda.run(ctx)
 				end
 				rec.puff = puffCurve(puff.u)
 				drawPuff(S, puff, dt, speed)
+				foamStreaks(S, puff, stir.active and stirTip or nil, dt, streaks)
 				-- 부푸는 동안 보글보글
 				Sfx.loop("foamBubble", puff.done and 0 or 0.45, 0.9 + 0.25 * rec.puff)
 			end

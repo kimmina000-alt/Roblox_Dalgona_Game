@@ -12,6 +12,9 @@ local BatterMesh = require(script.Parent:WaitForChild("BatterMesh"))
 --   다 누른 것(h < 0.16): DalgonaFlat  얇고 평평, 고운 구멍 자국
 -- 메시가 없으면 예전 원기둥 + 봉우리 모양
 local MOUND_H, FLAT_H = 0.40, 0.16
+-- 주름 메시는 울퉁불퉁해서 사진과 달라 안 씀 (2026-11-19 결과 화면 지적): 매끈한 원판 + 봉긋한 윗면 + 붓고 난 뒤 결
+local USE_FOLD_MESHES = false
+local RunService = game:GetService("RunService")
 
 local Dalgona = {}
 Dalgona.__index = Dalgona
@@ -21,8 +24,9 @@ local UP = CFrame.Angles(0, 0, math.rad(90))
 -- 탄 정도 b(0~1)에 따른 색·광택 (docs/DALGONA_LOOK.md: 참고 사진 분석)
 -- 광택은 Reflectance를 거의 안 씀 (하늘이 비쳐 보라색이 됨) → 밝은 하이라이트 점(gloss 개수)으로 표현
 local STOPS = {
-	{ b = 0.0, base = Color3.fromRGB(216, 146, 62), rim = Color3.fromRGB(186, 112, 42), spot = Color3.fromRGB(176, 104, 44), refl = 0.0, gloss = 0 },
-	{ b = 0.35, base = Color3.fromRGB(196, 116, 46), rim = Color3.fromRGB(150, 78, 30), spot = Color3.fromRGB(150, 80, 32), refl = 0.01, gloss = 3 },
+	-- 2026-11-19 영상(정미야 밥먹자) 다시 분석: 잘 된 반죽은 주황이 아니라 땅콩버터 같은 베이지 갈색, 다 누르면 무광 + 설탕 가루
+	{ b = 0.0, base = Color3.fromRGB(204, 150, 96), rim = Color3.fromRGB(176, 120, 68), spot = Color3.fromRGB(160, 104, 56), refl = 0.0, gloss = 0 },
+	{ b = 0.35, base = Color3.fromRGB(190, 128, 70), rim = Color3.fromRGB(150, 92, 44), spot = Color3.fromRGB(140, 82, 36), refl = 0.01, gloss = 3 },
 	{ b = 0.65, base = Color3.fromRGB(168, 88, 40), rim = Color3.fromRGB(105, 48, 20), spot = Color3.fromRGB(90, 40, 16), refl = 0.02, gloss = 7 },
 	{ b = 1.0, base = Color3.fromRGB(92, 42, 18), rim = Color3.fromRGB(38, 20, 10), spot = Color3.fromRGB(25, 15, 10), refl = 0.03, gloss = 10 },
 }
@@ -92,7 +96,7 @@ function Dalgona.new(station, center, color, volume, ellipse)
 		for _, l in ipairs(self.lumps) do
 			l.part.Transparency = 1
 		end
-	elseif Fx.template("DalgonaPuff") then
+	elseif USE_FOLD_MESHES and Fx.template("DalgonaPuff") then
 		self.meshes = {}
 		for _, name in ipairs({ "DalgonaMound", "DalgonaPuff", "DalgonaFlat" }) do
 			self.meshes[name] = Fx.mesh(name, station.fx, { Name = name, Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
@@ -154,12 +158,17 @@ function Dalgona:setThickness(h)
 	local w = self.rimW
 	local turn = CFrame.Angles(0, self.yaw or 0, 0)
 	local cy, sy = math.cos(self.yaw or 0), math.sin(self.yaw or 0)
-	self.rim.Size = Vector3.new(h * 0.75 - 0.008, d * k, d / k)
-	self.rim.CFrame = CFrame.new(c.X, c.Y + (h * 0.75 - 0.008) / 2, c.Z) * turn * UP
-	self.rim2.Size = Vector3.new(h * 0.75 - 0.004, d * k * (1 - w), d / k * (1 - w))
-	self.rim2.CFrame = CFrame.new(c.X, c.Y + (h * 0.75 - 0.004) / 2, c.Z) * turn * UP
-	self.body.Size = Vector3.new(h * 0.75, d * k * (1 - 2 * w), d / k * (1 - 2 * w))
-	self.body.CFrame = CFrame.new(c.X, c.Y + h * 0.375, c.Z) * turn * UP
+	-- 두꺼울수록 낮은 옆면 + 지름 전체를 덮는 둥근 윗면 = 낮고 둥근 웅덩이 (영상 9번). 누를수록 윗면이 평평해짐
+	local s = math.clamp((h - 0.12) / (Config.Press.h0 - 0.12), 0, 1)
+	local capH = h * 0.75 * 0.65 * s
+	local bodyH = math.max(h * 0.75 - capH, 0.01)
+	self.capH = capH
+	self.rim.Size = Vector3.new(bodyH - 0.008, d * k, d / k)
+	self.rim.CFrame = CFrame.new(c.X, c.Y + (bodyH - 0.008) / 2, c.Z) * turn * UP
+	self.rim2.Size = Vector3.new(bodyH - 0.004, d * k * (1 - w), d / k * (1 - w))
+	self.rim2.CFrame = CFrame.new(c.X, c.Y + (bodyH - 0.004) / 2, c.Z) * turn * UP
+	self.body.Size = Vector3.new(bodyH, d * k * (1 - 2 * w), d / k * (1 - 2 * w))
+	self.body.CFrame = CFrame.new(c.X, c.Y + bodyH / 2, c.Z) * turn * UP
 	-- 표면 무늬(결정 반점·기포·얼룩)는 반지름에 맞춰 따라 퍼짐
 	local top = c.Y + h * 0.75
 	local R = d / 2
@@ -207,14 +216,13 @@ function Dalgona:setThickness(h)
 		end
 	end
 	-- 언덕 모양: 두꺼울 때만 위에 둥근 봉우리와 덩어리
-	local s = math.clamp((h - 0.22) / (Config.Press.h0 - 0.22), 0, 1)
-	local dd = d * 0.8 * s
-	self.dome.Transparency = s < 0.05 and 1 or 0
-	self.dome.Size = Vector3.new(dd, math.max(dd * 0.55, 0.01), dd)
-	self.dome.CFrame = CFrame.new(c.X, c.Y + h * 0.75, c.Z)
+	-- 둥근 윗면: 옆면 꼭대기에 지름 전체 크기의 납작한 반구 (위쪽 절반만 보임)
+	self.dome.Transparency = s < 0.03 and 1 or 0
+	self.dome.Size = Vector3.new(d * k * 0.985, math.max(capH * 2, 0.01), d / k * 0.985)
+	self.dome.CFrame = CFrame.new(c.X, c.Y + bodyH, c.Z) * turn
 	for _, l in ipairs(self.lumps) do
 		local ls = 0.35 * s
-		l.part.Transparency = (s < 0.05 or self.simple) and 1 or 0
+		l.part.Transparency = 1 -- 덩어리 공은 울퉁불퉁해 보여서 안 씀 (2026-11-19)
 		l.part.Size = Vector3.one * math.max(ls, 0.01)
 		l.part.CFrame = CFrame.new(c.X + math.cos(l.a) * l.r * d, c.Y + h * 0.6, c.Z + math.sin(l.a) * l.r * d)
 	end
@@ -433,6 +441,21 @@ function Dalgona:groove(wires, handle)
 	for _, w in ipairs(wires) do
 		add(w.Position, w.CFrame.LookVector, w.Size.Z, w:GetAttribute("Width") or 0.07)
 	end
+	-- 모양대로 볼륨감 (영상 11~13번): 틀 안쪽 가장자리가 둥글게 부풀어 오른 턱. 틀 철사 선분마다 안쪽에 둥근 원기둥
+	local cx, cz, n = 0, 0, 0
+	for _, s in ipairs(g.segs) do
+		cx += s.mid.X
+		cz += s.mid.Z
+		n += 1
+	end
+	if n > 0 then
+		local centroid = Vector3.new(cx / n, y, cz / n)
+		for _, s in ipairs(g.segs) do
+			local r = s.right
+			s.inner = r:Dot(centroid - s.mid) >= 0 and r or -r
+			s.puff = self.S:fxPart(self.S.fx, { Name = "EngravePuff", Shape = Enum.PartType.Cylinder, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(s.len, 0.05, 0.05) })
+		end
+	end
 	if handle then
 		local d = handle.b - handle.a
 		add((handle.a + handle.b) / 2, d, d.Magnitude, 0.055)
@@ -463,6 +486,16 @@ function Groove:setDepth(k)
 		s.shadow.Transparency = 0.92 - 0.88 * kk
 		s.light.Color = base:Lerp(GROOVE_LIGHT, 0.55)
 		s.light.Transparency = 0.95 - 0.6 * kk
+		if s.puff then
+			-- 안쪽 턱: 홈 바로 안쪽에 둥글게 솟음 (깊게 찍을수록 또렷)
+			local d = s.w * (1.1 + 0.6 * kk)
+			local rise = 0.006 + 0.014 * kk
+			local pos = s.mid + s.inner * (fw / 2 + d * 0.4) + Vector3.new(0, rise - d / 2, 0)
+			s.puff.Size = Vector3.new(s.len + d * 0.6, d, d)
+			s.puff.CFrame = CFrame.lookAt(pos, pos + s.look) * CFrame.Angles(0, math.rad(90), 0)
+			s.puff.Color = base:Lerp(Color3.fromRGB(255, 238, 205), 0.22)
+			s.puff.Transparency = 1 - 0.95 * kk
+		end
 	end
 end
 
@@ -471,6 +504,65 @@ function Dalgona:engrave(wires, clarity, handle)
 	local g = self:groove(wires, handle)
 	g:setDepth(clarity)
 	return g
+end
+
+-- 부은 결 (영상 7~10번): 막 부으면 위에 소용돌이 결이 보이고, 몇 초에 걸쳐 퍼지며 매끈해짐
+local SWIRL_N, SWIRL_FADE = 44, 4.5
+function Dalgona:addSwirl()
+	if self.swirl then
+		for _, p in ipairs(self.swirl.parts) do
+			p:Destroy()
+		end
+	end
+	local parts = {}
+	for i = 1, SWIRL_N do
+		parts[i] = self.S:fxPart(self.S.fx, { Name = "DalgonaSwirl", Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(0.035, 0.01, 0.1) })
+	end
+	local sw = { parts = parts, age = 0, turn = math.random() * 6.28, dir = math.random() < 0.5 and -1 or 1 }
+	self.swirl = sw
+	local conn
+	conn = RunService.RenderStepped:Connect(function(dt)
+		if not parts[1].Parent then
+			conn:Disconnect()
+			return
+		end
+		sw.age += dt
+		local k = math.clamp(sw.age / SWIRL_FADE, 0, 1)
+		local r = self:radius()
+		local kk = math.sqrt(1 + (self.e or 0))
+		local c = self.center
+		local top = c.Y + self.h * 0.75
+		local domeH = 0
+		if self.dome and self.dome.Transparency < 1 then
+			domeH = self.dome.Size.Y / 2
+		end
+		local function at(a)
+			-- 아르키메데스 나선: 가운데에서 가장자리 85%까지 3바퀴
+			local rr = (a / (6 * math.pi)) * 0.85 * r * (1 + 0.15 * k)
+			local ang = sw.turn + sw.dir * a
+			local x, z = math.cos(ang) * rr * kk, math.sin(ang) * rr / kk
+			local dd = self.dome.Size.X / 2
+			local y = top - domeH + (dd > 0 and domeH * math.sqrt(math.max(0, 1 - (rr / dd) ^ 2)) or 0) + 0.004
+			return Vector3.new(c.X + x, y, c.Z + z)
+		end
+		local col = self.color:Lerp(Color3.fromRGB(255, 236, 200), 0.35)
+		for i, p in ipairs(parts) do
+			local a0 = (i - 1) / SWIRL_N * 6 * math.pi + 0.4
+			local a1 = i / SWIRL_N * 6 * math.pi + 0.4
+			local p0, p1 = at(a0), at(a1)
+			p.Size = Vector3.new(0.04 * (1 + k), 0.01, (p1 - p0).Magnitude + 0.02)
+			p.CFrame = CFrame.lookAt((p0 + p1) / 2, p1)
+			p.Color = col
+			p.Transparency = 0.35 + 0.65 * k
+		end
+		if k >= 1 then
+			conn:Disconnect()
+			for _, p in ipairs(parts) do
+				p:Destroy()
+			end
+			self.swirl = nil
+		end
+	end)
 end
 
 function Dalgona:sparkle()

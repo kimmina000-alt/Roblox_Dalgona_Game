@@ -31,7 +31,9 @@ end
 local function handleLine(wires, root, c, R)
 	local d = root.CFrame:VectorToWorldSpace(Vector3.zAxis)
 	d = Vector3.new(d.X, 0, d.Z).Unit
-	local base = root.Position
+	-- 손잡이가 붙은 자리: 도안마다 세로 가운데 선에서 조금 옆일 수 있음 (CutterRig가 HandleX 속성에 넣어 둠)
+	local hx = root.Parent and root.Parent:GetAttribute("HandleX") or 0
+	local base = root.Position + root.CFrame.XVector * hx
 	local best, bestT = nil, -math.huge
 	for _, w in ipairs(wires) do
 		local a = w.Position - w.CFrame.LookVector * (w.Size.Z / 2)
