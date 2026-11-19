@@ -30,6 +30,7 @@ for _, step in ipairs(Config.Steps) do
 end
 
 local station = Station.new()
+require(Making:WaitForChild("Toon")).apply(station.model) -- 도구 만화 외곽선
 local ui = Ui.new(player, Config.Steps)
 CameraRig.init(station.model:GetPivot())
 

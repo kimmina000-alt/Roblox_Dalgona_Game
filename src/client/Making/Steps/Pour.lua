@@ -189,6 +189,10 @@ local function setLadleHidden(ladle, k)
 			p.LocalTransparencyModifier = k
 		end
 	end
+	local outline = ladle:FindFirstChild("ToonOutline")
+	if outline then
+		outline.Enabled = k < 0.3
+	end
 end
 
 local function reshape(ctx, rec, blob, eRing)
