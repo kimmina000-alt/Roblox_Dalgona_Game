@@ -1,4 +1,4 @@
-# Dalgona Tycoon
+# 달고나 골목 (Dalgona Alley)
 
 한국 레트로 골목의 달고나 가게를 직접 운영하고 성장시키는 Roblox 타이쿤/시뮬레이터 프로젝트.
 
@@ -9,6 +9,7 @@
 - 핵심 재미 비중(기획 목표): 직접 제작 40%, 가게 성장 40%, 수집·꾸미기 20%
 
 ## 문서 안내
+- **[통합 기획서 v2 (기준 문서, 결정 D1~D15)](docs/GAME_DESIGN_DOCUMENT.md)**
 - [게임 기획서](docs/GAME_DESIGN_DOCUMENT.md)
 - [시스템 상세 설계](docs/SYSTEMS_SPECIFICATION.md)
 - [경제 밸런스](docs/ECONOMY_BALANCE.md)
