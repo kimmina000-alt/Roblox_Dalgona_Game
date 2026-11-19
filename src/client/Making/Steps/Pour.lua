@@ -172,11 +172,12 @@ local function reshape(ctx, rec, blob, eRing)
 	print(string.format("[Pour] 부은 모양 길쭉함 %.2f", spread0))
 	local floor = math.max(1.08, spread0 - RESHAPE_MAX)
 	local cam = workspace.CurrentCamera
-	-- 나무젓가락은 철판 오른쪽 앞에 비스듬히 눕혀 둠 (끝 = 철판 쪽, 손잡이 = 오른쪽 앞)
+	-- 나무젓가락은 철판 오른쪽 가장자리에 앞으로 눕혀 둠 (끝 = 철판 안쪽, 손잡이 = 화면 아래 플레이어 쪽).
+	-- 오른쪽 바깥으로 두면 화면 밖으로 나가고 모양 틀과 겹쳐서 손잡이를 잡기 어려움 (플레이 테스트 2026-11-19)
 	local plate = S.Plate.Position
 	local half = S.Plate.Size.X / 2
-	local restTip = Vector3.new(plate.X + half + 0.5, S.plateTop + 0.05, plate.Z + half * 0.3)
-	local restDir = Vector3.new(0.55, 0.12, 0.83).Unit
+	local restTip = Vector3.new(plate.X + half * 0.75, S.plateTop + 0.05, plate.Z - half * 0.35)
+	local restDir = Vector3.new(0.12, 0.1, 1).Unit
 	local function restStick()
 		Stir.placeChopsticksAt(S, restTip, restTip + restDir * 2.75)
 	end
