@@ -246,6 +246,7 @@ local function runSession()
 		station:setContents({ Color = Color3.fromRGB(24, 16, 12), Transparency = 0, Material = Enum.Material.Slate })
 		CameraRig.go("melt")
 	end
+	result.details = Scoring.explain(ctx.records)
 	ui:say(string.format("%s · 완성도 %d%%", result.grade, result.Q), "")
 	Pointer.enabled = false
 	ui:showResult(result, shape, {

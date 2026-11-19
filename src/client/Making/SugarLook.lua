@@ -23,7 +23,11 @@ local DOTS = 340
 local LUMPS = 560 -- 결정 많이 (2026-11-19 "결정이 더 많으면 좋겠음")
 -- 가루 → 결정은 녹은 정도 TRANS_A ~ TRANS_B 사이에서 서서히 (사용자 요청 2026-11-18: 너무 갑자기 바뀜).
 -- 점 하나하나·결정 하나하나가 자기 차례(문턱)에 천천히 사라지고/생겨서, 가루 사이로 결정이 조금씩 늘어남
-local TRANS_A, TRANS_B = 0.2, 0.48
+-- (사용자 요청 2026-11-19) 설탕 붓고 얼마 안 가서 국자가 결정으로 가득 차고, 저은 자리만 녹음 → 결정은 일찍 다 생김
+local TRANS_A, TRANS_B = 0.02, 0.12
+local MELT_R = 0.36 -- 젓가락 끝에서 이 거리 안의 결정만 녹음
+local MELT_GAIN = 14 -- 녹은 정도가 오르는 만큼 × 이 값이 근처 결정에 쌓임 (1이 되면 사라짐)
+local FORCE_FROM = 0.85 -- 이 뒤로는 안 저은 결정도 마저 녹음 (다 녹음 = 1)
 local FADE = 0.07 -- 점·결정 하나가 사라지거나 자라는 데 걸리는 녹은 정도 폭
 -- 젓는 자국: 가루 위에 젓가락이 지나간 골 (잠깐 남았다가 가루가 덮음)
 local FURROW_MAX = 70
@@ -93,7 +97,7 @@ function SugarLook.new(S, st)
 	for i = 1, LUMPS do
 		local r = math.sqrt(math.random()) * self.Ri * 0.95
 		local a = math.random() * 2 * math.pi
-		local s = 0.045 + math.random() * 0.05
+		local s = 0.06 + math.random() * 0.06
 		local p = Fx.mesh("SugarCrystal", self.folder, { Name = "Lump", Color = LUMP, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
 			or part(self.folder, { Name = "Lump", Color = LUMP, Transparency = 1 })
 		table.insert(self.lumps, {
@@ -288,6 +292,8 @@ function SugarLook:update(dt, p, tip, burn)
 			f.part.Transparency = 1
 		end
 	end
+	local dp = math.max(0, p - (self.lastP or p))
+	self.lastP = p
 	local vmag = vel.Magnitude
 	local vdir = vmag > 1e-4 and vel / vmag or nil
 	local parts, cfs = {}, {}
@@ -357,10 +363,13 @@ function SugarLook:update(dt, p, tip, burn)
 					l.x, l.z = l.x / rr * self.Ri * 0.95, l.z / rr * self.Ri * 0.95
 				end
 				l.rot = l.rot * CFrame.Angles(nz * push * 8, 0, -nx * push * 8)
-				l.extra += dt * 0.08 -- 젓가락 근처가 먼저 녹음
+			end
+			-- 젓가락이 지나간 자리만 녹음: 이번 프레임에 녹은 만큼이 근처 결정에 쌓임
+			if dist < MELT_R then
+				l.extra += (dp * MELT_GAIN + dt * 0.03) * (1 - dist / MELT_R)
 			end
 		end
-		local g = smooth01(p + l.extra, l.pm - 0.14, l.pm)
+		local g = smooth01(math.max(l.extra, (p - FORCE_FROM) / (1 - FORCE_FROM)), 0.25, 0.8)
 		local grow = smooth01(p, l.ap, l.ap + FADE) -- 자기 차례에 작게 생겨 천천히 커짐
 		if grow <= 0 or g >= 1 then
 			l.part.Transparency = 1
@@ -416,11 +425,11 @@ function SugarLook:update(dt, p, tip, burn)
 			b.part.CFrame = CFrame.new(c.X + b.x, surface + 0.003, c.Z + b.z)
 		end
 	end
-	if p < 0.3 then
+	if p < 0.08 then
 		return "가루"
-	elseif p < 0.5 then
+	elseif p < 0.55 then
 		return "결정"
-	elseif p < 0.72 then
+	elseif p < 0.8 then
 		return "녹는 중"
 	end
 	return "액체"

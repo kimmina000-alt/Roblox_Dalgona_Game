@@ -304,16 +304,48 @@ function Ui:_buildHeight()
 		}),
 		Parent = track,
 	})
-	self.heightKnob = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(30, 30), BackgroundColor3 = Color3.new(1, 1, 1), Parent = track }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
+	-- 알맞은 높이 칸 (사용자 요청 2026-11-19: 국자를 적당한 높이로 들라는 안내)
+	self.heightBand = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.1), Size = UDim2.new(0, 34, 0.35, 0), BackgroundColor3 = Color3.fromRGB(80, 200, 90), BackgroundTransparency = 0.55, Parent = track }, {
+		corner(8),
+		new("UIStroke", { Thickness = 2, Color = Color3.fromRGB(40, 150, 60) }),
+	})
+	label({ Text = "적당", TextSize = 11, TextColor3 = Color3.fromRGB(20, 110, 40), Position = UDim2.new(1, 2, 0.5, -7), Size = UDim2.fromOffset(28, 14), TextXAlignment = Enum.TextXAlignment.Left, Parent = self.heightBand })
+	self.heightGuide = label({ Text = "", TextSize = 15, TextColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.1, BackgroundColor3 = INK, Position = UDim2.new(1, 8, 0.5, -16), Size = UDim2.fromOffset(0, 32), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 4, Parent = track })
+	corner(12).Parent = self.heightGuide
+	new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), Parent = self.heightGuide })
+	self.heightKnob = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(30, 30), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 3, Parent = track }, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }) })
 	self.heightStroke = new("UIStroke", { Thickness = 3, Color = INK, Parent = self.heightKnob })
 	self.heightBox = box
 end
 
 -- h01: 1 = 가장 높이(불에서 멀리), 0 = 불 바로 위. danger면 빨갛게, active(끄는 중)면 크게
-function Ui:setHeight(visible, h01, danger, active)
+-- band = { lo, hi } 알맞은 높이 (h01 기준)
+function Ui:setHeight(visible, h01, danger, active, band)
 	self.heightBox.Visible = visible
 	if not visible then
 		return
+	end
+	if band then
+		self.heightBand.Visible = true
+		self.heightBand.Position = UDim2.fromScale(0.5, 1 - band[2])
+		self.heightBand.Size = UDim2.new(0, 34, band[2] - band[1], 0)
+		local g = self.heightGuide
+		if h01 < band[1] then
+			g.Text = danger and "▲ 위로 끌어 국자를 들어요!" or "▲ 조금 더 들어요"
+			g.BackgroundColor3 = danger and RED or INK
+		elseif h01 > band[2] then
+			g.Text = "▼ 너무 높아요 · 조금 내려요"
+			g.BackgroundColor3 = INK
+		else
+			g.Text = "좋아요! 이 높이"
+			g.BackgroundColor3 = Color3.fromRGB(40, 150, 60)
+		end
+		g.Position = UDim2.new(1, 34, 1 - math.clamp(h01, 0, 1), 0)
+		g.AnchorPoint = Vector2.new(0, 0.5)
+		g.Visible = true
+	else
+		self.heightBand.Visible = false
+		self.heightGuide.Visible = false
 	end
 	self.heightKnob.Position = UDim2.fromScale(0.5, 1 - math.clamp(h01, 0, 1))
 	local s = active and 36 or 30
@@ -327,7 +359,7 @@ function Ui:_buildResult()
 		Name = "Result",
 		AnchorPoint = self.touch and Vector2.new(1, 0.5) or Vector2.new(0.5, 1),
 		Position = self.touch and UDim2.new(1, -16, 0.5, 0) or UDim2.new(0.5, 0, 1, -24),
-		Size = UDim2.fromOffset(self.touch and 420 or 560, 224 + self.btn),
+		Size = UDim2.fromOffset(self.touch and 420 or 560, 224 + 132 + self.btn),
 		BackgroundColor3 = PAPER,
 		Visible = false,
 		ZIndex = 10,
@@ -354,6 +386,10 @@ function Ui:_buildResult()
 		self.resStars[i] = label({ Text = "★", TextSize = 48, TextColor3 = GREY, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, (i - 2) * 64, 0, 102), Size = UDim2.fromOffset(56, 56), ZIndex = 11, Parent = pop })
 	end
 	self.resBreak = label({ Text = "", TextSize = 14, Font = FONT_REG, TextColor3 = Color3.fromRGB(110, 100, 90), Position = UDim2.fromOffset(0, 162), Size = UDim2.new(1, 0, 0, 20), ZIndex = 11, Parent = pop })
+	-- 단계별 점수 (사용자 요청 2026-11-19: 어디에서 몇 점인지)
+	self.resRows = new("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 20, 0, 186), Size = UDim2.new(1, -40, 0, 126), ZIndex = 11, Parent = pop }, {
+		new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder }),
+	})
 	local row = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20), Size = UDim2.fromOffset(self.touch and 400 or 520, self.btn + 8), ZIndex = 11, Parent = pop }, {
 		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
@@ -565,6 +601,22 @@ function Ui:showResult(res, shape, handlers)
 	self.resLine.Text = string.format("%s 달고나 · 완성도 %d%%", shape.name, res.Q)
 	self.resPrice.Text = string.format("한 개 %d코인부터 · Perfect면 %d코인", math.floor(shape.price * 0.2 + 0.5), math.floor(shape.price * 1.7 + 0.5))
 	self.resBreak.Text = string.format("온도 %d · 소다 %d · 누르기 %d · 모양 %d%s", res.T, res.M, res.P, res.S, res.verified and "  (서버 판정)" or "")
+	for _, c in ipairs(self.resRows:GetChildren()) do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	for i, d in ipairs(res.details or {}) do
+		local col = d.score >= 85 and Color3.fromRGB(60, 160, 70) or (d.score >= 60 and Color3.fromRGB(200, 140, 30) or RED)
+		local line = new("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 19), LayoutOrder = i, ZIndex = 11, Parent = self.resRows })
+		label({ Text = d.label, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(0, 64, 1, 0), ZIndex = 11, Parent = line })
+		label({ Text = d.score .. "점", TextSize = 15, TextColor3 = col, TextXAlignment = Enum.TextXAlignment.Right, Position = UDim2.fromOffset(64, 0), Size = UDim2.new(0, 48, 1, 0), ZIndex = 11, Parent = line })
+		local bits = {}
+		for _, p in ipairs(d.parts) do
+			table.insert(bits, string.format("%s %d", p[1], p[2]))
+		end
+		label({ Text = table.concat(bits, " · "), TextSize = 13, Font = FONT_REG, TextColor3 = Color3.fromRGB(110, 100, 90), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Position = UDim2.fromOffset(124, 0), Size = UDim2.new(1, -124, 1, 0), ZIndex = 11, Parent = line })
+	end
 	for _, s in ipairs(self.resStars) do
 		s.TextColor3 = Color3.fromRGB(215, 210, 200)
 		s.TextSize = 48

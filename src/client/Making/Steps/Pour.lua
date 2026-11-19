@@ -179,7 +179,6 @@ local RESHAPE_FROM = 1.15 -- 이보다 길쭉해야 다듬기로 줄어듦
 local RESHAPE_MAX = 0.6 -- 다듬어서 줄일 수 있는 길쭉함 최대
 local RESHAPE_GAIN = 0.35 -- 가운데로 끈 거리(stud) → 줄어드는 길쭉함 (여러 번 끌어 모아야 함)
 local PICK_PX = 90 -- 누름판 화면 위치에서 이만큼 안을 누르면 누르기로
-local SCRAPE_LEAN = Vector3.new(-0.5, 0.75, 0.45).Unit -- 국자 긁을 때 젓가락 기울기 (손잡이가 왼쪽 위 앞)
 
 -- 붓는 동안 국자·손을 숨기고 줄기를 HIDE_RISE만큼 위에서 시작 → 화면 밖 높은 곳에서 붓는 것처럼
 local HIDE_RISE = 2.4
@@ -357,7 +356,6 @@ function Pour.run(ctx)
 	local tilt = 0
 	local dropped = false
 	local dropTime = 0
-	local scrapeT = nil -- 젓가락으로 국자 긁어내리는 중 (초)
 	local blob = nil
 	local poured = 0
 	local total = volume * (1 - REMAIN)
@@ -525,7 +523,6 @@ function Pour.run(ctx)
 							blob:setThickness(finalH)
 						end)
 						S:setContents({ thickness = 0.03 })
-						ui:say("젓가락으로 국자를 긁어요 (탭)", "남은 반죽까지 떨어뜨려요")
 						seenPress = P.presses
 					end
 				end
@@ -549,29 +546,12 @@ function Pour.run(ctx)
 				end
 			end
 		else
-			-- 국자는 다시 보이게 (긁어내리는 모습이 보이도록)
+			-- 다 부으면 남은 반죽이 저절로 똑 떨어짐 (사용자 요청 2026-11-19: 젓가락으로 국자 긁기 삭제)
 			if hideK > 0.01 then
 				hideK += (0 - hideK) * (1 - math.exp(-8 * dt))
 				setLadleHidden(ladle, hideK)
 			end
-			-- 탭 = 나무젓가락으로 국자 가장자리를 긁어내려 남은 반죽 떨어뜨리기 (사용자 요청 2026-11-19)
-			if P.presses ~= seenPress and not scrapeT then
-				seenPress = P.presses
-				scrapeT = 0
-			end
-			if scrapeT then
-				scrapeT += dt
-				local k = math.min(scrapeT / 0.4, 1)
-				local b = S.Bowl.Position
-				-- 국자 안쪽 위에서 가장자리(흘러나가는 쪽 +X)를 넘어 아래로 쓸어내림
-				local from = b + Vector3.new(-S.bowlRadius * 0.3, S.bowlHalf + 0.25, 0.1)
-				local over = b + Vector3.new(S.bowlRadius + 0.05, S.bowlHalf + 0.05, 0.1)
-				local down = b + Vector3.new(S.bowlRadius + 0.25, -0.35, 0.1)
-				local tip = k < 0.6 and from:Lerp(over, k / 0.6) or over:Lerp(down, (k - 0.6) / 0.4)
-				Stir.placeChopsticksAt(S, tip, tip + SCRAPE_LEAN * 2.75)
-			end
-			if scrapeT and scrapeT >= 0.4 then
-				S:restChopsticks()
+			if os.clock() - dropTime > 0.5 then
 				local remainBlob = S:fxPart(S.fx, { Name = "Drip", Shape = Enum.PartType.Ball, Size = Vector3.one * 0.35, Color = color, Material = Enum.Material.SmoothPlastic, CFrame = CFrame.new(S.Bowl.Position) })
 				local target = st.dalgona.center + Vector3.new(0.1, st.dalgona.h * 0.6, 0)
 				local tw = TweenService:Create(remainBlob, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { CFrame = CFrame.new(target), Size = Vector3.one * 0.2 })
@@ -583,10 +563,6 @@ function Pour.run(ctx)
 				st.dalgona:setThickness(st.dalgona.h)
 				rec.remain = 0.02
 				S:setContents({ Transparency = 1 })
-				ui:buzz(0.4, 0.06)
-				break
-			end
-			if os.clock() - dropTime > 2.5 then
 				break
 			end
 		end
@@ -612,9 +588,7 @@ function Pour.run(ctx)
 		st.dalgona:setThickness(st.dalgona.h)
 	end
 	S:setContents({ Transparency = 1 })
-	if st.dalgona and not reshape(ctx, rec, st.dalgona, eRing) then
-		return nil
-	end
+	-- 젓가락으로 반죽 다듬기 삭제 (사용자 요청 2026-11-19): 부으면 바로 누르기로
 	ctx.live("pour", Scoring.pour(rec))
 	rec.t1 = ctx.now()
 	return rec

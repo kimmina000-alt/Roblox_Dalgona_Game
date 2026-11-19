@@ -158,6 +158,53 @@ function Scoring.compute(records, shape)
 	}
 end
 
+-- 결과 화면용 (사용자 요청 2026-11-19: 어디에서 몇 점인지): 단계마다 점수 + 세부 항목 점수
+-- 반환: { { key, label, score, parts = { {name, value} ... } } ... } (Config.Steps 순서)
+function Scoring.explain(records)
+	local out = {}
+	for _, step in ipairs(Config.Steps) do
+		local r = records[step.key]
+		local parts = {}
+		if r then
+			if step.key == "sugar" then
+				local inLadle = r.white + r.brown
+				local need = Config.Sugar.white + Config.Sugar.brown
+				table.insert(parts, { "양", round(100 * c01(1 - math.abs(inLadle - need) / need)) })
+				table.insert(parts, { "안 흘림", round(100 * inLadle / math.max(inLadle + r.spill, 1e-3)) })
+			elseif step.key == "melt" then
+				table.insert(parts, { "젓기 속도", round(100 * (r.green or 0)) })
+				table.insert(parts, { "온도 유지", round(100 * (r.tempOk or 0)) })
+				if (r.burn or 0) > 0.05 or (r.scorch or 0) > 0.05 then
+					table.insert(parts, { "탐", -round((r.scorch or 0) * 30 + (r.burn or 0) * 25) })
+				end
+			elseif step.key == "soda" then
+				local cfg = Config.Soda
+				local a = r.amount
+				local amountS = a < cfg.idealMin and 100 * a / cfg.idealMin or (a > cfg.idealMax and 100 * c01(1 - (a - cfg.idealMax) / 0.85) or 100)
+				table.insert(parts, { "넣은 때", round(100 * c01(1 - (r.delay - cfg.bestDelay) / 8)) })
+				table.insert(parts, { "양", round(amountS) })
+				table.insert(parts, { "부풀기", round(100 * c01(r.fastFrac) * c01(r.puff)) })
+			elseif step.key == "pour" then
+				table.insert(parts, { "가운데", round(100 * c01(1 - r.dist / 1.4)) })
+				table.insert(parts, { "동그랗게", round(100 * c01(1 - ((r.spread or 1) - 1.15) / 0.65)) })
+			elseif step.key == "press" then
+				for i = 1, 3 do
+					table.insert(parts, { i .. "번째", round(Scoring.pressOne(i, r.thick and r.thick[i] or 1)) })
+				end
+				if r.cracked then
+					table.insert(parts, { "금", -35 })
+				end
+			elseif step.key == "stamp" then
+				table.insert(parts, { "가운데", round(100 * c01(1 - r.dist / 0.6)) })
+				table.insert(parts, { "반듯하게", round(100 * c01(1 - math.abs(r.angle) / 30)) })
+				table.insert(parts, { "누른 세기", round(Scoring.stampForce(r.hold)) })
+			end
+		end
+		table.insert(out, { key = step.key, label = step.label, score = r and round(Scoring[step.key](r)) or 0, parts = parts })
+	end
+	return out
+end
+
 -- QUALITY 링: 지금까지 알려진 단계 점수의 가중 평균 (0~100)
 function Scoring.live(stepScores)
 	local sw, sum = 0, 0

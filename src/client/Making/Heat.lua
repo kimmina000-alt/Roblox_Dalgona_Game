@@ -32,7 +32,9 @@ function Heat.control(st, P, ui)
 		st.h = math.clamp(st.h - d.Y / (vh * 0.45) * (cfg.hMax - cfg.hMin), cfg.hMin, cfg.hMax)
 	end
 	local danger = Heat.sourceTemp(st.h) > cfg.burnTemp or st.temp > cfg.burnTemp - 3
-	ui:setHeight(true, (st.h - cfg.hMin) / (cfg.hMax - cfg.hMin), danger, P.side.down)
+	-- 알맞은 높이 칸: 불 온도가 tempLow ~ tempHigh가 되는 높이 (sourceTemp = 235 - 95 × h01)
+	local band = { math.clamp((235 - cfg.tempHigh) / 95, 0, 1), math.clamp((235 - cfg.tempLow) / 95, 0, 1) }
+	ui:setHeight(true, (st.h - cfg.hMin) / (cfg.hMax - cfg.hMin), danger, P.side.down, band)
 	return danger
 end
 
