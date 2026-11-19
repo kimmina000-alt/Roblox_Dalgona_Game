@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
+local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DalgonaConfig"))
 
 local Ui = {}
 Ui.__index = Ui
@@ -545,6 +546,32 @@ function Ui:setGauge(visible, speed, slow, fast, title)
 	self.needleX = x
 	self.needle.Position = UDim2.fromScale(x, 0.5)
 	self.gaugeTitle.Text = title or "STIR SPEED"
+	for i, t in ipairs({ "SLOW", "JUST RIGHT", "FAST" }) do
+		segs[i]:FindFirstChildOfClass("TextLabel").Text = t
+	end
+end
+
+-- 누르기 게이지 (사용자 요청 2026-11-19): 이번 누르기 시작 두께(왼쪽) → 가장 얇게(오른쪽). 초록 = 멈출 두께.
+-- 바늘이 초록 칸에 있을 때 손을 떼면 됨. 처음엔 천천히, 오래 누를수록 빨리 움직임
+function Ui:setPressGauge(visible, h, hStart, hMin, lo, hi)
+	self.gauge.Visible = visible
+	if not visible then
+		return
+	end
+	local span = math.max(hStart - hMin, 1e-3)
+	local function x(v)
+		return math.clamp((hStart - v) / span, 0, 1)
+	end
+	local a, b = x(hi), x(lo)
+	local segs = self.gaugeSegs
+	segs[1].Position, segs[1].Size = UDim2.fromScale(0, 0), UDim2.fromScale(a, 1)
+	segs[2].Position, segs[2].Size = UDim2.fromScale(a, 0), UDim2.fromScale(math.max(b - a, 0.02), 1)
+	segs[3].Position, segs[3].Size = UDim2.fromScale(b, 0), UDim2.fromScale(1 - b, 1)
+	for i, t in ipairs({ "두꺼움", "딱 좋아", "너무 얇음" }) do
+		segs[i]:FindFirstChildOfClass("TextLabel").Text = t
+	end
+	self.needle.Position = UDim2.fromScale(x(h), 0.5)
+	self.gaugeTitle.Text = string.format("두께 %.1fmm · 오래 누를수록 빨라져요", h / Config.Press.h0 * 10)
 end
 
 -- 누르기 두께 (사용자 요청 2026-11-19: 두께를 표시하고 점점 얇아지는 게 눈에 보이게).
@@ -679,7 +706,8 @@ function Ui:showResult(res, shape, handlers)
 		for _, p in ipairs(d.parts) do
 			table.insert(bits, string.format("%s %d", p[1], p[2]))
 		end
-		label({ Text = table.concat(bits, " · "), TextSize = 13, Font = FONT_REG, TextColor3 = Color3.fromRGB(110, 100, 90), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Position = UDim2.fromOffset(124, 0), Size = UDim2.new(1, -124, 1, 0), ZIndex = 11, Parent = line })
+		-- 한 줄 조언(너무 오래 눌렀어요 등)을 먼저, 없으면 세부 점수
+		label({ Text = (d.tip and d.tip ~= "") and d.tip or table.concat(bits, " · "), TextSize = 13, Font = FONT_REG, TextColor3 = Color3.fromRGB(110, 100, 90), TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, Position = UDim2.fromOffset(124, 0), Size = UDim2.new(1, -124, 1, 0), ZIndex = 11, Parent = line })
 	end
 	for _, s in ipairs(self.resStars) do
 		s.TextColor3 = Color3.fromRGB(215, 210, 200)

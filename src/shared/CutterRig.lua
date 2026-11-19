@@ -73,6 +73,59 @@ local function addWires(m, root, pts, closed, width, visible)
 	end
 end
 
+-- 손잡이 연장 (사용자 요청 2026-11-19: 손잡이를 더 길게 해서 손가락이 틀을 덜 가리게).
+-- 메시 손잡이(tools/blender/cutters.py: 세로 가운데 선 x=0이 외곽선과 만나는 가장 아래 점에서 HANDLE_LEN 뻗고
+-- 끝에 반지름 LOOP_R 고리)의 고리 끝에서 막대를 더 뻗고, 끝에 빨간 손잡이를 끼움. 손가락은 빨간 손잡이 끝을 잡음 (Stamp)
+local HANDLE_LEN, LOOP_R, HANDLE_Y = 1.45, 0.13, 0.112
+local EXT_LEN, GRIP_LEN = 1.0, 0.5
+Rig.handleBottom = function(shape)
+	-- 외곽선이 x=0과 만나는 가장 아래 점의 y (CutterShapes 좌표)
+	local low = nil
+	local o = shape.outline
+	for i = 1, #o do
+		local a, b = o[i], o[i % #o + 1]
+		if (a[1] <= 0 and 0 <= b[1]) or (b[1] <= 0 and 0 <= a[1]) then
+			if a[1] ~= b[1] then
+				local y = a[2] + (b[2] - a[2]) * (0 - a[1]) / (b[1] - a[1])
+				if not low or y < low then
+					low = y
+				end
+			end
+		end
+	end
+	if not low then
+		low = math.huge
+		for _, p in ipairs(o) do
+			low = math.min(low, p[2])
+		end
+	end
+	return low
+end
+
+local function addHandleExt(m, root, shape)
+	local low = Rig.handleBottom(shape)
+	-- 고리 맨 끝 (월드 +Z 쪽). 고리 가운데는 손잡이 끝에서 +x로 LOOP_R
+	local z0 = (-low + HANDLE_LEN + LOOP_R) * SCALE
+	local x = 0 -- 메시를 가져올 때 좌우가 뒤집혀 고리 방향이 바뀔 수 있어서 가운데 선에 맞춤
+	local function piece(name, len, d, z, color, mat)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Shape = Enum.PartType.Cylinder
+		p.Anchored = true
+		p.CanCollide = false
+		p.CanQuery = false
+		p.CanTouch = false
+		p.Material = mat
+		p.Color = color
+		p.Size = Vector3.new(len, d, d)
+		p.CFrame = root.CFrame * CFrame.new(x, HANDLE_Y, z) * CFrame.Angles(0, math.rad(90), 0)
+		p.Parent = m
+		return p
+	end
+	piece("HandleExt", EXT_LEN + 0.04, 0.056, z0 + EXT_LEN / 2 - 0.02, Color3.fromRGB(200, 202, 208), Enum.Material.Metal)
+	piece("HandleGrip", GRIP_LEN, 0.15, z0 + EXT_LEN + GRIP_LEN / 2 - 0.05, Color3.fromRGB(226, 84, 84), Enum.Material.SmoothPlastic)
+end
+
 -- 반환: 도안 데이터 (없는 id면 nil, 아무것도 안 바꿈)
 function Rig.apply(m, id)
 	local shape = find(id)
@@ -113,6 +166,7 @@ function Rig.apply(m, id)
 		mesh.Size = Vector3.new(mesh.Size.X * SCALE, mesh.Size.Y, mesh.Size.Z * SCALE)
 		mesh.CFrame = root.CFrame * CFrame.new(c.X * SCALE, 0, -c.Y * SCALE) * CFrame.Angles(0, math.pi, 0)
 		mesh.Parent = m
+		addHandleExt(m, root, shape)
 	end
 	m:SetAttribute("ShapeId", id)
 	return shape

@@ -54,9 +54,10 @@ function Scoring.misshaped(records)
 	return p ~= nil and (p.spread or 1) > Config.Pour.failSpread
 end
 
+-- 목표 ±18% 안이면 만점 (2026-11-19 "누르기 100점 받기 어려움"), 그 밖은 목표의 60%만큼 벗어나면 0점
 function Scoring.pressOne(i, h)
 	local t = Config.Press.targets[i]
-	return 100 * c01(1 - math.abs(h - t) / (t * 0.6))
+	return 100 * c01(1 - math.max(0, math.abs(h - t) - 0.18 * t) / (t * 0.6))
 end
 
 function Scoring.press(r)
@@ -200,9 +201,108 @@ function Scoring.explain(records)
 				table.insert(parts, { "누른 세기", round(Scoring.stampForce(r.hold)) })
 			end
 		end
-		table.insert(out, { key = step.key, label = step.label, score = r and round(Scoring[step.key](r)) or 0, parts = parts })
+		table.insert(out, { key = step.key, label = step.label, score = r and round(Scoring[step.key](r)) or 0, parts = parts, tip = r and Scoring.tip(step.key, r) or "안 했어요" })
 	end
 	return out
+end
+
+-- 결과 화면 한 줄 조언 (사용자 요청 2026-11-19: 누르기를 너무 오래/짧게 눌렀는지 등 단계마다 알려 주기)
+function Scoring.tip(key, r)
+	local tips = {}
+	local function add(s)
+		if #tips < 2 then
+			table.insert(tips, s)
+		end
+	end
+	if key == "sugar" then
+		local inLadle = r.white + r.brown
+		local need = Config.Sugar.white + Config.Sugar.brown
+		if inLadle < need * 0.9 then
+			add("설탕이 조금 모자랐어요")
+		elseif inLadle > need * 1.1 then
+			add("설탕을 너무 많이 넣었어요")
+		end
+		if r.spill > 0.1 then
+			add("국자 밖으로 흘렸어요")
+		end
+		add("딱 맞게 넣었어요")
+	elseif key == "melt" then
+		if (r.burn or 0) > 0.05 then
+			add("불에 너무 가까워 탔어요 · 국자를 초록 높이로")
+		end
+		if (r.scorch or 0) > 0.05 then
+			add("젓다 멈춰서 바닥이 눌어붙었어요")
+		end
+		if (r.green or 0) < 0.6 then
+			add("젓는 속도가 너무 느리거나 빨랐어요")
+		end
+		if (r.tempOk or 1) < 0.6 then
+			add("국자 높이가 안 맞아 온도가 들쭉날쭉했어요")
+		end
+		add("고르게 잘 녹였어요")
+	elseif key == "soda" then
+		local cfg = Config.Soda
+		if r.delay > cfg.bestDelay + 3 then
+			add("다 녹은 뒤 소다를 늦게 넣었어요")
+		end
+		if r.amount < cfg.idealMin then
+			add("소다가 적어서 덜 부풀었어요")
+		elseif r.amount > cfg.idealMax then
+			add("소다가 많아서 쓰고 꺼졌어요")
+		end
+		if (r.fastFrac or 0) < 0.6 or (r.puff or 0) < 0.9 then
+			add("소다 넣고 더 빠르게 오래 저어야 해요")
+		end
+		add("딱 좋게 부풀었어요")
+	elseif key == "pour" then
+		if r.dist > 0.5 then
+			add("설탕 원 가운데에서 벗어나게 부었어요")
+		end
+		if (r.spread or 1) > 1.3 then
+			add("끌면서 부어서 길쭉해졌어요")
+		end
+		if (r.remain or 0) > 0.1 then
+			add("국자에 반죽이 남았어요")
+		end
+		add("가운데에 동그랗게 잘 부었어요")
+	elseif key == "press" then
+		if r.cracked then
+			add("너무 얇게 눌러서 금이 갔어요")
+		end
+		for i = 1, 3 do
+			local h, t = r.thick and r.thick[i], Config.Press.targets[i]
+			if h and h > t * 1.18 then
+				add(i .. "번째: 짧게 눌러서 두꺼워요")
+			elseif h and h < t * 0.82 then
+				add(i .. "번째: 너무 오래 눌러서 얇아요")
+			end
+		end
+		add("세 번 모두 딱 맞게 눌렀어요")
+	elseif key == "stamp" then
+		local cfg = Config.Stamp
+		if r.hold > cfg.crackHold then
+			add("너무 오래 눌러서 금이 갔어요")
+		elseif r.hold > cfg.holdMax then
+			add("조금 오래 눌러서 너무 깊어요")
+		elseif r.hold < cfg.holdMin then
+			add("너무 짧게 눌러서 자국이 흐려요")
+		end
+		if r.dist > 0.3 then
+			add("틀이 가운데에서 벗어났어요")
+		end
+		if math.abs(r.angle) > 10 then
+			add("틀이 비뚤어졌어요")
+		end
+		add("가운데에 반듯하게 잘 찍었어요")
+	end
+	-- 문제가 있으면 문제만, 없으면 칭찬 한 줄
+	if #tips > 1 then
+		local good = tips[#tips]
+		if good:find("잘") or good:find("딱") then
+			table.remove(tips)
+		end
+	end
+	return table.concat(tips, " · ")
 end
 
 -- QUALITY 링: 지금까지 알려진 단계 점수의 가중 평균 (0~100)

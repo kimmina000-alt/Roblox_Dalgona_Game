@@ -56,7 +56,8 @@ local function easeOut(a)
 end
 
 -- 반환: { pair = 1 | 2, side = "A" | "B" } 또는 nil(중간에 나감)
-function Picker.run(ctx)
+-- opts.from = 젓가락 통에서 막 뽑은 포장 젓가락(월드 부품): 1) 누르기를 건너뛰고 그 자리에서 바로 커짐 (2026-11-19)
+function Picker.run(ctx, opts)
 	local ui = ctx.ui
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
 	local cs = assets and assets:FindFirstChild("Chopsticks")
@@ -169,9 +170,13 @@ function Picker.run(ctx)
 	-- 처음에는 테이블 위 진짜 젓가락이 보이고, 누를 자리(holder)만 그 위에 겹쳐 둔다.
 	-- 누르면 같은 자리에서 3D 미리 보기로 바뀌어 화면 가운데로 커진다 (테이블에서 집어 드는 느낌).
 	local worldWrap = {}
-	for _, p in ipairs(ctx.station.Chopsticks:GetChildren()) do
-		if p.Name:sub(1, 7) == "Wrapped" then
-			table.insert(worldWrap, p)
+	if opts and opts.from then
+		worldWrap = { opts.from }
+	else
+		for _, p in ipairs(ctx.station.Chopsticks:GetChildren()) do
+			if p.Name:sub(1, 7) == "Wrapped" then
+				table.insert(worldWrap, p)
+			end
 		end
 	end
 	local function placeOverWorld()
@@ -201,10 +206,14 @@ function Picker.run(ctx)
 	if #worldWrap > 0 then
 		vpf.Visible = false
 		clicked = nil
-		while not clicked do
+		if opts and opts.from then
 			placeOverWorld()
-			if not ctx.frame() then
-				return finish(nil)
+		else
+			while not clicked do
+				placeOverWorld()
+				if not ctx.frame() then
+					return finish(nil)
+				end
 			end
 		end
 		for _, p in ipairs(worldWrap) do

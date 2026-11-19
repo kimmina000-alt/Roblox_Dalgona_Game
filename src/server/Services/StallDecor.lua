@@ -139,6 +139,11 @@ local function layout(ws, top)
 	for _, n in ipairs(RIGHT) do
 		shift(n, SPREAD)
 	end
+	-- 모양틀 손잡이가 길어져서(CutterRig 손잡이 연장) 테이블 밖으로 안 나가게 안쪽으로
+	local cutter = ws:FindFirstChild("Cutter")
+	if cutter then
+		cutter:PivotTo(cutter:GetPivot() + Vector3.new(0, 0, -0.2))
+	end
 	top.Size += Vector3.new(SPREAD * 2, 0, 0)
 	for _, leg in ipairs(ws:GetChildren()) do
 		if leg.Name == "TableLeg" then
@@ -209,9 +214,10 @@ local function chopstickCup(ws)
 	rim.Shape = Enum.PartType.Cylinder
 	local band = part(m, "Label", Vector3.new(0.4, CUP_D + 0.02, CUP_D + 0.02), CFrame.new(base + Vector3.new(0, CUP_H * 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(220, 90, 80), { Material = Enum.Material.SmoothPlastic })
 	band.Shape = Enum.PartType.Cylinder
-	local names = { "Stick1A", "Stick1B", "Stick2A", "Stick1A", "Stick1B" }
+	-- 포장지에 싸인 채로 꽂혀 있음 (사용자 요청 2026-11-19: 꺼내면 포장 찢기부터)
+	local names = { "Wrap1" }
 	local rng = Random.new(11)
-	for i = 1, 16 do
+	for i = 1, 12 do
 		local name = names[(i - 1) % #names + 1]
 		local tpl = tplFolder:FindFirstChild(name)
 		if tpl then
@@ -223,10 +229,10 @@ local function chopstickCup(ws)
 			s.CanTouch = false
 			local a = rng:NextNumber(0, math.pi * 2)
 			local r = math.sqrt(rng:NextNumber()) * 0.3
-			local len = math.max(s.Size.X, s.Size.Y)
+			local len = s.Size.Y -- 포장 젓가락은 길이 축이 Y
 			local pos = base + Vector3.new(math.cos(a) * r, 0.1 + len / 2 + rng:NextNumber(0, 0.15), math.sin(a) * r)
-			-- 길이 축(X)을 세우고, 바깥쪽으로 살짝 벌어지게
-			s.CFrame = CFrame.new(pos) * CFrame.Angles(math.sin(a) * 0.12, rng:NextNumber(0, 6), -math.cos(a) * 0.12) * CFrame.Angles(0, 0, math.rad(90))
+			-- 세워서 바깥쪽으로 살짝 벌어지게
+			s.CFrame = CFrame.new(pos) * CFrame.Angles(math.sin(a) * 0.12, rng:NextNumber(0, 6), -math.cos(a) * 0.12)
 			s.Parent = m
 		end
 	end

@@ -1,5 +1,8 @@
--- 5. 누르기: 누름판을 잡아 반죽 위로 가져와 꾹 멈추고 있으면 내려가고, 떼거나 옆으로 끌면 올라감. "확! 누르지 말고 3번 나눠서"
--- 매번 원판이 넓어지고 얇아짐. 점수: 3번 모두 목표 두께 구간에 멈췄는지. 너무 얇으면 가장자리가 갈라짐.
+-- 5. 누르기 (사용자 요청 2026-11-19 다시 정리):
+--   ① 막대 꽂기 (Stick) ② 누름판을 클릭하면 손에 들고 반죽 위에 떠 있음 (끌고 올 필요 없음)
+--   ③ 화면을 누르고 있는 동안 눌림: 처음엔 천천히, 오래 누를수록 빨라짐(꾹 누르면 훅). 떼면 멈추고 올라옴
+--   ④ 아래 게이지 바늘이 초록 칸(이번 목표 두께)에 들어갔을 때 떼면 1번 성공 → 3번. 초록 전에 떼면 이어서 더 누르면 됨
+-- 점수: 3번 모두 목표 두께 근처에서 멈췄는지 (±18% 안이면 만점). 너무 얇으면 가장자리가 갈라짐.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -12,22 +15,17 @@ local Stick = require(script.Parent:WaitForChild("Stick"))
 local Press = {}
 
 local HOVER = 0.7
+local PICK_PX = 150
+local BAND = 0.18 -- 목표 두께 ±18% = 초록 칸 (Scoring.pressOne과 같음)
 local RING_COLOR = Color3.fromRGB(150, 255, 140) -- 연두색
 local RING_SEGMENTS = 48
 
--- 누름판에 가려도 달고나가 퍼지는 크기가 보이게: 반투명 연두색 원 선.
--- 얇은 네온 조각 48개를 누름판 원판 바로 위 높이에 띄움 (카메라가 위에서 보므로 누름판에 안 가림)
+-- 누름판에 가려도 달고나가 퍼지는 크기가 보이게: 반투명 연두색 원 선
 local function makeRing(S)
 	local folder = Instance.new("Folder")
 	folder.Name = "PressRing"
 	for _ = 1, RING_SEGMENTS do
-		S:fxPart(folder, {
-			Name = "Seg",
-			Material = Enum.Material.Neon,
-			Color = RING_COLOR,
-			Transparency = 0.25,
-			Size = Vector3.new(0.09, 0.03, 0.1),
-		})
+		S:fxPart(folder, { Name = "Seg", Material = Enum.Material.Neon, Color = RING_COLOR, Transparency = 0.25, Size = Vector3.new(0.09, 0.03, 0.1) })
 	end
 	folder.Parent = S.fx
 	return folder
@@ -48,6 +46,11 @@ local function placeRing(S, ring, dal)
 	end
 end
 
+-- 누르고 있는 시간 → 얇아지는 빠르기 (두께 비율/초). 0.35에서 시작해 1초 뒤 약 2.6
+local function rateFor(holdT)
+	return 0.35 + 2.2 * holdT * holdT
+end
+
 function Press.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
 	local cfg = Config.Press
@@ -56,7 +59,7 @@ function Press.run(ctx)
 	local presser = S.Presser
 	local discHalf = presser.Disc.Size.X / 2
 	local c = dal.center
-	-- 0. 막대 꽂기 (사용자 요청 2026-11-19): 누르기 전에, 반죽이 말랑할 때
+	-- 0. 막대 꽂기 (반죽이 말랑할 때)
 	if not st.stick then
 		if not Stick.place(ctx) then
 			return nil
@@ -65,73 +68,87 @@ function Press.run(ctx)
 	S:presserSeeThrough(true)
 	local ring = makeRing(S)
 	placeRing(S, ring, dal)
-
-	-- 누름판은 손으로 가져와서 누름 (사용자 요청 2026-11-18, PresserGrab): 잡아서 반죽 위로 끌고 와
-	-- 손가락을 꾹 멈추면 내려가 누르고, 떼거나 옆으로 끌면 올라옴. 누르는 횟수는 예전처럼 3번
 	local pv = presser:GetPivot()
 	local grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0))
-	if st.presserInHand and P.down then
-		-- 붓기 뒤 도구 고르기에서 누름판을 잡고 넘어옴 → 잡은 채로 시작 (사용자 요청 2026-11-19)
-		grab.grabbed = true
-		grab.seen = P.presses
-	end
-	st.presserInHand = nil
-	local function canPress(pos)
-		return Vector3.new(pos.X - c.X, 0, pos.Z - c.Z).Magnitude < math.max(dal:radius() * 0.7, 0.35)
-	end
-
-	local count = 0
-	local wasPressing = false
-	local contact = false
-	local hStart = dal.h
-	local bottom = grab.bottom
-	local overHinted = false
+	local cam = workspace.CurrentCamera
 	local h = dal.h
-	local everGrabbed = false
+	local hMin = cfg.crack * 0.8
 
-	ui:say("누름판을 잡아 반죽 위로 가져와요", "반죽 위에서 꾹 누르고 있으면 눌려요 (1 / 3)")
+	-- ① 누름판 집기: 누르면 손에 들고 반죽 위로 날아옴
+	ui:say("누름판을 눌러 들어요", "누름판을 누르면 손에 들려요")
+	local seen = P.presses
+	local missed = false
+	while true do
+		local dt = ctx.frame()
+		if not dt then
+			return nil
+		end
+		if P.down and P.presses ~= seen then
+			seen = P.presses
+			local sp = cam:WorldToScreenPoint(grab:worldBottom() + Vector3.new(0, discHalf * 2, 0))
+			if (Vector2.new(sp.X, sp.Y) - P.pos).Magnitude < PICK_PX or missed then
+				break
+			end
+			missed = true -- 한 번 빗나가면 다음엔 어디를 눌러도 들림
+			ui:hint("누름판을 눌러요")
+		end
+		grab:draw()
+	end
+	Sfx.play("pop", 0.6, 1.0)
+	ui:buzz(0.3, 0.05)
+	-- 반죽 위로 날아와 떠 있음
+	local hover = dal:topY() + HOVER
+	local t = 0
+	local fromPos, fromBottom = grab.pos, grab.bottom
+	while t < 0.3 do
+		local dt = ctx.frame()
+		if not dt then
+			return nil
+		end
+		t += dt
+		local k = 1 - (1 - math.min(t / 0.3, 1)) ^ 3
+		grab.pos = fromPos:Lerp(Vector3.new(c.X, 0, c.Z), k)
+		grab.bottom = fromBottom + (hover - fromBottom) * k + math.sin(k * math.pi) * 0.5
+		grab:draw()
+		placeRing(S, ring, dal)
+	end
+	seen = P.presses -- 집을 때 누른 것은 누르기로 치지 않음
 
+	-- ② 3번 나눠 누르기
+	local count = 0
+	local holding, contact, holdT = false, false, 0
+	local hStart = h
+	local bottom = hover
 	while count < 3 do
 		local dt = ctx.frame()
 		if not dt then
-			ui:setThick(false)
+			ui:setGauge(false)
 			return nil
 		end
 		local target = cfg.targets[count + 1]
-		local carryY = dal:topY() + HOVER
-		local ended, why = grab:update(dt, carryY, canPress)
-		if why == "miss" then
-			ui:hint("누름판을 눌러 잡아요")
-		end
-		if grab.grabbed then
-			everGrabbed = true
-		end
-		if grab.pressing and not wasPressing then
+		local lo, hi = target * (1 - BAND), target * (1 + BAND)
+		hover = dal:topY() + HOVER
+		if P.down and not holding and P.presses ~= seen then
+			seen = P.presses
+			holding = true
 			contact = false
-			hStart = h
-			overHinted = false
+			holdT = 0
 		end
-		wasPressing = grab.pressing
-		if grab.pressing then
+		if holding then
 			local surface = c.Y + h * 0.75
 			if not contact then
 				bottom = math.max(bottom - 7 * dt, surface)
-				if bottom <= surface then
-					bottom = surface
+				if bottom <= surface + 1e-3 then
 					contact = true
 					ui:buzz(0.3, 0.05)
-					Sfx.play("pressSticky", 0.7, 1.0) -- 반죽에 닿을 때 끈적한 "쩍"
+					Sfx.play("pressSticky", 0.7, 1.0)
 				end
 			else
-				h = math.max(h - cfg.k * h * dt, cfg.crack * 0.8) -- 더 눌러도 이 이상 얇아지지 않음
+				holdT += dt
+				h = math.max(h - rateFor(holdT) * h * dt, hMin)
 				bottom = c.Y + h * 0.75
 				dal:setThickness(h)
 				Stick.follow(st)
-				local nextT = cfg.targets[count + 2]
-				if nextT and h < nextT * 1.05 and not overHinted then
-					overHinted = true
-					ui:hint("확! 누르지 말고 나눠서 눌러요")
-				end
 				if h < cfg.crack and not rec.cracked then
 					rec.cracked = true
 					dal:crack(6, 0.5)
@@ -139,48 +156,46 @@ function Press.run(ctx)
 					ui:buzz(0.8, 0.15)
 				end
 			end
-		else
-			-- 들고 있거나 놓아 둔 누름판은 반죽 위 높이에 떠 있음 (떼면 0.1~0.2초 스프링으로 올라옴)
-			bottom += (carryY - bottom) * (1 - math.exp(-22 * dt))
-		end
-		if ended then
-			if contact then
-				Sfx.play("pressSticky", 0.45, 1.3) -- 뗄 때 끈적하게 떨어지는 소리
-			end
-			-- 이미 가장 얇아졌으면 더 줄지 않아도 누른 것으로 셈 (안 그러면 단계가 안 끝남)
-			if hStart - h > 0.02 or (contact and h <= cfg.crack * 0.81) then
-				count += 1
-				h = h * 1.04 -- 떼면 살짝 되돌아옴
-				dal:setThickness(h)
-				rec.thick[count] = h
-				print(string.format("[Press] %d번째 두께 %.3f (목표 %.3f)", count, h, target))
-				local sc = Scoring.pressOne(count, h)
-				if h > target * 1.25 then
-					ui:hint("조금 더 길게 꾹 눌러요")
-				elseif sc >= 80 then
-					ui:toast(count < 3 and "좋아요!" or "딱 좋아요!", 0.8)
+			if not P.down then
+				holding = false
+				if contact then
+					Sfx.play("pressSticky", 0.45, 1.3)
 				end
-				ui:buzz(0.3, 0.05)
-			elseif contact then
-				ui:hint("조금 더 길게 꾹 눌러요")
+				if h <= hi then
+					-- 초록 칸에 들어왔거나 지나침 → 이번 누르기 끝
+					count += 1
+					rec.thick[count] = h
+					print(string.format("[Press] %d번째 두께 %.3f (목표 %.3f)", count, h, target))
+					local sc = Scoring.pressOne(count, h)
+					if sc >= 95 then
+						ui:toast(count < 3 and "딱 좋아요!" or "완벽해요!", 0.8)
+					elseif h < lo then
+						ui:hint("조금 너무 눌렀어요 (바늘이 초록 칸일 때 떼요)")
+					else
+						ui:toast("좋아요!", 0.7)
+					end
+					hStart = h
+					ui:buzz(0.3, 0.05)
+				elseif contact then
+					ui:hint("조금 더! 바늘이 초록 칸에 들어가면 떼요")
+				end
+				contact = false
 			end
-			contact = false
+		else
+			bottom += (hover - bottom) * (1 - math.exp(-22 * dt))
 		end
 		grab.bottom = bottom
 		grab:draw()
+		placeRing(S, ring, dal)
+		local nt = cfg.targets[math.min(count + 1, 3)]
 		if count < 3 then
-			if not everGrabbed then
-				ui:say("누름판을 잡아 반죽 위로 가져와요", string.format("반죽 위에서 꾹 누르고 있으면 눌려요 (%d / 3)", count + 1))
-			elseif grab.pressing then
-				ui:say(string.format("꾹! (%d / 3)", count + 1), "떼거나 옆으로 끌면 올라와요")
+			ui:setPressGauge(true, h, hStart, hMin, nt * (1 - BAND), nt * (1 + BAND))
+			if holding and contact then
+				ui:say(string.format("꾹! (%d / 3)", count + 1), "바늘이 초록 칸에 오면 손을 떼요 · 오래 누를수록 빨라져요")
 			else
-				ui:say(string.format("반죽 위에서 꾹 멈춰요 (%d / 3)", count + 1), count == 0 and "확! 누르지 말고 3번 나눠서" or (count == 1 and "두꺼운 원판 → 조금 더" or "마지막! 넓고 얇게"))
+				ui:say(string.format("화면을 누르고 있으면 눌려요 (%d / 3)", count + 1), count == 0 and "천천히! 3번 나눠서 넓고 얇게" or (count == 1 and "조금 더 얇게" or "마지막! 넓고 얇게"))
 			end
 		end
-		placeRing(S, ring, dal)
-		local nextTarget = cfg.targets[math.min(count + 1, 3)]
-		-- 옆에서 본 두께 카드 (두껍게 시작해서 누를수록 얇아짐, 초록 띠 = 이번 목표)
-		ui:setThick(true, h, cfg.h0, nextTarget * 0.82, nextTarget * 1.18, dal.color)
 		local partial = { thick = {}, cracked = rec.cracked }
 		for i = 1, 3 do
 			partial.thick[i] = rec.thick[i] or cfg.targets[i]
@@ -188,9 +203,9 @@ function Press.run(ctx)
 		ctx.live("press", Scoring.press(partial))
 	end
 
-	ui:setThick(false)
+	ui:setGauge(false)
 	ui:say("넓고 얇게 잘 펴졌어요!", "")
-	local t = 0
+	t = 0
 	while t < 0.4 do
 		local dt = ctx.frame()
 		if not dt then

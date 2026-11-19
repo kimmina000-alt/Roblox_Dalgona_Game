@@ -26,17 +26,25 @@ local function depthFor(hold, cfg)
 	return 1 + 0.3 * math.clamp((hold - cfg.holdMax) / (cfg.crackHold - cfg.holdMax), 0, 1)
 end
 
--- 틀 손잡이 자국: 손잡이 쪽(틀의 +Z)으로 가장 튀어나온 철사 끝에서 원판 가장자리까지 곧은 홈
-local function handleLine(wires, placed, c, R)
-	local d = placed:VectorToWorldSpace(Vector3.zAxis)
+-- 틀 손잡이 자국: 실제 손잡이가 붙은 자리에서 원판 가장자리까지 곧은 홈 (사용자 요청 2026-11-19: 손잡이 위치와 자국 위치 통일).
+-- 손잡이는 틀 가운데 세로선(Root의 x=0)이 외곽선과 만나는 가장 아래(+Z) 점에서 +Z로 뻗음 (CutterRig·cutters.py와 같은 규칙)
+local function handleLine(wires, root, c, R)
+	local d = root.CFrame:VectorToWorldSpace(Vector3.zAxis)
 	d = Vector3.new(d.X, 0, d.Z).Unit
-	local best, bestDot = nil, -math.huge
+	local base = root.Position
+	local best, bestT = nil, -math.huge
 	for _, w in ipairs(wires) do
-		for _, sgn in ipairs({ -1, 1 }) do
-			local p = w.Position + w.CFrame.LookVector * (w.Size.Z / 2) * sgn
-			local dot = (p - placed.Position):Dot(d)
-			if dot > bestDot then
-				best, bestDot = p, dot
+		local a = w.Position - w.CFrame.LookVector * (w.Size.Z / 2)
+		local b = w.Position + w.CFrame.LookVector * (w.Size.Z / 2)
+		local ex, ez = b.X - a.X, b.Z - a.Z
+		local det = -d.X * ez + ex * d.Z
+		if math.abs(det) > 1e-6 then
+			local rx, rz = a.X - base.X, a.Z - base.Z
+			local t = (-rx * ez + ex * rz) / det
+			local s = (d.X * rz - d.Z * rx) / det
+			if s >= -0.02 and s <= 1.02 and t > bestT then
+				bestT = t
+				best = Vector3.new(base.X + d.X * t, w.Position.Y, base.Z + d.Z * t)
 			end
 		end
 	end
@@ -194,7 +202,7 @@ function Stamp.run(ctx)
 						holdT = 0
 						if not groove then
 							-- 닿는 순간부터 홈이 파이기 시작 (누를수록 깊고 또렷)
-							groove = dal:groove(wires, handleLine(wires, placed, c, dal:radius() * 0.98))
+							groove = dal:groove(wires, handleLine(wires, cutter.Root, c, dal:radius() * 0.98))
 						end
 					end
 				else
@@ -225,7 +233,7 @@ function Stamp.run(ctx)
 
 	-- 결과: 틀 아래로 선이 파이고, 틀을 들면 자국이 남음
 	if not groove then
-		groove = dal:groove(wires, handleLine(wires, placed, c, dal:radius() * 0.98))
+		groove = dal:groove(wires, handleLine(wires, cutter.Root, c, dal:radius() * 0.98))
 	end
 	groove:setDepth(depthFor(rec.hold, cfg))
 	if (dal.e or 0) + 1 > Config.Pour.failSpread then
