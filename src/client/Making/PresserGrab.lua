@@ -7,13 +7,14 @@
 local Grab = {}
 Grab.__index = Grab
 
-local STILL_SPEED = 110 -- 픽셀/초: 이보다 느리면 멈춘 것
-local STILL_TIME = 0.14 -- 이만큼 멈춰 있으면 누르기 시작
+local STILL_SPEED = 150 -- 픽셀/초: 이보다 느리면 멈춘 것 (손가락 떨림에도 눌리게, 2026-11-19 "잘 안 눌림")
+local STILL_TIME = 0.1 -- 이만큼 멈춰 있으면 누르기 시작
 local DRAG_OFF = 30 -- 누르는 중 처음 자리에서 이만큼(픽셀) 끌면 들림
 local PICK_PX = 90 -- 누름판 화면 위치에서 이만큼 안을 눌러야 잡힘
 
 -- S: Station, P: Pointer, start: 지금 누름판 바닥 가운데(Vector3)
-function Grab.new(S, P, start)
+-- opts.anywhere: 화면 어디를 눌러도 누름판을 잡음 (모양 찍기처럼 누름판 말고 쓸 도구가 없을 때)
+function Grab.new(S, P, start, opts)
 	local presser = S.Presser
 	local self = setmetatable({}, Grab)
 	self.S, self.P = S, P
@@ -29,6 +30,7 @@ function Grab.new(S, P, start)
 	self.anchor = nil
 	self.lastPos = nil
 	self.missHint = false
+	self.anywhere = opts and opts.anywhere or false
 	return self
 end
 
@@ -52,7 +54,7 @@ function Grab:update(dt, carryY, canPress)
 		-- Pointer.pos 는 WorldToScreenPoint 좌표 (ScreenPointToRay 와 같은 기준)
 		local sp = cam:WorldToScreenPoint(self:worldBottom() + Vector3.new(0, self.discHalf * 2, 0))
 		local d = (Vector2.new(sp.X, sp.Y) - P.pos).Magnitude
-		if d < PICK_PX or self.missHint then
+		if d < PICK_PX or self.missHint or self.anywhere then
 			-- 한 번 빗나가면 다음엔 어디를 눌러도 잡힘 (작은 화면 배려)
 			self.grabbed = true
 			self.lastPos = nil

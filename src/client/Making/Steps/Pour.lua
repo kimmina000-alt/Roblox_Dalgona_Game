@@ -190,6 +190,25 @@ local function reshape(ctx, rec, blob, eRing)
 	local holding = false
 	local lastTip = nil
 	local touched = false
+	local foldA, fold = nil, nil -- 접기: 잡은 가장자리 점, 늘어난 반죽 조각
+	local function mergeFold()
+		-- 늘어난 조각이 접힌 자리에서 반죽 속으로 녹아듦
+		foldA = nil
+		local f = fold
+		fold = nil
+		if f then
+			task.spawn(function()
+				local s0, t = f.Size, 0
+				while t < 0.3 and f.Parent do
+					t += task.wait()
+					local a = math.min(t / 0.3, 1)
+					f.Size = Vector3.new(s0.X * (1 + 0.3 * a), s0.Y * (1 - 0.7 * a), s0.Z * (1 - 0.6 * a))
+					f.Transparency = a
+				end
+				f:Destroy()
+			end)
+		end
+	end
 	ui:say("어떤 도구를 쓸까요?", "젓가락 손잡이를 잡으면 모양 다듬기 · 누름판을 잡으면 누르기")
 	if spread0 > RESHAPE_FROM then
 		ui:hint("반죽이 길쭉해요! 젓가락으로 끝을 가운데로 모아 봐요")
@@ -243,8 +262,38 @@ local function reshape(ctx, rec, blob, eRing)
 				end
 			end
 			lastTip = tip
+			-- 접기 모션 (사용자 요청 2026-11-19): 젓가락 끝이 반죽 가장자리에 처음 닿은 곳을 잡고, 끄는 만큼
+			-- 그 자리의 반죽이 혀처럼 늘어나 안쪽으로 접혀 올라옴. 놓거나 반죽 밖으로 멀리 빼면 반죽 속으로 녹아듦
+			do
+				local R = blob:radius()
+				local k = math.sqrt(1 + blob.e)
+				local a, b = major(tip)
+				local rn = math.sqrt((a / (R * k)) ^ 2 + (b / (R / k)) ^ 2)
+				if not foldA and rn > 0.55 and rn < 1.2 then
+					-- 끝에서 가운데 → 바깥 방향으로 가장자리 점
+					local dx, dz = tip.X - blob.center.X, tip.Z - blob.center.Z
+					foldA = Vector3.new(blob.center.X + dx / math.max(rn, 1e-3), blob:topY(), blob.center.Z + dz / math.max(rn, 1e-3))
+				elseif foldA and rn > 1.5 then
+					mergeFold()
+				end
+				if foldA then
+					local T = Vector3.new(tip.X, blob:topY(), tip.Z)
+					local len = (T - foldA).Magnitude
+					if len > 0.04 then
+						if not fold then
+							fold = S:fxPart(S.fx, { Name = "FoldFlap", Shape = Enum.PartType.Ball, Color = blob.color, Material = Enum.Material.SmoothPlastic })
+						end
+						local w = math.max(R * 0.38, 0.12)
+						local mid = (foldA + T) / 2 + Vector3.new(0, 0.025, 0)
+						fold.Transparency = 0
+						fold.Size = Vector3.new(w * (1 - 0.25 * math.min(len / R, 1)), 0.07, len + w * 0.6)
+						fold.CFrame = CFrame.lookAt(mid, Vector3.new(T.X, mid.Y, T.Z))
+					end
+				end
+			end
 			if not P.down then
 				holding = false
+				mergeFold()
 				restStick() -- 놓으면 오른쪽 자리로 돌아감
 			end
 		end

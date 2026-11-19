@@ -126,12 +126,13 @@ function Stamp.run(ctx)
 						phase = "press"
 						S:presserSeeThrough(true)
 						local pv = presser:GetPivot()
-						grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0))
+						-- 이 단계에서 쓸 도구는 누름판뿐이라 어디를 눌러도 잡힘 (2026-11-19 "누름판 누르기가 잘 안 됨")
+						grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0), { anywhere = true })
 						ui:buzz(0.3, 0.05)
 						if rec.dist > 0.3 then
 							ui:hint("가운데에서 조금 벗어났어요")
 						end
-						ui:say("누름판을 잡아 틀 위로 가져와요", "틀 위에서 꾹 멈추면 눌려요 · 짧게! 오래 누르면 금이 가요")
+						ui:say("누름판을 틀 위로 끌고 와 꾹 멈춰요", "아무 데나 눌러 끌면 누름판이 따라와요 · 짧게! 오래 누르면 금이 가요")
 					else
 						ui:hint("달고나 위에 올려요")
 					end
@@ -145,7 +146,7 @@ function Stamp.run(ctx)
 			local contactY = placed.Position.Y + 0.42 + 0.05
 			local hover = contactY + 0.6
 			local ended, why = grab:update(dt, hover, function(pos)
-				return Vector3.new(pos.X - placed.X, 0, pos.Z - placed.Z).Magnitude < 0.6
+				return Vector3.new(pos.X - placed.X, 0, pos.Z - placed.Z).Magnitude < 1.0
 			end)
 			if why == "miss" then
 				ui:hint("누름판을 눌러 잡아요")

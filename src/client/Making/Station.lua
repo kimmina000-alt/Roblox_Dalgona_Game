@@ -9,6 +9,7 @@ Station.__index = Station
 local MOVABLE = { "Ladle", "WoodSpoon", "SodaSpoon", "Presser", "Cutter", "Chopsticks" }
 local CutterRig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CutterRig"))
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("DalgonaConfig"))
 local Fx = require(script.Parent:WaitForChild("Fx"))
 
 function Station.new()
@@ -44,6 +45,9 @@ function Station.new()
 	for _, name in ipairs(MOVABLE) do
 		self.rest[name] = self[name]:GetPivot()
 	end
+	-- 국자는 기본으로 연탄 위 철망에 놓여 있음 (사용자 요청 2026-11-19: 저절로 중간 높이에 떠 있지 않고, 플레이어가 들어야 함)
+	self.rest.Ladle = self:ladleAt(Config.Melt.hMin)
+	self.Ladle:PivotTo(self.rest.Ladle)
 	-- 젓가락은 부품마다 따로 움직여서(Stir) 모델째 되돌리면 테이블 위 포장 젓가락이 밀려남 → 부품별로 기억
 	self.chopRest = {}
 	for _, p in ipairs(self.Chopsticks:GetChildren()) do

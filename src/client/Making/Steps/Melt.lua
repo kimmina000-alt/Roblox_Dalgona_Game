@@ -45,7 +45,7 @@ function Melt.run(ctx)
 	local rec = { t0 = ctx.now(), green = 0, tempOk = 0, scorch = 0, burn = 0, burnt = false, samples = {} }
 	local stir = Stir.new()
 	local samp = sampler(rec)
-	st.h = 1.0 -- 처음엔 불에서 조금 띄워 둠 (가만히 두면 천천히 녹음)
+	st.h = cfg.hMin -- 국자는 연탄 위 철망에 놓여 있음: 가만히 두면 금방 뜨거워져 탐 → 왼쪽을 끌어 들어 올려야 함 (2026-11-19)
 	st.temp = st.temp or 30
 	st.burn = 0
 	st.melt = 0
@@ -59,7 +59,7 @@ function Melt.run(ctx)
 
 	Stir.placeChopsticks(S, S.Bowl.Position)
 	P.sideZone = Heat.sideZone
-	ui:say("국자 안에서 원을 그리며 저어요", "초록(JUST RIGHT)에 맞춰요 · 왼쪽을 위아래로 끌면 국자 높이")
+	ui:say("국자 안에서 원을 그리며 저어요", "국자가 연탄 위에 놓여 있어요 · 왼쪽을 위로 끌어 들어 올려요")
 
 	while true do
 		local dt = ctx.frame()
