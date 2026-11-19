@@ -18,6 +18,7 @@
 - [대화 결정 기록 및 미확정 사항](docs/DECISION_LOG_AND_OPEN_QUESTIONS.md)
 - [개발 계획서 v1 (미확정 권장안, 미니게임 조작, 개발 순서)](docs/DEVELOPMENT_PLAN.md)
 - [레퍼런스 영상 움직임 분석](docs/MOTION_REFERENCE_ANALYSIS.md)
+- [가게 성장 기획: 국자·알바생 → 시대별 설비 → 공장](docs/SHOP_GROWTH_PLAN.md)
 - [작업 우선순위 (지금 할 일·다음 순서)](docs/WORK_PRIORITIES.md)
 
 ## 문서 상태 규칙
