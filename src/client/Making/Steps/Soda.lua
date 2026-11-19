@@ -267,29 +267,58 @@ function Soda.run(ctx)
 	local sampleAcc = 0
 	local baseThick = S.Contents.Size.X
 
-	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "젓가락 손잡이를 끌어 끝을 소다 통에 대고 클릭해요")
-	-- 소다 넣는 동안은 높이 막대만 (2026-11-20: 왼쪽 구역이 소다 통 근처 젓가락 손잡이 클릭을 가로챘음). 젓기부터는 왼쪽 구역도
-	P.sideZone = Heat.barZoneFor(ui)
+	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "소다통을 눌러 찍어요")
+	-- 소다 넣는 동안 왼쪽 구역(국자 높이)은 소다 통·젓가락 근처를 빼고 (2026-11-20: 그 근처 클릭은 젓가락 쪽)
+	P.sideZone = Heat.sideZoneExcept(function(pos)
+		local cam = workspace.CurrentCamera
+		local function near(w, px)
+			local v = cam:WorldToScreenPoint(w)
+			return (Vector2.new(v.X, v.Y) - pos).Magnitude < px
+		end
+		if near(S.SodaTub.Soda.Position, TAP_PX) then
+			return true
+		end
+		local tip = stickTip
+		if tip then
+			for k = 0, 4 do
+				if near(tip + STICK_LEAN * 2.75 * (k / 4), 70) then
+					return true
+				end
+			end
+		end
+		return false
+	end)
+	-- 소다통 바로 위 안내 (2026-11-20 사용자 요청): 화면 글씨를 통 위에 붙임 (소다를 털어 넣을 때까지)
+	local function tubTip(on)
+		if on then
+			local v, vis = workspace.CurrentCamera:WorldToScreenPoint(S.SodaTub.Soda.Position + Vector3.new(0, 0.5, 0))
+			ui:setWorldTip(vis and "소다통을 눌러 찍어요 ↓" or nil, Vector2.new(v.X, v.Y))
+		else
+			ui:setWorldTip(nil)
+		end
+	end
 
 	while true do
 		local dt = ctx.frame()
 		if not dt then
 			bubbles(S, false)
 			P.sideZone = nil
+			tubTip(false)
 			return nil
 		end
 
 		-- 국자는 아직 불 위: 오래 끌면 탐 (너무 늦게 넣음). 높이는 왼쪽 막대로
-		local danger = Heat.control(st, P, ui)
+		local danger = Heat.control(st, P, ui, S)
 		S.Ladle:PivotTo(S:ladleAt(st.h))
 		Heat.flame(S, st.h)
 		Heat.step(st, dt)
 		if danger then
-			ui:hint(phase == "drop" and "불에 너무 가까워요! 왼쪽 높이 막대를 위로 끌어요" or "불에 너무 가까워요! 왼쪽을 위로 끌어 국자를 올려요")
+			ui:hint("불에 너무 가까워요! 왼쪽을 위로 끌어 국자를 올려요")
 		end
 		if st.burn >= 1 then
 			bubbles(S, false)
 			P.sideZone = nil
+			tubTip(false)
 			ui:setHeight(false)
 			ctx.markBurnt()
 			ui:hint("너무 늦었어요, 타 버렸어요…")
@@ -330,7 +359,7 @@ function Soda.run(ctx)
 					if load > 0.005 then
 						anim = { kind = "shake", t = 0, from = stickTip, done = false }
 					elseif dips == 0 then
-						ui:hint("먼저 젓가락 끝을 소다 통에 대고 클릭해요")
+						ui:hint("먼저 소다통을 눌러 소다를 묻혀요")
 					end
 					return true
 				end
@@ -350,19 +379,19 @@ function Soda.run(ctx)
 			if carrying and not P.down then
 				carrying = false
 				if press0 and not press0.moved and os.clock() - press0.t < 0.6 then
-					-- 클릭: 젓가락 끝이 있는 곳에서. 끝이 소다 통·국자 위가 아니면 누른 곳(화면 위치)으로 가서
-					if not tapAt(stickTip) then
-						local tubS = cam:WorldToScreenPoint(tubPos)
-						local ladleS = cam:WorldToScreenPoint(Vector3.new(bowl.X, S:contentsTopY(), bowl.Z))
-						local dTub = (P.pos - Vector2.new(tubS.X, tubS.Y)).Magnitude
-						local dLadle = (P.pos - Vector2.new(ladleS.X, ladleS.Y)).Magnitude
-						if dTub < TAP_PX and dTub <= dLadle then
-							tapAt(tubPos)
-						elseif dLadle < TAP_PX * 1.3 then
-							tapAt(bowl)
-						else
-							ui:hint("젓가락 손잡이를 끌어 끝을 소다 통에 대고 클릭해요")
-						end
+					-- 클릭: 소다 통을 누르면 통에서 찍기 (2026-11-20 "소다통 클릭"), 아니면 젓가락 끝이 있는 곳(통·국자)에서.
+					-- 그것도 아니면 국자 근처를 누른 경우 털어 넣기
+					local tubS = cam:WorldToScreenPoint(tubPos)
+					local ladleS = cam:WorldToScreenPoint(Vector3.new(bowl.X, S:contentsTopY(), bowl.Z))
+					local dTub = (P.pos - Vector2.new(tubS.X, tubS.Y)).Magnitude
+					local dLadle = (P.pos - Vector2.new(ladleS.X, ladleS.Y)).Magnitude
+					-- 순서: 소다통을 누름 → 찍기, 국자를 누름 → 털기, 그 밖 → 젓가락 끝이 있는 곳에서
+					if dTub < TAP_PX and dTub <= dLadle then
+						tapAt(tubPos)
+					elseif dLadle < TAP_PX * 1.3 then
+						tapAt(bowl)
+					elseif not tapAt(stickTip) then
+						ui:hint("소다통을 눌러 찍어요")
 					end
 				end
 				press0 = nil
@@ -473,6 +502,7 @@ function Soda.run(ctx)
 				if load <= 0.005 and dips > 0 and overLadle(stickTip) and spd > 2.5 then
 					phase = "stir"
 					P.sideZone = Heat.sideZoneFor(ui)
+					tubTip(false)
 					carrying = false
 					press0 = nil
 					ui:say("빠르게 저어요!", "FAST 쪽이 정답 · 불에서 떼고 저어요")
@@ -520,11 +550,12 @@ function Soda.run(ctx)
 			if load > 0.005 then
 				sub = string.format("%d번 찍었어요 · 더 클릭하면 두껍게 · 국자로 옮겨 클릭하면 톡톡 털어 넣어요", math.floor(load / DIP_LAYER + 0.5))
 			elseif dips == 0 then
-				sub = "젓가락 손잡이를 끌어 끝을 소다 통에 대고 클릭! · 클릭할수록 두껍게 · 초록 칸까지"
+				sub = "소다통을 눌러 찍어요 · 누를수록 두껍게 · 초록 칸까지"
 			else
 				sub = rec.amount < cfg.idealMin and "조금 더 넣어요 (초록 칸까지) · 다 넣었으면 국자 안을 끌어 저어요" or "다 넣었으면 국자 안을 끌어 원을 그리며 저어요"
 			end
 			ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", sub)
+			tubTip(dips == 0 and load < LOAD_MAX - 1e-3)
 			ui:setMeter(true, math.min(1, (rec.amount + load) / HEAP_MAX), cfg.idealMin / HEAP_MAX, cfg.idealMax / HEAP_MAX, "소다")
 		else
 			if tipPowder then
@@ -613,6 +644,7 @@ function Soda.run(ctx)
 
 	bubbles(S, false)
 	P.sideZone = nil
+	tubTip(false)
 	ui:setHeight(false)
 	Sfx.stopStir()
 	Sfx.stop("foamBubble")

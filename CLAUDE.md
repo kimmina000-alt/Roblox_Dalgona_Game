@@ -10,7 +10,7 @@
 |---|---|---|
 | `src/shared` | ReplicatedStorage.Shared | `DalgonaConfig`(수치), `Scoring`(Q 공식, 서버·클라 공용), `CutterShapes`(도안 외곽선, 자동 생성), `ShapeCatalog`(도안 목록·가격), `CutterRig`(작업대 틀에 도안 끼우기) |
 | `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수), `Services/WorkstationBuilder`(작업대를 Part로 생성), `Services/FactoryBuilder`(Lv5 공장 배치·색칠), `Services/StallDecor`(깅엄 식탁보·러그·색감 보정) |
-| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker, Toon=도구 만화 외곽선, ChopstickCup=젓가락 통, BatterMesh=EditableMesh 반죽), `Making/Steps/`(Stick=막대 꽂기 포함)(단계마다 모듈 1개) |
+| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker, Toon=도구 만화 외곽선, ChopstickCup=젓가락 통, BatterMesh=EditableMesh 반죽, Showcase=완성 달고나 크게 보여 주기·포장·빵끈), `Making/Steps/`(Stick=막대 꽂기 포함)(단계마다 모듈 1개) |
 
 미니게임 단계는 모듈 하나씩 (Luau 로컬 변수 200개 제한).
 

@@ -115,6 +115,23 @@ function Press.run(ctx)
 	seen = P.presses -- 집을 때 누른 것은 누르기로 치지 않음
 
 	-- ② 3번 나눠 누르기
+	-- 2026-11-20 (사용자 요청): 누름판은 드는 것까지만 보이고, 누르는 동안엔 사라져서 반죽이 눌려 퍼지는 게 보임
+	local presserParts = {}
+	for _, d in ipairs(S.Presser:GetDescendants()) do
+		if d:IsA("BasePart") then
+			table.insert(presserParts, d)
+		end
+	end
+	local presserOutline = S.Presser:FindFirstChild("ToonOutline")
+	local fade = 0
+	local function fadePresser(k)
+		for _, d in ipairs(presserParts) do
+			d.LocalTransparencyModifier = k
+		end
+		if presserOutline then
+			presserOutline.Enabled = k < 0.5
+		end
+	end
 	local count = 0
 	local holding, contact, holdT = false, false, 0
 	local hStart = h
@@ -123,6 +140,7 @@ function Press.run(ctx)
 		local dt = ctx.frame()
 		if not dt then
 			ui:setGauge(false)
+			fadePresser(0)
 			return nil
 		end
 		local target = cfg.targets[count + 1]
@@ -186,6 +204,8 @@ function Press.run(ctx)
 		end
 		grab.bottom = bottom
 		grab:draw()
+		fade += (((holding and contact) and 1 or 0) - fade) * (1 - math.exp(-14 * dt))
+		fadePresser(fade)
 		placeRing(S, ring, dal)
 		local nt = cfg.targets[math.min(count + 1, 3)]
 		if count < 3 then
@@ -204,6 +224,7 @@ function Press.run(ctx)
 	end
 
 	ui:setGauge(false)
+	fadePresser(0)
 	ui:say("넓고 얇게 잘 펴졌어요!", "")
 	t = 0
 	while t < 0.4 do

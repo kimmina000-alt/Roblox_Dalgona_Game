@@ -31,16 +31,23 @@ function Heat.sideZoneFor(ui)
 	end
 end
 
--- 막대만 (소다 넣기: 왼쪽 위 소다 통 근처를 누르는 건 젓가락 쪽이라 왼쪽 구역 전체를 쓰지 않음)
+-- 막대만 (예전) — 높이 막대가 없어진 뒤(2026-11-20)에는 아무 데도 아님
 function Heat.barZoneFor(ui)
 	return function(pos)
 		return ui:heightHit(pos)
 	end
 end
 
+-- 왼쪽 구역이지만 avoid(pos)가 참인 곳(소다 통·젓가락 근처)은 빼고 (소다 넣기: 그곳 클릭은 젓가락 쪽)
+function Heat.sideZoneExcept(avoid)
+	return function(pos)
+		return Heat.sideZone(pos) and not avoid(pos)
+	end
+end
+
 local coached = false -- 이번 접속에서 국자 높이를 한 번이라도 끌어 봤나 (처음 하는 사람 안내)
 
-function Heat.control(st, P, ui)
+function Heat.control(st, P, ui, S)
 	local cfg = Config.Melt
 	local d = P.takeSideDelta()
 	if P.side.down then
@@ -57,7 +64,14 @@ function Heat.control(st, P, ui)
 	local danger = Heat.sourceTemp(st.h) > cfg.burnTemp or st.temp > cfg.burnTemp - 3
 	-- 알맞은 높이 칸: 불 온도가 tempLow ~ tempHigh가 되는 높이 (sourceTemp = 235 - 95 × h01)
 	local band = { math.clamp((235 - cfg.tempHigh) / 95, 0, 1), math.clamp((235 - cfg.tempLow) / 95, 0, 1) }
-	ui:setHeight(true, (st.h - cfg.hMin) / (cfg.hMax - cfg.hMin), danger, P.side.down, band)
+	local anchor = nil
+	if S and S.Bowl then
+		local v, on = workspace.CurrentCamera:WorldToScreenPoint(S.Bowl.Position)
+		if on then
+			anchor = Vector2.new(v.X, v.Y)
+		end
+	end
+	ui:setHeight(true, (st.h - cfg.hMin) / (cfg.hMax - cfg.hMin), danger, P.side.down, band, anchor)
 	return danger
 end
 

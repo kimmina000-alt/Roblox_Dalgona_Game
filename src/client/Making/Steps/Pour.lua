@@ -362,7 +362,10 @@ function Pour.run(ctx)
 	local volume = math.pi * 0.55 ^ 2 * Config.Press.h0
 	-- 국자 손잡이 잡는 자리 (국자 피벗 기준, 기울이기 전 자세). 메시 손잡이 = 손 붙이는 자리와 같음
 	local gripLocal = S:ladleGripLocal()
-	local hideK = 0 -- 국자 숨김 정도 (붓는 동안 1)
+	local hideK = 1 -- 국자 숨김 정도 (2026-11-20: 붓기 내내 국자는 안 보이고 떨어지는 반죽만)
+	setLadleHidden(ladle, 1)
+	-- 반죽이 떨어질 자리 표시 (손가락 아래 철판 위 옅은 그림자)
+	local aimMark = S:fxPart(S.fx, { Name = "PourAim", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(60, 36, 20), Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(0.01, 0.34, 0.34) })
 
 	-- 젓가락은 내려놓음
 	S:restChopsticks()
@@ -445,7 +448,7 @@ function Pour.run(ctx)
 		ladle:PivotTo(start:Lerp(hover, 1 - (1 - math.min(tc / 0.4, 1)) ^ 3))
 	end
 	home = hover
-	ui:say("국자를 철판 위로 끌어 기울여요", "설탕 원 가운데에 덩어리째 부어요")
+	ui:say("철판 위를 누르고 있으면 반죽이 한 방울씩 떨어져요", "누른 채로 움직이면 그 모양대로 · 설탕 원 안에")
 
 	while true do
 		local dt = ctx.frame()
@@ -469,9 +472,13 @@ function Pour.run(ctx)
 				local w = f - rot:VectorToWorldSpace(gripLocal)
 				w = Vector3.new(w.X, carryY, w.Z)
 				local over = math.abs(w.X - plate.X) < half and math.abs(w.Z - plate.Z) < half
-				-- 철판 위에서 기울이면 국자는 높이 들어 붓는 것처럼 사라지고 떨어지는 반죽 줄기만 보임 (사용자 요청 2026-11-19)
-				hideK += ((over and tilt > math.rad(20) and 1 or 0) - hideK) * (1 - math.exp(-10 * dt))
-				setLadleHidden(ladle, hideK)
+				-- 방울 붓기: 국자는 숨기고 손가락 바로 아래로 반죽이 떨어짐 (2026-11-20)
+				local fingerLand = P.toPlane(S.plateTop)
+				if dropMode then
+					over = math.abs(fingerLand.X - plate.X) < half and math.abs(fingerLand.Z - plate.Z) < half
+					aimMark.Transparency = over and 0.7 or 1
+					aimMark.CFrame = CFrame.new(fingerLand.X, S.plateTop + 0.006, fingerLand.Z) * CFrame.Angles(0, 0, math.rad(90))
+				end
 				if over then
 					tilt = math.min(MAX_TILT, tilt + math.rad(150) * dt)
 				else
@@ -486,7 +493,7 @@ function Pour.run(ctx)
 				if dropMode and tilt > POUR_TILT and poured < total then
 					-- 한 방울씩: 많이 기울일수록 자주. 국자를 움직이며 떨어뜨리면 그 길대로 모양이 됨 (하트를 그리면 하트)
 					local rate = (tilt - POUR_TILT) / (MAX_TILT - POUR_TILT)
-					local landing = Vector3.new(lip.X + 0.12, S.plateTop, lip.Z)
+					local landing = Vector3.new(fingerLand.X, S.plateTop, fingerLand.Z)
 					landNow = landing
 					dropAcc += dt
 					if dropAcc >= 0.3 - 0.18 * rate then
@@ -615,10 +622,7 @@ function Pour.run(ctx)
 				end
 			else
 				tilt = 0
-				if hideK > 0.01 then
-					hideK += (0 - hideK) * (1 - math.exp(-10 * dt))
-					setLadleHidden(ladle, hideK)
-				end
+				aimMark.Transparency = 1
 				S:springTo(ladle, home, dt, 22)
 				if blob and blob.lobes and poured >= total - 1e-4 and #drops == 0 then
 					-- 방울을 다 떨어뜨린 뒤 손을 뗌: 다 부은 것으로
@@ -642,10 +646,7 @@ function Pour.run(ctx)
 			end
 		else
 			-- 다 부으면 남은 반죽이 저절로 똑 떨어짐 (사용자 요청 2026-11-19: 젓가락으로 국자 긁기 삭제)
-			if hideK > 0.01 then
-				hideK += (0 - hideK) * (1 - math.exp(-8 * dt))
-				setLadleHidden(ladle, hideK)
-			end
+			aimMark.Transparency = 1
 			if os.clock() - dropTime > 0.5 then
 				local remainBlob = S:fxPart(S.fx, { Name = "Drip", Shape = Enum.PartType.Ball, Size = Vector3.one * 0.35, Color = color, Material = Enum.Material.SmoothPlastic, CFrame = CFrame.new(S.Bowl.Position) })
 				local target = st.dalgona.center + Vector3.new(0.1, st.dalgona.h * 0.6, 0)

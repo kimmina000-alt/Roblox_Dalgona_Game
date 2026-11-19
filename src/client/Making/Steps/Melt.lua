@@ -80,7 +80,7 @@ function Melt.run(ctx)
 		if stir.active then
 			started = true
 		end
-		local danger = Heat.control(st, P, ui)
+		local danger = Heat.control(st, P, ui, S)
 		S.Ladle:PivotTo(S:ladleAt(st.h))
 		tip = nil
 		if stir.active then

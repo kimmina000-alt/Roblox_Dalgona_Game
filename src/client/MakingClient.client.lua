@@ -21,6 +21,7 @@ local Ui = require(Making:WaitForChild("Ui"))
 local ChopstickPicker = require(Making:WaitForChild("ChopstickCup")) -- 2026-11-19: 포장 찢기 대신 젓가락 통에서 꺼내기
 local CutterPicker = require(Making:WaitForChild("CutterPicker"))
 local Sfx = require(Making:WaitForChild("Sfx"))
+local Showcase = require(Making:WaitForChild("Showcase"))
 local StepsFolder = Making:WaitForChild("Steps")
 
 local STEP_MODULES = {}
@@ -168,7 +169,7 @@ local function runSession()
 		return
 	end
 	station:useChopstick(pick.pair, pick.side)
-	station:attachHand(player) -- 국자 손잡이를 잡은 캐릭터 팔 (젓가락 고르기 화면을 가리지 않게 그 뒤에 붙임)
+	-- 국자 잡은 손은 안 붙임 (2026-11-20 사용자 요청 "국자 잡은 손 삭제")
 	ctx.state.chopstick = pick
 
 	local okStart, sessionId = pcall(function()
@@ -250,6 +251,13 @@ local function runSession()
 		CameraRig.go("melt")
 	end
 	result.details = Scoring.explain(ctx.records)
+	-- 다 만든 달고나를 화면 가운데로 크게 → 포장지 씌우고 빵끈 묶기 → 완성 창 (2026-11-20)
+	if dal and not result.burnt then
+		Showcase.run(ctx, dal, ctx.state)
+		if ctx.aborted then
+			return
+		end
+	end
 	if result.stars >= 2 and not result.burnt and not result.misshaped then
 		Sfx.play("fanfare", 0.5)
 	end

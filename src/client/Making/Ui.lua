@@ -90,9 +90,9 @@ function Ui.new(player, steps)
 		local s = math.clamp(math.min(v.X / self.ref.X, v.Y / self.ref.Y), 0.5, 1.25)
 		self.scale.Scale = s
 		-- 작업 순서 줄은 Roblox 위쪽 메뉴 줄 높이까지 올림 (메뉴 버튼은 왼쪽 끝이라 안 겹침)
-		self.topRow.Position = UDim2.new(0.5, 0, 0, -GuiService:GetGuiInset().Y / s + 6)
+		self.topRow.Position = UDim2.new(0.5, 0, 0, -GuiService:GetGuiInset().Y / s + 20) -- 2026-11-20: 조금 내림
 		-- QUALITY 창과 세로 막대는 위 줄 아래 왼쪽에 (위쪽 여백이 0인 기기에서도 안 겹치게)
-		local rowBottom = -GuiService:GetGuiInset().Y / s + 6 + (self.touch and 52 or 44)
+		local rowBottom = -GuiService:GetGuiInset().Y / s + 20 + (self.touch and 52 or 44)
 		local qy = math.max(16, rowBottom + 10)
 		-- (사용자 요청 2026-11-19) 왼쪽 아래는 국자 높이를 끄는 손가락에 가려짐 → 온도·높이 막대는 왼쪽 위로, QUALITY는 오른쪽 위로
 		self.qualityBox.AnchorPoint = Vector2.new(1, 0)
@@ -103,6 +103,7 @@ function Ui.new(player, steps)
 		self.qualityBox.Position = UDim2.new(1, -20, 0, qy)
 		self.meter.Position = UDim2.fromOffset(20, qy)
 		self.heightBox.Position = UDim2.fromOffset(76, qy)
+		self.vgauge.Position = UDim2.fromOffset(76, qy) -- 젓기 속도: 거품·온도 창 오른쪽 옆, 같은 길이
 		root.Size = UDim2.fromOffset(v.X / s, v.Y / s)
 	end
 	rescale()
@@ -269,6 +270,24 @@ function Ui:_buildGauge()
 	end
 	self.needle = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(6, 36), BackgroundColor3 = INK, BorderSizePixel = 0, ZIndex = 3, Parent = track }, { corner(3) })
 	self.gauge = g
+	-- 젓기 속도 (2026-11-20 사용자 요청): 왼쪽 세로 막대, 거품·온도 창과 같은 길이. 아래 느림 → 위 빠름
+	local v = new("Frame", {
+		Name = "StirGaugeV",
+		Position = UDim2.fromOffset(76, 16),
+		Size = UDim2.fromOffset(46, self.touch and 150 or 200),
+		BackgroundColor3 = PAPER,
+		BackgroundTransparency = 0.08,
+		Visible = false,
+		Parent = self.root,
+	}, { corner(12) })
+	local vt = new("Frame", { Position = UDim2.fromOffset(13, 12), Size = UDim2.new(1, -26, 1, -40), BackgroundTransparency = 1, Parent = v })
+	self.vSegs = {}
+	for i, c in ipairs({ Color3.fromRGB(80, 140, 230), Color3.fromRGB(80, 190, 90), Color3.fromRGB(230, 80, 70) }) do
+		self.vSegs[i] = new("Frame", { BackgroundColor3 = c, BorderSizePixel = 0, Parent = vt })
+	end
+	self.vNeedle = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 1), Size = UDim2.new(1, 14, 0, 6), BackgroundColor3 = INK, BorderSizePixel = 0, ZIndex = 3, Parent = vt }, { corner(3) })
+	self.vTitle = label({ Text = "속도", TextSize = 12, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 16), Parent = v })
+	self.vgauge = v
 end
 
 -- 오른쪽 세로 막대: 누르기 두께 / 소다 양 같은 "얼마나"를 보여 줌
@@ -328,15 +347,16 @@ function Ui:_buildHeight()
 	self.heightStroke = new("UIStroke", { Thickness = 3, Color = INK, Parent = self.heightKnob })
 	self.heightBox = box
 	-- 처음 하는 사람 안내 (사용자 요청 2026-11-20): 손가락이 막대를 따라 위로 끄는 모습 + 말풍선
-	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Position = UDim2.new(1, 8, 0, 0), Size = UDim2.new(0, 260, 1, 0), Visible = false, ZIndex = 6, Parent = box })
+	-- 높이 막대를 없앤 뒤(2026-11-20)에는 화면 왼쪽(팔이 있는 곳)에서 손가락이 위로 끄는 모습
+	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Position = UDim2.new(0, 60, 0.35, 0), Size = UDim2.new(0, 300, 0.4, 0), Visible = false, ZIndex = 6, Parent = self.root })
 	self.coachFinger = label({ Text = "👆", TextSize = 40, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, -40, 0.85, 0), Size = UDim2.fromOffset(44, 44), ZIndex = 7, Parent = coach })
 	local bubble = label({
-		Text = "여기를 잡고 위로 끌면\n국자가 올라가요!\n(왼쪽 팔을 잡고 끌어도 돼요)",
+		Text = "왼쪽(팔)을 잡고 위로 끌면\n국자가 올라가요!",
 		TextSize = 15,
 		TextColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.05,
 		BackgroundColor3 = Color3.fromRGB(40, 150, 60),
-		Position = UDim2.new(0, 30, 0, -6), -- 위쪽: 아래에서 올라오는 높이 안내 말풍선과 안 겹치게
+		Position = UDim2.new(0, 30, 0, -6),
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -346,6 +366,55 @@ function Ui:_buildHeight()
 	corner(12).Parent = bubble
 	new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8), Parent = bubble })
 	self.coach = coach
+	-- 높이 글씨 안내
+	local msg = label({
+		Name = "HeightMsg",
+		Text = "",
+		TextSize = 20,
+		TextColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.05,
+		BackgroundColor3 = INK,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Size = UDim2.fromOffset(0, 40),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Visible = false,
+		ZIndex = 8,
+		Parent = self.root,
+	})
+	corner(20).Parent = msg
+	new("UIPadding", { PaddingLeft = UDim.new(0, 16), PaddingRight = UDim.new(0, 16), Parent = msg })
+	self.heightMsg = msg
+	-- 도구 바로 위에 붙는 안내 글씨 (소다통 등, 2026-11-20)
+	local wt = label({
+		Name = "WorldTip",
+		Text = "",
+		TextSize = 16,
+		TextColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0.05,
+		BackgroundColor3 = INK,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Size = UDim2.fromOffset(0, 34),
+		AutomaticSize = Enum.AutomaticSize.X,
+		Visible = false,
+		ZIndex = 8,
+		Parent = self.root,
+	})
+	corner(17).Parent = wt
+	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14), Parent = wt })
+	self.worldTip = wt
+end
+
+-- text가 nil이면 숨김. pos = 화면 좌표(도구 위)
+function Ui:setWorldTip(text, pos)
+	local wt = self.worldTip
+	if not text then
+		wt.Visible = false
+		return
+	end
+	local sc = self.scale.Scale
+	wt.Text = text
+	wt.Position = UDim2.fromOffset(pos.X / sc, pos.Y / sc - 6)
+	wt.Visible = true
 end
 
 -- 처음 하는 사람에게 국자 높이 끄는 법 보여 주기 (손가락이 막대 아래 → 위로 반복)
@@ -384,10 +453,58 @@ end
 
 -- h01: 1 = 가장 높이(불에서 멀리), 0 = 불 바로 위. danger면 빨갛게, active(끄는 중)면 크게
 -- band = { lo, hi } 알맞은 높이 (h01 기준)
-function Ui:setHeight(visible, h01, danger, active, band)
-	self.heightBox.Visible = visible
+-- 2026-11-20 (사용자 요청): 높이 막대 대신 글씨로만 알려 줌. 너무 가깝다·적당하다·너무 멀다를 국자 위에 띄웠다가 서서히 사라짐.
+-- anchor = 국자의 화면 위치 (없으면 화면 위쪽 가운데)
+function Ui:setHeight(visible, h01, danger, active, band, anchor)
+	self.heightBox.Visible = false
 	if not visible then
+		self.coach.Visible = false
+		if self.coachTween then
+			self.coachTween:Cancel()
+			self.coachTween = nil
+		end
+		self.heightState = nil
+		self.heightMsg.Visible = false
 		return
+	end
+	local state
+	if danger or (band and h01 < band[1]) then
+		state = "near"
+	elseif band and h01 > band[2] then
+		state = "far"
+	else
+		state = "ok"
+	end
+	local now = os.clock()
+	local msg = self.heightMsg
+	if anchor then
+		local sc = self.scale.Scale
+		msg.Position = UDim2.fromOffset(anchor.X / sc, anchor.Y / sc - 70)
+	else
+		msg.Position = UDim2.new(0.5, 0, 0.3, 0)
+	end
+	-- 상태가 바뀌거나, 끄는 중이거나, 너무 가까운 채로 1.6초가 지나면 다시 띄움
+	if state ~= self.heightState or (active and now - (self.heightShown or 0) > 0.4) or (state == "near" and now - (self.heightShown or 0) > 1.6) then
+		self.heightState = state
+		self.heightShown = now
+		local info = {
+			near = { "너무 가까워요! 위로 들어요", RED },
+			ok = { "적당해요!", Color3.fromRGB(40, 150, 60) },
+			far = { "너무 멀어요 · 조금 내려요", Color3.fromRGB(70, 120, 210) },
+		}
+		msg.Text = info[state][1]
+		msg.BackgroundColor3 = info[state][2]
+		msg.Visible = true
+		msg.TextTransparency = 0
+		msg.BackgroundTransparency = 0.05
+		if self.heightTween then
+			self.heightTween:Cancel()
+		end
+		self.heightTween = TweenService:Create(msg, TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In, 0, false, 0.5), { TextTransparency = 1, BackgroundTransparency = 1 })
+		self.heightTween:Play()
+	end
+	do
+		return -- 아래는 예전 높이 막대 (안 보임)
 	end
 	if band then
 		self.heightBand.Visible = true
@@ -579,9 +696,29 @@ end
 
 -- 젓기 속도 게이지: speed(rad/s), slow/fast 경계, 오른쪽 끝 = maxSpeed
 function Ui:setGauge(visible, speed, slow, fast, title)
-	self.gauge.Visible = visible
+	-- 젓기 속도는 왼쪽 세로 막대로 (누르기 게이지는 그대로 가로)
+	self.gauge.Visible = false
+	self.vgauge.Visible = visible
 	if not visible then
 		self.needleX = nil
+		return
+	end
+	do
+		local maxS = fast * 1.6
+		local a, b = slow / maxS, fast / maxS
+		local sg = self.vSegs
+		sg[1].Position, sg[1].Size = UDim2.fromScale(0, 1 - a), UDim2.fromScale(1, a)
+		sg[2].Position, sg[2].Size = UDim2.fromScale(0, 1 - b), UDim2.fromScale(1, b - a)
+		sg[3].Position, sg[3].Size = UDim2.fromScale(0, 0), UDim2.fromScale(1, 1 - b)
+		local now = os.clock()
+		local dt = math.min(now - (self.needleT or now), 0.1)
+		self.needleT = now
+		local target = math.clamp(speed / maxS, 0, 1)
+		local x = self.needleX or target
+		x += (target - x) * (1 - math.exp(-7 * dt))
+		self.needleX = x
+		self.vNeedle.Position = UDim2.fromScale(0.5, 1 - x)
+		self.vTitle.Text = speed < slow and "느림" or (speed > fast and "빠름" or "적당")
 		return
 	end
 	local maxS = fast * 1.6
