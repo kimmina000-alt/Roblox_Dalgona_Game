@@ -21,7 +21,9 @@ local POSES = {
 	sugar = { Vector2.new(-4.1, 0.4), 16.2 }, -- 설탕 그릇 두 개 + 국자
 	melt = { Vector2.new(-5.5, 0.4), 16.2 }, -- 국자 (아래 STIR SPEED 게이지에 안 가리게 화면 위쪽 62% 안)
 	soda = { Vector2.new(-3.6, 0.0), 15.6 }, -- 국자 + 소다 통 (게이지 위로). 통에 담가 휘저으니 통이 화면 안쪽에 오게 (2026-11-19)
-	pour = { Vector2.new(1.7, 0.3), 14.1 }, -- 철판 + 왼쪽에서 들고 오는 국자
+	-- 붓기: 위에서 보면 국자가 줄기를 가려서, 앞쪽에서 비스듬히(기울기 0.75) 내려다봄 → 국자 가장자리에서
+	-- 떨어지는 반죽 줄기가 국자 아래로 보임 (사용자 요청 2026-11-19: 국자 투명하게 말고 다른 방법)
+	pour = { Vector2.new(1.5, 0.2), 12.6, 0.75 }, -- 철판 + 왼쪽에서 들고 오는 국자
 	press = { Vector2.new(2.8, 0.2), 12.0 }, -- 철판 + 오른쪽 뒤로 비킨 누름판
 	stamp = { Vector2.new(3.5, 0.8), 14.1 }, -- 철판 + 오른쪽 모양 틀
 	result = { Vector2.new(5.2, 0.2), 12.2 }, -- 달고나는 왼쪽 (오른쪽은 결과 창)
@@ -44,6 +46,7 @@ end
 function CameraRig.poseFor(key)
 	local p = POSES[STEP_POSE[key] or key] or POSES.sugar
 	local c, y = p[1], p[2]
+	local tilt = p[3] or TILT
 	-- 세로 화면은 옆이 좁으니 더 높이 올라감
 	local vp = workspace.CurrentCamera.ViewportSize
 	if vp.X / math.max(vp.Y, 1) < 1.2 then
@@ -55,7 +58,7 @@ function CameraRig.poseFor(key)
 	end
 	local h = y - TABLE_TOP
 	local look = origin:PointToWorldSpace(Vector3.new(c.X, TABLE_TOP, c.Y))
-	local pos = origin:PointToWorldSpace(Vector3.new(c.X, y, c.Y + h * TILT))
+	local pos = origin:PointToWorldSpace(Vector3.new(c.X, y, c.Y + h * tilt))
 	-- 화면 위쪽 = 테이블 안쪽(-Z)
 	return CFrame.lookAt(pos, look, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))
 end

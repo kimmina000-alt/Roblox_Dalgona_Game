@@ -156,39 +156,43 @@ local function drawStream(st, lip, out, land)
 	end
 end
 
--- 부은 뒤 모양 다듬기 (사용자 요청 2026-11-18): 길쭉하게 부었으면 나무젓가락 손잡이를 잡고 끝을 끌어
--- 길쭉한 쪽 끝을 가운데로 모아 덜 길쭉하게. 완전히 동그랗게는 못 하고 조금 나아지는 정도(최대 RESHAPE_MAX만큼).
--- 끝(긴 축 바깥 절반)에 닿은 채 가운데 쪽으로 끈 거리만큼 줄어듦. 손을 떼고 RESHAPE_IDLE초 지나거나 충분히 둥글면 끝
-local RESHAPE_FROM = 1.15 -- 이보다 길쭉하면 다듬기 단계
+-- 부은 뒤 도구 고르기 (사용자 요청 2026-11-19): 철판 오른쪽에 나무젓가락과 누름판을 놓아 두고,
+-- 플레이어가 잡는 도구에 따라 다음 작업이 정해짐.
+--   나무젓가락 손잡이를 잡고 끌면 → 모양 다듬기 (길쭉한 끝을 가운데로 끌어 모음, 여러 번 가능)
+--   누름판을 잡으면 → 바로 누르기 단계로 (잡은 채로 넘어감)
+-- 다듬기는 완전히 동그랗게는 못 하고 조금 나아지는 정도(최대 RESHAPE_MAX만큼)
+local RESHAPE_FROM = 1.15 -- 이보다 길쭉해야 다듬기로 줄어듦
 local RESHAPE_MAX = 0.6 -- 다듬어서 줄일 수 있는 길쭉함 최대
-local RESHAPE_GAIN = 0.35 -- 가운데로 끈 거리(stud) → 줄어드는 길쭉함 (여러 번 끌어 모아야 함, 2026-11-19 너무 빨리 끝남)
-local RESHAPE_IDLE = 4.0 -- 다듬다가 손을 떼고 이만큼 지나면 끝 (안 건드리면 RESHAPE_IDLE * 3)
-
--- 붓는 동안 국자·손을 반투명하게 (사용자 요청 2026-11-19: 국자에 가려 어떻게 부어지는지 안 보임)
-local SEE_THROUGH = 0.6
-local function ladleSeeThrough(ladle, k)
-	for _, p in ipairs(ladle:GetDescendants()) do
-		if p:IsA("BasePart") and p.Name ~= "Contents" and p.Name ~= "FxFoam" then
-			p.LocalTransparencyModifier = k
-		end
-	end
-end
+local RESHAPE_GAIN = 0.35 -- 가운데로 끈 거리(stud) → 줄어드는 길쭉함 (여러 번 끌어 모아야 함)
+local PICK_PX = 90 -- 도구 손잡이 화면 위치에서 이만큼 안을 눌러야 잡힘
 
 local function reshape(ctx, rec, blob, eRing)
-	local S, P, ui = ctx.station, ctx.pointer, ctx.ui
+	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
 	local spread0 = rec.spread or 1
-	print(string.format("[Pour] 부은 모양 길쭉함 %.2f (다듬기 %s)", spread0, spread0 > RESHAPE_FROM and "함" or "안 함"))
-	if spread0 <= RESHAPE_FROM then
-		return true
-	end
+	print(string.format("[Pour] 부은 모양 길쭉함 %.2f", spread0))
 	local floor = math.max(1.08, spread0 - RESHAPE_MAX)
-	ui:say("젓가락으로 모양을 다듬어요", "길쭉한 끝을 가운데로 끌어 모아요")
-	ui:hint("반죽이 길쭉해요! 끝을 가운데로 모아요")
+	local cam = workspace.CurrentCamera
+	-- 나무젓가락은 철판 오른쪽 앞에 비스듬히 눕혀 둠 (끝 = 철판 쪽, 손잡이 = 오른쪽 앞)
+	local plate = S.Plate.Position
+	local half = S.Plate.Size.X / 2
+	local restTip = Vector3.new(plate.X + half + 0.5, S.plateTop + 0.05, plate.Z + half * 0.3)
+	local restDir = Vector3.new(0.55, 0.12, 0.83).Unit
+	local function restStick()
+		Stir.placeChopsticksAt(S, restTip, restTip + restDir * 2.75)
+	end
+	restStick()
+	local function screen(v)
+		local p = cam:WorldToScreenPoint(v)
+		return Vector2.new(p.X, p.Y)
+	end
 	local seenPress = P.presses
 	local holding = false
 	local lastTip = nil
-	local idle = 0
 	local touched = false
+	ui:say("어떤 도구를 쓸까요?", "젓가락 손잡이를 잡으면 모양 다듬기 · 누름판을 잡으면 누르기")
+	if spread0 > RESHAPE_FROM then
+		ui:hint("반죽이 길쭉해요! 젓가락으로 끝을 가운데로 모아 봐요")
+	end
 	while true do
 		local dt = ctx.frame()
 		if not dt then
@@ -196,11 +200,23 @@ local function reshape(ctx, rec, blob, eRing)
 		end
 		if P.down and not holding and P.presses ~= seenPress then
 			seenPress = P.presses
-			holding = true
-			lastTip = nil
+			local stickHandle = screen(restTip + restDir * 2.6)
+			local pv = S.Presser:GetPivot()
+			local presserTop = screen(pv.Position + Vector3.new(0, S.Presser.Disc.Size.X, 0))
+			local dStick = (P.pos - stickHandle).Magnitude
+			local dPress = (P.pos - presserTop).Magnitude
+			if dPress < PICK_PX and dPress <= dStick then
+				-- 누름판을 잡음 → 누르기 단계로 (Press가 잡힌 채로 시작)
+				st.presserInHand = true
+				break
+			elseif dStick < PICK_PX * 1.3 then
+				holding = true
+				lastTip = nil
+			else
+				ui:hint("젓가락 손잡이나 누름판을 잡아요")
+			end
 		end
 		if holding then
-			idle = 0
 			local tip, hnd = Stir.grip(blob:topY() + 0.02)
 			Stir.placeChopsticksAt(S, tip, hnd)
 			-- 긴 축(yaw) 좌표: 반죽 가운데에서 긴 쪽으로 얼마나 나가 있나
@@ -218,7 +234,7 @@ local function reshape(ctx, rec, blob, eRing)
 				-- 끝 쪽(긴 축 바깥 절반, 반죽 안이나 바로 바깥)에서 가운데로 끌면 줄어듦
 				local nearEnd = math.abs(a1) > L * 0.45 and math.abs(a1) < L * 1.15 and math.abs(b1) < R / k * 1.1
 				local inward = math.abs(a0) - math.abs(a1)
-				if nearEnd and inward > 0 and rec.spread > floor then
+				if nearEnd and inward > 0 and rec.spread > floor and rec.spread > RESHAPE_FROM * 0.95 then
 					touched = true
 					rec.spread = math.max(floor, rec.spread - inward * RESHAPE_GAIN)
 					blob.e = math.max(eRing, rec.spread - 1)
@@ -228,24 +244,18 @@ local function reshape(ctx, rec, blob, eRing)
 			lastTip = tip
 			if not P.down then
 				holding = false
+				restStick() -- 놓으면 오른쪽 자리로 돌아감
 			end
-		else
-			idle += dt
-			S:restChopsticks()
 		end
 		ctx.live("pour", Scoring.pour(rec))
-		local left = math.max(0, (touched and RESHAPE_IDLE or RESHAPE_IDLE * 3) - idle)
-		ui:say("젓가락으로 모양을 다듬어요", string.format("길쭉한 끝을 가운데로 끌어 모아요 · 길쭉함 %d%%%s", math.floor((rec.spread - 1) * 100 + 0.5), (not holding and idle > 0.8) and string.format(" · %d초 뒤 다음 단계", math.ceil(left)) or ""))
-		-- 둥글어지거나 한도에 닿아도 바로 넘어가지 않고, 손을 뗀 채 RESHAPE_IDLE초 지나야 다음 단계 (사용자 요청 2026-11-19)
-		if idle > RESHAPE_IDLE and (touched or idle > RESHAPE_IDLE * 3) then
-			break
+		if holding then
+			ui:say("젓가락으로 모양을 다듬어요", string.format("길쭉한 끝을 가운데로 끌어 모아요 · 길쭉함 %d%%", math.floor((rec.spread - 1) * 100 + 0.5)))
+		else
+			ui:say("어떤 도구를 쓸까요?", touched and string.format("길쭉함 %d%% · 다 다듬었으면 누름판을 잡아요", math.floor((rec.spread - 1) * 100 + 0.5)) or "젓가락 손잡이를 잡으면 모양 다듬기 · 누름판을 잡으면 누르기")
 		end
 	end
 	S:restChopsticks()
 	print(string.format("[Pour] 다듬은 뒤 길쭉함 %.2f", rec.spread))
-	if rec.spread <= floor + 1e-3 and floor > RESHAPE_FROM then
-		ui:hint("더는 동그랗게 안 돼요 (붓는 것부터 한 곳에)")
-	end
 	return true
 end
 Pour.reshape = reshape
@@ -267,7 +277,6 @@ function Pour.run(ctx)
 	local volume = math.pi * 0.55 ^ 2 * Config.Press.h0
 	-- 국자 손잡이 잡는 자리 (국자 피벗 기준, 기울이기 전 자세). 메시 손잡이 = 손 붙이는 자리와 같음
 	local gripLocal = S:ladleGripLocal()
-	local seeK = 0 -- 국자 반투명 정도
 
 	-- 젓가락은 내려놓음
 	S:restChopsticks()
@@ -323,8 +332,6 @@ function Pour.run(ctx)
 			if grabbing then
 				-- 손가락 = 국자 손잡이 (사용자 요청 2026-11-18: 동그란 그릇이 아니라 손잡이를 잡고 옮김).
 				-- 그릇 자리 = 손가락 자리에서 손잡이→그릇 만큼 옮긴 곳
-				seeK += (SEE_THROUGH - seeK) * (1 - math.exp(-12 * dt))
-				ladleSeeThrough(ladle, seeK)
 				local f = P.toPlane(carryY + rot:VectorToWorldSpace(gripLocal).Y)
 				local w = f - rot:VectorToWorldSpace(gripLocal)
 				w = Vector3.new(w.X, carryY, w.Z)
@@ -448,10 +455,6 @@ function Pour.run(ctx)
 				end
 			else
 				tilt = 0
-				if seeK > 0.01 then
-					seeK += (0 - seeK) * (1 - math.exp(-12 * dt))
-					ladleSeeThrough(ladle, seeK)
-				end
 				S:springTo(ladle, home, dt, 22)
 				if blob and not dropped then
 					-- 붓다가 손을 떼면 줄기가 끊겨 떨어짐 (다시 기울이면 이어서 부음)
@@ -507,7 +510,6 @@ function Pour.run(ctx)
 		S:springTo(ladle, S.rest.Ladle, dt, 14)
 	end
 	ladle:PivotTo(S.rest.Ladle)
-	ladleSeeThrough(ladle, 0)
 	S:setContents({ Transparency = 1 })
 	if st.dalgona and not reshape(ctx, rec, st.dalgona, eRing) then
 		return nil

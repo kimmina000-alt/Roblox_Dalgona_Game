@@ -62,6 +62,12 @@ function Press.run(ctx)
 	-- 손가락을 꾹 멈추면 내려가 누르고, 떼거나 옆으로 끌면 올라옴. 누르는 횟수는 예전처럼 3번
 	local pv = presser:GetPivot()
 	local grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0))
+	if st.presserInHand and P.down then
+		-- 붓기 뒤 도구 고르기에서 누름판을 잡고 넘어옴 → 잡은 채로 시작 (사용자 요청 2026-11-19)
+		grab.grabbed = true
+		grab.seen = P.presses
+	end
+	st.presserInHand = nil
 	local function canPress(pos)
 		return Vector3.new(pos.X - c.X, 0, pos.Z - c.Z).Magnitude < math.max(dal:radius() * 0.7, 0.35)
 	end

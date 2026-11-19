@@ -168,8 +168,11 @@ function SugarLook:center()
 	return Vector3.new(b.X, self.S:contentsTopY(), b.Z)
 end
 
--- 젓가락 끝에 맺히는 설탕물 (고른 젓가락에 붙어서 같이 움직임)
-function SugarLook:coatTip(tip, amount, burn)
+-- 젓가락 끝에 묻는 설탕 (고른 젓가락에 붙어서 같이 움직임). 사용자 요청 2026-11-19:
+-- 녹이는 동안 설탕에 담긴 끝부분에 설탕이 묻어 색이 점점 진해짐 — 흰 가루 → 반투명 결정 → 맑은 호박색 → (탈수록) 진한 갈색
+local COAT_POWDER = Color3.fromRGB(250, 248, 242)
+local COAT_CRYSTAL = Color3.fromRGB(240, 214, 160)
+function SugarLook:coatTip(tip, amount, burn, p)
 	local st, S = self.st, self.S
 	local stick = S.Chopsticks:FindFirstChild("Chosen") or S.Chopsticks:FindFirstChild("Stick1")
 	if not stick then
@@ -196,9 +199,27 @@ function SugarLook:coatTip(tip, amount, burn)
 		coat.Parent = S.fx
 		st.tipCoat = coat
 	end
-	coat.Color = SugarLook.syrupColor(1, burn)
+	p = p or 1
+	local col
+	if p < 0.3 then
+		col = COAT_POWDER
+		coat.Material = Enum.Material.Sand
+		coat.Transparency = 0
+	elseif p < 0.6 then
+		col = COAT_POWDER:Lerp(COAT_CRYSTAL, (p - 0.3) / 0.3)
+		coat.Material = Enum.Material.Glass
+		coat.Transparency = 0.15
+	else
+		col = COAT_CRYSTAL:Lerp(SugarLook.syrupColor(1, burn), math.clamp((p - 0.6) / 0.4, 0, 1))
+		coat.Material = Enum.Material.Glass
+		coat.Transparency = 0.2
+	end
+	if burn > 0 then
+		col = col:Lerp(SugarLook.syrupColor(1, burn), math.min(1, burn * 2))
+	end
+	coat.Color = col
 	local w = 0.03 + 0.035 * amount
-	coat.Size = Vector3.new(w, w, 0.06 + 0.08 * amount)
+	coat.Size = Vector3.new(w, w, 0.07 + 0.1 * amount)
 end
 
 -- p = 녹은 정도 0~1, tip = 젓는 중이면 젓가락 끝 (Vector3), 아니면 nil
@@ -351,9 +372,9 @@ function SugarLook:update(dt, p, tip, burn)
 			l.part.CFrame = CFrame.new(c.X + l.x, base.Y + s * l.squash * 0.5, c.Z + l.z) * l.rot
 		end
 	end
-	-- 젓가락 끝 설탕물: 녹기 시작하면 묻어서 점점 맺힘
-	if tip and p > 0.4 then
-		self:coatTip(tip, smooth01(p, 0.4, 1), burn)
+	-- 젓가락 끝 설탕: 저으면 처음부터 가루가 묻고, 녹을수록 색이 진해지며 두껍게 맺힘
+	if tip and (self.stirred > 0.3 or p > 0.05) then
+		self:coatTip(tip, 0.25 + 0.75 * smooth01(p, 0.05, 1), burn, p)
 	end
 	-- C: 남은 흰 실이 떠다니다 사라지고, 작은 기포 점이 생겼다 꺼짐 (물 위에)
 	local thr = (p >= 0.66) and smooth01(p, 0.7, 0.9) or 1

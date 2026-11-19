@@ -69,6 +69,15 @@ function Stamp.run(ctx)
 		end
 	end
 
+	-- 틀 손잡이 끝 자리 (틀 기준점 기준, 제자리 회전 기준): 손잡이는 플레이어 쪽(+Z)으로 가장 튀어나온 곳
+	local cutRot = S.rest.Cutter - S.rest.Cutter.Position
+	local handleLocal = Vector3.new(0, 0, 0.8)
+	do
+		local bcf, bsz = cutter:GetBoundingBox()
+		local pv = cutter:GetPivot()
+		local far = bcf.Position + Vector3.new(0, 0, bsz.Z / 2 - 0.08)
+		handleLocal = cutRot:VectorToObjectSpace(Vector3.new(far.X - pv.Position.X, 0, far.Z - pv.Position.Z))
+	end
 	local phase = "place"
 	local grabbing = false
 	local seenPress = P.presses
@@ -93,7 +102,11 @@ function Stamp.run(ctx)
 				lastPos = nil
 			end
 			if grabbing then
-				local w = P.toPlane(top + 0.7)
+				-- 손가락 = 틀 손잡이 끝 (사용자 요청 2026-11-19: 가운데를 잡으면 손가락에 틀이 가려 안 보임).
+				-- 틀 가운데 = 손가락 자리에서 손잡이 끝 → 가운데만큼 옮긴 곳
+				local f = P.toPlane(top + 0.7)
+				local w = f - (CFrame.Angles(0, math.rad(yaw), 0) * cutRot):VectorToWorldSpace(handleLocal)
+				w = Vector3.new(w.X, top + 0.7, w.Z)
 				if lastPos and dt > 0 then
 					local vx = (w.X - lastPos.X) / dt
 					local target = math.clamp(vx * 4, -25, 25)
