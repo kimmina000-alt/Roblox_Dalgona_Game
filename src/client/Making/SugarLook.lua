@@ -181,7 +181,7 @@ function SugarLook:coatTip(tip, amount, burn, p)
 	local coat = st.tipCoat
 	if not coat or not coat.Parent then
 		local dir = S.stickDir or STICK_DIR
-		local center = tip + dir * 0.05
+		local center = tip + dir * 0.12 -- 끝에서 젓가락 위쪽으로 묻음
 		coat = Instance.new("Part")
 		coat.Name = "FxTipCoat"
 		coat.Shape = Enum.PartType.Ball
@@ -218,8 +218,9 @@ function SugarLook:coatTip(tip, amount, burn, p)
 		col = col:Lerp(SugarLook.syrupColor(1, burn), math.min(1, burn * 2))
 	end
 	coat.Color = col
-	local w = 0.03 + 0.035 * amount
-	coat.Size = Vector3.new(w, w, 0.07 + 0.1 * amount)
+	-- 위에서도 보이게 굵고 길게 (2026-11-19 "설탕 묻은 게 안 보임")
+	local w = 0.06 + 0.06 * amount
+	coat.Size = Vector3.new(w, w, 0.14 + 0.2 * amount)
 end
 
 -- p = 녹은 정도 0~1, tip = 젓는 중이면 젓가락 끝 (Vector3), 아니면 nil

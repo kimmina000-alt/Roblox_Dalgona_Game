@@ -85,6 +85,7 @@ function Stamp.run(ctx)
 	local lastPos = nil
 	local placed = nil -- 놓은 자리 CFrame (틀 Root)
 	local contact, holdT = false, 0
+	local holding = false
 	local grab = nil -- 누름판 손으로 들기 (PresserGrab)
 	local groove = nil
 
@@ -126,13 +127,14 @@ function Stamp.run(ctx)
 						phase = "press"
 						S:presserSeeThrough(true)
 						local pv = presser:GetPivot()
-						-- 이 단계에서 쓸 도구는 누름판뿐이라 어디를 눌러도 잡힘 (2026-11-19 "누름판 누르기가 잘 안 됨")
-						grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0), { anywhere = true })
+						-- 틀을 올리면 누름판은 틀 위로 와서 기다림 (사용자 요청 2026-11-19: 누름판을 끌고 오지 않아도 화면을 누르면 찍힘)
+						grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0))
+						seenPress = P.presses
 						ui:buzz(0.3, 0.05)
 						if rec.dist > 0.3 then
 							ui:hint("가운데에서 조금 벗어났어요")
 						end
-						ui:say("누름판을 틀 위로 끌고 와 꾹 멈춰요", "아무 데나 눌러 끌면 누름판이 따라와요 · 짧게! 오래 누르면 금이 가요")
+						ui:say("화면을 꾹 눌러 틀을 찍어요", "누르는 동안 누름판이 내려가요 · 짧게! 오래 누르면 금이 가요")
 					else
 						ui:hint("달고나 위에 올려요")
 					end
@@ -142,20 +144,19 @@ function Stamp.run(ctx)
 				S:springTo(cutter, S.rest.Cutter, dt, 22)
 			end
 		elseif phase == "press" then
-			-- 누름판은 손으로 가져와 틀 위에서 꾹 멈춰야 눌림 (사용자 요청 2026-11-18). 떼거나 옆으로 끌면 끝
+			-- 화면 어디든 누르고 있으면 틀 위의 누름판이 내려가 찍음, 떼면 끝 (사용자 요청 2026-11-19)
 			local contactY = placed.Position.Y + 0.42 + 0.05
 			local hover = contactY + 0.6
-			local ended, why = grab:update(dt, hover, function(pos)
-				return Vector3.new(pos.X - placed.X, 0, pos.Z - placed.Z).Magnitude < 1.0
-			end)
-			if why == "miss" then
-				ui:hint("누름판을 눌러 잡아요")
+			-- 누름판은 틀 위로 날아와 떠 있음
+			grab.pos = grab.pos:Lerp(Vector3.new(placed.X, 0, placed.Z), 1 - math.exp(-14 * dt))
+			if P.down and not holding and P.presses ~= seenPress then
+				seenPress = P.presses
+				holding = true
 			end
-			if grab.pressing then
+			if holding then
 				if not contact then
-					grab.bottom -= 8 * dt
-					if grab.bottom <= contactY then
-						grab.bottom = contactY
+					grab.bottom = math.max(contactY, grab.bottom - 8 * dt)
+					if grab.bottom <= contactY + 1e-3 then
 						contact = true
 						holdT = 0
 						if not groove then
@@ -170,17 +171,18 @@ function Stamp.run(ctx)
 					cutter:PivotTo(placed - Vector3.new(0, depth, 0))
 					grab.bottom = contactY - depth
 				end
+				if not P.down then
+					holding = false
+					if contact and holdT > 0.03 then
+						rec.hold = holdT
+						phase = "lift"
+					else
+						contact = false
+						ui:hint("조금 더 꾹 눌러요")
+					end
+				end
 			else
 				grab.bottom += (hover - grab.bottom) * (1 - math.exp(-22 * dt))
-			end
-			if ended then
-				if contact and holdT > 0.03 then
-					rec.hold = holdT
-					phase = "lift"
-				else
-					contact = false
-					ui:hint("틀 위에서 꾹 멈춰요")
-				end
 			end
 			grab:draw()
 		else

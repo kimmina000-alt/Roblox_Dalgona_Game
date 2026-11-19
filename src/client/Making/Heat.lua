@@ -46,6 +46,13 @@ end
 function Heat.step(st, dt)
 	local src = Heat.sourceTemp(st.h)
 	st.temp += (src - st.temp) * (1 - math.exp(-0.6 * dt))
+	-- 시작 유예 (사용자 요청 2026-11-19): 국자가 연탄 위에 놓인 채 녹이기를 시작해도 처음 몇 초는 타지 않음.
+	-- 그 사이 국자를 들어 올리는 게 정식 방법이고, 유예가 끝난 뒤에도 계속 가까이 있으면 탐
+	if st.grace and st.grace > 0 then
+		st.grace -= dt
+		st.temp = math.min(st.temp, Config.Melt.burnTemp - 2)
+		return
+	end
 	if st.temp > Config.Melt.burnTemp then
 		-- 불에 너무 가까우면 탐: 온도가 넘을수록 빨리 (가장 낮으면 2초 안팎)
 		st.burn = math.min(1, st.burn + dt * (st.temp - Config.Melt.burnTemp) / 40)

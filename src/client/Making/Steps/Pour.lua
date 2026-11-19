@@ -166,6 +166,16 @@ local RESHAPE_MAX = 0.6 -- 다듬어서 줄일 수 있는 길쭉함 최대
 local RESHAPE_GAIN = 0.35 -- 가운데로 끈 거리(stud) → 줄어드는 길쭉함 (여러 번 끌어 모아야 함)
 local PICK_PX = 90 -- 도구 손잡이 화면 위치에서 이만큼 안을 눌러야 잡힘
 
+-- 붓는 동안 국자·손을 숨기고 줄기를 HIDE_RISE만큼 위에서 시작 → 화면 밖 높은 곳에서 붓는 것처럼
+local HIDE_RISE = 2.4
+local function setLadleHidden(ladle, k)
+	for _, p in ipairs(ladle:GetDescendants()) do
+		if p:IsA("BasePart") then
+			p.LocalTransparencyModifier = k
+		end
+	end
+end
+
 local function reshape(ctx, rec, blob, eRing)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
 	local spread0 = rec.spread or 1
@@ -327,6 +337,7 @@ function Pour.run(ctx)
 	local volume = math.pi * 0.55 ^ 2 * Config.Press.h0
 	-- 국자 손잡이 잡는 자리 (국자 피벗 기준, 기울이기 전 자세). 메시 손잡이 = 손 붙이는 자리와 같음
 	local gripLocal = S:ladleGripLocal()
+	local hideK = 0 -- 국자 숨김 정도 (붓는 동안 1)
 
 	-- 젓가락은 내려놓음
 	S:restChopsticks()
@@ -386,6 +397,9 @@ function Pour.run(ctx)
 				local w = f - rot:VectorToWorldSpace(gripLocal)
 				w = Vector3.new(w.X, carryY, w.Z)
 				local over = math.abs(w.X - plate.X) < half and math.abs(w.Z - plate.Z) < half
+				-- 철판 위에서 기울이면 국자는 높이 들어 붓는 것처럼 사라지고 떨어지는 반죽 줄기만 보임 (사용자 요청 2026-11-19)
+				hideK += ((over and tilt > math.rad(20) and 1 or 0) - hideK) * (1 - math.exp(-10 * dt))
+				setLadleHidden(ladle, hideK)
 				if over then
 					tilt = math.min(MAX_TILT, tilt + math.rad(150) * dt)
 				else
@@ -464,7 +478,7 @@ function Pour.run(ctx)
 					blob:setThickness(Config.Press.h0 * (1.15 - 0.15 * fill) + 0.03 * math.sin(stream.t * 9) * stream.flow)
 					local at = landNow or blob.center
 					local land = Vector3.new(at.X, blob:topY() + 0.05, at.Z)
-					drawStream(stream, lip, out, land)
+					drawStream(stream, lip + Vector3.new(0, HIDE_RISE * hideK, 0), out, land)
 					local remain = 1 - poured / volume
 					S:setContents({ thickness = math.max(0.06, contentsThick * remain / 1) })
 					local foam = ladle:FindFirstChild("FxFoam")
@@ -488,7 +502,7 @@ function Pour.run(ctx)
 								stream.t += 1 / 60
 								stream.tail = math.min(1, t / 0.35)
 								stream.flow = math.max(0.15, stream.flow * 0.97)
-								drawStream(stream, lip, out, Vector3.new(blob.center.X, blob:topY() + 0.05, blob.center.Z))
+								drawStream(stream, lip + Vector3.new(0, HIDE_RISE * hideK, 0), out, Vector3.new(blob.center.X, blob:topY() + 0.05, blob.center.Z))
 								local a = math.min(t / 0.45, 1)
 								blob:setThickness(finalH * (1 + 0.08 * math.sin(a * math.pi * 2.5) * (1 - a)))
 							end
@@ -505,6 +519,10 @@ function Pour.run(ctx)
 				end
 			else
 				tilt = 0
+				if hideK > 0.01 then
+					hideK += (0 - hideK) * (1 - math.exp(-10 * dt))
+					setLadleHidden(ladle, hideK)
+				end
 				S:springTo(ladle, home, dt, 22)
 				if blob and not dropped then
 					-- 붓다가 손을 떼면 줄기가 끊겨 떨어짐 (다시 기울이면 이어서 부음)
@@ -560,6 +578,7 @@ function Pour.run(ctx)
 		S:springTo(ladle, S.rest.Ladle, dt, 14)
 	end
 	ladle:PivotTo(S.rest.Ladle)
+	setLadleHidden(ladle, 0)
 	S:setContents({ Transparency = 1 })
 	if st.dalgona and not reshape(ctx, rec, st.dalgona, eRing) then
 		return nil

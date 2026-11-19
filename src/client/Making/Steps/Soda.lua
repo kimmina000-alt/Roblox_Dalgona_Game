@@ -1,4 +1,4 @@
--- 3. 소다: ① 나무젓가락 손잡이를 잡고 끌어 끝을 소다 통에 찍을 때마다 한 겹씩 묻고(흰 껍질이 두꺼워짐), 국자로 끌고 와 놓으면 톡. 넣은 양 합계 = 양 (0.35~0.65가 알맞음)
+-- 3. 소다: ① 소다 통을 누를 때마다 젓가락이 콕 찍혀 한 겹씩 묻고(흰 껍질이 두꺼워짐), 국자를 누르면 톡톡 털어 넣음. 넣은 양 합계 = 양 (0.35~0.65가 알맞음)
 --          ② 불에서 떼고 빠르게 젓기 (이번엔 FAST 쪽이 정답, 불 가까이 저으면 금방 탐) → 실제 영상처럼 3.5초 S곡선으로 부풀어 오름
 --             (docs/MOTION_REFERENCE_ANALYSIS.md 7장: 느린 시작 1.1초 → 빠른 상승 1.5초 → 멈춤 0.9초 → 유지)
 -- 점수: 넣은 타이밍(투명해진 직후) + 양 + 부푼 정도
@@ -18,12 +18,13 @@ local Sfx = require(Making:WaitForChild("Sfx"))
 local Soda = {}
 
 local HEAP_MAX = 1.2
-local TUB_R = 0.75 -- 젓가락 끝이 소다 통 가운데에서 이만큼 안이면 통 위 (쿡 잠김)
 -- 찍을 때마다 한 겹씩 (사용자 요청 2026-11-19): 1번 찍으면 얇게, 2번이면 더 두껍게, 3번이면 더 두껍게
 local DIP_LAYER = 0.17 -- 한 번 찍을 때 묻는 양 (1번 0.17 적음 · 2~3번 0.34~0.51 알맞음 · 4번 0.68 많음)
 local LAYERS_MAX = 4 -- 한 번 들고 갈 때 최대 겹 수
 local LOAD_MAX = DIP_LAYER * LAYERS_MAX
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit
+local STICK_LEAN = Vector3.new(0.45, 0.6, 0.66).Unit -- 소다 넣을 때 젓가락 기울기 (눕혀서 끝에 묻은 소다가 위에서 보이게)
+local TAP_PX = 110 -- 소다 통·국자 화면 위치에서 이만큼 안을 누르면 그 도구
 local FOAM = Color3.fromRGB(214, 160, 92)
 local FOAM_DARK = Color3.fromRGB(140, 86, 40)
 local CREAM = Color3.fromRGB(226, 182, 118)
@@ -185,9 +186,9 @@ function Soda.run(ctx)
 	local dips = 0
 	local spots = {}
 	local tipPowder = nil
-	local dipK = 0 -- 젓가락 끝이 소다에 잠긴 정도 0~1
 	local load = 0 -- 지금 젓가락 끝에 묻은 소다 양
-	local dipped = false -- 지금 통에 담겨 있음 (빼야 다음 찍기)
+	local stickTip = nil -- 소다 넣을 때 젓가락 끝 자리
+	local anim = nil -- 찍기·털기 움직임
 	local falling = {}
 	local firstDrop = nil
 	local puffed = false
@@ -197,7 +198,7 @@ function Soda.run(ctx)
 	local sampleAcc = 0
 	local baseThick = S.Contents.Size.X
 
-	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "끝을 소다 통에 콕 찍었다 빼요 · 찍을수록 두껍게 묻어요")
+	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "소다 통을 눌러 콕 찍어요 · 누를수록 두껍게 묻어요")
 	P.sideZone = Heat.sideZone -- 왼쪽 구역 위아래로 끌기 = 국자 높이 (녹이기와 같음)
 
 	while true do
@@ -228,95 +229,135 @@ function Soda.run(ctx)
 		Heat.smoke(S, st.burn > 0.03, st.burn)
 
 		if phase == "drop" then
-			-- 나무젓가락 손잡이를 잡고 끌어서(사용자 요청 2026-11-18) 끝을 소다 통에 넣었다 빼면 흰 소다가 묻고,
-			-- 그대로 국자 위로 끌고 와서 놓으면 톡. 넣은 횟수 = 양 (실제 영상: "2~3번").
-			-- 다 넣었으면 국자 안에서 그대로 원을 그리면 젓기로 넘어감
+			-- 소다 넣기 (사용자 요청 2026-11-19): 클릭(탭) 한 번이면 젓가락이 소다 통에 콕 찍혀 한 겹 묻고,
+			-- 국자를 클릭하면 국자 위로 가서 톡톡 털어 넣음. 통을 여러 번 누를수록 흰 소다가 두껍게 묻음 = 양.
+			-- 다 넣었으면 국자 안에서 원을 그리며 끌면 젓기로 넘어감
 			local tubPos = S.SodaTub.Soda.Position
+			local bowl = S.Bowl.Position
+			local cam = workspace.CurrentCamera
+			if not stickTip then
+				stickTip = bowl + Vector3.new(0.9, 0.6, 0.6)
+			end
 			if P.down and P.presses ~= seenPress then
 				seenPress = P.presses
-				carrying = true
-				dipK = 0
-				stir = Stir.new()
-				ui:buzz(0.2, 0.04)
-			end
-			if carrying then
-				local liftY = S:contentsTopY() + 0.35
-				local surface = tubPos.Y + 0.02
-				-- 끝이 소다 통 위에 있으면 쑥 내려가 소다에 잠김 (손가락은 그대로 손잡이).
-				-- 통은 국자보다 훨씬 낮아서, 통 높이에서 본 끝 자리(atTub)로 통 위인지 보고 그 자리로 곧게 내려감
-				local atLift = Stir.grip(liftY)
-				local atTub = Stir.grip(surface)
-				local overTub = Vector3.new(atTub.X - tubPos.X, 0, atTub.Z - tubPos.Z).Magnitude < TUB_R
-				dipK += ((overTub and 1 or 0) - dipK) * (1 - math.exp(-14 * dt))
-				local tip = atLift:Lerp(atTub, dipK)
-				local hnd = Stir.handleFor(tip)
-				Stir.placeChopsticksAt(S, tip, hnd)
-				-- 소다 묻히기 (사용자 요청 2026-11-19): 끝을 통에 넣었다 뺄 때마다(찍을 때마다) 한 겹씩 묻음.
-				-- 젓가락 끝부분에 흰 소다 껍질이 보이고, 겹이 많을수록 두껍고 길어짐 = 넣을 양
-				if dipK > 0.8 and not dipped then
-					dipped = true
+				local tubS = cam:WorldToScreenPoint(tubPos)
+				local ladleS = cam:WorldToScreenPoint(Vector3.new(bowl.X, S:contentsTopY(), bowl.Z))
+				local dTub = (P.pos - Vector2.new(tubS.X, tubS.Y)).Magnitude
+				local dLadle = (P.pos - Vector2.new(ladleS.X, ladleS.Y)).Magnitude
+				if anim then
+					-- 움직이는 중에는 다음 누름을 기다림
+				elseif dTub < TAP_PX and dTub <= dLadle then
 					if load < LOAD_MAX - 1e-3 then
-						load = math.min(LOAD_MAX, load + DIP_LAYER)
-						ui:buzz(0.2, 0.04)
+						anim = { kind = "dip", t = 0, from = stickTip, done = false }
+					else
+						ui:hint("더는 안 묻어요 · 국자를 눌러 털어 넣어요")
 					end
-				elseif dipK < 0.3 then
-					dipped = false -- 빼면 다음 찍기 준비
+				elseif dLadle < TAP_PX * 1.3 then
+					if load > 0.005 then
+						anim = { kind = "shake", t = 0, from = stickTip, done = false }
+					elseif dips > 0 then
+						carrying = true -- 빈 젓가락으로 국자 안을 끌어 원을 그리면 젓기 시작
+						stir = Stir.new()
+					else
+						ui:hint("먼저 소다 통을 눌러 소다를 묻혀요")
+					end
+				else
+					ui:hint("소다 통이나 국자를 눌러요")
 				end
-				if load > 0.005 and not tipPowder then
-					tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.1, 0.06, 0.06) })
+			end
+			local tip = stickTip
+			if anim then
+				anim.t += dt
+				if anim.kind == "dip" then
+					-- 통 위로 옮겨 가서(0.18초) 콕 찍고(0.12초) 올라옴(0.12초)
+					local above = tubPos + Vector3.new(0, 0.55, 0)
+					local bottom = tubPos + Vector3.new(0, 0.02, 0)
+					local t = anim.t
+					if t < 0.18 then
+						tip = anim.from:Lerp(above, 1 - (1 - t / 0.18) ^ 2)
+					elseif t < 0.3 then
+						tip = above:Lerp(bottom, (t - 0.18) / 0.12)
+					else
+						if not anim.done then
+							anim.done = true
+							load = math.min(LOAD_MAX, load + DIP_LAYER)
+							ui:buzz(0.25, 0.05)
+							ui:toast(string.format("소다 묻음 %d번", math.floor(load / DIP_LAYER + 0.5)), 0.6)
+						end
+						tip = bottom:Lerp(above, math.min((t - 0.3) / 0.12, 1))
+						if t > 0.42 then
+							anim = nil
+						end
+					end
+				else
+					-- 국자 위로 옮겨 가서(0.2초) 톡톡 두 번 털면 소다가 떨어짐
+					local over = Vector3.new(bowl.X + 0.15, S:contentsTopY() + 0.45, bowl.Z + 0.1)
+					local t = anim.t
+					if t < 0.2 then
+						tip = anim.from:Lerp(over, 1 - (1 - t / 0.2) ^ 2)
+					else
+						local k = (t - 0.2) / 0.3
+						tip = over + Vector3.new(0, -0.12 * math.abs(math.sin(k * math.pi * 2)), 0)
+						if k > 0.5 and not anim.done and tipPowder then
+							anim.done = true
+							dips += 1
+							local amt = load
+							rec.amount = math.min(HEAP_MAX, rec.amount + load)
+							load = 0
+							if not firstDrop then
+								firstDrop = ctx.now()
+								rec.delay = firstDrop - (st.meltDoneAt or firstDrop)
+							end
+							local flat = Vector3.new(tip.X - bowl.X, 0, tip.Z - bowl.Z)
+							if flat.Magnitude > S.bowlRadius - 0.3 then
+								flat = flat.Unit * (S.bowlRadius - 0.3)
+							end
+							-- 젓가락 끝의 소다가 설탕물 위로 툭 떨어짐 (떨어진 뒤 흰 점이 됨)
+							table.insert(falling, { part = tipPowder, from = tipPowder.Position, to = Vector3.new(bowl.X + flat.X, S:contentsTopY(), bowl.Z + flat.Z), t = 0, amt = amt })
+							tipPowder = nil
+							ui:buzz(0.35, 0.06)
+							if rec.amount > cfg.idealMax then
+								ui:hint("소다가 너무 많아요 (쓴맛, 너무 부풀다 꺼져요)")
+							end
+						end
+						if k >= 1 then
+							anim = nil
+						end
+					end
 				end
-				if tipPowder then
-					local layers = load / DIP_LAYER
-					local len = 0.1 + 0.05 * layers
-					local d = 0.05 + 0.028 * layers
-					local dir = S.stickDir or STICK_DIR
-					local center = tip + dir * (len / 2 - 0.015)
-					tipPowder.Size = Vector3.new(len, d, d)
-					-- 원기둥 축(X)을 젓가락 방향으로
-					tipPowder.CFrame = CFrame.lookAt(center, center + dir) * CFrame.Angles(0, math.rad(90), 0)
-					tipPowder.Transparency = 0
-				end
-				local bowl = S.Bowl.Position
-				local flat = Vector3.new(tip.X - bowl.X, 0, tip.Z - bowl.Z)
-				local inLadle = flat.Magnitude < S.bowlRadius
-				-- 소다를 다 넣은 뒤: 빈 젓가락으로 국자 안에서 원을 그리면 젓기 시작
+				stickTip = tip
+				Stir.placeChopsticksAt(S, tip, tip + STICK_LEAN * 2.75)
+			elseif carrying then
+				-- 국자 안에서 끌어 원 그리기 → 젓기
+				local t2, hnd = Stir.grip(S:contentsTopY())
+				Stir.placeChopsticks(S, t2, hnd)
+				stickTip = t2
 				local spd = stir:update(dt)
-				if dips > 0 and not tipPowder and inLadle and spd > 2.5 then
+				local flat = Vector3.new(t2.X - bowl.X, 0, t2.Z - bowl.Z)
+				if flat.Magnitude < S.bowlRadius and spd > 2.5 then
 					phase = "stir"
 					carrying = false
 					ui:say("빠르게 저어요!", "FAST 쪽이 정답 · 불에서 떼고 저어요")
 				end
 				if not P.down then
 					carrying = false
-					dipped = false
-					if tipPowder and inLadle then
-						dips += 1
-						local amt = load
-						rec.amount = math.min(HEAP_MAX, rec.amount + load)
-						load = 0
-						if not firstDrop then
-							firstDrop = ctx.now()
-							rec.delay = firstDrop - (st.meltDoneAt or firstDrop)
-						end
-						if flat.Magnitude > S.bowlRadius - 0.3 then
-							flat = flat.Unit * (S.bowlRadius - 0.3)
-						end
-						-- 젓가락 끝의 소다가 설탕물 위로 툭 떨어짐 (떨어진 뒤 흰 점이 됨)
-						table.insert(falling, { part = tipPowder, from = tipPowder.Position, to = Vector3.new(bowl.X + flat.X, S:contentsTopY(), bowl.Z + flat.Z), t = 0, amt = amt })
-						tipPowder = nil
-						ui:buzz(0.35, 0.06)
-						if rec.amount > cfg.idealMax then
-							ui:hint("소다가 너무 많아요 (쓴맛, 너무 부풀다 꺼져요)")
-						end
-					elseif tipPowder then
-						ui:hint("국자 위에서 놓아요")
-						tipPowder:Destroy()
-						tipPowder = nil
-						load = 0
-					end
 				end
-			elseif dips > 0 then
-				Stir.placeChopsticks(S, S.Bowl.Position + Vector3.new(0.3, 0, 0.2))
+			else
+				Stir.placeChopsticksAt(S, tip, tip + STICK_LEAN * 2.75)
+			end
+			-- 젓가락 끝에 묻은 흰 소다 (겹이 많을수록 두껍고 길게, 위에서도 잘 보이게 굵게)
+			if load > 0.005 and not tipPowder then
+				tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(255, 255, 255), Material = Enum.Material.Sand, Size = Vector3.new(0.1, 0.1, 0.1) })
+			end
+			if tipPowder then
+				local layers = load / DIP_LAYER
+				local len = 0.16 + 0.08 * layers
+				local d = 0.1 + 0.045 * layers
+				local dir = S.stickDir or STICK_DIR
+				local center = stickTip + dir * (len / 2 - 0.02)
+				tipPowder.Size = Vector3.new(len, d, d)
+				tipPowder.CFrame = CFrame.lookAt(center, center + dir) * CFrame.Angles(0, math.rad(90), 0) -- 원기둥 축(X) = 젓가락 방향
+				tipPowder.Transparency = 0
 			end
 			for i = #falling, 1, -1 do
 				local f = falling[i]
@@ -340,11 +381,11 @@ function Soda.run(ctx)
 			end
 			local sub
 			if load > 0.005 then
-				sub = string.format("%d번 찍었어요 · 더 찍으면 두껍게 · 국자 위에서 손을 떼면 톡", math.floor(load / DIP_LAYER + 0.5))
+				sub = string.format("%d번 찍었어요 · 더 누르면 두껍게 · 국자를 누르면 톡톡 털어 넣어요", math.floor(load / DIP_LAYER + 0.5))
 			elseif dips == 0 then
-				sub = "끝을 소다 통에 콕 찍었다 빼요 · 찍을수록 두껍게 묻어요 · 초록 칸까지"
+				sub = "소다 통을 눌러 콕 찍어요 · 누를수록 두껍게 묻어요 · 초록 칸까지"
 			else
-				sub = rec.amount < cfg.idealMin and "조금 더 넣어요 (초록 칸까지) · 다 넣었으면 국자 안에서 저어요" or "다 넣었으면 국자 안에서 저어요"
+				sub = rec.amount < cfg.idealMin and "조금 더 넣어요 (초록 칸까지) · 다 넣었으면 국자 안을 끌어 저어요" or "다 넣었으면 국자 안을 끌어 원을 그리며 저어요"
 			end
 			ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", sub)
 			ui:setMeter(true, math.min(1, (rec.amount + load) / HEAP_MAX), cfg.idealMin / HEAP_MAX, cfg.idealMax / HEAP_MAX, "소다")

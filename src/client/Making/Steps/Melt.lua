@@ -45,7 +45,8 @@ function Melt.run(ctx)
 	local rec = { t0 = ctx.now(), green = 0, tempOk = 0, scorch = 0, burn = 0, burnt = false, samples = {} }
 	local stir = Stir.new()
 	local samp = sampler(rec)
-	st.h = cfg.hMin -- 국자는 연탄 위 철망에 놓여 있음: 가만히 두면 금방 뜨거워져 탐 → 왼쪽을 끌어 들어 올려야 함 (2026-11-19)
+	st.h = cfg.hMin -- 국자는 연탄 위 철망에 놓여 있음: 가만히 두면 뜨거워져 탐 → 왼쪽을 끌어 들어 올려야 함 (2026-11-19)
+	st.grace = 5 -- 처음 5초는 타지 않음 (그 사이 들어 올리기)
 	st.temp = st.temp or 30
 	st.burn = 0
 	st.melt = 0

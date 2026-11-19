@@ -220,8 +220,9 @@ function Sugar.run(ctx)
 			else
 				dwell = math.max(0, dwell - dt * 4)
 			end
-			local target = overLadle and MAX_TILT * math.clamp((dwell - 0.12) / 0.55, 0, 1) or math.rad(6) -- 옮길 땐 살짝만 (흔들림)
-			tilt += (target - tilt) * (1 - math.exp(-(target < tilt and 14 or 7) * dt))
+			-- 멈추면 0.05초 뒤부터 0.3초 만에 다 기울어짐 (2026-11-19 "조금 더 빨리 기울어졌으면")
+			local target = overLadle and MAX_TILT * math.clamp((dwell - 0.05) / 0.3, 0, 1) or math.rad(6) -- 옮길 땐 살짝만 (흔들림)
+			tilt += (target - tilt) * (1 - math.exp(-(target < tilt and 14 or 12) * dt))
 			local toward = d > 0.05 and flat.Unit or Vector3.new(-1, 0, 0)
 			local axis = Vector3.yAxis:Cross(toward)
 			if spoonGeo then
