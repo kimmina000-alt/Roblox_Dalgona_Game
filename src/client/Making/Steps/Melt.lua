@@ -12,6 +12,7 @@ local Stir = require(Making:WaitForChild("Stir"))
 local Heat = require(Making:WaitForChild("Heat"))
 local SugarLook = require(Making:WaitForChild("SugarLook"))
 local Sfx = require(Making:WaitForChild("Sfx"))
+local CameraRig = require(Making:WaitForChild("CameraRig"))
 
 local Melt = {}
 
@@ -41,6 +42,10 @@ end
 
 function Melt.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
+	-- 국자를 들어 올려도 화면 가운데에 (사용자 요청 2026-11-19). 아래 게이지에 덜 가리게 아주 살짝 위
+	CameraRig.track(function()
+		return S.Bowl.Position + Vector3.new(0, 0, 0.3)
+	end)
 	local cfg = Config.Melt
 	local rec = { t0 = ctx.now(), green = 0, tempOk = 0, scorch = 0, burn = 0, burnt = false, samples = {} }
 	local stir = Stir.new()
@@ -172,6 +177,7 @@ function Melt.run(ctx)
 		ui:say("다 녹았어요! 바로 소다!", "투명해진 직후가 가장 좋아요")
 	end
 	st.meltDoneAt = ctx.now()
+	CameraRig.track(nil)
 	rec.t1 = ctx.now()
 	return rec
 end

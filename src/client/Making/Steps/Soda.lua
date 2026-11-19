@@ -259,7 +259,7 @@ function Soda.run(ctx)
 			local tubSize = S.SodaTub.Soda.Size
 			local tubR = math.max(tubSize.X, tubSize.Z) / 2
 			local function overTub(p)
-				return Vector3.new(p.X - tubPos.X, 0, p.Z - tubPos.Z).Magnitude < tubR + 0.3
+				return Vector3.new(p.X - tubPos.X, 0, p.Z - tubPos.Z).Magnitude < tubR + 0.5
 			end
 			local function overLadle(p)
 				return Vector3.new(p.X - bowl.X, 0, p.Z - bowl.Z).Magnitude < S.bowlRadius + 0.15
@@ -285,7 +285,9 @@ function Soda.run(ctx)
 			if P.down and P.presses ~= seenPress and not anim then
 				seenPress = P.presses
 				carrying = true
-				press0 = { pos = P.pos, t = os.clock(), moved = false }
+				-- 상대 이동: 누른 자리에서 끈 만큼만 젓가락이 움직임 (손잡이를 눌러도 끝이 튀지 않아서, 끝을 통에 올려 둔 채 손잡이를 누르면 그 자리에서 찍힘)
+				local hy = math.max(tubPos.Y + 0.35, S:contentsTopY() + 0.35)
+				press0 = { pos = P.pos, t = os.clock(), moved = false, anchor = P.toPlane(hy), tip0 = stickTip }
 				stir = Stir.new()
 			end
 			if carrying and press0 and (P.pos - press0.pos).Magnitude > 14 then
@@ -397,7 +399,13 @@ function Soda.run(ctx)
 			elseif carrying then
 				-- 손가락 = 젓가락 손잡이. 끝은 소다 통 위면 통 바로 위, 국자 위면 설탕물 위, 아니면 떠 있음
 				local hoverY = math.max(tubPos.Y + 0.35, S:contentsTopY() + 0.35)
-				local t2 = Stir.grip(hoverY)
+				local t2
+				if press0 and press0.anchor then
+					local d = P.toPlane(hoverY) - press0.anchor
+					t2 = Vector3.new(press0.tip0.X + d.X, hoverY, press0.tip0.Z + d.Z)
+				else
+					t2 = Stir.grip(hoverY)
+				end
 				if overTub(t2) then
 					t2 = Vector3.new(t2.X, tubPos.Y + 0.18, t2.Z)
 				elseif overLadle(t2) then

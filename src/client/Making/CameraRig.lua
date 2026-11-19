@@ -17,15 +17,16 @@ local TILT = 0.12 -- 완전 수직이면 도구가 납작해 보여서 플레이
 -- 피해 다 들어오면서 가장 가까운 카메라를 Play 화면에서 계산한 값 (점들은 남는 칸 가운데로).
 -- 망원(FOV 40)으로 높이서 찍어서 높은 국자(화로 1.95배, y 약 8.1)와 테이블 위 그릇이 덜 찌그러짐
 local POSES = {
-	pick = { Vector2.new(-8.3, 0.3), 12.0 }, -- 테이블 왼쪽 끝 나무젓가락
-	sugar = { Vector2.new(-4.1, 0.4), 16.2 }, -- 설탕 그릇 두 개 + 국자
-	melt = { Vector2.new(-5.5, 0.4), 16.2 }, -- 국자 (아래 STIR SPEED 게이지에 안 가리게 화면 위쪽 62% 안)
-	soda = { Vector2.new(-3.6, 0.0), 15.6 }, -- 국자 + 소다 통 (게이지 위로). 통에 담가 휘저으니 통이 화면 안쪽에 오게 (2026-11-19)
+	-- 2026-11-19 도구 간격 1.5씩 넓힘 (StallDecor.layout): 화로·국자·젓가락은 x -1.5, 철판·누름판·틀은 x +1.5
+	pick = { Vector2.new(-9.7, -0.9), 12.6 }, -- 테이블 왼쪽 끝 나무젓가락 통 + 꺼낸 젓가락
+	sugar = { Vector2.new(-4.9, 0.4), 17.0 }, -- 설탕 그릇 두 개 + 국자
+	melt = { Vector2.new(-5.9, 0.0), 16.2 }, -- 국자 (CameraRig.track으로 국자를 따라가며 화면 가운데에 둠)
+	soda = { Vector2.new(-4.4, 0.0), 16.4 }, -- 국자 + 소다 통 (게이지 위로). 통에 담가 휘저으니 통이 화면 안쪽에 오게 (2026-11-19)
 	-- 붓기: 항공샷 그대로 (2026-11-19). 기울여 붓는 동안 국자는 화면 위로 올라간 것처럼 사라지고 떨어지는 반죽만 보임 (Pour.lua)
-	pour = { Vector2.new(1.7, 0.3), 14.1 }, -- 철판 + 왼쪽에서 들고 오는 국자
-	press = { Vector2.new(2.8, 0.2), 12.0 }, -- 철판 + 오른쪽 뒤로 비킨 누름판
-	stamp = { Vector2.new(3.5, 0.8), 14.1 }, -- 철판 + 오른쪽 모양 틀
-	result = { Vector2.new(5.2, 0.2), 12.2 }, -- 달고나는 왼쪽 (오른쪽은 결과 창)
+	pour = { Vector2.new(3.2, 0.3), 14.1 }, -- 철판 + 왼쪽에서 들고 오는 국자
+	press = { Vector2.new(4.3, 0.2), 12.0 }, -- 철판 + 오른쪽 뒤로 비킨 누름판
+	stamp = { Vector2.new(5.0, 0.8), 14.1 }, -- 철판 + 오른쪽 모양 틀
+	result = { Vector2.new(6.7, 0.2), 12.2 }, -- 달고나는 왼쪽 (오른쪽은 결과 창)
 }
 local STEP_POSE = {}
 
@@ -62,10 +63,36 @@ function CameraRig.poseFor(key)
 	return CFrame.lookAt(pos, look, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))
 end
 
-local function step()
+-- 움직이는 물체 따라가기 (사용자 요청 2026-11-19: 국자를 들면 화면 가운데에서 어긋남).
+-- fn()이 돌려주는 점이 화면 가운데에 오게, 지금 화면의 카메라 높이·기울기 그대로 부드럽게 따라감. nil이면 멈춤
+local tracker = nil
+function CameraRig.track(fn)
+	tracker = fn
+end
+
+local function trackPose(p)
+	local pose = POSES[current] or POSES.sugar
+	local y = pose[2]
+	local vp = workspace.CurrentCamera.ViewportSize
+	if vp.X / math.max(vp.Y, 1) < 1.2 then
+		y = TABLE_TOP + (y - TABLE_TOP) * 1.6
+	end
+	local h = y - TABLE_TOP
+	local camY = origin:PointToWorldSpace(Vector3.new(0, y, 0)).Y
+	local pos = Vector3.new(p.X, camY, p.Z) + origin:VectorToWorldSpace(Vector3.new(0, 0, h * (pose[3] or TILT)))
+	return CFrame.lookAt(pos, p, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))
+end
+
+local function step(dt)
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Scriptable
 	cam.FieldOfView = FOV
+	if tracker then
+		local p = tracker()
+		if p then
+			to = to:Lerp(trackPose(p), 1 - math.exp(-10 * (dt or 1 / 60)))
+		end
+	end
 	local a = math.clamp((os.clock() - t0) / EASE, 0, 1)
 	local e = 1 - (1 - a) * (1 - a) -- Quad ease-out
 	cam.CFrame = from:Lerp(to, e)
@@ -76,6 +103,7 @@ function CameraRig.go(key, instant)
 	if bound and pose == current and not instant then
 		return -- 같은 화면이면 카메라를 움직이지 않음
 	end
+	tracker = nil
 	current = pose
 	local target = CameraRig.poseFor(key)
 	if instant then
@@ -98,6 +126,7 @@ function CameraRig.release()
 		RunService:UnbindFromRenderStep("DalgonaCamera")
 	end
 	current = nil
+	tracker = nil
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70

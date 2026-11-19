@@ -48,6 +48,12 @@ function Station.new()
 	-- 국자는 기본으로 연탄 위 철망에 놓여 있음 (사용자 요청 2026-11-19: 저절로 중간 높이에 떠 있지 않고, 플레이어가 들어야 함)
 	self.rest.Ladle = self:ladleAt(Config.Melt.hMin)
 	self.Ladle:PivotTo(self.rest.Ladle)
+	-- 소다 통 숟가락은 안 씀 (사용자 요청 2026-11-19: 소다컵에 숟가락 삭제). 모델은 남겨 두고 이 화면에서만 숨김
+	for _, p in ipairs(self.SodaSpoon:GetDescendants()) do
+		if p:IsA("BasePart") then
+			p.LocalTransparencyModifier = 1
+		end
+	end
 	-- 젓가락은 부품마다 따로 움직여서(Stir) 모델째 되돌리면 테이블 위 포장 젓가락이 밀려남 → 부품별로 기억
 	self.chopRest = {}
 	for _, p in ipairs(self.Chopsticks:GetChildren()) do

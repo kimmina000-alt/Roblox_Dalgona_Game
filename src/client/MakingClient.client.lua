@@ -18,7 +18,7 @@ local Pointer = require(Making:WaitForChild("Pointer"))
 local Station = require(Making:WaitForChild("Station"))
 local CameraRig = require(Making:WaitForChild("CameraRig"))
 local Ui = require(Making:WaitForChild("Ui"))
-local ChopstickPicker = require(Making:WaitForChild("ChopstickPicker"))
+local ChopstickPicker = require(Making:WaitForChild("ChopstickCup")) -- 2026-11-19: 포장 찢기 대신 젓가락 통에서 꺼내기
 local CutterPicker = require(Making:WaitForChild("CutterPicker"))
 local Sfx = require(Making:WaitForChild("Sfx"))
 local StepsFolder = Making:WaitForChild("Steps")
@@ -161,7 +161,7 @@ local function runSession()
 	station:setCutter(shape.id)
 	ctx.state.shape = shape
 
-	-- 0. 나무젓가락 고르기 (포장지 찢기 → 꺼내기 → 쪼개기 → 한 짝 고르기)
+	-- 0. 나무젓가락 꺼내기 (통을 누르면 한 짝이 뽑혀 테이블 위에 놓임)
 	CameraRig.go("pick") -- 테이블 왼쪽 끝 젓가락 쪽으로
 	local pick = ChopstickPicker.run(ctx)
 	if ctx.aborted or not pick then

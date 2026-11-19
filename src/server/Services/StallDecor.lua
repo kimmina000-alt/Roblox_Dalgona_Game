@@ -113,18 +113,186 @@ local function grade()
 	Lighting.OutdoorAmbient = Color3.fromRGB(150, 138, 132)
 end
 
+-- 도구 사이 간격 넓히기 (사용자 요청 2026-11-19: 화로 · 설탕 그릇 · 철판 사이를 더 떨어뜨리고 테이블은 길어져도 됨).
+-- Studio에 저장된 작업대도 실행할 때 옮긴다. 카메라 자리(CameraRig POSES)는 옮긴 뒤 기준.
+-- WorkstationBuilder.rebuildBrazier는 옛 자리(BRAZIER_X)에 다시 만드니, 쓸 때는 이것도 다시 부른다.
+local SPREAD = 1.5
+local LEFT = { "Brazier", "Ladle", "Chopsticks" }
+local RIGHT = { "IronPlate", "SugarRing", "SugarRingInner", "Presser", "Cutter" }
+
+local function layout(ws, top)
+	if ws:GetAttribute("LayoutV2") then
+		return
+	end
+	ws:SetAttribute("LayoutV2", true)
+	local function shift(name, dx)
+		local inst = ws:FindFirstChild(name)
+		if inst and inst:IsA("Model") then
+			inst:PivotTo(inst:GetPivot() + Vector3.new(dx, 0, 0))
+		elseif inst and inst:IsA("BasePart") then
+			inst.CFrame += Vector3.new(dx, 0, 0)
+		end
+	end
+	for _, n in ipairs(LEFT) do
+		shift(n, -SPREAD)
+	end
+	for _, n in ipairs(RIGHT) do
+		shift(n, SPREAD)
+	end
+	top.Size += Vector3.new(SPREAD * 2, 0, 0)
+	for _, leg in ipairs(ws:GetChildren()) do
+		if leg.Name == "TableLeg" then
+			leg.CFrame += Vector3.new(leg.Position.X < top.Position.X and -SPREAD or SPREAD, 0, 0)
+		end
+	end
+end
+
+-- 기본은 낡은 나무 테이블 (사용자 요청 2026-11-19): 바랜 색 + 얼룩 몇 군데
+local OLD_WOOD = Color3.fromRGB(116, 86, 62)
+local STAIN = Color3.fromRGB(70, 48, 34)
+local function wornTable(ws, top)
+	if ws:FindFirstChild("Stains") then
+		return
+	end
+	top.Color = OLD_WOOD
+	top.Material = Enum.Material.WoodPlanks
+	for _, leg in ipairs(ws:GetChildren()) do
+		if leg.Name == "TableLeg" then
+			leg.Color = OLD_WOOD:Lerp(STAIN, 0.25)
+		end
+	end
+	local f = Instance.new("Model")
+	f.Name = "Stains"
+	local rng = Random.new(7)
+	local y = top.Size.Y / 2 + 0.006
+	for _ = 1, 9 do
+		local d = rng:NextNumber(0.5, 1.4)
+		local x = rng:NextNumber(-top.Size.X / 2 + 1, top.Size.X / 2 - 1)
+		local z = rng:NextNumber(-top.Size.Z / 2 + 0.6, top.Size.Z / 2 - 0.6)
+		local p = part(f, "Stain", Vector3.new(0.01, d, d * rng:NextNumber(0.6, 1)), top.CFrame * CFrame.new(x, y, z) * CFrame.Angles(0, rng:NextNumber(0, 6), math.rad(90)), STAIN, { Transparency = 0.7, Material = Enum.Material.SmoothPlastic })
+		p.Shape = Enum.PartType.Cylinder
+	end
+	-- 모서리가 닳아 밝아진 가장자리
+	for _, s in ipairs({ -1, 1 }) do
+		part(f, "WornEdge", Vector3.new(top.Size.X, 0.05, 0.12), top.CFrame * CFrame.new(0, y - 0.02, s * (top.Size.Z / 2 - 0.05)), OLD_WOOD:Lerp(Color3.fromRGB(200, 170, 130), 0.35), { Transparency = 0.3, Material = Enum.Material.Wood })
+	end
+	f.Parent = ws
+end
+
+-- 나무젓가락 통 (사용자 요청 2026-11-19): 낡은 양철 통에 나무젓가락이 잔뜩. 누르면 한 짝을 꺼냄 (클라이언트 ChopstickCup)
+local function chopstickCup(ws)
+	if ws:FindFirstChild("ChopstickCup") then
+		return
+	end
+	local chop = ws:FindFirstChild("Chopsticks")
+	local top = ws:FindFirstChild("TableTop")
+	local assets = game:GetService("ReplicatedStorage"):FindFirstChild("Assets")
+	local tplFolder = assets and assets:FindFirstChild("Chopsticks")
+	if not (chop and top and tplFolder) then
+		return
+	end
+	-- 포장된 젓가락은 숨김 (이제 통에서 꺼냄)
+	for _, p in ipairs(chop:GetChildren()) do
+		if p:IsA("BasePart") and p.Name:sub(1, 7) == "Wrapped" then
+			p.Transparency = 1
+		end
+	end
+	local m = Instance.new("Model")
+	m.Name = "ChopstickCup"
+	local tableY = top.Position.Y + top.Size.Y / 2
+	local base = Vector3.new(chop:GetPivot().Position.X, tableY, top.Position.Z - 2.2)
+	local CUP_D, CUP_H = 1.0, 1.25
+	local tin = { Material = Enum.Material.CorrodedMetal, CanQuery = false }
+	local body = part(m, "Cup", Vector3.new(CUP_H, CUP_D, CUP_D), CFrame.new(base + Vector3.new(0, CUP_H / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(168, 172, 168), tin)
+	body.Shape = Enum.PartType.Cylinder
+	local rim = part(m, "Rim", Vector3.new(0.08, CUP_D + 0.06, CUP_D + 0.06), CFrame.new(base + Vector3.new(0, CUP_H, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(120, 122, 118), tin)
+	rim.Shape = Enum.PartType.Cylinder
+	local band = part(m, "Label", Vector3.new(0.4, CUP_D + 0.02, CUP_D + 0.02), CFrame.new(base + Vector3.new(0, CUP_H * 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(220, 90, 80), { Material = Enum.Material.SmoothPlastic })
+	band.Shape = Enum.PartType.Cylinder
+	local names = { "Stick1A", "Stick1B", "Stick2A", "Stick1A", "Stick1B" }
+	local rng = Random.new(11)
+	for i = 1, 16 do
+		local name = names[(i - 1) % #names + 1]
+		local tpl = tplFolder:FindFirstChild(name)
+		if tpl then
+			local s = tpl:Clone()
+			s.Name = "CupStick"
+			s:SetAttribute("Tpl", name)
+			s.Anchored = true
+			s.CanCollide = false
+			s.CanTouch = false
+			local a = rng:NextNumber(0, math.pi * 2)
+			local r = math.sqrt(rng:NextNumber()) * 0.3
+			local len = math.max(s.Size.X, s.Size.Y)
+			local pos = base + Vector3.new(math.cos(a) * r, 0.1 + len / 2 + rng:NextNumber(0, 0.15), math.sin(a) * r)
+			-- 길이 축(X)을 세우고, 바깥쪽으로 살짝 벌어지게
+			s.CFrame = CFrame.new(pos) * CFrame.Angles(math.sin(a) * 0.12, rng:NextNumber(0, 6), -math.cos(a) * 0.12) * CFrame.Angles(0, 0, math.rad(90))
+			s.Parent = m
+		end
+	end
+	m.Parent = ws
+end
+
+-- 식탁보는 상점에서 산 사람만 (사용자 요청 2026-11-19). 지금은 플레이어 속성 OwnsTablecloth로 판정 (상점은 다음 단계).
+-- 작업대에 있는 플레이어 중 한 명이라도 가지고 있으면 깔림.
+local clothStore = nil
+function Decor.setTablecloth(ws, on)
+	local cloth = ws:FindFirstChild("Tablecloth") or clothStore
+	if not cloth then
+		local top = ws:FindFirstChild("TableTop")
+		if not top then
+			return
+		end
+		tablecloth(ws, top)
+		cloth = ws:FindFirstChild("Tablecloth")
+	end
+	clothStore = cloth
+	cloth.Parent = on and ws or game:GetService("ServerStorage")
+end
+
+function Decor.watchOwners(ws)
+	local Players = game:GetService("Players")
+	local function refresh()
+		local any = false
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p:GetAttribute("OwnsTablecloth") then
+				any = true
+			end
+		end
+		Decor.setTablecloth(ws, any)
+	end
+	Players.PlayerAdded:Connect(function(p)
+		p:GetAttributeChangedSignal("OwnsTablecloth"):Connect(refresh)
+		refresh()
+	end)
+	Players.PlayerRemoving:Connect(function()
+		task.defer(refresh)
+	end)
+	refresh()
+end
+
 function Decor.dress(ws)
 	local top = ws:FindFirstChild("TableTop")
 	if not top then
 		return
 	end
-	if not ws:FindFirstChild("Tablecloth") then
-		tablecloth(ws, top)
+	layout(ws, top)
+	wornTable(ws, top)
+	-- 소다 통 숟가락 숨김 (사용자 요청 2026-11-19). 클라이언트 Station이 찾는 모델이라 지우지는 않음
+	local spoon = ws:FindFirstChild("SodaSpoon")
+	if spoon then
+		for _, p in ipairs(spoon:GetDescendants()) do
+			if p:IsA("BasePart") then
+				p.Transparency = 1
+			end
+		end
 	end
+	chopstickCup(ws)
 	if not ws:FindFirstChild("Rug") then
 		rug(ws, top)
 	end
 	grade()
+	Decor.watchOwners(ws)
 end
 
 return Decor
