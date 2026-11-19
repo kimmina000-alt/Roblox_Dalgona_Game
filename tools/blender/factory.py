@@ -13,7 +13,8 @@
 #   + 공장 건물: 콘크리트 바닥(노란 안전선), 뒤·왼쪽 벽(창문), 철골 기둥·들보, 매달린 조명, 안전 난간
 #
 # 텍스처는 이 스크립트가 numpy로 그려서 glb에 넣는다 (솔질 스테인리스, 위험 줄무늬, 고무 벨트, 콘크리트, 칠한 벽, 제어판 면).
-# 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/factory.py -- <출력 폴더(절대 경로)>
+# 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/factory.py -- <출력 폴더(절대 경로)> [line]
+#   끝에 line을 붙이면 Lv4 연속 생산 설비(build_line) → dalgona_line.glb, line_preview*.png, line_parts.txt
 # 결과: dalgona_factory.glb, factory_preview.png, factory_preview2.png, factory_parts.txt
 # 크기 = 게임 stud. 원점 = 공장 바닥 가운데. 바닥 44 × 28, 벽 높이 16.
 
@@ -260,6 +261,8 @@ def M(name):
         "BeaconY": dict(rgb=(255, 190, 30), emit=True, rbx="Neon"),
         "BeaconG": dict(rgb=(60, 220, 90), emit=True, rbx="Neon"),
         "Green": dict(rgb=(50, 180, 80), rough=0.4, rbx="SmoothPlastic"),
+        "Paint": dict(rgb=(58, 128, 120), metal=0.3, rough=0.45, rbx="SmoothPlastic"),  # Lv4 기계 칠 (청록)
+        "Cream": dict(rgb=(232, 226, 204), rough=0.5, rbx="SmoothPlastic"),
         "White": dict(rgb=(240, 238, 232), rough=0.5, rbx="SmoothPlastic"),
     }
     return mat(name, **specs[name])
@@ -617,15 +620,190 @@ def console():
         finish(f"Line_Tower{mname[-1]}", bm, mname, smooth=True)
 
 
-building()
-hopper_tower()
-kettles()
-conveyor()
-depositor()
-press()
-cooling_tunnel()
-output()
-console()
+# ───────────── Lv4 연속 생산 설비 (컨베이어 라인 기계 한 대) ─────────────
+# 사용자 결정 2026-11-19 (docs/SHOP_GROWTH_PLAN.md 2-1·5장): 4단계 = 연속 생산 설비. 가정용 미니 메이커는 뺌.
+# 공장(Lv5)보다 작은 기계 한 대: 청록 칠 받침 위에 설탕 통 → 솥 1개 → 노즐 3개 → 짧은 컨베이어 → 작은 프레스 → 식힘 덮개 → 받는 상자.
+# 바닥에 놓는 기계 (길이 약 12 · 깊이 3.4 · 높이 약 6.3). 원점 = 바닥 가운데, 앞(플레이어 쪽) = -Y. 부품 이름 L4_*
+def build_line():
+    BZ = 2.8  # 벨트 윗면
+    x0, x1 = -3.2, 4.4  # 벨트
+    bm = bmesh.new()  # 받침 캐비닛 (칠한 철판) + 발
+    add_box(bm, (0.2, 0, 1.25), (11.0, 2.8, 2.1), bevel=0.06)
+    finish("L4_Cabinet", bm, "Paint")
+    bm = bmesh.new()
+    for x in (-5.0, 5.4):
+        for y in (-1.2, 1.2):
+            add_box(bm, (x, y, 0.1), (0.4, 0.4, 0.2))
+    add_box(bm, (0.2, 0, 2.35), (11.2, 3.0, 0.1))  # 윗판 테두리
+    add_box(bm, (0.2, -1.42, 0.55), (10.6, 0.04, 0.12))  # 아래 걸레받이 줄
+    finish("L4_Trim", bm, "SteelDark")
+    bm = bmesh.new()  # 앞면 점검 문 4개 (크림색 판)
+    for x in (-3.6, -1.0, 1.6, 4.2):
+        add_box(bm, (x, -1.42, 1.25), (2.2, 0.04, 1.5), bevel=0.02)
+    finish("L4_Doors", bm, "Cream")
+    bm = bmesh.new()  # 문 손잡이
+    for x in (-3.6, -1.0, 1.6, 4.2):
+        add_box(bm, (x + 0.8, -1.47, 1.35), (0.08, 0.06, 0.5))
+    finish("L4_Handles", bm, "Steel")
+    # ① 설탕 통 (투명) + 깔때기, 솥 위
+    bm, sugar = bmesh.new(), bmesh.new()
+    add_box(bm, (-4.4, 0.3, 5.35), (1.4, 1.4, 1.5), bevel=0.05)
+    add_lathe(bm, [(0.15, 0.0), (0.7, 0.55)], center=(-4.4, 0.3, 4.05), seg=4)
+    add_box(sugar, (-4.4, 0.3, 5.0), (1.3, 1.3, 0.8))
+    finish("L4_Hopper", bm, "Glass")
+    finish("L4_HopperSugar", sugar, "Sugar")
+    bm = bmesh.new()  # 설탕 통 받침 기둥
+    for dx in (-0.65, 0.65):
+        add_box(bm, (-4.4 + dx, 1.0, 4.05), (0.12, 0.12, 3.4))
+    add_box(bm, (-4.4, 1.0, 4.6), (1.42, 0.12, 0.12))
+    finish("L4_HopperFrame", bm, "SteelDark")
+    # ② 솥 1개 (스테인리스 + 빨간 가열 띠) + 계기 + 배관 → 노즐
+    bm, jacket, gauge = bmesh.new(), bmesh.new(), bmesh.new()
+    c = (-4.4, 0.1, 2.4)
+    add_lathe(bm, [(0.0, 0.0), (0.2, 0.0), (0.75, 0.5), (0.8, 1.55), (0.86, 1.62), (0.86, 1.7), (0.0, 1.7)], center=c, seg=36)
+    add_lathe(jacket, [(0.82, 0.7), (0.88, 0.74), (0.88, 1.3), (0.82, 1.34)], center=c, seg=36)
+    add_cyl(gauge, (-4.4, 0.1 - 0.9, 3.35), 0.2, 0.06, axis="Y")
+    add_rod(bm, (-3.7, 0.1, 3.0), (-2.4, 0.0, 3.0), 0.09)
+    add_rod(bm, (-2.4, 0.0, 3.0), (-2.4, 0.0, 4.05), 0.09)
+    finish("L4_Kettle", bm, "Steel", smooth=True)
+    finish("L4_KettleJacket", jacket, "Red", smooth=True)
+    finish("L4_KettleGauge", gauge, "White", smooth=True)
+    # ③ 노즐대 (문형) + 반죽 통 + 노즐 3개
+    bm = bmesh.new()
+    for y in (-1.15, 1.15):
+        add_box(bm, (-2.4, y, 3.4), (0.2, 0.2, 2.0))
+    add_box(bm, (-2.4, 0, 4.35), (0.6, 2.5, 0.25))
+    finish("L4_DepositorFrame", bm, "Paint")
+    bm = bmesh.new()
+    add_box(bm, (-2.4, 0, 3.85), (0.8, 1.6, 0.7), bevel=0.05)
+    for dy in (-0.5, 0.0, 0.5):
+        add_cyl(bm, (-2.4, dy, 3.35), 0.08, 0.35, seg=12, r2=0.035)
+    finish("L4_Depositor", bm, "Steel", smooth=True)
+    # ④ 컨베이어: 벨트 + 옆 가드 + 롤러 + 틀 쟁반(2×2칸) + 달고나
+    L, cx = x1 - x0, (x0 + x1) / 2
+    bm = bmesh.new()
+    add_box(bm, (cx, 0, BZ - 0.05), (L, 1.7, 0.1))
+    finish("L4_Belt", bm, "Belt", uvscale=0.5)
+    bm = bmesh.new()
+    for y in (-0.95, 0.95):
+        add_box(bm, (cx, y, BZ + 0.05), (L + 0.3, 0.12, 0.35))
+    for x in (x0, x1):
+        add_cyl(bm, (x, 0, BZ - 0.25), 0.22, 1.9, axis="Y")
+    add_box(bm, (cx, 0, BZ - 0.3), (L, 1.9, 0.3))
+    finish("L4_BeltFrame", bm, "SteelDark")
+    bm, dal = bmesh.new(), bmesh.new()
+    for x in np.arange(x0 + 0.6, x1 - 0.3, 1.25):
+        add_box(bm, (x, 0, BZ + 0.05), (1.05, 1.45, 0.08), bevel=0.02)
+        if x > -2.3:
+            for dx in (-0.26, 0.26):
+                for dy in (-0.36, 0.36):
+                    cc = (x + dx, dy, BZ + 0.12)
+                    if x > 0.9:  # 프레스 지난 뒤: 별 모양
+                        add_star_disc(dal, cc, 0.22, 0.1, 0.05)
+                    else:
+                        add_lathe(dal, [(0.0, 0.0), (0.2, 0.0), (0.21, 0.03), (0.15, 0.07), (0.0, 0.08)], center=cc, seg=14)
+    finish("L4_Trays", bm, "Steel")
+    finish("L4_Dalgona", dal, "Dalgona", smooth=True)
+    # ⑤ 작은 프레스: 양옆 판(위험 줄무늬) + 위 상자 + 실린더 1개 + 도장판
+    px = 0.4
+    bm = bmesh.new()
+    for y in (-1.15, 1.15):
+        add_box(bm, (px, y, 3.9), (1.2, 0.25, 2.3))
+    finish("L4_PressSides", bm, "Hazard", uvscale=0.5)
+    bm = bmesh.new()
+    add_box(bm, (px, 0, 5.25), (1.4, 2.6, 0.7), bevel=0.05)
+    finish("L4_PressTop", bm, "Paint")
+    bm = bmesh.new()
+    add_cyl(bm, (px, 0, 4.55), 0.3, 0.8)
+    add_cyl(bm, (px, 0, 3.85), 0.12, 0.7)
+    finish("L4_PressCylinder", bm, "Steel", smooth=True)
+    bm = bmesh.new()
+    add_box(bm, (px, 0, 3.45), (1.0, 1.35, 0.22), bevel=0.03)
+    finish("L4_PressHead", bm, "SteelDark")
+    bm = bmesh.new()
+    for dx in (-0.26, 0.26):
+        for dy in (-0.36, 0.36):
+            add_star_disc(bm, (px + dx, dy, 3.3), 0.22, 0.1, 0.07)
+    finish("L4_PressStamps", bm, "Copper")
+    # ⑥ 식힘 덮개 (둥근 지붕) + 환풍구
+    bm = bmesh.new()
+    prof = []
+    for k in range(9):
+        a = math.pi * k / 8
+        prof.append((math.cos(a) * 1.0, math.sin(a) * 0.7))
+    # 반원 단면을 X축으로 밀어 낸 덮개
+    xa, xb = 1.8, 3.9
+    va = [bm.verts.new((xa, y, BZ + 0.2 + z)) for y, z in prof]
+    vb = [bm.verts.new((xb, y, BZ + 0.2 + z)) for y, z in prof]
+    for i in range(len(prof) - 1):
+        bm.faces.new((va[i], va[i + 1], vb[i + 1], vb[i]))
+    finish("L4_CoolCover", bm, "Steel", smooth=True)
+    bm = bmesh.new()
+    add_cyl(bm, ((xa + xb) / 2, 0, BZ + 0.95), 0.32, 0.15, seg=20)
+    finish("L4_CoolFan", bm, "SteelDark", smooth=True)
+    # ⑦ 미끄럼판 + 받는 상자
+    bm = bmesh.new()
+    add_box(bm, (5.0, 0, BZ - 0.45), (1.2, 1.5, 0.08), rot=Matrix.Rotation(-0.55, 4, "Y"))
+    finish("L4_Chute", bm, "Steel")
+    bm, dal = bmesh.new(), bmesh.new()
+    add_box(bm, (6.3, 0, 0.55), (1.5, 1.7, 1.1), bevel=0.04)
+    for k in range(8):
+        add_star_disc(dal, (6.3 + random.uniform(-0.45, 0.45), random.uniform(-0.55, 0.55), 1.12 + k * 0.025), 0.22, 0.1, 0.05)
+    finish("L4_Crate", bm, "Crate")
+    finish("L4_CrateDalgona", dal, "Dalgona")
+    # ⑧ 앞 조작판 (공장 제어판과 같은 그림: 계기판 3개 + 도안 버튼 6개) + 시작·정지 + 경고등
+    tilt = Matrix.Rotation(math.radians(30), 3, "X")
+    nrm = tilt @ Vector((0, 0, 1))
+    cpx, cpy, cpz = -0.9, -1.75, 2.75
+    bm = bmesh.new()
+    add_box(bm, (cpx, cpy + 0.15, cpz - 0.5), (2.3, 0.5, 1.0))
+    add_box(bm, (cpx, cpy, cpz), (2.3, 1.3, 0.1), rot=Matrix.Rotation(math.radians(30), 4, "X"))
+    finish("L4_ControlBox", bm, "SteelDark")
+    bm = bmesh.new()
+    uv = bm.loops.layers.uv.verify()
+    c0 = Vector((cpx, cpy, cpz)) + nrm * 0.06
+    corners = [(-1.1, -0.59), (1.1, -0.59), (1.1, 0.59), (-1.1, 0.59)]
+    vs = [bm.verts.new(c0 + tilt @ Vector((u, v, 0))) for u, v in corners]
+    f = bm.faces.new(vs)
+    for l, (u, v) in zip(f.loops, corners):
+        l[uv].uv = (u / 2.2 + 0.5, v / 1.18 + 0.5)
+    bm.normal_update()
+    me = bpy.data.meshes.new("L4_ControlPanel")
+    bm.to_mesh(me)
+    bm.free()
+    o = bpy.data.objects.new("L4_ControlPanel", me)
+    scene.collection.objects.link(o)
+    o.data.materials.append(M("Panel"))
+    PARTS.append(("L4_ControlPanel", "Panel"))
+    bm = bmesh.new()
+    add_cyl(bm, (cpx - 1.45, cpy + 0.05, cpz - 0.25), 0.16, 0.16, axis="Y")
+    finish("L4_StartButton", bm, "Green", smooth=True)
+    bm = bmesh.new()
+    add_cyl(bm, (cpx + 1.45, cpy + 0.05, cpz - 0.25), 0.18, 0.16, axis="Y")
+    finish("L4_StopButton", bm, "Red", smooth=True)
+    bm = bmesh.new()
+    add_rod(bm, (5.4, 1.1, 2.4), (5.4, 1.1, 4.2), 0.05)
+    finish("L4_TowerPole", bm, "SteelDark", smooth=True)
+    for k, mname in enumerate(("BeaconG", "BeaconY", "BeaconR")):
+        bm = bmesh.new()
+        add_cyl(bm, (5.4, 1.1, 4.35 + k * 0.32), 0.15, 0.3, seg=16)
+        finish(f"L4_Tower{mname[-1]}", bm, mname, smooth=True)
+
+
+MODE = argv[1] if len(argv) > 1 else "factory"
+if MODE == "line":
+    build_line()
+else:
+    building()
+    hopper_tower()
+    kettles()
+    conveyor()
+    depositor()
+    press()
+    cooling_tunnel()
+    output()
+    console()
+NAME = "line" if MODE == "line" else "factory"
 
 # 부품 목록 (Roblox에서 색·재질 칠할 때 씀)
 lines = ["# 이름\t재질키\tRoblox 재질\t색(텍스처 없을 때)\t텍스처\t경계 상자 가운데\t크기\t삼각형"]
@@ -647,12 +825,12 @@ for o in scene.objects:
     lines.append(f"{o.name}\t{m.name}\t{m['rbx']}\t{tuple(m['rgb'])}\t{texname}\t({c.x:.2f}, {c.y:.2f}, {c.z:.2f})\t({s.x:.2f}, {s.y:.2f}, {s.z:.2f})\t{tris}")
     if tris > 20000:
         print("[factory] WARNING over 20k tris:", o.name, tris)
-with open(os.path.join(OUT, "factory_parts.txt"), "w", encoding="utf-8") as f:
+with open(os.path.join(OUT, f"{NAME}_parts.txt"), "w", encoding="utf-8") as f:
     f.write("\n".join(lines) + "\n")
 print(f"[factory] parts={len(lines) - 1} tris={total}")
 
 bpy.ops.object.select_all(action="SELECT")
-bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "dalgona_factory.glb"), export_format="GLB", use_selection=True, export_apply=True, export_image_format="AUTO")
+bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, f"dalgona_{NAME}.glb"), export_format="GLB", use_selection=True, export_apply=True, export_image_format="AUTO")
 
 # 미리 보기 2장: 앞 위에서 전체, 제어대·프레스 가까이
 world = bpy.data.worlds.new("W")
@@ -664,7 +842,7 @@ sun = bpy.data.objects.new("Sun", bpy.data.lights.new("Sun", "SUN"))
 sun.data.energy = 3.0
 sun.rotation_euler = (math.radians(55), math.radians(-20), math.radians(30))
 scene.collection.objects.link(sun)
-for x, y in [(x, y) for x in (-14, 0, 14) for y in (-3, 6)]:
+for x, y in ([(x, y) for x in (-14, 0, 14) for y in (-3, 6)] if MODE != "line" else [(-3, -4), (4, -4)]):
     L = bpy.data.objects.new("PL", bpy.data.lights.new("PL", "POINT"))
     L.data.energy = 600
     L.location = (x, y, FH - 5)
@@ -685,6 +863,14 @@ def shot(path, loc, target, lens):
     bpy.ops.render.render(write_still=True)
 
 
-shot("factory_preview.png", (6, -40, 24), (1, 0, 3), 30)
-shot("factory_preview2.png", (6, -14, 9), (1.5, -1, 4), 32)
+if MODE == "line":
+    # 바닥 판 (미리 보기용, 내보내기 뒤라 glb에 안 들어감)
+    bm = bmesh.new()
+    add_box(bm, (0.5, 0, -0.05), (20, 12, 0.1))
+    finish("PreviewFloor", bm, "Concrete", uvscale=0.125)
+    shot("line_preview.png", (4, -17, 10), (0.6, 0, 2.8), 32)
+    shot("line_preview2.png", (-1, -7.5, 5.2), (-0.6, -0.8, 2.9), 30)
+else:
+    shot("factory_preview.png", (6, -40, 24), (1, 0, 3), 30)
+    shot("factory_preview2.png", (6, -14, 9), (1.5, -1, 4), 32)
 print("[factory] done")
