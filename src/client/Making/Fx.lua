@@ -37,6 +37,18 @@ function Fx.mesh(name, parent, props)
 	return p
 end
 
+-- 늘어나는 공(타원체): Roblox Ball 부품은 크기를 다르게 주면 가장 작은 쪽으로 동그랗게 줄어서,
+-- 네모 부품 + 구 모양 SpecialMesh로 바꿈 → Size 그대로 납작하거나 길쭉한 공이 됨
+function Fx.ellipsoid(p)
+	p.Shape = Enum.PartType.Block
+	if not p:FindFirstChildOfClass("SpecialMesh") then
+		local m = Instance.new("SpecialMesh")
+		m.MeshType = Enum.MeshType.Sphere
+		m.Parent = p
+	end
+	return p
+end
+
 -- 돔 메시를 지름 d, 높이 h로, 바닥 가운데를 base(Vector3)에 맞춤. yaw는 돌림(라디안)
 function Fx.placeDome(p, base, d, h, yaw)
 	p.Size = Vector3.new(d, math.max(h, 0.005), d)

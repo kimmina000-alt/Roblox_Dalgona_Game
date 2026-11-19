@@ -305,7 +305,7 @@ local function reshape(ctx, rec, blob, eRing)
 					local len = (T - foldA).Magnitude
 					if len > 0.04 then
 						if not fold then
-							fold = S:fxPart(S.fx, { Name = "FoldFlap", Shape = Enum.PartType.Ball, Color = blob.color, Material = Enum.Material.SmoothPlastic })
+							fold = Fx.ellipsoid(S:fxPart(S.fx, { Name = "FoldFlap", Color = blob.color, Material = Enum.Material.SmoothPlastic }))
 						end
 						local w = math.max(R * 0.38, 0.12)
 						local mid = (foldA + T) / 2 + Vector3.new(0, 0.025, 0)

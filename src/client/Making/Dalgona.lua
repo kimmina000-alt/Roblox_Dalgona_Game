@@ -74,7 +74,8 @@ function Dalgona.new(station, center, color, volume, ellipse)
 	self.rim2 = station:fxPart(station.fx, { Name = "DalgonaRim2", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic })
 	self.rimW = 0.06
 	self.details = {}
-	self.dome = station:fxPart(station.fx, { Name = "DalgonaDome", Shape = Enum.PartType.Ball, Color = color, Material = Enum.Material.SmoothPlastic })
+	-- 가운데 볼록: 납작한 공이어야 해서 늘어나는 공으로 (Ball 부품은 크기가 같은 공으로만 보임)
+	self.dome = Fx.ellipsoid(station:fxPart(station.fx, { Name = "DalgonaDome", Color = color, Material = Enum.Material.SmoothPlastic }))
 	self.lumps = {}
 	for i = 1, 4 do
 		local a = i * math.pi / 2 + 0.4

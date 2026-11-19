@@ -128,7 +128,7 @@ local function newPuff(S, amount, baseThick)
 	pf.t = 0
 	-- 둥근 공 하나가 국자 속에서 부풀어 오름 (사용자 요청 2026-11-19: 주름 언덕 메시는 동그라미가 줄지어 보임).
 	-- 공 가운데가 국자 안쪽 면에 있어서 위쪽 반구만 보임 = 매끈한 둥근 돔
-	pf.foam = S:fxPart(S.Ladle, { Name = "FxFoam", Shape = Enum.PartType.Ball, Color = pf.syrup, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.one * 0.1 })
+	pf.foam = Fx.ellipsoid(S:fxPart(S.Ladle, { Name = "FxFoam", Color = pf.syrup, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.one * 0.1 }))
 	return pf
 end
 
