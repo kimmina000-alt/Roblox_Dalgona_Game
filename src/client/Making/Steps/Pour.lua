@@ -178,7 +178,8 @@ end
 local RESHAPE_FROM = 1.15 -- 이보다 길쭉해야 다듬기로 줄어듦
 local RESHAPE_MAX = 0.6 -- 다듬어서 줄일 수 있는 길쭉함 최대
 local RESHAPE_GAIN = 0.35 -- 가운데로 끈 거리(stud) → 줄어드는 길쭉함 (여러 번 끌어 모아야 함)
-local PICK_PX = 90 -- 도구 손잡이 화면 위치에서 이만큼 안을 눌러야 잡힘
+local PICK_PX = 90 -- 누름판 화면 위치에서 이만큼 안을 누르면 누르기로
+local SCRAPE_LEAN = Vector3.new(-0.5, 0.75, 0.45).Unit -- 국자 긁을 때 젓가락 기울기 (손잡이가 왼쪽 위 앞)
 
 -- 붓는 동안 국자·손을 숨기고 줄기를 HIDE_RISE만큼 위에서 시작 → 화면 밖 높은 곳에서 붓는 것처럼
 local HIDE_RISE = 2.4
@@ -233,7 +234,7 @@ local function reshape(ctx, rec, blob, eRing)
 			end)
 		end
 	end
-	ui:say("어떤 도구를 쓸까요?", "젓가락 손잡이를 잡으면 모양 다듬기 · 누름판을 잡으면 누르기")
+	ui:say("젓가락으로 모양을 다듬어요", "끌어서 가장자리를 안쪽으로 접어요 · 다 됐으면 누름판을 눌러요")
 	if spread0 > RESHAPE_FROM then
 		ui:hint("반죽이 길쭉해요! 젓가락으로 끝을 가운데로 모아 봐요")
 	end
@@ -244,21 +245,16 @@ local function reshape(ctx, rec, blob, eRing)
 		end
 		if P.down and not holding and P.presses ~= seenPress then
 			seenPress = P.presses
-			local stickHandle = screen(restTip + restDir * 2.6)
 			local pv = S.Presser:GetPivot()
 			local presserTop = screen(pv.Position + Vector3.new(0, S.Presser.Disc.Size.X, 0))
-			local dStick = (P.pos - stickHandle).Magnitude
-			local dPress = (P.pos - presserTop).Magnitude
-			if dPress < PICK_PX and dPress <= dStick then
-				-- 누름판을 잡음 → 누르기 단계로 (Press가 잡힌 채로 시작)
+			if (P.pos - presserTop).Magnitude < PICK_PX then
+				-- 누름판을 누르면 누르기 단계로 (사용자 요청 2026-11-19)
 				st.presserInHand = true
 				break
-			elseif dStick < PICK_PX * 1.3 then
-				holding = true
-				lastTip = nil
-			else
-				ui:hint("젓가락 손잡이나 누름판을 잡아요")
 			end
+			-- 나머지는 들고 있는 나무젓가락으로 다듬기 (도구 고르기 없이 기본으로 젓가락을 들고 있음)
+			holding = true
+			lastTip = nil
 		end
 		if holding then
 			local tip, hnd = Stir.grip(blob:topY() + 0.02)
@@ -325,7 +321,7 @@ local function reshape(ctx, rec, blob, eRing)
 		if holding then
 			ui:say("젓가락으로 모양을 다듬어요", string.format("길쭉한 끝을 가운데로 끌어 모아요 · 길쭉함 %d%%", math.floor((rec.spread - 1) * 100 + 0.5)))
 		else
-			ui:say("어떤 도구를 쓸까요?", touched and string.format("길쭉함 %d%% · 다 다듬었으면 누름판을 잡아요", math.floor((rec.spread - 1) * 100 + 0.5)) or "젓가락 손잡이를 잡으면 모양 다듬기 · 누름판을 잡으면 누르기")
+			ui:say("젓가락으로 모양을 다듬어요", touched and string.format("길쭉함 %d%% · 다 됐으면 누름판을 눌러요", math.floor((rec.spread - 1) * 100 + 0.5)) or "끌어서 가장자리를 안쪽으로 접어요 · 다 됐으면 누름판을 눌러요")
 		end
 	end
 	S:restChopsticks()
@@ -361,7 +357,7 @@ function Pour.run(ctx)
 	local tilt = 0
 	local dropped = false
 	local dropTime = 0
-	local flickPress = nil
+	local scrapeT = nil -- 젓가락으로 국자 긁어내리는 중 (초)
 	local blob = nil
 	local poured = 0
 	local total = volume * (1 - REMAIN)
@@ -529,7 +525,7 @@ function Pour.run(ctx)
 							blob:setThickness(finalH)
 						end)
 						S:setContents({ thickness = 0.03 })
-						ui:say("국자를 톡 털어요 (탭)", "남은 반죽까지 떨어뜨려요")
+						ui:say("젓가락으로 국자를 긁어요 (탭)", "남은 반죽까지 떨어뜨려요")
 						seenPress = P.presses
 					end
 				end
@@ -553,13 +549,29 @@ function Pour.run(ctx)
 				end
 			end
 		else
-			-- 탭 = 국자를 톡 털어 남은 반죽 떨어뜨리기
-			if P.presses ~= seenPress then
-				seenPress = P.presses
-				flickPress = os.clock()
-				ladle:PivotTo(ladle:GetPivot() * CFrame.new(0, -0.15, 0))
+			-- 국자는 다시 보이게 (긁어내리는 모습이 보이도록)
+			if hideK > 0.01 then
+				hideK += (0 - hideK) * (1 - math.exp(-8 * dt))
+				setLadleHidden(ladle, hideK)
 			end
-			if flickPress and not P.down and P.releases > 0 then
+			-- 탭 = 나무젓가락으로 국자 가장자리를 긁어내려 남은 반죽 떨어뜨리기 (사용자 요청 2026-11-19)
+			if P.presses ~= seenPress and not scrapeT then
+				seenPress = P.presses
+				scrapeT = 0
+			end
+			if scrapeT then
+				scrapeT += dt
+				local k = math.min(scrapeT / 0.4, 1)
+				local b = S.Bowl.Position
+				-- 국자 안쪽 위에서 가장자리(흘러나가는 쪽 +X)를 넘어 아래로 쓸어내림
+				local from = b + Vector3.new(-S.bowlRadius * 0.3, S.bowlHalf + 0.25, 0.1)
+				local over = b + Vector3.new(S.bowlRadius + 0.05, S.bowlHalf + 0.05, 0.1)
+				local down = b + Vector3.new(S.bowlRadius + 0.25, -0.35, 0.1)
+				local tip = k < 0.6 and from:Lerp(over, k / 0.6) or over:Lerp(down, (k - 0.6) / 0.4)
+				Stir.placeChopsticksAt(S, tip, tip + SCRAPE_LEAN * 2.75)
+			end
+			if scrapeT and scrapeT >= 0.4 then
+				S:restChopsticks()
 				local remainBlob = S:fxPart(S.fx, { Name = "Drip", Shape = Enum.PartType.Ball, Size = Vector3.one * 0.35, Color = color, Material = Enum.Material.SmoothPlastic, CFrame = CFrame.new(S.Bowl.Position) })
 				local target = st.dalgona.center + Vector3.new(0.1, st.dalgona.h * 0.6, 0)
 				local tw = TweenService:Create(remainBlob, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { CFrame = CFrame.new(target), Size = Vector3.one * 0.2 })

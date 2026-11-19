@@ -11,6 +11,10 @@ local Sfx = require(script.Parent.Parent:WaitForChild("Sfx"))
 local Stamp = {}
 
 local HALF_WIRE = 0.14
+-- 찍힐 자리 미리 보기 (사용자 요청 2026-11-19): 틀이 반죽 위에 떠 있어서 실제로 찍힐 자리와 달라 보임 →
+-- 틀을 들고 있는 동안 반죽 윗면에 찍힐 선을 연두색으로, 반죽 밖으로 나가는 부분은 빨간색으로 보여 줌
+local PREVIEW_IN = Color3.fromRGB(150, 255, 120)
+local PREVIEW_OUT = Color3.fromRGB(255, 70, 70)
 
 -- 누른 시간 → 홈 깊이 (0 안 보임 · 1 또렷 · 1.3 너무 깊어 금 감)
 local function depthFor(hold, cfg)
@@ -79,6 +83,29 @@ function Stamp.run(ctx)
 		local far = bcf.Position + Vector3.new(0, 0, bsz.Z / 2 - 0.08)
 		handleLocal = cutRot:VectorToObjectSpace(Vector3.new(far.X - pv.Position.X, 0, far.Z - pv.Position.Z))
 	end
+	local preview = {} -- 미리 보기 선 조각 (철사마다 하나)
+	local function showPreview(on)
+		for i, w in ipairs(wires) do
+			local seg = preview[i]
+			if not seg then
+				seg = S:fxPart(S.fx, { Name = "StampPreview", Material = Enum.Material.Neon, Transparency = 1, Size = Vector3.new(0.05, 0.01, 0.05) })
+				preview[i] = seg
+			end
+			if not on then
+				seg.Transparency = 1
+			else
+				local look = w.CFrame.LookVector
+				look = Vector3.new(look.X, 0, look.Z)
+				if look.Magnitude > 1e-4 then
+					local mid = Vector3.new(w.Position.X, top + 0.012, w.Position.Z)
+					seg.Size = Vector3.new(0.045, 0.01, w.Size.Z)
+					seg.CFrame = CFrame.lookAt(mid, mid + look.Unit)
+					seg.Color = dal:inside(mid) and PREVIEW_IN or PREVIEW_OUT
+					seg.Transparency = 0.15
+				end
+			end
+		end
+	end
 	local phase = "place"
 	local grabbing = false
 	local seenPress = P.presses
@@ -116,11 +143,13 @@ function Stamp.run(ctx)
 				end
 				lastPos = w
 				cutter:PivotTo(CFrame.new(w) * CFrame.Angles(0, math.rad(yaw), 0))
+				showPreview(true)
 				local flat = Vector3.new(w.X - c.X, 0, w.Z - c.Z)
 				rec.dist = flat.Magnitude
 				ctx.live("stamp", Scoring.stamp({ dist = rec.dist, angle = yaw, hold = 0.3 }))
 				if not P.down then
 					grabbing = false
+					showPreview(false)
 					if rec.dist < dal:radius() then
 						rec.angle = yaw
 						placed = CFrame.new(w.X, top + HALF_WIRE - 0.02, w.Z) * CFrame.Angles(0, math.rad(yaw), 0)
@@ -232,6 +261,9 @@ function Stamp.run(ctx)
 	presser:PivotTo(S.rest.Presser)
 	S:presserSeeThrough(false)
 	cutter:PivotTo(S.rest.Cutter)
+	for _, seg in ipairs(preview) do
+		seg:Destroy()
+	end
 	rec.t1 = ctx.now()
 	return rec
 end
