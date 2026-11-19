@@ -38,6 +38,8 @@ local KINDS = {
 	White = { Enum.Material.SmoothPlastic, Color3.fromRGB(255, 255, 255) },
 	Window = { Enum.Material.Glass, Color3.fromRGB(190, 225, 245), 0.15 },
 	Yellow = { Enum.Material.SmoothPlastic, Color3.fromRGB(255, 228, 120) },
+	Paint = { Enum.Material.SmoothPlastic, Color3.fromRGB(165, 228, 205) },
+	Cream = { Enum.Material.SmoothPlastic, Color3.fromRGB(255, 248, 228) },
 }
 
 local PART_KIND = {
@@ -59,10 +61,21 @@ local PART_KIND = {
 	Deco_SwirlL_Pink = "Pink", Deco_SwirlL_Lemon = "Lemon", Deco_SwirlL_Mint = "Mint", Deco_SwirlL_Sky = "Sky",
 	Deco_SwirlL_Lilac = "Lilac", Deco_SwirlL_Top = "White", Deco_SwirlR_Pink = "Pink", Deco_SwirlR_Lemon = "Lemon",
 	Deco_SwirlR_Mint = "Mint", Deco_SwirlR_Sky = "Sky", Deco_SwirlR_Lilac = "Lilac", Deco_SwirlR_Top = "White",
+	-- Lv4 연속 생산 설비 (dalgona_line.glb → ServerStorage.Assets.MachineLine)
+	L4_Cabinet = "Paint", L4_Trim = "SteelDark", L4_Doors = "Cream", L4_Handles = "Steel",
+	L4_Hopper = "Glass", L4_HopperSugar = "Sugar", L4_HopperFrame = "SteelDark", L4_Kettle = "Steel",
+	L4_KettleJacket = "Red", L4_KettleGauge = "White", L4_DepositorFrame = "Paint", L4_Depositor = "Steel",
+	L4_Belt = "Belt", L4_BeltFrame = "SteelDark", L4_Trays = "Steel", L4_Dalgona = "Dalgona",
+	L4_PressSides = "Hazard", L4_PressTop = "Paint", L4_PressCylinder = "Steel", L4_PressHead = "SteelDark",
+	L4_PressStamps = "Copper", L4_CoolCover = "Steel", L4_CoolFan = "SteelDark", L4_Chute = "Steel",
+	L4_Crate = "Crate", L4_CrateDalgona = "Dalgona", L4_ControlBox = "SteelDark", L4_ControlPanel = "Panel",
+	L4_StartButton = "Green", L4_StopButton = "Red", L4_TowerPole = "SteelDark", L4_TowerG = "BeaconG",
+	L4_TowerY = "BeaconY", L4_TowerR = "BeaconR", L4_DecoHopperBall = "Pink", L4_DecoPressBall = "Lemon",
+	L4_DecoLolli_Stick = "White", L4_DecoLolli_Candy = "Pink", L4_DecoLolli_Swirl = "White",
 }
 
 -- 사람이 지나가야 하는 얇은 것·빛은 부딪히지 않게
-local NO_COLLIDE = { Line_Curtains = true, Factory_LampLight = true, Factory_Lamps = true, Line_Dalgona = true, Line_CrateDalgona = true }
+local NO_COLLIDE = { Line_Curtains = true, Factory_LampLight = true, Factory_Lamps = true, Line_Dalgona = true, Line_CrateDalgona = true, L4_Dalgona = true, L4_CrateDalgona = true }
 
 -- 매달린 조명 6개 (Blender x ∈ {-14,0,14}, y ∈ {-3,6}, 높이 11.45) → 모델 기준 (-x, 11.45, y)
 local LAMPS = {}
@@ -123,6 +136,28 @@ function FactoryBuilder.place(parent, cf)
 	end
 	local m = src:Clone()
 	m.Name = "DalgonaFactory"
+	m:PivotTo(cf)
+	style(m)
+	m.Parent = parent
+	return m
+end
+
+-- Lv4 연속 생산 설비(컨베이어 라인)를 놓는다 (시험용 자리, 2026-11-19).
+-- 손 작업대(화로)는 그대로 두고 가게 "기계 자리"에 따로 놓는 기계 (D10). 정식 기계 자리는 가게 배치가 정해지면 옮김.
+-- cf = 기계 바닥 가운데, 기계 앞(조작판) = cf 의 -Z. 이미 있으면 그대로 돌려줌.
+function FactoryBuilder.placeLine(parent, cf)
+	local existing = parent:FindFirstChild("DalgonaMachineLine")
+	if existing then
+		return existing
+	end
+	local assets = ServerStorage:FindFirstChild("Assets")
+	local src = assets and assets:FindFirstChild("MachineLine")
+	if not src then
+		warn("[Factory] ServerStorage.Assets.MachineLine 없음")
+		return nil
+	end
+	local m = src:Clone()
+	m.Name = "DalgonaMachineLine"
 	m:PivotTo(cf)
 	style(m)
 	m.Parent = parent
