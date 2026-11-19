@@ -438,6 +438,7 @@ function Soda.run(ctx)
 				if k >= 1 then
 					f.part:Destroy()
 					table.remove(falling, i)
+					Sfx.play("sodaDrop", 0.5, 1.2)
 					local spot = Fx.mesh("SodaMound", S.Ladle, { Name = "FxSoda", Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand })
 						or S:fxPart(S.Ladle, { Name = "FxSoda", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.2, 0.06, 0.2) })
 					local base = f.to - Vector3.new(0, 0.01, 0)
@@ -525,6 +526,8 @@ function Soda.run(ctx)
 				end
 				rec.puff = puffCurve(puff.u)
 				drawPuff(S, puff, dt, speed)
+				-- 부푸는 동안 보글보글
+				Sfx.loop("foamBubble", puff.done and 0 or 0.45, 0.9 + 0.25 * rec.puff)
 			end
 			Sfx.stir(puffed and "stirCream" or "stirLiquid", speed, stir.active)
 			ui:setGauge(true, speed, mcfg.slow, cfg.fastMin, "STIR FAST! · 빠르게")
@@ -545,6 +548,7 @@ function Soda.run(ctx)
 	P.sideZone = nil
 	ui:setHeight(false)
 	Sfx.stopStir()
+	Sfx.stop("foamBubble")
 	Sfx.stop("fire") -- 소다 다음부터는 불을 안 씀
 	ui:setGauge(false)
 	ui:setMeter(false)

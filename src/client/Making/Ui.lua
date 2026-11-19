@@ -7,6 +7,8 @@ local HapticService = game:GetService("HapticService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
+local Sfx = require(script.Parent:WaitForChild("Sfx"))
+
 local Ui = {}
 Ui.__index = Ui
 
@@ -632,6 +634,7 @@ function Ui:showResult(res, shape, handlers)
 			local s = self.resStars[i]
 			s.TextColor3 = GOLD
 			s.TextSize = 64
+			Sfx.play("pop", 0.7, 1 + 0.18 * i) -- 별 하나마다 "뽁" (점점 높게)
 			TweenService:Create(s, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { TextSize = 48 }):Play()
 			self:buzz(0.3, 0.05)
 			task.wait(0.2)
@@ -643,9 +646,18 @@ function Ui:showResult(res, shape, handlers)
 		end
 	end
 	self.resConns = {
-		self.btnRetry.Activated:Connect(handlers.retry),
-		self.btnOther.Activated:Connect(handlers.other),
-		self.btnLeave.Activated:Connect(handlers.leave),
+		self.btnRetry.Activated:Connect(function()
+			Sfx.play("pop", 0.6, 1.1)
+			handlers.retry()
+		end),
+		self.btnOther.Activated:Connect(function()
+			Sfx.play("pop", 0.6, 1.1)
+			handlers.other()
+		end),
+		self.btnLeave.Activated:Connect(function()
+			Sfx.play("pop", 0.6, 0.9)
+			handlers.leave()
+		end),
 	}
 end
 

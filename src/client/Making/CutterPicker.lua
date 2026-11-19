@@ -6,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
+local Sfx = require(script.Parent:WaitForChild("Sfx"))
 
 local Picker = {}
 
@@ -187,6 +188,7 @@ function Picker.run(ctx, currentId)
 		})
 		corner(tag, 8)
 		card.Activated:Connect(function()
+			Sfx.play("pop", 0.6, 1.1)
 			chosen = entry
 		end)
 	end

@@ -128,6 +128,7 @@ function Stamp.run(ctx)
 			if P.down and not grabbing and P.presses ~= seenPress then
 				seenPress = P.presses
 				grabbing = true
+				Sfx.play("pop", 0.5, 1.1)
 				lastPos = nil
 			end
 			if grabbing then
@@ -156,6 +157,7 @@ function Stamp.run(ctx)
 						cutter:PivotTo(placed)
 						phase = "press"
 						S:presserSeeThrough(true)
+						Sfx.play("metalClink", 0.25, 1.6) -- 틀 내려놓는 "땡"
 						local pv = presser:GetPivot()
 						-- 틀을 올리면 누름판은 틀 위로 와서 기다림 (사용자 요청 2026-11-19: 누름판을 끌고 오지 않아도 화면을 누르면 찍힘)
 						grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0))

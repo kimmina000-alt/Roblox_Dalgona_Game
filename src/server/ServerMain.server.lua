@@ -5,6 +5,7 @@ local Services = script.Parent:WaitForChild("Services")
 local WorkstationBuilder = require(Services:WaitForChild("WorkstationBuilder"))
 local ProductionService = require(Services:WaitForChild("ProductionService"))
 local FactoryBuilder = require(Services:WaitForChild("FactoryBuilder"))
+local StallDecor = require(Services:WaitForChild("StallDecor"))
 
 local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not remotes then
@@ -25,6 +26,8 @@ local ws = workspace:FindFirstChild("DalgonaWorkstation") or WorkstationBuilder.
 if not ws:FindFirstChild("Cutter") then
 	WorkstationBuilder.buildCutter(ws) -- 예전 별 전용 틀 → 도안을 바꿔 끼우는 틀
 end
+-- 식탁보·러그·색감 (2026-11-19 귀엽게)
+StallDecor.dress(ws)
 if ws:GetAttribute("CoalLeft") == nil then
 	WorkstationBuilder.setCoal(ws, 1)
 end

@@ -4,6 +4,8 @@
 --   손을 떼면 그 자리에 떠 있음 (다시 잡아서 계속).
 -- Press(펴기)와 Stamp(모양 찍기)가 같이 쓴다.
 
+local Sfx = require(script.Parent:WaitForChild("Sfx"))
+
 local Grab = {}
 Grab.__index = Grab
 
@@ -57,6 +59,7 @@ function Grab:update(dt, carryY, canPress)
 		if d < PICK_PX or self.missHint or self.anywhere then
 			-- 한 번 빗나가면 다음엔 어디를 눌러도 잡힘 (작은 화면 배려)
 			self.grabbed = true
+			Sfx.play("pop", 0.5, 1.0)
 			self.lastPos = nil
 			self.still = 0
 			self.speed = 0

@@ -11,6 +11,7 @@ local Scoring = require(Shared:WaitForChild("Scoring"))
 
 local Dalgona = require(script.Parent.Parent:WaitForChild("Dalgona"))
 local Stir = require(script.Parent.Parent:WaitForChild("Stir"))
+local Sfx = require(script.Parent.Parent:WaitForChild("Sfx"))
 local Fx = require(script.Parent.Parent:WaitForChild("Fx"))
 
 local Pour = {}
@@ -394,6 +395,7 @@ function Pour.run(ctx)
 			if P.down and not grabbing and P.presses ~= seenPress then
 				seenPress = P.presses
 				grabbing = true
+				Sfx.play("pop", 0.5, 1.1)
 			end
 			if grabbing and not P.down then
 				grabbing = false
@@ -566,8 +568,11 @@ function Pour.run(ctx)
 				break
 			end
 		end
+		-- 반죽이 흘러내리는 "꿀렁" (줄기 세기만큼)
+		Sfx.loop("pourGlug", (stream.flow or 0) * 0.6, 0.75)
 		ctx.live("pour", Scoring.pour(rec))
 	end
+	Sfx.stop("pourGlug")
 
 	ctx.live("pour", Scoring.pour(rec))
 	ui:say("잘 부었어요!", rec.remain > 0.1 and "국자에 반죽이 조금 남았어요" or "")

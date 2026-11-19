@@ -100,6 +100,14 @@ C.Sounds = {
 	stirLiquid = "rbxassetid://9116146746", -- 녹은 시럽 젓기 (부드러움)
 	stirCream = "rbxassetid://9126209045", -- 소다 넣은 뒤 걸쭉한 거품 젓기 (둔함)
 	pressSticky = "rbxassetid://137866583821455", -- 누름판이 반죽에 닿고 뗄 때 끈적한 "쩍" (2026-11-19 요청, 임시 후보: Creator Store "goop slime sound effect")
+	-- 귀여운 효과음 (2026-11-19 "효과음 들어가면 재미있을 것 같음", Creator Store 무료, Studio에서 불러와짐 확인)
+	pop = "rbxassetid://6586979979", -- "뽁" 0.2초: 도구 집기 · 버튼 · 별 채우기
+	stepDone = "rbxassetid://18448089848", -- 단계 끝 "띵"
+	fanfare = "rbxassetid://1839881844", -- 결과 별 2개 이상 (APM "Spinning Around")
+	pourGlug = "rbxassetid://9114622480", -- 반죽 붓는 "꿀렁" (반복)
+	foamBubble = "rbxassetid://73232090200005", -- 소다 넣고 부풀 때 보글보글 (반복)
+	sodaDrop = "rbxassetid://109359226723492", -- 소다 털어 넣을 때 "퐁"
+	metalClink = "rbxassetid://9125781406", -- 모양틀 내려놓는 "땡"
 	-- 앞쪽 무음 (AudioAnalyzer로 잼). 반복 소리도 이 구간부터 되풀이돼서 끊김이 없음
 	sugarPourStart = 0.08,
 	crackStart = 0.16,

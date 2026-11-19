@@ -20,6 +20,7 @@ local CameraRig = require(Making:WaitForChild("CameraRig"))
 local Ui = require(Making:WaitForChild("Ui"))
 local ChopstickPicker = require(Making:WaitForChild("ChopstickPicker"))
 local CutterPicker = require(Making:WaitForChild("CutterPicker"))
+local Sfx = require(Making:WaitForChild("Sfx"))
 local StepsFolder = Making:WaitForChild("Steps")
 
 local STEP_MODULES = {}
@@ -207,6 +208,7 @@ local function runSession()
 		if (rec.burnt or ctx.state.burntLate) then
 			break
 		end
+		Sfx.play("stepDone", 0.45) -- 단계 끝 "띵"
 		-- 단계 사이 짧은 숨 (성공 피드백이 보이게)
 		local w = 0
 		while w < 0.35 do
@@ -247,6 +249,9 @@ local function runSession()
 		CameraRig.go("melt")
 	end
 	result.details = Scoring.explain(ctx.records)
+	if result.stars >= 2 and not result.burnt and not result.misshaped then
+		Sfx.play("fanfare", 0.5)
+	end
 	ui:say(string.format("%s · 완성도 %d%%", result.grade, result.Q), "")
 	Pointer.enabled = false
 	ui:showResult(result, shape, {
