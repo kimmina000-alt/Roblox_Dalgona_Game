@@ -1,16 +1,20 @@
--- 반죽 3D 메시 하나 (사용자 요청 2026-11-19: 부을 때와 부은 뒤 모양이 달라서 하나로, 정교한 3D로).
--- EditableMesh로 게임 안에서 직접 만든다: 위가 둥근 반죽 덩어리. 가장자리는 살짝 울퉁불퉁하고 철판에 닿는 곳은 둥글게 말림.
---   flat 0 = 막 부은 둥근 언덕(가운데가 봉긋) → 1 = 다 누른 넓고 얇은 원판(윗면 평평, 가장자리만 둥글게)
--- 메시 좌표는 X·Z −1~1, Y 0~1 (크기는 MeshPart.Size로). 가장자리 쪽은 진하고 가운데는 밝은 정점 색.
--- 만들 수 없는 환경이면 nil → Dalgona가 예전 모양을 씀.
+-- 반죽 3D 메시 하나 (2026-11-19/20 사용자 요청: 원판에 그림을 그리지 말고 진짜 3D로).
+-- EditableMesh로 정점을 직접 움직인다 — 덧그린 부품 없이 메시 표면 자체가:
+--   · 막 부은 반죽: 둥근 언덕 + 소용돌이 결(실제로 솟은 주름). 시간이 지나면 주름이 낮아져 매끈해짐 (영상 7~10번)
+--   · 누를수록 윗면이 평평한 원판, 가장자리는 비정형으로 울퉁불퉁 (예전 접힌 메시 느낌, 2026-11-20)
+--   · 모양 찍기: 틀 선을 따라 홈이 파이고, 틀 안쪽은 봉긋하게 솟음 (영상 11~13번)
+-- 메시 좌표: X·Z −1.1~1.1(가장자리 반지름 약 1), Y 0~1 (기본 윗면 꼭대기 = TOP). 크기는 MeshPart.Size로.
+-- 쓸 수 없으면(Experience Settings > Security에서 EditableMesh 꺼짐) nil → Dalgona가 예전 방식.
 
 local AssetService = game:GetService("AssetService")
 
 local Batter = {}
 Batter.__index = Batter
 
-local SEG = 72 -- 둘레 조각
-local RINGS = 16 -- 가운데 → 가장자리 고리 (가장자리 쪽이 촘촘)
+local SEG = 200 -- 둘레 조각
+local RINGS = 56 -- 가운데 → 가장자리 고리
+local TOP = 0.88 -- 기본 모양 꼭대기 높이 (찍은 모양 안쪽이 솟을 여유)
+local BOUND = 1.1 -- 메시 경계 상자 (MeshPart 크기 기준을 고정하려고 모서리 점 2개를 박아 둠)
 
 local function lerp(a, b, t)
 	return a + (b - a) * t
@@ -24,27 +28,21 @@ local function build(parent, color, seed)
 	local self = setmetatable({}, Batter)
 	self.em = em
 	local rng = Random.new(seed or 1)
-	-- 가장자리 모양: 완전한 원이 아니라 조금씩 울퉁불퉁
-	local ph = { rng:NextNumber(0, 6.28), rng:NextNumber(0, 6.28), rng:NextNumber(0, 6.28), rng:NextNumber(0, 6.28) }
-	self.edge = {}
-	local maxR = 0
-	for j = 1, SEG do
-		local a = (j - 1) / SEG * 2 * math.pi
-		local r = 1 + 0.035 * math.sin(3 * a + ph[1]) + 0.025 * math.sin(5 * a + ph[2]) + 0.012 * math.sin(9 * a + ph[3])
-		self.edge[j] = r
-		maxR = math.max(maxR, r)
+	self.ph = {}
+	for i = 1, 8 do
+		self.ph[i] = rng:NextNumber(0, 6.283)
 	end
-	for j = 1, SEG do
-		self.edge[j] /= maxR
-	end
-	self.ph = ph
-	-- 고리 반지름 (0~1): 가장자리 쪽으로 촘촘하게
 	self.ringT = {}
 	for i = 1, RINGS do
-		self.ringT[i] = 1 - (1 - i / RINGS) ^ 1.7
+		self.ringT[i] = 1 - (1 - i / RINGS) ^ 1.5
 	end
-	-- 정점: 윗면 가운데 + 고리들, 바닥 가운데
-	self.topCenter = em:AddVertex(Vector3.new(0, 1, 0))
+	self.cos, self.sin = {}, {}
+	for j = 1, SEG do
+		local a = (j - 1) / SEG * 2 * math.pi
+		self.cos[j], self.sin[j] = math.cos(a), math.sin(a)
+	end
+	-- 정점
+	self.topCenter = em:AddVertex(Vector3.new(0, TOP, 0))
 	self.rings = {}
 	for i = 1, RINGS do
 		local ring = {}
@@ -54,26 +52,27 @@ local function build(parent, color, seed)
 		self.rings[i] = ring
 	end
 	self.bottomCenter = em:AddVertex(Vector3.new(0, 0, 0))
-	-- 면 (위에서 볼 때 반시계: Roblox 앞면)
-	self.faces = {}
-	local function tri(a, b, c, ringIdx)
-		local f = em:AddTriangle(a, b, c)
-		table.insert(self.faces, { f = f, ring = ringIdx })
-	end
 	for j = 1, SEG do
 		local j2 = j % SEG + 1
-		tri(self.topCenter, self.rings[1][j2], self.rings[1][j], 1)
+		em:AddTriangle(self.topCenter, self.rings[1][j2], self.rings[1][j])
 		for i = 1, RINGS - 1 do
 			local a, b = self.rings[i][j], self.rings[i][j2]
 			local c, d = self.rings[i + 1][j], self.rings[i + 1][j2]
-			tri(a, b, d, i + 1)
-			tri(a, d, c, i + 1)
+			em:AddTriangle(a, b, d)
+			em:AddTriangle(a, d, c)
 		end
-		-- 바닥 (아래를 봄)
-		tri(self.bottomCenter, self.rings[RINGS][j], self.rings[RINGS][j2], RINGS)
+		em:AddTriangle(self.bottomCenter, self.rings[RINGS][j], self.rings[RINGS][j2])
 	end
-	self.flat = -1
-	self:setShape(0)
+	-- 경계 고정용 아주 작은 삼각형 (바닥 아래 안 보이는 곳)
+	local p1 = em:AddVertex(Vector3.new(-BOUND, 0, -BOUND))
+	local p2 = em:AddVertex(Vector3.new(-BOUND + 0.001, 0, -BOUND))
+	local p3 = em:AddVertex(Vector3.new(BOUND, 1, BOUND))
+	local p4 = em:AddVertex(Vector3.new(BOUND - 0.001, 1, BOUND))
+	em:AddTriangle(p1, p2, p1)
+	em:AddTriangle(p3, p4, p3)
+	self.flat, self.swirl, self.stampK = 0, 0, 0
+	self.stamp = nil
+	self:rebuild()
 	local mp = AssetService:CreateMeshPartAsync(Content.fromObject(em))
 	mp.Name = "DalgonaBatter"
 	mp.Anchored = true
@@ -88,7 +87,6 @@ local function build(parent, color, seed)
 	return self
 end
 
--- 설정에서 꺼져 있으면 정점을 넣는 순간 오류 → 통째로 pcall, 실패하면 nil (한 번 실패하면 다시 시도 안 함)
 local unavailable = false
 function Batter.new(parent, color, seed)
 	if unavailable then
@@ -103,40 +101,133 @@ function Batter.new(parent, color, seed)
 	return nil
 end
 
--- flat 0 = 둥근 언덕, 1 = 얇은 원판. 바뀐 만큼만 정점을 다시 놓음
-function Batter:setShape(flat)
-	flat = math.clamp(flat, 0, 1)
-	if math.abs(flat - self.flat) < 0.01 then
-		return
-	end
-	self.flat = flat
+-- 가장자리 반지름 (각도 j): 누를수록 비정형으로 울퉁불퉁
+function Batter:edgeR(j)
+	local ph = self.ph
+	local c, s = self.cos[j], self.sin[j]
+	local a = math.atan2(s, c)
+	local amp = lerp(0.025, 0.07, self.flat)
+	return 1 - amp + amp * (0.55 * math.sin(3 * a + ph[1]) + 0.3 * math.sin(5 * a + ph[2]) + 0.15 * math.sin(9 * a + ph[3]))
+end
+
+-- 모든 정점 다시 놓기
+function Batter:rebuild()
 	local em = self.em
-	-- 높이 곡선 y(t) = (1 - t^n)^p : n이 클수록 윗면이 평평, p가 작을수록 가장자리가 둥글게 섬
-	local n = lerp(2.0, 9.0, flat)
-	local p = lerp(0.62, 0.32, flat)
-	-- 막 부은 반죽은 리본이 접힌 듯 아주 살짝 물결 (누를수록 사라짐)
-	local ripple = 0.035 * (1 - flat)
+	local flat = self.flat
+	local n = lerp(2.0, 10.0, flat)
+	local p = lerp(0.6, 0.3, flat)
+	local swirl = self.swirl
+	local ph = self.ph
+	local st = self.stamp
+	local k = self.stampK
+	local edges = {}
+	for j = 1, SEG do
+		edges[j] = self:edgeR(j)
+	end
 	for i = 1, RINGS do
 		local t = self.ringT[i]
 		local ring = self.rings[i]
 		for j = 1, SEG do
-			local a = (j - 1) / SEG * 2 * math.pi
-			local r = t * self.edge[j]
-			local y = (1 - math.min(t, 1) ^ n) ^ p
+			local r = t * edges[j]
+			local x, z = self.cos[j] * r, self.sin[j] * r
+			local y = 0
 			if i < RINGS then
-				y = math.clamp(y * (1 + ripple * math.sin(4 * a + 9 * t + self.ph[4])), 0, 1)
-			else
-				y = 0
+				y = (1 - t ^ n) ^ p
+				-- 부은 결: 가운데에서 바깥으로 도는 소용돌이 주름 (실제로 솟음)
+				if swirl > 0.001 then
+					local a = math.atan2(self.sin[j], self.cos[j])
+					y *= 1 + swirl * 0.11 * math.sin(22 * t - 2 * a + ph[4]) * (1 - t * 0.6)
+				end
+				-- 모양 찍기: 틀 선을 따라 파인 홈 + 안쪽 봉긋
+				if st and k > 0.001 then
+					local idx = (i - 1) * SEG + j
+					local g = st.groove[idx]
+					local inn = st.inside[idx]
+					y = y - k * 0.62 * g * y + k * 0.1 * inn
+				end
+				y = math.clamp(y, 0, 1.12) * TOP
 			end
-			em:SetPosition(ring[j], Vector3.new(math.cos(a) * r, y, math.sin(a) * r))
+			em:SetPosition(ring[j], Vector3.new(x, y, z))
 		end
 	end
-	em:SetPosition(self.topCenter, Vector3.new(0, 1, 0))
+	local yc = TOP * (1 + swirl * 0.11 * math.sin(ph[4]))
+	em:SetPosition(self.topCenter, Vector3.new(0, yc, 0))
 end
 
+-- flat 0 = 둥근 언덕, 1 = 얇은 원판 / swirl 0~1 = 부은 결 세기
+function Batter:setShape(flat, swirl)
+	flat = math.clamp(flat, 0, 1)
+	swirl = math.clamp(swirl or self.swirl, 0, 1)
+	if math.abs(flat - self.flat) < 0.01 and math.abs(swirl - self.swirl) < 0.02 then
+		return
+	end
+	self.flat, self.swirl = flat, swirl
+	self:rebuild()
+end
+
+-- 정점 하나의 (메시 좌표) 위치 → 세계 좌표 (place로 정한 크기·자세 기준, 높이 무시)
+local function localXZ(self, i, j)
+	local t = self.ringT[i]
+	local r = t * self:edgeR(j)
+	return self.cos[j] * r, self.sin[j] * r
+end
+
+-- 모양 찍기 준비: segs = { {a = Vector3, b = Vector3, w = 폭}, ... } (세계 좌표), poly = 틀 외곽선 안쪽 판정 함수(worldPos) → bool
+-- 정점마다 홈 깊이(0~1)·안쪽 봉긋(0~1)을 미리 계산해 두고, setStamp(k)로 깊이만 바꿈
+function Batter:prepareStamp(segs, isInside)
+	local cf = self.part.CFrame
+	local size = self.part.Size
+	local groove, inside = {}, {}
+	for i = 1, RINGS do
+		for j = 1, SEG do
+			local lx, lz = localXZ(self, i, j)
+			-- 세계 좌표 (높이는 상관없음): 메시 x −BOUND~BOUND ↔ Size.X
+			local wp = cf:PointToWorldSpace(Vector3.new(lx * size.X / (2 * BOUND), 0, lz * size.Z / (2 * BOUND)))
+			local best = math.huge
+			local bw = 0.05
+			for _, s in ipairs(segs) do
+				local ax, az, bx, bz = s.a.X, s.a.Z, s.b.X, s.b.Z
+				local ex, ez = bx - ax, bz - az
+				local L2 = ex * ex + ez * ez
+				local u = L2 > 1e-9 and math.clamp(((wp.X - ax) * ex + (wp.Z - az) * ez) / L2, 0, 1) or 0
+				local dx, dz = ax + ex * u - wp.X, az + ez * u - wp.Z
+				local d2 = dx * dx + dz * dz
+				if d2 < best then
+					best = d2
+					bw = s.w
+				end
+			end
+			local d = math.sqrt(best)
+			local gw = bw * 0.75
+			local idx = (i - 1) * SEG + j
+			groove[idx] = math.exp(-(d / gw) ^ 2)
+			if isInside(wp) then
+				-- 안쪽: 홈에서 멀어질수록 봉긋 (가장자리가 둥글게 내려감)
+				local q = math.clamp(d / (gw * 3.2), 0, 1)
+				inside[idx] = q * q * (3 - 2 * q)
+			else
+				inside[idx] = 0
+			end
+		end
+	end
+	self.stamp = { groove = groove, inside = inside }
+	self.stampK = 0
+end
+
+function Batter:setStamp(k)
+	k = math.clamp(k, 0, 1.4)
+	if math.abs(k - self.stampK) < 0.02 then
+		return
+	end
+	self.stampK = k
+	self:rebuild()
+end
+
+-- center = 철판 위 반죽 가운데, width/depth = 가장자리 지름, height = 기본 윗면 꼭대기 높이
 function Batter:place(center, width, depth, height, yaw)
-	self.part.Size = Vector3.new(math.max(width, 0.02), math.max(height, 0.01), math.max(depth, 0.02))
-	self.part.CFrame = CFrame.new(center.X, center.Y + height / 2, center.Z) * CFrame.Angles(0, yaw or 0, 0)
+	local sy = math.max(height / TOP, 0.01)
+	self.part.Size = Vector3.new(math.max(width * BOUND, 0.02), sy, math.max(depth * BOUND, 0.02))
+	self.part.CFrame = CFrame.new(center.X, center.Y + sy / 2, center.Z) * CFrame.Angles(0, yaw or 0, 0)
 end
 
 function Batter:destroy()

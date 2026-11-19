@@ -126,6 +126,7 @@ function Stamp.run(ctx)
 	local holding = false
 	local grab = nil -- 누름판 손으로 들기 (PresserGrab)
 	local groove = nil
+	local fingerV = 0
 
 	ui:say(shapeName .. " 틀을 끌어 원판 가운데에 놓아요", "가운데에, 반듯하게")
 
@@ -147,12 +148,14 @@ function Stamp.run(ctx)
 				local f = P.toPlane(top + 0.7)
 				local w = f - (CFrame.Angles(0, math.rad(yaw), 0) * cutRot):VectorToWorldSpace(handleLocal)
 				w = Vector3.new(w.X, top + 0.7, w.Z)
+				-- 기울기는 손가락 속도로만 (틀 위치로 재면 기울기 → 위치 → 속도가 서로 되먹여 벌벌 떨림, 2026-11-20 수정)
 				if lastPos and dt > 0 then
-					local vx = (w.X - lastPos.X) / dt
-					local target = math.clamp(vx * 4, -25, 25)
-					yaw += (target - yaw) * (1 - math.exp(-10 * dt))
+					local vx = (f.X - lastPos.X) / dt
+					fingerV += (vx - fingerV) * (1 - math.exp(-6 * dt))
+					local target = math.clamp(fingerV * 3, -18, 18)
+					yaw += (target - yaw) * (1 - math.exp(-6 * dt))
 				end
-				lastPos = w
+				lastPos = f
 				cutter:PivotTo(CFrame.new(w) * CFrame.Angles(0, math.rad(yaw), 0))
 				showPreview(true)
 				local flat = Vector3.new(w.X - c.X, 0, w.Z - c.Z)

@@ -13,7 +13,8 @@ local BatterMesh = require(script.Parent:WaitForChild("BatterMesh"))
 -- 메시가 없으면 예전 원기둥 + 봉우리 모양
 local MOUND_H, FLAT_H = 0.40, 0.16
 -- 주름 메시는 울퉁불퉁해서 사진과 달라 안 씀 (2026-11-19 결과 화면 지적): 매끈한 원판 + 봉긋한 윗면 + 붓고 난 뒤 결
-local USE_FOLD_MESHES = false
+-- 2026-11-20: 누른 뒤(얇을 때)는 예전 접힌 메시가 비정형이라 더 좋다는 의견 → EditableMesh가 없을 때 누른 반죽에만 다시 씀
+local USE_FOLD_MESHES = true
 local RunService = game:GetService("RunService")
 
 local Dalgona = {}
@@ -90,6 +91,7 @@ function Dalgona.new(station, center, color, volume, ellipse)
 	-- EditableMesh를 쓸 수 없으면(Experience Settings > Security에서 꺼짐) 아래 예전 방식
 	self.batter = BatterMesh.new(station.fx, color, math.random(1, 9999))
 	if self.batter then
+		self.swirlAmp = 1 -- 붓는 동안 소용돌이 결이 솟아 있음 (다 부으면 addSwirl로 낮아짐)
 		for _, p in ipairs({ self.body, self.rim, self.rim2, self.dome }) do
 			p.Transparency = 1
 		end
@@ -189,14 +191,14 @@ function Dalgona:setThickness(h)
 		-- 두꺼울수록 둥근 언덕, 누를수록 윗면이 평평한 원판 (가장자리는 둥글게)
 		local h0 = Config.Press.h0
 		local flat = math.clamp((h0 * 0.95 - h) / (h0 * 0.95 - 0.1), 0, 1)
-		self.batter:setShape(flat)
+		self.batter:setShape(flat, self.swirlAmp or 0)
 		self.batter:place(c, d * k, d / k, h * 0.75, self.yaw or 0)
 		for _, dt in ipairs(self.details) do
 			dt.part.LocalTransparencyModifier = flat > 0.6 and 0 or 1
 		end
 		return
 	end
-	if self.meshes and not self.simple then
+	if self.meshes and not self.simple and h < MOUND_H then
 		for _, p in ipairs({ self.body, self.rim, self.rim2, self.dome }) do
 			p.Transparency = 1 -- simple(붓는 동안)에서 돌아올 때 원판 부품 숨김
 		end
@@ -384,7 +386,46 @@ function Dalgona:inside(p, margin)
 	return (lx / (R * k)) ^ 2 + (lz / (R / k)) ^ 2 <= 1
 end
 
+-- 3D 반죽(EditableMesh)이면 메시 표면에 직접 홈을 파고 안쪽을 봉긋하게 (부품을 덧그리지 않음, 2026-11-20)
+local BatterGroove = {}
+BatterGroove.__index = BatterGroove
+function BatterGroove:setDepth(k)
+	if not self.ready then
+		self.ready = true
+		self.dal.batter:prepareStamp(self.segs, self.isInside)
+	end
+	self.dal.batter:setStamp(k)
+end
+
 function Dalgona:groove(wires, handle)
+	if self.batter then
+		local segs = {}
+		local closed = {}
+		for _, w in ipairs(wires) do
+			local half = w.CFrame.LookVector * (w.Size.Z / 2)
+			local s = { a = w.Position - half, b = w.Position + half, w = w:GetAttribute("Width") or 0.07 }
+			table.insert(segs, s)
+			table.insert(closed, s)
+		end
+		if handle then
+			table.insert(segs, { a = handle.a, b = handle.b, w = 0.055 })
+		end
+		-- 틀 안쪽 판정: 철사 선분들에 대한 홀짝 규칙 (안쪽 구멍은 바깥으로 처리됨)
+		local function isInside(p)
+			local cross = 0
+			for _, s in ipairs(closed) do
+				local az, bz = s.a.Z, s.b.Z
+				if (az > p.Z) ~= (bz > p.Z) then
+					local x = s.a.X + (p.Z - az) / (bz - az) * (s.b.X - s.a.X)
+					if x > p.X then
+						cross += 1
+					end
+				end
+			end
+			return cross % 2 == 1
+		end
+		return setmetatable({ dal = self, segs = segs, isInside = isInside }, BatterGroove)
+	end
 	local g = setmetatable({ dal = self, segs = {} }, Groove)
 	local y = self:topY()
 	local function add(mid, look, len, width)
@@ -453,7 +494,7 @@ function Dalgona:groove(wires, handle)
 		for _, s in ipairs(g.segs) do
 			local r = s.right
 			s.inner = r:Dot(centroid - s.mid) >= 0 and r or -r
-			s.puff = self.S:fxPart(self.S.fx, { Name = "EngravePuff", Shape = Enum.PartType.Cylinder, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(s.len, 0.05, 0.05) })
+			-- (2026-11-20) 원기둥 턱은 계단처럼 보여서 안 씀 → 3D 반죽(BatterMesh)에서 메시로 표현
 		end
 	end
 	if handle then
@@ -509,6 +550,29 @@ end
 -- 부은 결 (영상 7~10번): 막 부으면 위에 소용돌이 결이 보이고, 몇 초에 걸쳐 퍼지며 매끈해짐
 local SWIRL_N, SWIRL_FADE = 44, 4.5
 function Dalgona:addSwirl()
+	if self.batter then
+		-- 3D: 메시의 소용돌이 주름이 SWIRL_FADE초에 걸쳐 낮아짐 (그림을 덧그리지 않음)
+		self.swirlAmp = 1
+		local age = 0
+		local conn
+		conn = RunService.RenderStepped:Connect(function(dt)
+			if not (self.batter.part and self.batter.part.Parent) then
+				conn:Disconnect()
+				return
+			end
+			age += dt
+			local k = math.clamp(age / SWIRL_FADE, 0, 1)
+			self.swirlAmp = (1 - k) ^ 1.5
+			self:setThickness(self.h)
+			if k >= 1 then
+				conn:Disconnect()
+			end
+		end)
+		return
+	end
+	do
+		return -- 3D가 아닐 때는 그림으로 결을 덧그리지 않음 (2026-11-20 "원에다가 그림 그리지 말고")
+	end
 	if self.swirl then
 		for _, p in ipairs(self.swirl.parts) do
 			p:Destroy()

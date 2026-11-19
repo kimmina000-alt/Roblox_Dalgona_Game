@@ -454,7 +454,8 @@ function Soda.run(ctx)
 					t2 = Stir.grip(hoverY)
 				end
 				if overTub(t2) then
-					t2 = Vector3.new(t2.X, tubPos.Y + 0.18, t2.Z)
+					-- 젓가락 끝만 소다 통 안 가루 속에 살짝 잠김 (2026-11-20: 끝만 통에 넣고 손잡이를 누르면 찍힘)
+					t2 = Vector3.new(t2.X, tubPos.Y - 0.02, t2.Z)
 				elseif overLadle(t2) then
 					t2 = Vector3.new(t2.X, S:contentsTopY() + 0.2, t2.Z)
 				end

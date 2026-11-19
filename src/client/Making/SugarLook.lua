@@ -116,8 +116,8 @@ function SugarLook.new(S, st)
 			extra = 0,
 		})
 	end
-	-- 액체 단계에 떠다니는 흰 실 (남은 결정)
-	for _ = 1, 4 do
+	-- 액체 단계에 떠다니는 흰 실 (남은 결정) → 2026-11-20 "막바지에 흰 선 삭제": 안 만듦
+	for _ = 1, 0 do
 		local a = math.random() * 2 * math.pi
 		table.insert(self.threads, {
 			part = part(self.folder, { Name = "Thread", Color = LUMP, Transparency = 1, Size = Vector3.new(0.014, 0.008, 0.12 + math.random() * 0.16) }),
@@ -273,7 +273,9 @@ function SugarLook:update(dt, p, tip, burn)
 	local liquid = p > 0.5
 	local base0 = self:base()
 	local surface0 = base0.Y + self.fullThick * (0.12 + 0.88 * smooth01(p, 0.32, 1))
-	if tip and (inPowder or liquid) then
+	-- 국자 속 설탕 위에서만 (2026-11-20: 설탕물 없는 허공·가장자리 밖에 길이 생기던 것 막음)
+	local overSugar = tip and Vector3.new(tip.X - c.X, 0, tip.Z - c.Z).Magnitude < self.Ri * 0.9
+	if tip and overSugar and (inPowder or liquid) then
 		if self.lastFurrow then
 			local seg = Vector3.new(tip.X - self.lastFurrow.X, 0, tip.Z - self.lastFurrow.Z)
 			if seg.Magnitude >= FURROW_STEP then
@@ -293,7 +295,7 @@ function SugarLook:update(dt, p, tip, burn)
 		self.lastFurrow = nil
 		self.dustPe.Rate = 0
 	end
-	local streakCol = SugarLook.syrupColor(p, burn):Lerp(Color3.fromRGB(255, 236, 200), 0.55)
+	local streakCol = SugarLook.syrupColor(p, burn):Lerp(Color3.fromRGB(255, 236, 200), 0.22)
 	for _, f in ipairs(self.furrows) do
 		local life = f.kind == "syrup" and STREAK_LIFE or FURROW_LIFE
 		if f.t < life then
@@ -303,7 +305,7 @@ function SugarLook:update(dt, p, tip, burn)
 				-- 설탕물 위 젓가락 결: 밝게 비치는 가는 줄이 퍼지며 사라짐
 				f.part.Color = streakCol
 				f.part.Material = Enum.Material.Glass
-				f.part.Transparency = math.min(1, 0.35 + 0.65 * k)
+				f.part.Transparency = math.min(1, 0.55 + 0.45 * k)
 				f.part.Size = Vector3.new(0.035 + 0.05 * k, 0.004, f.len)
 			else
 				-- 가루 위 젓가락 길: 진한 골이 오래 남다가 흐려짐
