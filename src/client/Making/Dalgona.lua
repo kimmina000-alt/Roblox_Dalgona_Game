@@ -4,6 +4,7 @@
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DalgonaConfig"))
 local Fx = require(script.Parent:WaitForChild("Fx"))
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
+local BatterMesh = require(script.Parent:WaitForChild("BatterMesh"))
 
 -- 3D 반죽 메시 (tools/blender/dalgona_mesh.py, 유튜브 쇼츠 영상 분석): 두께에 따라 바뀜
 --   붓는 중·막 부은 것(h ≥ 0.40): DalgonaMound  리본처럼 접히며 쌓인 주름진 언덕
@@ -81,7 +82,17 @@ function Dalgona.new(station, center, color, volume, ellipse)
 		local a = i * math.pi / 2 + 0.4
 		self.lumps[i] = { part = station:fxPart(station.fx, { Name = "DalgonaLump", Shape = Enum.PartType.Ball, Color = color, Material = Enum.Material.SmoothPlastic }), a = a, r = 0.25 + 0.08 * (i % 2) }
 	end
-	if Fx.template("DalgonaPuff") then
+	-- 정교한 3D 반죽 메시 하나 (2026-11-19): 붓는 동안·부은 뒤·누른 뒤 모두 같은 메시가 모양만 바뀜.
+	-- EditableMesh를 쓸 수 없으면(Experience Settings > Security에서 꺼짐) 아래 예전 방식
+	self.batter = BatterMesh.new(station.fx, color, math.random(1, 9999))
+	if self.batter then
+		for _, p in ipairs({ self.body, self.rim, self.rim2, self.dome }) do
+			p.Transparency = 1
+		end
+		for _, l in ipairs(self.lumps) do
+			l.part.Transparency = 1
+		end
+	elseif Fx.template("DalgonaPuff") then
 		self.meshes = {}
 		for _, name in ipairs({ "DalgonaMound", "DalgonaPuff", "DalgonaFlat" }) do
 			self.meshes[name] = Fx.mesh(name, station.fx, { Name = name, Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
@@ -165,6 +176,17 @@ function Dalgona:setThickness(h)
 			dt.part.CFrame = CFrame.new(x, top + dt.abs * 0.12, z)
 		end
 	end
+	if self.batter then
+		-- 두꺼울수록 둥근 언덕, 누를수록 윗면이 평평한 원판 (가장자리는 둥글게)
+		local h0 = Config.Press.h0
+		local flat = math.clamp((h0 * 0.95 - h) / (h0 * 0.95 - 0.1), 0, 1)
+		self.batter:setShape(flat)
+		self.batter:place(c, d * k, d / k, h * 0.75, self.yaw or 0)
+		for _, dt in ipairs(self.details) do
+			dt.part.LocalTransparencyModifier = flat > 0.6 and 0 or 1
+		end
+		return
+	end
 	if self.meshes and not self.simple then
 		for _, p in ipairs({ self.body, self.rim, self.rim2, self.dome }) do
 			p.Transparency = 1 -- simple(붓는 동안)에서 돌아올 때 원판 부품 숨김
@@ -222,6 +244,10 @@ function Dalgona:setLook(look)
 	for _, p in ipairs({ self.body, self.dome }) do
 		p.Color = base
 		p.Reflectance = refl
+	end
+	if self.batter then
+		self.batter.part.Color = base
+		self.batter.part.Reflectance = refl
 	end
 	if self.meshes then
 		-- 막 부은 반죽은 크림처럼 조금 밝고, 굳어 갈수록 본래 색
@@ -287,6 +313,9 @@ end
 
 function Dalgona:setColor(c)
 	self.color = c
+	if self.batter then
+		self.batter.part.Color = c
+	end
 	if self.meshes then
 		for _, p in pairs(self.meshes) do
 			p.Color = c

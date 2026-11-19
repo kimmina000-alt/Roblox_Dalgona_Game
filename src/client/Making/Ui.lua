@@ -78,6 +78,7 @@ function Ui.new(player, steps)
 	self:_buildGauge()
 	self:_buildMeter()
 	self:_buildHeight()
+	self:_buildThick()
 	self:_buildResult()
 
 	local function rescale()
@@ -92,9 +93,15 @@ function Ui.new(player, steps)
 		-- QUALITY 창과 세로 막대는 위 줄 아래 왼쪽에 (위쪽 여백이 0인 기기에서도 안 겹치게)
 		local rowBottom = -GuiService:GetGuiInset().Y / s + 6 + (self.touch and 52 or 44)
 		local qy = math.max(16, rowBottom + 10)
-		self.qualityBox.Position = UDim2.fromOffset(20, qy)
-		self.meter.Position = UDim2.fromOffset(20, qy + self.qualityBox.Size.Y.Offset + 10)
-		self.heightBox.Position = UDim2.fromOffset(76, qy + self.qualityBox.Size.Y.Offset + 10)
+		-- (사용자 요청 2026-11-19) 왼쪽 아래는 국자 높이를 끄는 손가락에 가려짐 → 온도·높이 막대는 왼쪽 위로, QUALITY는 오른쪽 위로
+		self.qualityBox.AnchorPoint = Vector2.new(1, 0)
+		-- 오른쪽에는 누름판·틀 같은 도구가 있어서 작게 (72%)
+		if not self.qualityBox:FindFirstChild("Shrink") then
+			new("UIScale", { Name = "Shrink", Scale = 0.72, Parent = self.qualityBox })
+		end
+		self.qualityBox.Position = UDim2.new(1, -20, 0, qy)
+		self.meter.Position = UDim2.fromOffset(20, qy)
+		self.heightBox.Position = UDim2.fromOffset(76, qy)
 		root.Size = UDim2.fromOffset(v.X / s, v.Y / s)
 	end
 	rescale()
@@ -538,6 +545,61 @@ function Ui:setGauge(visible, speed, slow, fast, title)
 	self.needleX = x
 	self.needle.Position = UDim2.fromScale(x, 0.5)
 	self.gaugeTitle.Text = title or "STIR SPEED"
+end
+
+-- 누르기 두께 (사용자 요청 2026-11-19: 두께를 표시하고 점점 얇아지는 게 눈에 보이게).
+-- 옆에서 본 반죽 단면: 철판 위 캐러멜색 판이 눌릴수록 낮아짐. 초록 띠 = 이번에 멈출 두께, 숫자 = mm
+function Ui:_buildThick()
+	local box = new("Frame", {
+		Name = "Thick",
+		-- 왼쪽 가운데 (가운데 아래는 철판·반죽이라 가림)
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 20, 0.55, 0),
+		Size = UDim2.fromOffset(300, 104),
+		BackgroundColor3 = PAPER,
+		BackgroundTransparency = 0.08,
+		Visible = false,
+		Parent = self.root,
+	}, { corner(16) })
+	label({ Text = "두께 (옆에서 본 모습)", TextSize = 12, TextColor3 = GREY, Position = UDim2.fromOffset(0, 4), Size = UDim2.new(1, 0, 0, 14), Parent = box })
+	local area = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 20), Size = UDim2.new(1, -110, 1, -28), Parent = box })
+	new("Frame", { Name = "Plate", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = Color3.fromRGB(40, 40, 44), BorderSizePixel = 0, Parent = area }, { corner(3) })
+	self.thickBand = new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(1, 8, 0, 10), BackgroundColor3 = Color3.fromRGB(80, 200, 90), BackgroundTransparency = 0.6, BorderSizePixel = 0, ZIndex = 3, Parent = area }, {
+		new("UIStroke", { Thickness = 2, Color = Color3.fromRGB(40, 150, 60), Transparency = 0.2 }),
+	})
+	self.thickSlab = new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(0.6, 0, 0, 60), BackgroundColor3 = Color3.fromRGB(216, 146, 62), BorderSizePixel = 0, ZIndex = 2, Parent = area }, {
+		new("UICorner", { CornerRadius = UDim.new(0, 10) }),
+		new("UIStroke", { Thickness = 2, Color = Color3.fromRGB(150, 80, 30) }),
+	})
+	self.thickText = label({ Text = "", TextSize = 24, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -14, 0.5, 4), Size = UDim2.fromOffset(86, 30), TextXAlignment = Enum.TextXAlignment.Right, Parent = box })
+	self.thickSub = label({ Text = "", TextSize = 11, TextColor3 = Color3.fromRGB(40, 150, 60), AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0.5, 20), Size = UDim2.fromOffset(86, 14), TextXAlignment = Enum.TextXAlignment.Right, Parent = box })
+	self.thickBox = box
+end
+
+-- h·h0·lo·hi = 반죽 두께(스터드), color = 반죽 색. 처음 두께 h0 = 10mm로 보여 줌
+function Ui:setThick(visible, h, h0, lo, hi, color)
+	self.thickBox.Visible = visible
+	if not visible then
+		return
+	end
+	local H = 64 -- 처음 두께일 때 단면 높이(px)
+	local k = math.clamp(h / h0, 0.03, 1.2)
+	-- 얇아질수록 옆으로 넓게 퍼짐 (부피 그대로)
+	self.thickSlab.Size = UDim2.new(math.clamp(0.42 / math.sqrt(k), 0.3, 1), 0, 0, math.max(2, H * k))
+	if color then
+		self.thickSlab.BackgroundColor3 = color
+	end
+	if lo and hi then
+		self.thickBand.Visible = true
+		self.thickBand.Position = UDim2.new(0.5, 0, 1, -6 - H * lo / h0)
+		self.thickBand.Size = UDim2.new(1, 8, 0, math.max(4, H * (hi - lo) / h0))
+		self.thickBand.AnchorPoint = Vector2.new(0.5, 1)
+		self.thickSub.Text = string.format("목표 %.1fmm", (lo + hi) / 2 / h0 * 10)
+	else
+		self.thickBand.Visible = false
+		self.thickSub.Text = ""
+	end
+	self.thickText.Text = string.format("%.1fmm", h / h0 * 10)
 end
 
 function Ui:setMeter(visible, value01, lo01, hi01, text)

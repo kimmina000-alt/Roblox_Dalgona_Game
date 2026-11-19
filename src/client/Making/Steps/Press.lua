@@ -7,6 +7,7 @@ local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 local PresserGrab = require(script.Parent.Parent:WaitForChild("PresserGrab"))
 local Sfx = require(script.Parent.Parent:WaitForChild("Sfx"))
+local Stick = require(script.Parent:WaitForChild("Stick"))
 
 local Press = {}
 
@@ -55,6 +56,12 @@ function Press.run(ctx)
 	local presser = S.Presser
 	local discHalf = presser.Disc.Size.X / 2
 	local c = dal.center
+	-- 0. 막대 꽂기 (사용자 요청 2026-11-19): 누르기 전에, 반죽이 말랑할 때
+	if not st.stick then
+		if not Stick.place(ctx) then
+			return nil
+		end
+	end
 	S:presserSeeThrough(true)
 	local ring = makeRing(S)
 	placeRing(S, ring, dal)
@@ -87,6 +94,7 @@ function Press.run(ctx)
 	while count < 3 do
 		local dt = ctx.frame()
 		if not dt then
+			ui:setThick(false)
 			return nil
 		end
 		local target = cfg.targets[count + 1]
@@ -118,6 +126,7 @@ function Press.run(ctx)
 				h = math.max(h - cfg.k * h * dt, cfg.crack * 0.8) -- 더 눌러도 이 이상 얇아지지 않음
 				bottom = c.Y + h * 0.75
 				dal:setThickness(h)
+				Stick.follow(st)
 				local nextT = cfg.targets[count + 2]
 				if nextT and h < nextT * 1.05 and not overHinted then
 					overHinted = true
@@ -170,7 +179,8 @@ function Press.run(ctx)
 		end
 		placeRing(S, ring, dal)
 		local nextTarget = cfg.targets[math.min(count + 1, 3)]
-		ui:setMeter(true, h / cfg.h0, nextTarget * 0.82 / cfg.h0, nextTarget * 1.18 / cfg.h0, "두께")
+		-- 옆에서 본 두께 카드 (두껍게 시작해서 누를수록 얇아짐, 초록 띠 = 이번 목표)
+		ui:setThick(true, h, cfg.h0, nextTarget * 0.82, nextTarget * 1.18, dal.color)
 		local partial = { thick = {}, cracked = rec.cracked }
 		for i = 1, 3 do
 			partial.thick[i] = rec.thick[i] or cfg.targets[i]
@@ -178,7 +188,7 @@ function Press.run(ctx)
 		ctx.live("press", Scoring.press(partial))
 	end
 
-	ui:setMeter(false)
+	ui:setThick(false)
 	ui:say("넓고 얇게 잘 펴졌어요!", "")
 	local t = 0
 	while t < 0.4 do
