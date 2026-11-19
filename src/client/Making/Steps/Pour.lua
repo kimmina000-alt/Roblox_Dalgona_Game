@@ -161,8 +161,18 @@ end
 -- 끝(긴 축 바깥 절반)에 닿은 채 가운데 쪽으로 끈 거리만큼 줄어듦. 손을 떼고 RESHAPE_IDLE초 지나거나 충분히 둥글면 끝
 local RESHAPE_FROM = 1.15 -- 이보다 길쭉하면 다듬기 단계
 local RESHAPE_MAX = 0.6 -- 다듬어서 줄일 수 있는 길쭉함 최대
-local RESHAPE_GAIN = 0.9 -- 가운데로 끈 거리(stud) → 줄어드는 길쭉함
-local RESHAPE_IDLE = 2.2
+local RESHAPE_GAIN = 0.35 -- 가운데로 끈 거리(stud) → 줄어드는 길쭉함 (여러 번 끌어 모아야 함, 2026-11-19 너무 빨리 끝남)
+local RESHAPE_IDLE = 4.0 -- 다듬다가 손을 떼고 이만큼 지나면 끝 (안 건드리면 RESHAPE_IDLE * 3)
+
+-- 붓는 동안 국자·손을 반투명하게 (사용자 요청 2026-11-19: 국자에 가려 어떻게 부어지는지 안 보임)
+local SEE_THROUGH = 0.6
+local function ladleSeeThrough(ladle, k)
+	for _, p in ipairs(ladle:GetDescendants()) do
+		if p:IsA("BasePart") and p.Name ~= "Contents" and p.Name ~= "FxFoam" then
+			p.LocalTransparencyModifier = k
+		end
+	end
+end
 
 local function reshape(ctx, rec, blob, eRing)
 	local S, P, ui = ctx.station, ctx.pointer, ctx.ui
@@ -224,8 +234,10 @@ local function reshape(ctx, rec, blob, eRing)
 			S:restChopsticks()
 		end
 		ctx.live("pour", Scoring.pour(rec))
-		ui:say("젓가락으로 모양을 다듬어요", string.format("길쭉한 끝을 가운데로 끌어 모아요 · 길쭉함 %d%%", math.floor((rec.spread - 1) * 100 + 0.5)))
-		if rec.spread <= RESHAPE_FROM or rec.spread <= floor + 1e-3 or (idle > RESHAPE_IDLE and (touched or idle > RESHAPE_IDLE * 4)) then
+		local left = math.max(0, (touched and RESHAPE_IDLE or RESHAPE_IDLE * 3) - idle)
+		ui:say("젓가락으로 모양을 다듬어요", string.format("길쭉한 끝을 가운데로 끌어 모아요 · 길쭉함 %d%%%s", math.floor((rec.spread - 1) * 100 + 0.5), (not holding and idle > 0.8) and string.format(" · %d초 뒤 다음 단계", math.ceil(left)) or ""))
+		-- 둥글어지거나 한도에 닿아도 바로 넘어가지 않고, 손을 뗀 채 RESHAPE_IDLE초 지나야 다음 단계 (사용자 요청 2026-11-19)
+		if idle > RESHAPE_IDLE and (touched or idle > RESHAPE_IDLE * 3) then
 			break
 		end
 	end
@@ -255,6 +267,7 @@ function Pour.run(ctx)
 	local volume = math.pi * 0.55 ^ 2 * Config.Press.h0
 	-- 국자 손잡이 잡는 자리 (국자 피벗 기준, 기울이기 전 자세). 메시 손잡이 = 손 붙이는 자리와 같음
 	local gripLocal = S:ladleGripLocal()
+	local seeK = 0 -- 국자 반투명 정도
 
 	-- 젓가락은 내려놓음
 	S:restChopsticks()
@@ -310,6 +323,8 @@ function Pour.run(ctx)
 			if grabbing then
 				-- 손가락 = 국자 손잡이 (사용자 요청 2026-11-18: 동그란 그릇이 아니라 손잡이를 잡고 옮김).
 				-- 그릇 자리 = 손가락 자리에서 손잡이→그릇 만큼 옮긴 곳
+				seeK += (SEE_THROUGH - seeK) * (1 - math.exp(-12 * dt))
+				ladleSeeThrough(ladle, seeK)
 				local f = P.toPlane(carryY + rot:VectorToWorldSpace(gripLocal).Y)
 				local w = f - rot:VectorToWorldSpace(gripLocal)
 				w = Vector3.new(w.X, carryY, w.Z)
@@ -433,6 +448,10 @@ function Pour.run(ctx)
 				end
 			else
 				tilt = 0
+				if seeK > 0.01 then
+					seeK += (0 - seeK) * (1 - math.exp(-12 * dt))
+					ladleSeeThrough(ladle, seeK)
+				end
 				S:springTo(ladle, home, dt, 22)
 				if blob and not dropped then
 					-- 붓다가 손을 떼면 줄기가 끊겨 떨어짐 (다시 기울이면 이어서 부음)
@@ -488,6 +507,7 @@ function Pour.run(ctx)
 		S:springTo(ladle, S.rest.Ladle, dt, 14)
 	end
 	ladle:PivotTo(S.rest.Ladle)
+	ladleSeeThrough(ladle, 0)
 	S:setContents({ Transparency = 1 })
 	if st.dalgona and not reshape(ctx, rec, st.dalgona, eRing) then
 		return nil

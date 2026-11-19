@@ -1,4 +1,4 @@
--- 3. 소다: ① 나무젓가락 손잡이를 잡고 끌어 끝을 소다 통에 넣었다 빼서 묻히고, 국자로 끌고 와 놓으면 톡. 넣은 횟수 = 양 (2~3번이 알맞음, 실제 영상 YqKNy2l802c 1:17)
+-- 3. 소다: ① 나무젓가락 손잡이를 잡고 끌어 끝을 소다 통에 넣고 휘저을수록 많이 묻고, 국자로 끌고 와 놓으면 톡. 넣은 양 합계 = 양 (0.35~0.65가 알맞음)
 --          ② 불에서 떼고 빠르게 젓기 (이번엔 FAST 쪽이 정답, 불 가까이 저으면 금방 탐) → 실제 영상처럼 3.5초 S곡선으로 부풀어 오름
 --             (docs/MOTION_REFERENCE_ANALYSIS.md 7장: 느린 시작 1.1초 → 빠른 상승 1.5초 → 멈춤 0.9초 → 유지)
 -- 점수: 넣은 타이밍(투명해진 직후) + 양 + 부푼 정도
@@ -18,9 +18,9 @@ local Sfx = require(Making:WaitForChild("Sfx"))
 local Soda = {}
 
 local HEAP_MAX = 1.2
-local DIP_AMOUNT = 0.21 -- 한 번 찍을 때 양: 1번 0.21(적음) · 2~3번 0.42~0.63(알맞음) · 4번 0.84(많음)
-local MAX_DIPS = 5
 local TUB_R = 0.75 -- 젓가락 끝이 소다 통 가운데에서 이만큼 안이면 통 위 (쿡 잠김)
+local LOAD_PER_STUD = 0.09 -- 통 안에서 젓가락 끝이 1 stud 움직일 때 묻는 소다 양 (작은 원 한 바퀴 ≈ 0.1)
+local LOAD_MAX = 0.45 -- 한 번에 묻힐 수 있는 최대 양 (알맞은 양 0.35~0.65 → 1~2번에 채움)
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit
 local FOAM = Color3.fromRGB(214, 160, 92)
 local FOAM_DARK = Color3.fromRGB(140, 86, 40)
@@ -101,9 +101,21 @@ end
 
 local function newPuff(S, amount, baseThick)
 	local cfg = Config.Soda
-	local dark = math.clamp((amount - cfg.idealMax) / 0.85, 0, 1)
-	local final = FOAM:Lerp(CREAM, 0.3):Lerp(FOAM_DARK, dark)
-	local pf = { u = 0, hold = 0, done = false, final = final, yaw = math.random() * 6, baseThick = baseThick }
+	-- 넣은 소다 양에 따라 다르게 부풂 (사용자 요청 2026-11-19):
+	--   적게: 덜 부풀고(낮고 작음) 진하고 번들번들 (기포가 적어 단단함)
+	--   알맞게: 크림색으로 높고 둥글게
+	--   많이: 국자 밖까지 크게 부풀었다가 가운데가 꺼지고, 진한 갈색 (쓴맛)
+	local low = math.clamp((cfg.idealMin - amount) / cfg.idealMin, 0, 1)
+	local high = math.clamp((amount - cfg.idealMax) / 0.45, 0, 1)
+	local dark = math.max(high, 0.45 * low)
+	local final = FOAM:Lerp(CREAM, 0.3 * (1 - low)):Lerp(FOAM_DARK, dark)
+	local pf = {
+		u = 0, hold = 0, done = false, final = final, yaw = math.random() * 6, baseThick = baseThick,
+		size = 1 - 0.45 * low + 0.25 * high, -- 높이 배율
+		wide = 1 - 0.12 * low + 0.18 * high, -- 지름 배율 (많으면 국자 밖으로)
+		collapse = 0.3 * high, -- 다 부푼 뒤 꺼지는 정도
+		glossy = low > 0.3, -- 적으면 끝까지 번들번들
+	}
 	local start = scaleColor(final, COLOR_RAMP[1][2])
 	S:setContents({ Material = Enum.Material.SmoothPlastic, Transparency = 0, Color = start })
 	-- 국자 속 반죽 하나만 부풀어 오름 (표면에 붙는 점·동그라미 없음, 사용자 요청 2026-11-18)
@@ -120,8 +132,14 @@ local function drawPuff(S, pf, dt, speed)
 	local R = S.bowlRadius - 0.08
 	local Hf = 2 * R * Fx.HEIGHT.FoamPuff
 	-- 덩어리 → 둥근 돔: 높이(Y)는 많이, 지름(X/Z)은 조금. 마지막엔 국자 테두리를 살짝 넘음. 튀거나 꺼지지 않음
-	local height = Hf * (0.42 + 0.58 * h)
-	local diam = 2 * R * (0.84 + 0.2 * h)
+	local height = Hf * (0.42 + 0.58 * h) * (1 + (pf.size - 1) * h)
+	local diam = 2 * R * (0.84 + 0.2 * h) * (1 + (pf.wide - 1) * h)
+	if pf.done and pf.collapse > 0 then
+		-- 너무 많이 넣음: 크게 부풀었다가 꺼짐
+		local c = math.min(pf.hold / HOLD_TIME, 1)
+		height *= 1 - pf.collapse * c
+		diam *= 1 + 0.05 * c
+	end
 	local base = Vector3.new(S.Bowl.Position.X, S:contentsTopY() - 0.04, S.Bowl.Position.Z)
 	if not pf.done then
 		pf.yaw += math.min(speed, 20) * dt * 0.04
@@ -135,7 +153,7 @@ local function drawPuff(S, pf, dt, speed)
 	local foam = pf.foam
 	foam.Color = col
 	-- 광택 → 무광: 빠르게 부풀기 시작하면 고운 결이 있는 재질로
-	foam.Material = u > 0.45 and Enum.Material.Sand or Enum.Material.SmoothPlastic
+	foam.Material = (u > 0.45 and not pf.glossy) and Enum.Material.Sand or Enum.Material.SmoothPlastic
 	if foam:IsA("MeshPart") then
 		local mh = height * (1.15 - 0.1 * h)
 		foam.Size = Vector3.new(diam * (0.95 + 0.03 * h), math.max(mh, 0.01), diam * (0.85 + 0.1 * h)) -- 커질수록 둥글게
@@ -166,6 +184,8 @@ function Soda.run(ctx)
 	local spots = {}
 	local tipPowder = nil
 	local dipK = 0 -- 젓가락 끝이 소다에 잠긴 정도 0~1
+	local load = 0 -- 지금 젓가락 끝에 묻은 소다 양
+	local lastDipTip = nil
 	local falling = {}
 	local firstDrop = nil
 	local puffed = false
@@ -175,7 +195,7 @@ function Soda.run(ctx)
 	local sampleAcc = 0
 	local baseThick = S.Contents.Size.X
 
-	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "젓가락을 끌어 끝을 소다 통에 넣었다가 국자로 · 2~3번")
+	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "끝을 소다 통에 넣고 휘저을수록 많이 묻어요")
 	P.sideZone = Heat.sideZone -- 왼쪽 구역 위아래로 끌기 = 국자 높이 (녹이기와 같음)
 
 	while true do
@@ -229,13 +249,25 @@ function Soda.run(ctx)
 				local tip = atLift:Lerp(atTub, dipK)
 				local hnd = Stir.handleFor(tip)
 				Stir.placeChopsticksAt(S, tip, hnd)
-				if dipK > 0.8 and not tipPowder and dips < MAX_DIPS then
-					tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.07, 0.06, 0.07) })
-					ui:buzz(0.15, 0.03)
+				-- 소다 묻히기 (사용자 요청 2026-11-19: 찍기가 어려움 → 통에 담그고 휘저을수록 조금씩 묻음 = 양 조절).
+				-- 통 안에서 끝이 움직인 거리만큼 묻고(한 번에 LOAD_MAX까지), 묻은 양만큼 끝의 흰 덩이가 커짐
+				if dipK > 0.8 and lastDipTip then
+					local moved = Vector3.new(tip.X - lastDipTip.X, 0, tip.Z - lastDipTip.Z).Magnitude
+					local before = load
+					load = math.min(LOAD_MAX, load + moved * LOAD_PER_STUD)
+					if load > before and math.floor(before / 0.05) ~= math.floor(load / 0.05) then
+						ui:buzz(0.12, 0.02) -- 조금씩 묻을 때마다 톡톡
+					end
+				end
+				lastDipTip = dipK > 0.8 and tip or nil
+				if load > 0.005 and not tipPowder then
+					tipPowder = S:fxPart(S.fx, { Name = "FxSodaTip", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand, Size = Vector3.new(0.04, 0.035, 0.04) })
 				end
 				if tipPowder then
+					local k = math.sqrt(load / LOAD_MAX)
+					tipPowder.Size = Vector3.new(0.04 + 0.11 * k, 0.035 + 0.08 * k, 0.04 + 0.11 * k)
 					tipPowder.Transparency = 0
-					tipPowder.CFrame = CFrame.new(tip + (S.stickDir or STICK_DIR) * 0.025)
+					tipPowder.CFrame = CFrame.new(tip + (S.stickDir or STICK_DIR) * (0.02 + 0.03 * k))
 				end
 				local bowl = S.Bowl.Position
 				local flat = Vector3.new(tip.X - bowl.X, 0, tip.Z - bowl.Z)
@@ -249,9 +281,11 @@ function Soda.run(ctx)
 				end
 				if not P.down then
 					carrying = false
+					lastDipTip = nil
 					if tipPowder and inLadle then
 						dips += 1
-						rec.amount = math.min(HEAP_MAX, dips * DIP_AMOUNT)
+						rec.amount = math.min(HEAP_MAX, rec.amount + load)
+						load = 0
 						if not firstDrop then
 							firstDrop = ctx.now()
 							rec.delay = firstDrop - (st.meltDoneAt or firstDrop)
@@ -263,13 +297,14 @@ function Soda.run(ctx)
 						table.insert(falling, { part = tipPowder, from = tipPowder.Position, to = Vector3.new(bowl.X + flat.X, S:contentsTopY(), bowl.Z + flat.Z), t = 0 })
 						tipPowder = nil
 						ui:buzz(0.35, 0.06)
-						if dips >= 4 then
-							ui:hint("소다가 너무 많아요 (쓴맛)")
+						if rec.amount > cfg.idealMax then
+							ui:hint("소다가 너무 많아요 (쓴맛, 너무 부풀다 꺼져요)")
 						end
 					elseif tipPowder then
 						ui:hint("국자 위에서 놓아요")
 						tipPowder:Destroy()
 						tipPowder = nil
+						load = 0
 					end
 				end
 			elseif dips > 0 then
@@ -294,8 +329,16 @@ function Soda.run(ctx)
 					table.insert(spots, spot)
 				end
 			end
-			ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", dips == 0 and "젓가락을 끌어 끝을 소다 통에 넣었다가 국자로 · 2~3번" or string.format("%d번 넣었어요 · 2~3번이 알맞아요 · 다 넣었으면 국자 안에서 저어요", dips))
-			ui:setMeter(true, rec.amount / HEAP_MAX, cfg.idealMin / HEAP_MAX, cfg.idealMax / HEAP_MAX, "소다")
+			local sub
+			if load > 0.005 then
+				sub = "국자 위로 끌고 와서 손을 떼면 톡 · 더 저으면 더 묻어요"
+			elseif dips == 0 then
+				sub = "끝을 소다 통에 넣고 휘저을수록 많이 묻어요 · 초록 칸까지"
+			else
+				sub = rec.amount < cfg.idealMin and "조금 더 넣어요 (초록 칸까지) · 다 넣었으면 국자 안에서 저어요" or "다 넣었으면 국자 안에서 저어요"
+			end
+			ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", sub)
+			ui:setMeter(true, math.min(1, (rec.amount + load) / HEAP_MAX), cfg.idealMin / HEAP_MAX, cfg.idealMax / HEAP_MAX, "소다")
 		else
 			if tipPowder then
 				tipPowder:Destroy()

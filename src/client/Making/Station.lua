@@ -9,6 +9,7 @@ Station.__index = Station
 local MOVABLE = { "Ladle", "WoodSpoon", "SodaSpoon", "Presser", "Cutter", "Chopsticks" }
 local CutterRig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CutterRig"))
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
+local Fx = require(script.Parent:WaitForChild("Fx"))
 
 function Station.new()
 	local m = workspace:WaitForChild("DalgonaWorkstation")
@@ -64,6 +65,28 @@ function Station.new()
 	for _, h in pairs(self.heaps) do
 		h.size = h.part.Size
 		h.color = h.part.Color
+	end
+	-- 나무 숟가락 위 설탕: 동그란 공 대신 그릇 더미와 같은 메시로 "납작하고 가운데만 살짝 솟은" 모양 (사용자 요청 2026-11-19)
+	local ball = self.heaps.WoodSpoon.part
+	local tpl = self.WhiteBowl:FindFirstChild("SugarHeapMesh")
+	if tpl then
+		local m = self.WoodSpoon:FindFirstChild("HeapMound") or tpl:Clone() -- Station을 또 만들어도 하나만
+		m.Name = "HeapMound"
+		m.Anchored, m.CanCollide, m.CanQuery, m.CanTouch, m.CastShadow = true, false, false, false, false
+		local d = math.max(ball.Size.X, ball.Size.Z) * 1.1
+		Fx.placeDome(m, ball.Position - Vector3.new(0, ball.Size.Y * 0.3, 0), d, d * 0.22, 0)
+		m.Color = ball.Color
+		m.Parent = self.WoodSpoon
+		ball.LocalTransparencyModifier = 1
+		self.heaps.WoodSpoon = {
+			part = m,
+			mound = true,
+			size = m.Size,
+			color = ball.Color,
+			-- 숟가락 기준 바닥 자리 (숟가락이 움직이고 기울어도 같이 따라감)
+			baseLocal = self.WoodSpoon:GetPivot():ToObjectSpace(m.CFrame * CFrame.new(0, -m.Size.Y / 2, 0)),
+			model = self.WoodSpoon,
+		}
 	end
 
 	-- 누름판 반투명용: 원래 보이는 부품과 투명도
@@ -130,6 +153,16 @@ function Station:setHeap(name, amount01, color)
 	local h = self.heaps[name]
 	local a = math.clamp(amount01, 0, 1)
 	h.part.Transparency = a <= 0.001 and 1 or 0
+	if h.mound then
+		-- 줄어들 때 납작하게 퍼진 채로 얇아짐 (바닥은 숟가락 면에 붙어 있음)
+		local sz = Vector3.new(h.size.X * (0.6 + 0.4 * a), h.size.Y * (0.3 + 0.7 * a), h.size.Z * (0.6 + 0.4 * a))
+		h.part.Size = sz
+		h.part.CFrame = h.model:GetPivot() * h.baseLocal * CFrame.new(0, sz.Y / 2, 0)
+		if color then
+			h.part.Color = color
+		end
+		return
+	end
 	h.part.Size = h.size * (0.35 + 0.65 * a)
 	if color then
 		h.part.Color = color
