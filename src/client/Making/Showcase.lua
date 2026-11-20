@@ -86,7 +86,8 @@ function Showcase.run(ctx, dal, st, extras)
 	for i, p in ipairs(parts) do
 		rel[i] = R0:ToObjectSpace(p.CFrame)
 		p.Anchored = true
-		if p ~= batterPart then
+		-- 안 보이는 부품(예전 원판·덩어리 DalgonaDome/Lump 등, 멀리 남아 있음)은 크기 계산에서 뺌
+		if p ~= batterPart and p.Transparency < 0.99 then
 			local h = p.Size / 2
 			for _, s in ipairs({ Vector3.new(1, 1, 1), Vector3.new(1, 1, -1), Vector3.new(1, -1, 1), Vector3.new(-1, 1, 1) }) do
 				for _, sg in ipairs({ 1, -1 }) do

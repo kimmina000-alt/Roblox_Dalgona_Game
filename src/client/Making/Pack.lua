@@ -220,8 +220,10 @@ function Pack.run(ctx, dal, st)
 	local zTop = z1 + 0.35
 	local neckZ = math.min(-(R * 1.2 + 0.18), z0 - 0.35)
 	local D = { hw = hw, zTop = zTop, zNeck = neckZ, zc = (z0 + z1) / 2, rz = (z1 - z0) / 2, rx = (x1 - x0) / 2, xoff = xoff }
-	-- 비닐이 처음 놓이는 자리: 달고나 위쪽(화면 위)에서 입구가 달고나 윗부분에 막 걸친 곳
-	local OUT = math.max(z1 - (neckZ - 0.45) - R * 0.6, 1.2)
+	-- 비닐이 처음 놓이는 자리: 달고나 위쪽(화면 위)으로 조금, 그리고 공중에 LIFT만큼 떠 있음.
+	-- 아래로 끌면 내려오면서 씌워짐 (2026-11-20 "위에서 비닐 내려와서 씌우는"). 테이블 밖으로 안 나가게 짧게
+	local OUT = math.max(R * 0.7, 1.2)
+	local LIFT = 1.4
 	-- 카메라: 막대 끝 ~ 처음 비닐 윗끝이 다 보이게
 	local lowZ = z0 - stickLen
 	local highZ = zTop + OUT
@@ -293,13 +295,13 @@ function Pack.run(ctx, dal, st)
 			tt += dt
 			local k = smooth(tt / dur)
 			local to = m + up * toSlide
-			bagAt(from:Lerp(to, k), (lift0 or 0) * (1 - k) + math.sin(math.pi * k) * 0.25)
+			bagAt(from:Lerp(to, k), (lift0 or 0) * (1 - k) + LIFT * toSlide / OUT * k + math.sin(math.pi * k) * 0.25)
 			slide = s0 + (toSlide - s0) * k
 			Sfx.loop("bagRustle", 0.5, 1.1)
 		end
 		Sfx.loop("bagRustle", 0, 1)
 		slide = toSlide
-		bagAt(m + up * toSlide, 0)
+		bagAt(m + up * toSlide, LIFT * toSlide / OUT)
 		return true
 	end
 	ui:say("비닐에 넣어요", "비닐 통을 눌러 비닐을 꺼내요")
@@ -341,8 +343,9 @@ function Pack.run(ctx, dal, st)
 			ui:setWorldTip(nil)
 			return nil
 		end
-		local bagS = screenOf(m + up * (slide + zTop * 0.6))
-		ui:setWorldTip(not grab and "↓ 끌어요" or nil, bagS - Vector2.new(0, 40))
+		-- 끌기 안내는 비닐 가운데쯤 (위쪽 끝은 안내 문구와 겹침)
+		local bagS = screenOf(m + up * (slide + zTop * 0.2))
+		ui:setWorldTip(not grab and "↓ 끌어요" or nil, bagS)
 		if P.down and P.presses ~= seen and not grab then
 			seen = P.presses
 			local at = P.toPlane(m.Y)
@@ -354,14 +357,14 @@ function Pack.run(ctx, dal, st)
 			local want = math.clamp((at - m):Dot(up) - grab, 0, OUT)
 			local before = slide
 			slide += (want - slide) * (1 - math.exp(-dt / 0.05))
-			bagAt(m + up * slide, 0.06 * math.min(slide / 0.3, 1))
+			bagAt(m + up * slide, LIFT * slide / OUT)
 			-- 끄는 빠르기만큼 바스락
 			Sfx.loop("bagRustle", math.clamp(math.abs(slide - before) / math.max(dt, 1e-3) * 0.25, 0, 0.8), 1)
 			if not P.down then
 				grab = nil
 				if slide < OUT * 0.35 then
 					-- 거의 다 씌웠으면 쏙 들어감
-					if not flyTo(m + up * slide, 0, 0, 0.15) then
+					if not flyTo(m + up * slide, 0, LIFT * slide / OUT, 0.15) then
 						return nil
 					end
 					slide = 0
@@ -371,7 +374,7 @@ function Pack.run(ctx, dal, st)
 			Sfx.loop("bagRustle", 0, 1)
 			idle += dt
 			if idle > IDLE_T then
-				if not flyTo(m + up * slide, 0, 0, 0.5) then
+				if not flyTo(m + up * slide, 0, LIFT * slide / OUT, 0.5) then
 					return nil
 				end
 				slide = 0

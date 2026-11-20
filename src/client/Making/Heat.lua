@@ -77,8 +77,9 @@ function Heat.control(st, P, ui, S)
 		st.h = cfg.hMin + ui:heightAt(P.side.pos.Y) * (cfg.hMax - cfg.hMin)
 	elseif d.Y ~= 0 then
 		local vh = workspace.CurrentCamera.ViewportSize.Y
-		-- 2026-11-20 플레이 테스트: 안내 줄(화면 높이의 약 21%)을 한 번 끝까지 끌면 알맞은 높이 칸에 들어가게 (예전 0.45는 줄 끝까지 끌어도 탐)
-		st.h = math.clamp(st.h - d.Y / (vh * 0.25) * (cfg.hMax - cfg.hMin), cfg.hMin, cfg.hMax)
+		-- 2026-11-20 플레이 테스트: 안내 줄(왼쪽 아래 큰 화살표 길, 화면 높이의 약 27%)을 한 번 끝까지 끌면
+		-- 알맞은 높이 칸 가운데쯤 (약 160°)에 들어가게. 0.45는 끝까지 끌어도 타고, 0.25는 너무 올라가 식음
+		st.h = math.clamp(st.h - d.Y / (vh * 0.34) * (cfg.hMax - cfg.hMin), cfg.hMin, cfg.hMax)
 	end
 	local danger = Heat.sourceTemp(st.h) > cfg.burnTemp or st.temp > cfg.burnTemp - 3
 	-- 알맞은 높이 칸: 불 온도가 tempLow ~ tempHigh가 되는 높이 (sourceTemp = 235 - 95 × h01)

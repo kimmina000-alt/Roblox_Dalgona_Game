@@ -330,7 +330,7 @@ function Ui:_buildGauge()
 	self.vTitle = label({ Text = "속도", TextSize = 12, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 16), Parent = v })
 	self.vgauge = v
 	-- 누르기 두께 (2026-11-20 폰 사진: 가로 게이지가 반죽을 가림 → 왼쪽 세로 막대). 위 두꺼움 → 아래 너무 얇음,
-	-- 누를수록 바늘이 아래로 내려감. 칸 이름은 막대 오른쪽에
+	-- 누를수록 바늘이 아래로 내려감. 칸 이름은 막대 왼쪽에 (오른쪽은 설명 글씨와 겹침)
 	local pg = new("Frame", {
 		Name = "PressGaugeV",
 		AnchorPoint = Vector2.new(0.5, 0),
@@ -345,7 +345,7 @@ function Ui:_buildGauge()
 	self.pSegs = {}
 	for i, s in ipairs({ { "두꺼움", Color3.fromRGB(80, 140, 230) }, { "딱 좋아", Color3.fromRGB(80, 190, 90) }, { "너무 얇음", Color3.fromRGB(230, 80, 70) } }) do
 		local f = new("Frame", { BackgroundColor3 = s[2], BorderSizePixel = 0, Parent = pt })
-		local tag = label({ Text = s[1], TextSize = 13, TextColor3 = Color3.new(1, 1, 1), BackgroundColor3 = s[2], BackgroundTransparency = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, 22, 0.5, 0), Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, Parent = f })
+		local tag = label({ Text = s[1], TextSize = 13, TextColor3 = Color3.new(1, 1, 1), BackgroundColor3 = s[2], BackgroundTransparency = 0, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(0, -22, 0.5, 0), Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, Parent = f })
 		corner(8).Parent = tag
 		new("UIPadding", { PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 7), Parent = tag })
 		self.pSegs[i] = f
@@ -856,6 +856,7 @@ end
 function Ui:setGauge(visible, speed, slow, fast, title)
 	-- 젓기 속도는 왼쪽 세로 막대로 (누르기 게이지는 그대로 가로)
 	self.gauge.Visible = false
+	self.pgauge.Visible = false -- 누르기 단계도 끝날 때 setGauge(false)로 숨김
 	self.vgauge.Visible = visible
 	if not visible then
 		self.needleX = nil
