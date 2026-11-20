@@ -386,9 +386,9 @@ local function sugarDust(f, ws)
 	end
 	local topY = plate.Position.Y + plate.Size.Y / 2
 	deco(f, "SugarDust", Vector3.new(plate.Size.X * 0.96, 0.004, plate.Size.Z * 0.96), CFrame.new(plate.Position.X, topY + 0.002, plate.Position.Z), Color3.fromRGB(250, 250, 248), Enum.Material.Sand, { Transparency = 0.8 })
-	-- 가장자리에 조금 몰린 설탕
+	-- 가장자리에 조금 몰린 설탕 → 반투명한 동그라미로만 보여서 뺌 (2026-11-20)
 	local rng = Random.new(3)
-	for _ = 1, 7 do
+	for _ = 1, 0 do
 		local a = rng:NextNumber(0, math.pi * 2)
 		local r = plate.Size.X * rng:NextNumber(0.36, 0.46)
 		local d = rng:NextNumber(0.25, 0.5)

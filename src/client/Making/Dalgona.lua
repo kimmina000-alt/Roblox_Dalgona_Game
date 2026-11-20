@@ -23,6 +23,12 @@ Dalgona.__index = Dalgona
 
 local UP = CFrame.Angles(0, 0, math.rad(90))
 
+-- 3D 반죽은 정점 색을 TOP_DIM만큼 낮춰 두고 밝은 반점만 1로 올림 → 부품 색은 그만큼 밝게 칠해 원래 색이 되게
+local function batterTint(c)
+	local k = 1 / (BatterMesh.TOP_DIM or 1)
+	return Color3.new(math.min(1, c.R * k), math.min(1, c.G * k), math.min(1, c.B * k))
+end
+
 -- 탄 정도 b(0~1)에 따른 색·광택 (docs/DALGONA_LOOK.md: 참고 사진 분석)
 -- 광택은 Reflectance를 거의 안 씀 (하늘이 비쳐 보라색이 됨) → 밝은 하이라이트 점(gloss 개수)으로 표현
 local STOPS = {
@@ -387,8 +393,9 @@ function Dalgona:setThickness(h)
 				ck.part.CFrame = CFrame.lookAt((a + b) / 2, b)
 			end
 		end
+		-- 기포 구멍·반점은 이제 3D 반죽 메시 안에 있음 (BatterMesh pore/speck) → 덧붙이던 무늬 부품은 숨김
 		for _, dt in ipairs(self.details) do
-			dt.part.LocalTransparencyModifier = flat > 0.6 and 0 or 1
+			dt.part.LocalTransparencyModifier = 1
 		end
 		return
 	end
@@ -450,7 +457,7 @@ function Dalgona:setLook(look)
 		p.Reflectance = refl
 	end
 	if self.batter then
-		self.batter.part.Color = base
+		self.batter.part.Color = batterTint(base)
 		self.batter.part.Reflectance = refl
 	end
 	if self.meshes then
@@ -518,7 +525,7 @@ end
 function Dalgona:setColor(c)
 	self.color = c
 	if self.batter then
-		self.batter.part.Color = c
+		self.batter.part.Color = batterTint(c)
 	end
 	if self.meshes then
 		for _, p in pairs(self.meshes) do

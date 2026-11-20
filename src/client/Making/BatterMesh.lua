@@ -16,6 +16,8 @@ local RINGS = 54 -- 가운데 → 가장자리 고리
 -- 정점 색 (MeshPart.Color에 곱해짐, 2026-11-20): 옆면은 두께만큼 그림자진 진한 갈색, 찍힌 홈은 조금 진하게
 local SIDE_SHADE = Vector3.new(0.6, 0.45, 0.32)
 local GROOVE_SHADE = Vector3.new(0.72, 0.58, 0.46)
+local TOP_DIM = 0.9 -- 반점이 밝아 보이게 기본 정점 색을 이만큼 낮춤 (Dalgona가 부품 색을 1/TOP_DIM배로)
+Batter.TOP_DIM = TOP_DIM
 local TOP = 0.88 -- 기본 모양 꼭대기 높이 (찍은 모양 안쪽이 솟을 여유)
 local BOUND = 1.8 -- 메시 경계 상자 (MeshPart 크기 기준을 고정하려고 모서리 점 2개를 박아 둠). 방울로 그린 모양(하트 끝 등)이 반지름 1 밖으로 나가도 들어가게
 
@@ -38,6 +40,18 @@ local function build(parent, color, seed)
 	self.ringT = {}
 	for i = 1, RINGS do
 		self.ringT[i] = 1 - (1 - i / RINGS) ^ 1.5
+	end
+	-- 누른 반죽 질감 (2026-11-20: 예전 접힌 메시처럼 기포 구멍과 반점): 정점마다 미리 정해 둠
+	--   pore = 작은 기포 구멍 (살짝 파이고 진함), speck = 결정 반점 (밝음). 누를수록 또렷
+	self.pore, self.speck = {}, {}
+	for i = 1, RINGS do
+		for j = 1, SEG do
+			local idx = (i - 1) * SEG + j
+			local edge = i > RINGS - 4
+			local r = rng:NextNumber()
+			self.pore[idx] = (not edge and r < 0.055) and rng:NextNumber(0.5, 1) or 0
+			self.speck[idx] = (not edge and r > 0.955) and rng:NextNumber(0.5, 1) or 0
+		end
 	end
 	self.cos, self.sin = {}, {}
 	for j = 1, SEG do
@@ -142,6 +156,7 @@ function Batter:rebuild()
 	local st = self.stamp
 	local k = self.stampK
 	local bumps = self.bumps
+	local tex = math.clamp((flat - 0.55) / 0.4, 0, 1) -- 질감 세기
 	local edges = {}
 	for j = 1, SEG do
 		edges[j] = self:edgeR(j)
@@ -187,12 +202,20 @@ function Batter:rebuild()
 					y = y - k * 0.62 * g * y + k * 0.1 * inn
 					gshade = g * math.min(k, 1.2) * 0.85
 				end
+				local idx2 = (i - 1) * SEG + j
+				local pore = self.pore[idx2] * tex
+				if pore > 0 then
+					y -= pore * 0.16 * y
+				end
 				y = math.clamp(y, 0, 1.12) * TOP
+				gshade = math.max(gshade, pore * 0.7)
 			else
 				shade = 1
 			end
 			em:SetPosition(ring[j], Vector3.new(x, y, z))
-			local m = Vector3.one:Lerp(SIDE_SHADE, math.clamp(shade, 0, 1)):Lerp(GROOVE_SHADE, math.clamp(gshade, 0, 1))
+			-- 기본 윗면은 살짝 어둡게(0.9) 두고 반점만 원래 밝기(1) → 밝은 결정 반점 (MeshPart 색은 1/0.9배 밝게 칠함)
+			local speck = i < RINGS and self.speck[(i - 1) * SEG + j] * tex or 0
+			local m = Vector3.one:Lerp(SIDE_SHADE, math.clamp(shade, 0, 1)):Lerp(GROOVE_SHADE, math.clamp(gshade, 0, 1)) * (TOP_DIM + (1 - TOP_DIM) * speck)
 			em:SetColor(cring[j], Color3.new(m.X, m.Y, m.Z))
 		end
 	end
