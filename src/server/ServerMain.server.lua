@@ -33,17 +33,37 @@ for _, name in ipairs({ "PlayerState", "Notify" }) do
 	end
 end
 
--- 맵은 스크립트로 만든다. Studio에 이미 저장된 작업대가 있으면 그대로 쓴다.
-local ws = workspace:FindFirstChild("DalgonaWorkstation") or WorkstationBuilder.build(workspace)
-if not ws:FindFirstChild("Cutter") then
-	WorkstationBuilder.buildCutter(ws) -- 예전 별 전용 틀 → 도안을 바꿔 끼우는 틀
-end
--- 식탁보·러그·색감 (2026-11-19 귀엽게)
-StallDecor.dress(ws)
--- 국자 여러 개 (화로 위 알바생 국자, 속성 LadleCount 1~4)
-WorkstationBuilder.watchLadles(ws)
-if ws:GetAttribute("CoalLeft") == nil then
-	WorkstationBuilder.setCoal(ws, 1)
+-- 손 작업대 틀 (17b·U8, 2026-11-21): 스폰 앞 공용 작업대는 없애고, 가게 부지마다 작업대를 둠 (PlotService).
+-- 틀 = ServerStorage.Assets.WorkstationTemplate (Studio에 저장된 꾸며진 작업대). 예전 장소처럼 공용 작업대가
+-- workspace에 남아 있으면 틀 자리로 옮김. 꾸미기(StallDecor.dress)는 틀에 한 번 해 두고 PlotService가 복제함
+do
+	local ServerStorage = game:GetService("ServerStorage")
+	local assets = ServerStorage:FindFirstChild("Assets")
+	if not assets then
+		assets = Instance.new("Folder")
+		assets.Name = "Assets"
+		assets.Parent = ServerStorage
+	end
+	local tpl = assets:FindFirstChild("WorkstationTemplate")
+	local shared = workspace:FindFirstChild("DalgonaWorkstation")
+	if not tpl and shared then
+		shared.Name = "WorkstationTemplate"
+		shared.Parent = assets
+		tpl = shared
+	elseif shared then
+		shared:Destroy()
+	end
+	if tpl then
+		if not tpl:FindFirstChild("Cutter") then
+			WorkstationBuilder.buildCutter(tpl) -- 예전 별 전용 틀 → 도안을 바꿔 끼우는 틀
+		end
+		StallDecor.dress(tpl) -- 식탁보·러그·색감·포장 공간 (2026-11-19~20)
+		if tpl:GetAttribute("CoalLeft") == nil then
+			WorkstationBuilder.setCoal(tpl, 1)
+		end
+	else
+		warn("[Server] ServerStorage.Assets.WorkstationTemplate 이 없어요 — 가게 작업대를 만들 수 없음")
+	end
 end
 
 -- Lv5 달고나 공장: 스폰 뒤쪽(+Z)에 앞(제어대)이 스폰을 보게 놓는다. 자동 생산 연결은 다음 단계.
@@ -61,6 +81,7 @@ ProductionService.hooks.mods = GrowthService.mods
 ProductionService.hooks.canStart = EconomyService.canMake
 ProductionService.hooks.onStart = EconomyService.onStart -- 나무젓가락 1쌍
 ProductionService.hooks.onResult = EconomyService.onMade
+ProductionService.hooks.workstation = PlotService.workstation -- 내 가게 작업대 (17b)
 ProductionService.hooks.onPpopgi = EconomyService.onPpopgi -- 뽑기 보너스·쪼개짐 (15번)
 
 ProductionService.init({
