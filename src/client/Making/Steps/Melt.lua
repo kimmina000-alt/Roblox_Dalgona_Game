@@ -50,7 +50,10 @@ function Melt.run(ctx)
 	local rec = { t0 = ctx.now(), green = 0, tempOk = 0, scorch = 0, burn = 0, burnt = false, samples = {} }
 	local stir = Stir.new()
 	local samp = sampler(rec)
-	st.h = cfg.hMin -- 국자는 연탄 위 철망에 놓여 있음: 가만히 두면 뜨거워져 탐 → 왼쪽을 끌어 들어 올려야 함 (2026-11-19)
+	-- 2026-11-20 "설탕 넣고 저을 때는 국자 위치 중간 그대로": 알맞은 온도가 되는 높이 가운데에서 시작
+	-- (sourceTemp = 235 - 95 × h01 이 tempLow~tempHigh 사이의 가운데)
+	local mid01 = (235 - (cfg.tempLow + cfg.tempHigh) / 2) / 95
+	st.h = cfg.hMin + mid01 * (cfg.hMax - cfg.hMin)
 	st.grace = 5 -- 처음 5초는 타지 않음 (그 사이 들어 올리기)
 	st.temp = st.temp or 30
 	st.burn = 0
@@ -65,7 +68,8 @@ function Melt.run(ctx)
 
 	Stir.placeChopsticks(S, S.Bowl.Position)
 	P.sideZone = Heat.sideZoneFor(ui)
-	ui:say("국자 안에서 원을 그리며 저어요", "국자가 연탄 위에 놓여 있어요 · 왼쪽을 위로 끌어 들어 올려요")
+	ui:say("국자 안에서 원을 그리며 저어요", "왼쪽을 위아래로 끌면 국자 높이가 바뀌어요")
+	local idle = 0 -- 아무것도 안 하고 있던 시간 (오래 두면 눌어붙어 탐)
 
 	while true do
 		local dt = ctx.frame()
@@ -92,6 +96,16 @@ function Melt.run(ctx)
 
 		Heat.step(st, dt)
 		Heat.flame(S, st.h)
+		-- 가만히 오래 두면 (불에서 멀어도) 바닥이 눌어붙어 탐 (2026-11-20): IDLE_BURN초부터 타기 시작해 IDLE_BURN_T초 뒤 다 탐
+		if stir.active or P.side.down then
+			idle = 0
+		else
+			idle += dt
+			if idle > Heat.IDLE_BURN then
+				st.burn = math.min(1, st.burn + dt / Heat.IDLE_BURN_T)
+				ui:hint("가만히 두면 타요! 계속 저어요")
+			end
+		end
 
 		if stir.active then -- 저을 때만 속도 비율을 잼 (손을 잠깐 떼는 건 눌어붙음 감점으로만)
 			tTotal += dt

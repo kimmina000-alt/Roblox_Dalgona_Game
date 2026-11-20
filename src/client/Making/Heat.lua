@@ -45,6 +45,10 @@ function Heat.sideZoneExcept(avoid)
 	end
 end
 
+-- 아무것도 안 하고 오래 두면 탐 (2026-11-20): 8초 지나면 타기 시작, 그 뒤 6초에 걸쳐 다 탐 (= 14초)
+Heat.IDLE_BURN = 8
+Heat.IDLE_BURN_T = 6
+
 local coached = false -- 이번 접속에서 국자 높이를 한 번이라도 끌어 봤나 (처음 하는 사람 안내)
 
 function Heat.control(st, P, ui, S)
@@ -53,7 +57,8 @@ function Heat.control(st, P, ui, S)
 	if P.side.down then
 		coached = true
 	end
-	ui:setCoach(not coached)
+	-- 국자 들기 안내: 처음 한 번 끌어 보기 전, 그리고 불에 너무 가까울 때 (2026-11-20 "국자 들라고 할 때")
+	ui:setCoach(not coached or Heat.sourceTemp(st.h) > cfg.burnTemp or st.temp > cfg.tempHigh + 1)
 	if P.side.down and P.side.start and ui:heightHit(P.side.start) then
 		-- 막대를 잡고 끌면 손가락 자리 = 국자 높이 (바로 따라옴)
 		st.h = cfg.hMin + ui:heightAt(P.side.pos.Y) * (cfg.hMax - cfg.hMin)

@@ -367,15 +367,17 @@ function Ui:_buildHeight()
 	self.heightBox = box
 	-- 처음 하는 사람 안내 (사용자 요청 2026-11-20): 손가락이 막대를 따라 위로 끄는 모습 + 말풍선
 	-- 높이 막대를 없앤 뒤(2026-11-20)에는 화면 왼쪽(팔이 있는 곳)에서 손가락이 위로 끄는 모습
-	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Position = UDim2.new(0, 60, 0.35, 0), Size = UDim2.new(0, 300, 0.4, 0), Visible = false, ZIndex = 6, Parent = self.root })
-	self.coachFinger = label({ Text = "👆", TextSize = 40, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, -40, 0.85, 0), Size = UDim2.fromOffset(44, 44), ZIndex = 7, Parent = coach })
+	-- 2026-11-20: 화면 왼쪽 아래(폰에서 이동 버튼이 있던 자리)에 화살표가 아래에서 위로 올라가는 모습
+	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Position = UDim2.new(0, 24, 0.42, 0), Size = UDim2.new(0, 260, 0.5, 0), Visible = false, ZIndex = 6, Parent = self.root })
+	new("Frame", { Name = "Track", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0, 56, 0.08, 0), Size = UDim2.new(0, 14, 0.86, 0), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.55, ZIndex = 6, Parent = coach }, { corner(7) })
+	self.coachFinger = label({ Text = "▲", TextSize = 54, TextColor3 = Color3.fromRGB(255, 120, 160), TextStrokeColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 56, 0.92, 0), Size = UDim2.fromOffset(60, 60), ZIndex = 7, Parent = coach })
 	local bubble = label({
-		Text = "왼쪽(팔)을 잡고 위로 끌면\n국자가 올라가요!",
+		Text = "여기를 아래에서 위로 끌면\n국자가 올라가요!",
 		TextSize = 15,
 		TextColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.05,
 		BackgroundColor3 = Color3.fromRGB(40, 150, 60),
-		Position = UDim2.new(0, 30, 0, -6),
+		Position = UDim2.new(0, 90, 0, -6),
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -468,8 +470,9 @@ function Ui:setCoach(on)
 		self.coachTween = nil
 	end
 	if on then
-		self.coachFinger.Position = UDim2.new(0, -40, 0.85, 0)
-		self.coachTween = TweenService:Create(self.coachFinger, TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut, -1, false, 0.35), { Position = UDim2.new(0, -40, 0.2, 0) })
+		self.coachFinger.Position = UDim2.new(0, 56, 0.92, 0)
+		self.coachFinger.TextTransparency = 0
+		self.coachTween = TweenService:Create(self.coachFinger, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1, false, 0.25), { Position = UDim2.new(0, 56, 0.12, 0), TextTransparency = 0.7 })
 		self.coachTween:Play()
 	end
 end

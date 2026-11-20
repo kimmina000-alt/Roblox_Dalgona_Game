@@ -27,7 +27,7 @@ local LAYERS_MAX = 8 -- 한 번 들고 갈 때 최대 겹 수
 local LOAD_MAX = DIP_LAYER * LAYERS_MAX
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit
 local STICK_LEAN = Vector3.new(0.45, 0.6, 0.66).Unit -- 소다 넣을 때 젓가락 기울기 (눕혀서 끝에 묻은 소다가 위에서 보이게)
-local STIR_LIFT = 1.35 -- 소다 젓기: 국자를 이 높이까지 들어 올림 (불 위 철망에서, 녹일 때 알맞은 높이보다 훨씬 위)
+local STIR_LIFT = 1.58 -- 소다 젓기: 국자를 이 높이까지 들어 올림 (거의 맨 위, 2026-11-20 "소다 넣은 후에는 더 높게")
 local TAP_PX = 110 -- 소다 통·국자 화면 위치에서 이만큼 안을 누르면 그 도구
 -- 영상 5·6번: 부푼 반죽은 밝은 땅콩버터 베이지, 젓가락이 지나간 자리에 결이 남음
 local FOAM = Color3.fromRGB(206, 152, 96)
@@ -395,6 +395,7 @@ function Soda.run(ctx)
 	local tStir, tFast = 0, 0
 	local sampleAcc = 0
 	local baseThick = S.Contents.Size.X
+	local idleS = 0
 
 	ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", "소다통을 눌러 찍어요")
 	-- 소다 넣는 동안 왼쪽 구역(국자 높이)은 소다 통·젓가락 근처를 빼고 (2026-11-20: 그 근처 클릭은 젓가락 쪽)
@@ -445,6 +446,16 @@ function Soda.run(ctx)
 		S.Ladle:PivotTo(S:ladleAt(st.h))
 		Heat.flame(S, st.h)
 		Heat.step(st, dt)
+		-- 소다를 넣기 전에 아무것도 안 하고 오래 두면 탐 (2026-11-20, 녹이기와 같은 시간)
+		if P.down or P.side.down or puffed then
+			idleS = 0
+		else
+			idleS += dt
+			if idleS > Heat.IDLE_BURN then
+				st.burn = math.min(1, st.burn + dt / Heat.IDLE_BURN_T)
+				ui:hint("가만히 두면 타요! 소다를 넣어요")
+			end
+		end
 		if danger then
 			ui:hint("불에 너무 가까워요! 왼쪽을 위로 끌어 국자를 올려요")
 		end

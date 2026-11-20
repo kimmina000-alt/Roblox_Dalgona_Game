@@ -68,7 +68,8 @@ function Dalgona.lookFor(records, st)
 	local b = (st and st.burn or melt.burn or 0) * 1.4
 	b += (1 - (melt.tempOk or 1)) * 0.25 -- 적정 온도를 벗어나 있던 시간
 	b += math.clamp(((soda.delay or 0) - Config.Soda.bestDelay) * 0.08, 0, 0.3) -- 소다를 늦게
-	b += math.clamp(((soda.amount or Config.Soda.idealMin) - Config.Soda.idealMax) / 0.85, 0, 1) * 0.35 -- 소다를 많이
+	-- 소다를 많이: 부풀 때 진해진 색(Soda FOAM_DARK, 0.45 넘치면 가장 진함)을 붓기·누르기·결과까지 그대로 (2026-11-20)
+	b += math.clamp(((soda.amount or Config.Soda.idealMin) - Config.Soda.idealMax) / 0.45, 0, 1) * 0.7
 	local dense = math.clamp((Config.Soda.idealMin - (soda.amount or Config.Soda.idealMin)) / Config.Soda.idealMin, 0, 1)
 	return { b = math.clamp(b, 0, 1), dense = dense }
 end
