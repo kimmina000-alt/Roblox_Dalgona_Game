@@ -199,7 +199,7 @@ function Ui:_buildBottom()
 	local pill = new("Frame", {
 		Name = "Instruction",
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -58),
+		Position = UDim2.new(0.5, 0, 1, -104), -- 2026-11-20: 위로 올림 (아래 끝은 손가락·홈 바에 가려짐)
 		Size = UDim2.fromOffset(0, 58),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundColor3 = INK,
@@ -215,7 +215,7 @@ function Ui:_buildBottom()
 		TextSize = self.touch and 22 or 18,
 		TextColor3 = Color3.fromRGB(70, 66, 62),
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -24),
+		Position = UDim2.new(0.5, 0, 1, -70),
 		Size = UDim2.fromOffset(700, 26),
 		TextStrokeColor3 = Color3.new(1, 1, 1),
 		TextStrokeTransparency = 0.3,

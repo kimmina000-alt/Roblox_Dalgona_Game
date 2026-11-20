@@ -115,7 +115,8 @@ function Stick.place(ctx)
 end
 
 -- 막대를 반죽 두께·크기에 맞춰 놓음: 반죽 가운데 쪽 끝은 반죽 속(가운데에서 반지름 35% 지점), 나머지는 바깥으로 삐져나옴
-function Stick.follow(st)
+-- flat = true면 철판 테두리 걸침(살짝 들기) 없이 평평하게 (포장 매트로 옮긴 뒤: 2026-11-20 "막대 끝이 끊겨 보임")
+function Stick.follow(st, flat)
 	local s = st.stick
 	local dal = st.dalgona
 	if not (s and dal and st.stickPlace) then
@@ -131,7 +132,7 @@ function Stick.follow(st)
 	-- 막대 바깥쪽이 테두리에 닿으면 반죽 속 끝을 축으로 살짝 들어 테두리 위로 걸침
 	local plate = dal.S and dal.S.Plate
 	local tilt = 0
-	if plate then
+	if plate and not flat then
 		local d = s.dir
 		local hx, hz = plate.Size.X / 2, plate.Size.Z / 2
 		local ox, oz = c.X - plate.Position.X, c.Z - plate.Position.Z
