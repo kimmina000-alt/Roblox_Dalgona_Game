@@ -132,7 +132,7 @@ local function loadRecord(player)
 			waited += 2
 		else
 			lastErr = tostring(res)
-			if lastErr:find("API Services") or lastErr:find("StudioAccessToApisNotAllowed") or lastErr:find("403") then
+			if lastErr:find("API Services") or lastErr:find("StudioAccessToApisNotAllowed") or lastErr:find("403") or lastErr:find("publish") then
 				return nil, lastErr -- Studio에서 API 접근이 꺼져 있음: 재시도해도 안 됨
 			end
 			task.wait(delay)
