@@ -4,7 +4,6 @@
 -- 판정은 shared/PpopgiRules (서버가 같은 표본으로 다시 계산). 목표 시간 10~20초.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
 
 local Rules = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("PpopgiRules"))
 local CameraRig = require(script.Parent:WaitForChild("CameraRig"))
@@ -124,7 +123,6 @@ function Ppopgi.run(ctx, dal, shapeId)
 	-- 바늘 (가는 쇠 + 빨간 머리). 끝 = 긁는 자리
 	local shaft = S:fxPart(S.fx, { Name = "PpopgiNeedle", Shape = Enum.PartType.Cylinder, Color = STEEL, Material = Enum.Material.Metal, Reflectance = 0.2, Size = Vector3.new(NEEDLE_LEN, 0.035, 0.035) })
 	local head = S:fxPart(S.fx, { Name = "PpopgiNeedleHead", Shape = Enum.PartType.Ball, Color = Color3.fromRGB(220, 70, 70), Material = Enum.Material.SmoothPlastic, Size = Vector3.new(0.13, 0.13, 0.13) })
-	local touch = UserInputService.TouchEnabled
 	local function placeNeedle(tip, lifted, stress)
 		local cam = workspace.CurrentCamera.CFrame
 		local right = Vector3.new(cam.RightVector.X, 0, cam.RightVector.Z)
@@ -137,15 +135,8 @@ function Ppopgi.run(ctx, dal, shapeId)
 		shaft.Color = STEEL:Lerp(CRACK_RED, math.clamp(stress, 0, 1) * 0.8)
 	end
 	local function tipFromPointer()
+		-- 누른 곳 그대로 긁음 (2026-11-21 사용자: 누른 곳과 긁히는 곳이 달랐음 → 폰 손가락 보정 뺌)
 		local f = P.toPlane(topY + 0.03)
-		if touch then
-			-- 폰: 손가락에 바늘 끝이 가리지 않게 화면 위쪽으로 조금
-			local up = workspace.CurrentCamera.CFrame.UpVector
-			local flat = Vector3.new(up.X, 0, up.Z)
-			if flat.Magnitude > 1e-3 then
-				f += flat.Unit * 0.35
-			end
-		end
 		return Vector3.new(f.X, surfY(f) + LIFT - 0.01, f.Z)
 	end
 
