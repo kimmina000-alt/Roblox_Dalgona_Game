@@ -21,6 +21,11 @@ PlayerDataService.MIGRATIONS = {
 	[1] = function(_data)
 		-- v0 → v1: 첫 스키마. 빠진 칸은 reconcile이 기본값으로 채운다.
 	end,
+	[2] = function(data)
+		-- v1 → v2 (Phase 4 성장): 도안 해금을 레벨 기준으로 다시 계산 (v1은 별을 기본으로 줬음).
+		-- 여기서는 비우기만 하고, reconcile이 Common을 넣고 GrowthService가 접속 때 레벨만큼 더한다.
+		data.unlockedShapes = nil
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

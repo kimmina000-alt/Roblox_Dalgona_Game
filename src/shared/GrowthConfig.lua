@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 1
+G.SchemaVersion = 2 -- v2 (2026-11-20 성장): 레벨로 도안 해금, 도감, 일일 목표, 알바생
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -26,13 +26,15 @@ G.DefaultData = {
 	level = 1,
 	ingredients = { sugar = 5, soda = 5, wrapper = 5, chopsticks = 5, twistTie = 5 }, -- 첫 판을 바로 해 볼 수 있게 5회분 (사용자 확정, 2026-11-20)
 	stock = {}, -- 만든 달고나 { s = 도안 id, g = 등급, q = 완성도, p = 판매가, b = 도안 가격, m = 품질 배율, pk = 포장 여부 }
-	unlockedShapes = { "Circle", "Square", "Triangle", "Star" },
+	unlockedShapes = { "Circle", "Square", "Triangle", "Bone" }, -- Common (레벨이 오르면 GrowthService가 더함)
 	upgrades = { stove = 0, presser = 0, table = 0 }, -- 화로·누르개·작업대 장비 Lv (Phase 4)
 	ladles = 1, -- 국자 수 1~4 (SHOP_GROWTH_PLAN 2장)
-	partTimers = {}, -- 알바생 { { id, skill } } (Phase 4)
+	partTimers = {}, -- 알바생 { { shape = 만들 도안 id, skill = 숙련(자리만) } } 국자 2번째부터 1명씩
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
 	factory = { unlocked = false }, -- 가게 뒤 공장 (D11, Phase 5)
-	stats = { made = 0, sold = 0, coinsEarned = 0 },
+	stats = { made = 0, sold = 0, coinsEarned = 0, helperMade = 0, wagesPaid = 0 },
+	collection = {}, -- 도감 [도안 id] = { best = 손으로 만든 최고 등급, n = 손으로 만든 수 } (자동 생산은 안 셈)
+	daily = { day = "", goals = {} }, -- 일일 목표 3개 (UTC 날짜가 바뀌면 새로)
 }
 
 ---------------------------------------------------------------- 재료 (ECONOMY_BALANCE 2장)
@@ -75,22 +77,31 @@ G.ChopsticksPerRound = 1
 G.ChopsticksPerHelperRound = 1 -- 알바생 1판 (Phase 4)
 G.ChopsticksPerMachineRound = 0 -- 2~5단계 기계·공장은 안 씀 (공장은 운영비 +1)
 
-G.StockMax = 30 -- 들고 있을 수 있는 달고나 수 (진열대 10칸은 Phase 3)
-G.EnforceUnlocks = false -- true면 해금 안 된 도안은 서버가 거절 (Phase 4에서 켬)
+G.StockMax = 30 -- 들고 있을 수 있는 달고나 수 (작업대 업그레이드마다 +10, G.stockMax)
+G.EnforceUnlocks = true -- 해금 안 된 도안은 서버가 거절 (Phase 4, 2026-11-20 켬)
 
 ---------------------------------------------------------------- 레벨 (GDD 6장)
 G.MaxLevel = 25
 -- Lv n → n+1 요구 EXP. Lv1~10은 GDD 값, 그 뒤는 임시로 +110씩 (테스트 뒤 정함)
-G.ExpToNext = { 50, 80, 120, 170, 230, 300, 380, 470, 570 }
+G.ExpToNext = {
+	50, 80, 120, 170, 230, 300, 380, 470, 570, -- Lv1→10 (GDD 6장)
+	-- Lv10→25: 기획안 (2026-11-20 기획 세션). 목표 Lv15 ≈ 6~8시간, Lv25 ≈ 20~30시간, Phase 5 시뮬레이터로 다시 봄
+	700, 1000, 1300, 1650, 2100,
+	2150, 2200, 2300, 2350, 2400, 2450, 2500, 2600, 2700, 2850,
+}
 -- 레벨업 보상 코인 (도달 레벨 → 코인)
 G.LevelCoins = {
 	[2] = 100, [3] = 50, [4] = 150, [5] = 200, [6] = 250, [7] = 300,
 	[8] = 200, [9] = 275, [10] = 350,
 	[11] = 500, [12] = 500, [13] = 500, [14] = 500, [15] = 700,
 	[16] = 1000, [17] = 1000, [18] = 1000, [19] = 1000, [20] = 1000,
+	[21] = 1200, [22] = 1200, [23] = 1200, [24] = 1200, [25] = 1200, -- 기획안
 }
 G.ExpHand = { base = 10, Excellent = 10, Perfect = 20 } -- 손 제작 성공 EXP + 등급 보너스
 G.ExpBurnt = 2 -- 태우거나 모양이 망가져도(Fail) 조금은 배움
+G.ExpHelper = 5 -- 알바생이 만든 1개 (손의 절반, 기획 확정 2026-11-20)
+G.ExpMachine = 1 -- 2~5단계 기계·공장 1개 (Phase 5에서 씀. 5씩 주면 Lv10 뒤 레벨이 설비값보다 너무 빨리 오름)
+G.ExpDailyGoal = 15 -- 일일 목표 1개 (GDD 6장)
 
 function G.expToNext(level)
 	if level >= G.MaxLevel then
@@ -105,6 +116,68 @@ function G.expFor(grade)
 	end
 	return G.ExpHand.base + (G.ExpHand[grade] or 0)
 end
+
+---------------------------------------------------------------- 도안 해금 (GDD 3-1장, 2026-11-20)
+G.UnlockLevel = { Common = 1, Uncommon = 3, Rare = 6, Epic = 10, Legendary = 15, Mythic = 25 }
+-- Master는 레벨이 아니라 도감 조건 (D6, 기획 확정 2026-11-20): 손으로 Excellent 이상 만든 Mythic 종류 수 1/2/3, 연꽃은 Mythic 3종 모두 손으로 Perfect
+G.MasterUnlock = {
+	{ id = "Spider", mythicExcellent = 1 },
+	{ id = "Sierpinski", mythicExcellent = 2 },
+	{ id = "Snowflake", mythicExcellent = 3 },
+	{ id = "Lotus", mythicPerfect = 3 },
+}
+G.GradeRank = { Burnt = 0, Fail = 0, Poor = 1, Normal = 2, Good = 3, Excellent = 4, Perfect = 5 }
+
+---------------------------------------------------------------- 장비 업그레이드 (SYSTEMS_SPECIFICATION 7장, Lv2에 열림)
+G.UpgradeUnlockLevel = 2
+G.Upgrades = {
+	stove = { name = "화로", costs = { 150, 500, 1500, 5000 }, desc = "적정 온도 구간 +8%/Lv" }, -- Lv2~5 값
+	presser = { name = "누르개", costs = { 200, 700, 2000 }, desc = "누르기 두께 판정 +8%/Lv" }, -- Lv2~4
+	table = { name = "작업대", costs = { 500, 2000, 7000 }, desc = "달고나 보관함 +10/Lv" }, -- Lv2~4
+}
+G.UpgradeOrder = { "stove", "presser", "table" }
+G.StoveBandPerLevel = 0.08 -- 적정 온도 구간 폭 ×(1 + 0.08×(Lv-1)), DEVELOPMENT_PLAN 3장 14번
+G.PresserBandPerLevel = 0.08
+G.TableStockPerLevel = 10
+
+-- data.upgrades는 0부터 (0 = Lv1). 장비 Lv = 값 + 1
+function G.stockMax(data)
+	local t = data and data.upgrades and data.upgrades.table or 0
+	return G.StockMax + t * G.TableStockPerLevel
+end
+
+---------------------------------------------------------------- 국자·알바생 (SHOP_GROWTH_PLAN 2장, D10)
+G.Ladles = { -- 2번째 국자부터: 해금 레벨, 값
+	[2] = { level = 3, cost = 300 },
+	[3] = { level = 5, cost = 800 },
+	[4] = { level = 8, cost = 1800 },
+}
+G.HireCost = { 500, 1000, 2000 } -- 알바생 1·2·3번째
+G.Helper = {
+	seconds = 40, -- 1판 (기본 알바생)
+	wagePer30s = 3, -- 일하는 동안만
+	qMin = 50, -- 품질 Normal~Good
+	qMax = 84,
+	maxGrade = "Legendary", -- 자동 생산은 Legendary까지 (D13)
+	chopsticks = 1, -- G.ChopsticksPerHelperRound
+	-- 숙련 업그레이드: 아직 미정 (자리만). skill 1·2 → 35초·30초 등
+	skillSeconds = { [0] = 40 },
+}
+
+---------------------------------------------------------------- 일일 목표 (GDD 6장: 3개, 보상 15 EXP)
+G.Daily = {
+	count = 3,
+	rewardCoins = 30, -- 임시
+	pool = {
+		{ kind = "make", n = 3, text = "달고나 %d개 만들기" },
+		{ kind = "make", n = 5, text = "달고나 %d개 만들기" },
+		{ kind = "good", n = 2, text = "Good 이상 %d개 만들기" },
+		{ kind = "sell", n = 5, text = "손님에게 %d개 팔기" },
+		{ kind = "sell", n = 8, text = "손님에게 %d개 팔기" },
+		{ kind = "pack", n = 2, text = "%d개 포장하기" },
+		{ kind = "earn", n = 60, text = "판매로 %d코인 벌기" },
+	},
+}
 
 ---------------------------------------------------------------- 가게 부지 (D10·D11)
 G.Plots = {

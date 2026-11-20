@@ -67,15 +67,16 @@ function Scoring.misshaped(records)
 end
 
 -- 목표 ±18% 안이면 만점 (2026-11-19 "누르기 100점 받기 어려움"), 그 밖은 목표의 60%만큼 벗어나면 0점
-function Scoring.pressOne(i, h)
+-- tolMul: 누르개 업그레이드로 넓어진 판정 폭 (서버가 넣음, 없으면 1)
+function Scoring.pressOne(i, h, tolMul)
 	local t = Config.Press.targets[i]
-	return 100 * c01(1 - math.max(0, math.abs(h - t) - 0.18 * t) / (t * 0.6))
+	return 100 * c01(1 - math.max(0, math.abs(h - t) - 0.18 * t * (tolMul or 1)) / (t * 0.6))
 end
 
 function Scoring.press(r)
 	local sum = 0
 	for i = 1, 3 do
-		sum += Scoring.pressOne(i, r.thick[i] or 1)
+		sum += Scoring.pressOne(i, r.thick[i] or 1, r.tolMul)
 	end
 	local s = sum / 3
 	if r.cracked then
