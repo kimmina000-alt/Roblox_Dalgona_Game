@@ -8,9 +8,9 @@
 ## 코드 구조 (Rojo, `default.project.json`)
 | 폴더 | Studio 위치 | 내용 |
 |---|---|---|
-| `src/shared` | ReplicatedStorage.Shared | `DalgonaConfig`(수치), `Scoring`(Q 공식, 서버·클라 공용), `CutterShapes`(도안 외곽선, 자동 생성), `ShapeCatalog`(도안 목록·가격), `CutterRig`(작업대 틀에 도안 끼우기) |
-| `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수), `Services/WorkstationBuilder`(작업대를 Part로 생성), `Services/FactoryBuilder`(Lv5 공장 배치·색칠), `Services/StallDecor`(깅엄 식탁보·러그·색감 보정, 1단계 꾸미기: 은박지·설탕 결정·틀 쟁반·막대 통·포장 달고나 진열대, 테이블 오른쪽 +6 포장 공간 PackArea: 매트·비닐 통·빵끈 통) |
-| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker, Toon=도구 만화 외곽선, ChopstickCup=젓가락 통, BatterMesh=EditableMesh 반죽, Showcase=완성 달고나(포장했으면 포장째) 화면 정중앙에 띄워 보여 주기, Pack=모양 찍기 뒤 포장할지 고르면 테이블 오른쪽 포장 공간에서 네모 비닐 씌우기·빵끈 집어 두 번 끌어 묶기, HelperLadles=화로 위 알바생 국자 움직임, FoamMesh=소다 많이 넣었을 때 국자 넘쳐 흘러내리는 거품 3D, BagShape=입구 벌린 포장 봉투 정점 데이터(자동 생성, `tools/blender/bag.py`)), `Making/Steps/`(Stick=막대 꽂기 포함)(단계마다 모듈 1개) |
+| `src/shared` | ReplicatedStorage.Shared | `DalgonaConfig`(수치), `GrowthConfig`(저장·부지·재료·레벨 수치, Phase 2), `Scoring`(Q 공식, 서버·클라 공용), `CutterShapes`(도안 외곽선, 자동 생성), `ShapeCatalog`(도안 목록·가격), `CutterRig`(작업대 틀에 도안 끼우기) |
+| `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수, `hooks.canStart/onResult`로 경제 연결), `Services/PlayerDataService`(DataStore 저장: 스키마 버전·MIGRATIONS, 세션 잠금, 60초 자동 저장, 퇴장·BindToClose 저장), `Services/PlotService`(가게 부지 6칸 `workspace.ShopPlots`: 배정·반환·이름 간판, 손 작업대 자리·기계 1자리·공장 문 자리), `Services/EconomyService`(재료 상점, 제작 끝 → 재료 소비·재고·EXP·레벨업, HUD 상태 전송), `Services/WorkstationBuilder`(작업대를 Part로 생성), `Services/FactoryBuilder`(Lv5 공장 배치·색칠), `Services/StallDecor`(깅엄 식탁보·러그·색감 보정, 1단계 꾸미기: 은박지·설탕 결정·틀 쟁반·막대 통·포장 달고나 진열대, 테이블 오른쪽 +6 포장 공간 PackArea: 매트·비닐 통·빵끈 통) |
+| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Hud`(코인·레벨·재료·보관함 HUD + 재료 상점, 제작 화면 중엔 숨김), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker, Toon=도구 만화 외곽선, ChopstickCup=젓가락 통, BatterMesh=EditableMesh 반죽, Showcase=완성 달고나(포장했으면 포장째) 화면 정중앙에 띄워 보여 주기, Pack=모양 찍기 뒤 포장할지 고르면 테이블 오른쪽 포장 공간에서 네모 비닐 씌우기·빵끈 집어 두 번 끌어 묶기, HelperLadles=화로 위 알바생 국자 움직임, FoamMesh=소다 많이 넣었을 때 국자 넘쳐 흘러내리는 거품 3D, BagShape=입구 벌린 포장 봉투 정점 데이터(자동 생성, `tools/blender/bag.py`)), `Making/Steps/`(Stick=막대 꽂기 포함)(단계마다 모듈 1개) |
 
 미니게임 단계는 모듈 하나씩 (Luau 로컬 변수 200개 제한).
 
