@@ -719,7 +719,7 @@ function Soda.run(ctx)
 			local zone = Stir.zone(speed, mcfg.slow, cfg.fastMin)
 			local target = 0
 			if stir.active then
-				local t, hnd = Stir.grip(S:contentsTopY())
+				local t, hnd = Stir.gripUp(S:contentsTopY()) -- 젓가락은 위로 서고 끝은 손가락 살짝 아래 (2026-11-20)
 				Stir.placeChopsticks(S, t, hnd)
 				stirTip = t
 				tStir += dt

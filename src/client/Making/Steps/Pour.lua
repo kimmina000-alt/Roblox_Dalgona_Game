@@ -389,8 +389,10 @@ function Pour.run(ctx)
 	local volume = math.pi * 0.55 ^ 2 * Config.Press.h0
 	-- 국자 손잡이 잡는 자리 (국자 피벗 기준, 기울이기 전 자세). 메시 손잡이 = 손 붙이는 자리와 같음
 	local gripLocal = S:ladleGripLocal()
-	local hideK = 1 -- 국자 숨김 정도 (2026-11-20: 붓기 내내 국자는 안 보이고 떨어지는 반죽만)
-	setLadleHidden(ladle, 1)
+	-- 2026-11-20 (다시) "반투명 흰색 원 삭제하고 달고나 반죽 담긴 국자 머리를 왼쪽에 보이게": 국자를 숨기면
+	-- 안의 시럽·거품만 하얀 원처럼 남았음 → 국자는 철판 왼쪽에 반죽을 담은 채 보이게 두고, 방울은 위에서 떨어짐
+	local hideK = 0
+	setLadleHidden(ladle, 0)
 	-- 붓는 동안 철판 옆 누름판은 안 보이게 (누르기 단계에서 다시 나옴)
 	S:hidePresser(true)
 	-- 반죽이 떨어질 자리 표시 (손가락 아래 철판 위 옅은 그림자)
@@ -544,7 +546,12 @@ function Pour.run(ctx)
 				end
 				-- 기울일 때는 그릇 자리를 그대로 두고 그릇 가장자리 쪽으로 기울임 (손잡이를 손가락에 붙여 두면
 				-- 기울이는 만큼 그릇이 손 쪽으로 1.6 넘게 밀려 철판 밖에 부어짐 → 플레이 테스트에서 확인)
-				ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, -tilt) * rot)
+				if dropMode then
+					-- 방울 붓기: 국자는 철판 왼쪽 자리에 그대로, 누르는 동안 철판 쪽으로 살짝 기울기만 함
+					ladle:PivotTo(CFrame.new(hover.Position) * CFrame.Angles(0, 0, -tilt * 0.45) * rot)
+				else
+					ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, -tilt) * rot)
+				end
 				-- 국자 가장자리(손잡이 반대쪽 +X)와 흘러나가는 방향
 				local out = Vector3.new(1, 0, 0)
 				local lip = (CFrame.new(w) * CFrame.Angles(0, 0, -tilt)):PointToWorldSpace(Vector3.new(S.bowlRadius - 0.04, S.bowlHalf, 0))
@@ -666,7 +673,10 @@ function Pour.run(ctx)
 								stream.t += 1 / 60
 								stream.tail = math.min(1, t / 0.35)
 								stream.flow = math.max(0.15, stream.flow * 0.97)
-								drawStream(stream, lip + Vector3.new(0, HIDE_RISE * hideK, 0), out, Vector3.new(blob.center.X, blob:topY() + 0.05, blob.center.Z))
+								-- 방울 붓기(3D 반죽)는 줄기가 없음: 마지막에 실처럼 늘어나는 줄을 그리면 화면 밖까지 긴 줄이 생김 (2026-11-20 "부을 때 마지막에 생기는 저 줄 삭제")
+								if not blob.lobes then
+									drawStream(stream, lip + Vector3.new(0, HIDE_RISE * hideK, 0), out, Vector3.new(blob.center.X, blob:topY() + 0.05, blob.center.Z))
+								end
 								local a = math.min(t / 0.45, 1)
 								blob:setThickness(finalH * (1 + 0.08 * math.sin(a * math.pi * 2.5) * (1 - a)))
 							end
