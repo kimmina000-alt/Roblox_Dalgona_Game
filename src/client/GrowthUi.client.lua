@@ -201,7 +201,7 @@ local function render()
 	local hireCost = G.HireCost[nHelp + 1]
 	local seats = gr.ladles - 1
 	order += 1
-	row(page, order, string.format("알바생 %d / %d명", nHelp, seats), string.format("%d초에 1개 · 급여 30초당 %d · 젓가락 1쌍", G.Helper.seconds, G.Helper.wagePer30s),
+	row(page, order, string.format("알바생 %d / %d명", nHelp, seats), string.format("%d초에 1개 · 급여 30초당 %d", G.Helper.seconds, G.Helper.wagePer30s),
 		(nHelp >= seats and "자리 없음") or (hireCost and (hireCost .. " 코인")) or "최대",
 		nHelp < seats and hireCost ~= nil and state.coins >= hireCost, function()
 			act("buy", "hire")

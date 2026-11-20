@@ -79,7 +79,7 @@ end
 
 -- 나무젓가락: 한 판 시작(젓가락을 꺼낼 때)에 1쌍. "다시 하기"도 새 판이라 1쌍. 0쌍이면 시작 못 함
 G.ChopsticksPerRound = 1
-G.ChopsticksPerHelperRound = 1 -- 알바생 1판 (Phase 4)
+G.ChopsticksPerHelperRound = 0 -- 알바생은 젓가락을 안 씀 (사용자 결정 2026-11-21: 젓가락은 손 제작 1판에 1쌍만)
 G.ChopsticksPerMachineRound = 0 -- 2~5단계 기계·공장은 안 씀 (공장은 운영비 +1)
 
 G.StockMax = 30 -- 들고 있을 수 있는 달고나 수 (작업대 업그레이드마다 +10, G.stockMax)
@@ -164,7 +164,7 @@ G.Helper = {
 	qMin = 50, -- 품질 Normal~Good
 	qMax = 84,
 	maxGrade = "Legendary", -- 자동 생산은 Legendary까지 (D13)
-	chopsticks = 1, -- G.ChopsticksPerHelperRound
+	chopsticks = 0, -- 젓가락 안 씀 (G.ChopsticksPerHelperRound, 2026-11-21)
 	-- 숙련 업그레이드: 아직 미정 (자리만). skill 1·2 → 35초·30초 등
 	skillSeconds = { [0] = 40 },
 	-- 외형 = 주인 아바타 미니미 (D19, 2026-11-20)
