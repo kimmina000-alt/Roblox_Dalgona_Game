@@ -47,9 +47,7 @@ local function buildBag(parent, R, zNeck)
 			for j = 1, NA do
 				local j2 = j % NA + 1
 				local a, b, c, d = verts[i][j], verts[i][j2], verts[i + 1][j], verts[i + 1][j2]
-				-- 앞뒤 두 겹 (투명해서 안쪽 면도 보임)
-				em:AddTriangle(a, b, d)
-				em:AddTriangle(a, d, c)
+				-- 바깥 면 한 겹만 (2026-11-20 "비닐 무늬 안 보이게": 앞뒤 두 겹이 같은 자리에 겹쳐 얼룩무늬가 보였음)
 				em:AddTriangle(a, d, b)
 				em:AddTriangle(a, c, d)
 			end

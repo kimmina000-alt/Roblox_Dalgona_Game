@@ -17,10 +17,12 @@ local Sfx = require(Making:WaitForChild("Sfx"))
 
 local Soda = {}
 
-local HEAP_MAX = 1.2
+-- 2026-11-20 "소다 완전 많이 묻힐 수 있게, 부풀어서 국자 넘치게": 넣을 수 있는 양 1.2 → 3 (서버 상한과 같음)
+local HEAP_MAX = 3.0
+local METER_MAX = 1.2 -- 소다 막대는 이 양에서 꽉 참 (초록 칸이 너무 작아지지 않게)
 -- 찍을 때마다 한 겹씩 (사용자 요청 2026-11-19): 1번 찍으면 얇게, 2번이면 더 두껍게, 3번이면 더 두껍게
 local DIP_LAYER = 0.17 -- 한 번 찍을 때 묻는 양 (1번 0.17 적음 · 2~3번 0.34~0.51 알맞음 · 4번 0.68 많음)
-local LAYERS_MAX = 4 -- 한 번 들고 갈 때 최대 겹 수
+local LAYERS_MAX = 8 -- 한 번 들고 갈 때 최대 겹 수
 local LOAD_MAX = DIP_LAYER * LAYERS_MAX
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit
 local STICK_LEAN = Vector3.new(0.45, 0.6, 0.66).Unit -- 소다 넣을 때 젓가락 기울기 (눕혀서 끝에 묻은 소다가 위에서 보이게)
@@ -112,14 +114,16 @@ local function newPuff(S, amount, baseThick)
 	--   많이: 국자 밖까지 크게 부풀었다가 가운데가 꺼지고, 진한 갈색 (쓴맛)
 	local low = math.clamp((cfg.idealMin - amount) / cfg.idealMin, 0, 1)
 	local high = math.clamp((amount - cfg.idealMax) / 0.45, 0, 1)
+	local huge = math.clamp((amount - 1.1) / 1.6, 0, 1) -- 아주 많이: 국자 밖으로 흘러넘침
 	local dark = math.max(high, 0.45 * low)
 	local final = FOAM:Lerp(CREAM, 0.6 * (1 - low)):Lerp(FOAM_DARK, dark)
 	local pf = {
 		u = 0, hold = 0, done = false, final = final, yaw = math.random() * 6, baseThick = baseThick,
 		-- 2026-11-20: 너무 많이 넣으면 훨씬 크게 부풀어 국자 밖으로 넘침
-		size = 1 - 0.45 * low + 0.9 * high, -- 높이 배율
-		wide = 1 - 0.12 * low + 0.5 * high, -- 지름 배율 (많으면 국자 밖으로)
-		collapse = 0.3 * high, -- 다 부푼 뒤 꺼지는 정도
+		size = 1 - 0.45 * low + 0.9 * high + 1.4 * huge, -- 높이 배율
+		wide = 1 - 0.12 * low + 0.5 * high + 0.6 * huge, -- 지름 배율 (많으면 국자 밖으로)
+		collapse = 0.3 * high * (1 - 0.7 * huge), -- 다 부푼 뒤 꺼지는 정도 (아주 많으면 넘친 채로 남음)
+		over = math.clamp(0.7 * high + huge, 0, 1.6), -- 국자 테두리 밖으로 흘러내리는 정도
 		glossy = low > 0.3, -- 적으면 끝까지 번들번들
 	}
 	local start = scaleColor(final, COLOR_RAMP[1][2])
@@ -131,6 +135,15 @@ local function newPuff(S, amount, baseThick)
 	-- 둥근 공 하나가 국자 속에서 부풀어 오름 (사용자 요청 2026-11-19: 주름 언덕 메시는 동그라미가 줄지어 보임).
 	-- 공 가운데가 국자 안쪽 면에 있어서 위쪽 반구만 보임 = 매끈한 둥근 돔
 	pf.foam = Fx.ellipsoid(S:fxPart(S.Ladle, { Name = "FxFoam", Color = pf.syrup, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.one * 0.1 }))
+	-- 넘친 반죽: 국자 테두리를 넘어 바깥으로 흘러내리는 방울 줄기
+	pf.drips = {}
+	if pf.over > 0 then
+		local n = math.floor(4 + 5 * math.min(pf.over, 1))
+		for i = 1, n do
+			local part = Fx.ellipsoid(S:fxPart(S.Ladle, { Name = "FxFoamDrip", Color = pf.syrup, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.one * 0.05 }))
+			pf.drips[i] = { part = part, a = (i - 1) / n * 2 * math.pi + (math.random() - 0.5) * 0.5, len = 0.5 + 0.5 * math.random(), delay = 0.55 + 0.3 * math.random() }
+		end
+	end
 	return pf
 end
 
@@ -181,6 +194,28 @@ local function drawPuff(S, pf, dt, speed)
 	else
 		foam.Size = Vector3.new(diam, height * 2, diam)
 		foam.CFrame = CFrame.new(base)
+	end
+	-- 넘침: 거품이 국자보다 커지면(빠른 상승 뒤쪽부터) 테두리 밖으로 반죽이 흘러내림
+	local edgeR = math.max(diam / 2 * 0.93, S.bowlRadius + 0.04)
+	for _, d in ipairs(pf.drips) do
+		local k = math.clamp((h - d.delay) / (1 - d.delay), 0, 1)
+		if pf.done then
+			k = 1
+		end
+		local L = (0.15 + 0.75 * d.len) * math.min(pf.over, 1.3) * k * k * (3 - 2 * k)
+		local part = d.part
+		if L < 0.04 then
+			part.Transparency = 1
+		else
+			local w = 0.26 + 0.1 * d.len
+			local out = Vector3.new(math.cos(d.a), 0, math.sin(d.a))
+			local top = base + out * edgeR + Vector3.new(0, 0.06, 0)
+			part.Color = col
+			part.Transparency = foam.Transparency
+			part.Size = Vector3.new(w, L + w * 0.5, w * 0.8)
+			-- 위는 테두리에 붙고 아래로 늘어지며 바깥으로 살짝 기욺
+			part.CFrame = CFrame.lookAt(top, top + out) * CFrame.new(0, -L / 2 + w * 0.2, -w * 0.3) * CFrame.Angles(math.rad(12), 0, 0)
+		end
 	end
 end
 
@@ -557,7 +592,7 @@ function Soda.run(ctx)
 			end
 			ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", sub)
 			tubTip(dips == 0 and load < LOAD_MAX - 1e-3)
-			ui:setMeter(true, math.min(1, (rec.amount + load) / HEAP_MAX), cfg.idealMin / HEAP_MAX, cfg.idealMax / HEAP_MAX, "소다")
+			ui:setMeter(true, math.min(1, (rec.amount + load) / METER_MAX), cfg.idealMin / METER_MAX, cfg.idealMax / METER_MAX, "소다")
 		else
 			if tipPowder then
 				tipPowder:Destroy()

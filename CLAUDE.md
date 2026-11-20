@@ -14,6 +14,11 @@
 
 미니게임 단계는 모듈 하나씩 (Luau 로컬 변수 200개 제한).
 
+## 고정 (사용자가 "너무 좋다, 고정해" 한 것 — 바꾸지 말 것, 2026-11-20)
+- 반죽 붓기: `Steps/Pour` 한 방울씩 떨어뜨리기 (손가락 아래로 떨어지고, 먼저 떨어진 방울과 경계가 흐려지며 이어져 그린 모양대로 됨).
+- 누른 모양: `BatterMesh.rebuild` 가운데 평평하게 내려앉고 가장자리 두툼한 둥근 턱 (RIM_* 값), 기포는 부을 때 보이다 서서히 사라짐.
+- 다른 기능을 고치다 이 둘이 달라지면 안 된다. 바꿔야 하면 먼저 사용자에게 묻는다.
+
 ## 에셋 (Rojo 밖, Studio에만 있음)
 - `ServerStorage.Assets.LadleMesh`: 사용자가 만든 구리 국자 (`레퍼런스/dalgona_gukja.glb`를 Studio에서 가져옴). `WorkstationBuilder.attachLadleMesh`가 투명한 판정용 원기둥 `Ladle.Bowl`에 맞춰 붙인다. 게임 코드는 계속 `Bowl` 기준으로 움직인다.
 - `ServerStorage.Assets.BrazierMesh / CoalMesh / CoalBurntMesh`: 사용자가 만든 화로·연탄·다 탄 연탄 (`레퍼런스/dalgona_wharo.glb`). 화로는 CorrodedMetal(낡은 금속). 연탄은 `WorkstationBuilder.setCoal(ws, 남은 양)`으로 높이·색이 바뀌고, 작업대 속성 `CoalLeft`에 남는다. 한 판 끝날 때마다 서버가 0.1씩 줄이고, 0이면 다음 판 시작 때 새 연탄.
