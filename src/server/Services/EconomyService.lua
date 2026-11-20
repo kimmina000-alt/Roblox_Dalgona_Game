@@ -182,7 +182,7 @@ end
 function EconomyService.sell(player, n)
 	local sold, coins = 0, 0
 	Data.update(player, function(d)
-		local shelf = math.min(#d.stock, G.Sales.shelfSlots)
+		local shelf = math.min(#d.stock, G.shelfSlots(d))
 		n = math.min(n, shelf)
 		if n <= 0 then
 			return false
@@ -244,7 +244,7 @@ end
 
 function EconomyService.shelfCount(player)
 	local data = Data.get(player)
-	return data and math.min(#data.stock, G.Sales.shelfSlots) or 0
+	return data and math.min(#data.stock, G.shelfSlots(data)) or 0
 end
 
 -- 뽑기 결과 (15번, ProductionService.hooks.onPpopgi). 2026-11-21 사용자:
@@ -297,7 +297,9 @@ end
 
 -- 제작 끝. 반환: 보상 정보 (결과 표에 붙음)
 function EconomyService.onMade(player, shape, result)
-	local need = G.recipe(shape.grade)
+	-- 민짜 달고나 (D20): 틀을 안 찍었으면 기본값 8, 설탕 Common 1회분
+	local plain = result.plain == true
+	local need = G.recipe(plain and G.PlainSugarGrade or shape.grade)
 	local reward = { exp = G.expFor(result.grade), levelUps = {}, coins = 0 }
 	Data.update(player, function(d)
 		for id, n in pairs(need) do
@@ -308,9 +310,10 @@ function EconomyService.onMade(player, shape, result)
 				s = shape.id,
 				g = result.grade,
 				q = result.Q,
-				b = shape.price,
+				b = plain and G.PlainBasePrice or shape.price,
 				m = result.mult or 1,
 				pk = false,
+				plain = plain or nil,
 			}
 			item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
 			table.insert(d.stock, item)
