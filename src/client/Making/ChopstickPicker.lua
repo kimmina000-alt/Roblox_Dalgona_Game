@@ -112,18 +112,38 @@ function Picker.run(ctx, opts)
 
 	local angle = 0
 	local items = {}
+	-- 만화 외곽선 (2026-11-20): ViewportFrame 안에서는 Highlight가 안 그려져서, 조각마다 조금 큰 짙은 갈색 복제본을
+	-- 바로 뒤(카메라 반대쪽)에 둬 테두리처럼 보이게 함
+	local OUTLINE = Color3.fromRGB(92, 52, 34)
+	local OUT_W = 0.07 -- 테두리 두께 (조각 크기에 더함)
 	local function add(name, localCf, transparency)
 		local p = cs:FindFirstChild(name):Clone()
 		p.Transparency = transparency or 0
 		p.Parent = vpf
-		local it = { part = p, cf = localCf, fix = name:sub(1, 5) == "Stick" and stickFix(p) or CFrame.new() }
+		local o = p:Clone()
+		o.Name = name .. "_Outline"
+		for _, c in ipairs(o:GetChildren()) do
+			c:Destroy()
+		end
+		o.Color = OUTLINE
+		o.Material = Enum.Material.SmoothPlastic
+		if o:IsA("MeshPart") then
+			o.TextureID = ""
+		end
+		o.Size = p.Size + Vector3.one * OUT_W
+		o.Parent = vpf
+		local it = { part = p, outline = o, cf = localCf, fix = name:sub(1, 5) == "Stick" and stickFix(p) or CFrame.new() }
 		items[name] = it
 		return it
 	end
 	local function render()
 		local pivot = CFrame.Angles(0, 0, math.rad(angle))
 		for _, it in pairs(items) do
-			it.part.CFrame = pivot * it.cf * it.fix
+			local cf = pivot * it.cf * it.fix
+			it.part.CFrame = cf
+			-- 테두리는 같은 자리에서 카메라 반대쪽(-Z)으로 살짝 뒤
+			it.outline.CFrame = cf - Vector3.new(0, 0, 0.12)
+			it.outline.Transparency = it.part.Transparency
 		end
 	end
 	local function animate(dur, fn)
@@ -231,7 +251,7 @@ function Picker.run(ctx, opts)
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromOffset(math.min(h * 0.75, rootSize.X.Offset * 0.6), h),
 	}):Play()
-	TweenService:Create(dim, TweenInfo.new(0.35), { BackgroundTransparency = 0.45 }):Play()
+	-- 2026-11-20 "젓가락 꺼내고 뽀갤 때 배경에 검은색 깔리는 거 삭제": 뒤 화면을 어둡게 하지 않음
 	if not animate(0.35, function(a)
 		angle = TILT * a
 	end) then

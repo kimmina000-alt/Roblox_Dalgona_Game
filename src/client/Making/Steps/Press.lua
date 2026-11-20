@@ -186,8 +186,9 @@ function Press.run(ctx)
 				if contact then
 					Sfx.play("pressSticky", 0.45, 1.3)
 				end
-				if h <= hi then
-					-- 초록 칸에 들어왔거나 지나침 → 이번 누르기 끝
+				-- 2026-11-20 "녹색까지 못 갔어도 한 번 누르면 차감": 닿았다가 떼면 초록 칸이든 아니든 한 번으로 침
+				-- (덜 눌렀으면 두꺼운 만큼 점수가 깎임)
+				if contact then
 					count += 1
 					rec.thick[count] = h
 					print(string.format("[Press] %d번째 두께 %.3f (목표 %.3f)", count, h, target))
@@ -196,13 +197,13 @@ function Press.run(ctx)
 						ui:toast(count < 3 and "딱 좋아요!" or "완벽해요!", 0.8)
 					elseif h < lo then
 						ui:hint("조금 너무 눌렀어요 (바늘이 초록 칸일 때 떼요)")
+					elseif h > hi then
+						ui:hint("덜 눌렸어요 (바늘이 초록 칸에 오면 떼요)")
 					else
 						ui:toast("좋아요!", 0.7)
 					end
 					hStart = h
 					ui:buzz(0.3, 0.05)
-				elseif contact then
-					ui:hint("조금 더! 바늘이 초록 칸에 들어가면 떼요")
 				end
 				contact = false
 			end
