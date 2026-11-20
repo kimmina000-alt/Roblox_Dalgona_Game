@@ -81,8 +81,12 @@ function Press.run(ctx)
 	while true do
 		local dt = ctx.frame()
 		if not dt then
+			ui:setArrow(nil)
 			return nil
 		end
+		-- 안내가 보일 때(처음 판들 · 막혔을 때 · 한 번 빗나갔을 때) 누름판을 화살표로 가리킴 (2026-11-20)
+		local ap = cam:WorldToScreenPoint(grab:worldBottom() + Vector3.new(0, discHalf * 2 + 0.3, 0))
+		ui:setArrow((ui:subShown() or missed) and Vector2.new(ap.X, ap.Y) or nil, "누름판")
 		if P.down and P.presses ~= seen then
 			seen = P.presses
 			local sp = cam:WorldToScreenPoint(grab:worldBottom() + Vector3.new(0, discHalf * 2, 0))
@@ -94,6 +98,7 @@ function Press.run(ctx)
 		end
 		grab:draw()
 	end
+	ui:setArrow(nil)
 	Sfx.play("pop", 0.6, 1.0)
 	ui:buzz(0.3, 0.05)
 	-- 반죽 위로 날아와 떠 있음

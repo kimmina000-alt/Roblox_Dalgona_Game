@@ -421,6 +421,27 @@ function Ui:_buildHeight()
 	corner(17).Parent = wt
 	new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14), Parent = wt })
 	self.worldTip = wt
+	-- 도구를 가리키는 통통 튀는 화살표 (2026-11-20 "누름판 선택하라고 할 때 화살표로 가리키기")
+	local arrow = new("Frame", { Name = "PointArrow", AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(120, 96), BackgroundTransparency = 1, Visible = false, ZIndex = 9, Parent = self.root })
+	self.arrowTag = label({ Text = "", TextSize = 16, TextColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.05, BackgroundColor3 = INK, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0), Size = UDim2.fromOffset(0, 32), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 9, Parent = arrow })
+	corner(16).Parent = self.arrowTag
+	new("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12), Parent = self.arrowTag })
+	label({ Text = "▼", TextSize = 52, TextColor3 = Color3.fromRGB(255, 120, 160), TextStrokeColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.fromScale(0.5, 1), Size = UDim2.fromOffset(60, 56), ZIndex = 9, Parent = arrow })
+	self.arrow = arrow
+end
+
+-- pos = 가리킬 화면 좌표 (nil이면 숨김). 화살표 끝이 pos 바로 위에 오고 위아래로 통통 튐
+function Ui:setArrow(pos, text)
+	if not pos then
+		self.arrow.Visible = false
+		return
+	end
+	local sc = self.scale.Scale
+	local bob = math.abs(math.sin(os.clock() * 6)) * 12
+	self.arrowTag.Text = text or ""
+	self.arrowTag.Visible = text ~= nil and text ~= ""
+	self.arrow.Position = UDim2.fromOffset(pos.X / sc, pos.Y / sc - 8 - bob)
+	self.arrow.Visible = true
 end
 
 -- text가 nil이면 숨김. pos = 화면 좌표(도구 위)

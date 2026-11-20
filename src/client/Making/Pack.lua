@@ -263,7 +263,9 @@ function Pack.run(ctx, dal, st)
 			bagAt(from:Lerp(to, k), (lift0 or 0) * (1 - k) + math.sin(math.pi * k) * 0.25)
 			slide = s0 + (toSlide - s0) * k
 			tiltDal()
+			Sfx.loop("bagRustle", 0.5, 1.1)
 		end
+		Sfx.loop("bagRustle", 0, 1)
 		slide = toSlide
 		bagAt(m + right * toSlide, 0)
 		tiltDal()
@@ -292,7 +294,7 @@ function Pack.run(ctx, dal, st)
 		end
 	end
 	ui:setWorldTip(nil)
-	Sfx.play("pop", 0.3, 1.3)
+	Sfx.play("bagYank", 0.7, 1.1)
 	bag3.part.Transparency = 0.68
 	if not flyTo(bagBox.Position, OUT, 0.4, 0.4) then
 		return nil
@@ -318,9 +320,12 @@ function Pack.run(ctx, dal, st)
 			idle = 0
 			local at = P.toPlane(m.Y)
 			local want = math.clamp((at - m):Dot(right) - grab, 0, OUT)
+			local before = slide
 			slide += (want - slide) * (1 - math.exp(-dt / 0.05))
 			bagAt(m + right * slide, 0.06 * math.min(slide / 0.3, 1))
 			tiltDal()
+			-- 끄는 빠르기만큼 바스락
+			Sfx.loop("bagRustle", math.clamp(math.abs(slide - before) / math.max(dt, 1e-3) * 0.25, 0, 0.8), 1)
 			if not P.down then
 				grab = nil
 				if slide < OUT * 0.35 then
@@ -332,6 +337,7 @@ function Pack.run(ctx, dal, st)
 				end
 			end
 		else
+			Sfx.loop("bagRustle", 0, 1)
 			idle += dt
 			if idle > IDLE_T then
 				if not flyTo(m + right * slide, 0, 0, 0.5) then
@@ -341,6 +347,7 @@ function Pack.run(ctx, dal, st)
 			end
 		end
 	end
+	Sfx.stop("bagRustle")
 	ui:setWorldTip(nil)
 	bagAt(m, 0)
 	placeDal(R1)
@@ -352,6 +359,7 @@ function Pack.run(ctx, dal, st)
 		local down = pivot:VectorToWorldSpace(Vector3.new(0, 0, 1))
 		down = Vector3.new(down.X, 0, down.Z).Unit
 		local R2 = CFrame.lookAt(m, m + down)
+		Sfx.play("bagYank", 0.35, 1.4)
 		local tt = 0
 		while tt < 0.5 do
 			local dt = ctx.frame()
@@ -457,11 +465,15 @@ function Pack.run(ctx, dal, st)
 				dragStart = P.pos
 				dragLen, lastPos = 0, P.pos
 			end
-			dragLen += (P.pos - lastPos).Magnitude
+			local moved = (P.pos - lastPos).Magnitude
+			dragLen += moved
 			lastPos = P.pos
+			-- 돌리는(끄는) 빠르기만큼 비닐이 바스락
+			Sfx.loop("bagRustle", math.clamp(moved / math.max(dt, 1e-3) / 900, 0, 0.8), 1.15)
 			local d = dragLen
 			target = (done + math.min(d / DRAG_PX, 1) * 0.9) * 0.5
 		elseif dragStart then
+			Sfx.loop("bagRustle", 0, 1)
 			local d = dragLen
 			dragStart = nil
 			if d >= DRAG_PX * 0.8 then
@@ -486,6 +498,8 @@ function Pack.run(ctx, dal, st)
 		drawTie(gNow)
 	end
 	-- 마저 꽉
+	Sfx.stop("bagRustle")
+	Sfx.play("bagYank", 0.4, 1.6)
 	while gNow < 0.995 do
 		local dt = ctx.frame()
 		if not dt then

@@ -108,6 +108,9 @@ C.Sounds = {
 	foamBubble = "rbxassetid://73232090200005", -- 소다 넣고 부풀 때 보글보글 (반복)
 	sodaDrop = "rbxassetid://109359226723492", -- 소다 털어 넣을 때 "퐁"
 	metalClink = "rbxassetid://9125781406", -- 모양틀 내려놓는 "땡"
+	-- 비닐 바스락 (2026-11-20 "비닐 씌우고 빵끈 묶을 때 바스락", Creator Store 무료 Pro Sound Effects)
+	bagRustle = "rbxassetid://9125745458", -- 비닐 바스락바스락 (반복, 끄는·돌리는 빠르기 = 크기)
+	bagYank = "rbxassetid://9117414729", -- 비닐 한 장 휙 꺼내는 소리
 	-- 앞쪽 무음 (AudioAnalyzer로 잼). 반복 소리도 이 구간부터 되풀이돼서 끊김이 없음
 	sugarPourStart = 0.08,
 	crackStart = 0.16,
