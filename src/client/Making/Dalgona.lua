@@ -22,6 +22,7 @@ local Dalgona = {}
 Dalgona.__index = Dalgona
 
 local UP = CFrame.Angles(0, 0, math.rad(90))
+local PORE_HOLD, PORE_FADE = 3, 6 -- 기포: 붓기 시작 뒤 3초는 또렷, 그다음 6초에 걸쳐 매끈해짐
 
 -- 3D 반죽은 정점 색을 TOP_DIM만큼 낮춰 두고 밝은 반점만 1로 올림 → 부품 색은 그만큼 밝게 칠해 원래 색이 되게
 local function batterTint(c)
@@ -101,6 +102,26 @@ function Dalgona.new(station, center, color, volume, ellipse)
 	if self.batter then
 		self.swirlAmp = 1 -- 붓는 동안 소용돌이 결이 솟아 있음 (다 부으면 addSwirl로 낮아짐)
 		Toon.outline(self.batter.part) -- 다른 도구처럼 만화 외곽선
+		-- 막 부은 반죽은 기포 구멍·반점이 또렷하고, 몇 초에 걸쳐 매끈해짐 (2026-11-20)
+		local t0 = os.clock()
+		local lastT = 0
+		local poreConn
+		poreConn = RunService.RenderStepped:Connect(function()
+			if not (self.batter and self.batter.part and self.batter.part.Parent) then
+				poreConn:Disconnect()
+				return
+			end
+			local now = os.clock()
+			if now - lastT < 0.1 then
+				return
+			end
+			lastT = now
+			local k = 1 - math.clamp((now - t0 - PORE_HOLD) / PORE_FADE, 0, 1)
+			self.batter:setPores(k * k)
+			if k <= 0 then
+				poreConn:Disconnect()
+			end
+		end)
 		for _, p in ipairs({ self.body, self.rim, self.rim2, self.dome }) do
 			p.Transparency = 1
 		end
@@ -383,7 +404,8 @@ function Dalgona:setThickness(h)
 		local flat = math.clamp((h0 * 0.95 - h) / (h0 * 0.95 - 0.1), 0, 1)
 		self.batter:setShape(flat, self.swirlAmp or 0)
 		-- 두꺼울 때는 보이는 높이를 낮춰 퍼진 웅덩이처럼 (부피 계산·누름판 닿는 높이는 그대로)
-		self.batter:place(c, d * k, d / k, h * 0.75 * (1 - 0.3 * (1 - flat)), self.yaw or 0)
+		-- 누를수록 보이는 두께를 조금 키움: 납작해 보이지 않게 (2026-11-20). 부피·판정 높이는 그대로
+		self.batter:place(c, d * k, d / k, h * 0.75 * (1 - 0.3 * (1 - flat)) * (1 + 0.7 * flat), self.yaw or 0)
 		-- 금 선은 반죽 표면을 따라 (금 간 뒤 더 누르면 같이 내려감)
 		for _, ck in ipairs(self.cracks or {}) do
 			local ya, yb = self.batter:surfaceY(ck.a), self.batter:surfaceY(ck.b)

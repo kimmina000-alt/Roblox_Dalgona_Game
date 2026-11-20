@@ -99,6 +99,7 @@ local function build(parent, color, seed)
 	em:AddTriangle(p1, p2, p1)
 	em:AddTriangle(p3, p4, p3)
 	self.flat, self.swirl, self.stampK, self.turn = 0, 0, 0, 0
+	self.poreAmt = 1
 	self.outline = nil -- 방울로 만든 모양: 각도 j마다 가장자리 반지름 (평균 반지름 1 기준), 없으면 원
 	self.bumps = nil -- 막 떨어진 방울 봉긋함 { {x, z, r, a}, ... } (메시 좌표)
 	self.stamp = nil
@@ -149,14 +150,16 @@ function Batter:rebuild()
 	local em = self.em
 	local flat = self.flat
 	-- 막 부은 반죽도 빵처럼 봉긋하지 않고 낮게 퍼진 웅덩이 (영상 9번: 윗면이 넓고 가장자리만 둥글게 내려감)
-	local n = lerp(3.2, 10.0, flat)
-	local p = lerp(0.45, 0.3, flat)
+	-- 누른 뒤에도 가장자리가 둥글게 내려가는 도톰한 원판 (2026-11-20 "결과물 너무 납작해 보임")
+	local n = lerp(3.2, 6.5, flat)
+	local p = lerp(0.45, 0.36, flat)
 	local swirl = self.swirl
 	local ph = self.ph
 	local st = self.stamp
 	local k = self.stampK
 	local bumps = self.bumps
-	local tex = math.clamp((flat - 0.55) / 0.4, 0, 1) -- 질감 세기
+	-- 기포 세기 (2026-11-20: 막 부었을 때만 또렷하고 시간이 지나며 매끈해짐 → Dalgona가 setPores로 낮춤)
+	local tex = self.poreAmt or 0
 	local edges = {}
 	for j = 1, SEG do
 		edges[j] = self:edgeR(j)
@@ -241,6 +244,16 @@ function Batter:setDrops(outline, bumps)
 	self:rebuild()
 end
 Batter.SEG = SEG
+
+-- 기포 구멍·반점 세기 (1 = 막 부음, 0 = 매끈)
+function Batter:setPores(k)
+	k = math.clamp(k, 0, 1)
+	if math.abs(k - (self.poreAmt or 0)) < 0.03 and not (k == 0 and (self.poreAmt or 0) > 0) then
+		return
+	end
+	self.poreAmt = k
+	self:rebuild()
+end
 
 -- 붓는 동안 소용돌이 결이 감기며 돎 (각도, 라디안)
 function Batter:setTurn(a)
