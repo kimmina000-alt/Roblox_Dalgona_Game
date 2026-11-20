@@ -149,7 +149,7 @@ end
 -- 사용자가 만든 화로·연탄 메시(레퍼런스/dalgona_wharo.glb → ServerStorage.Assets)
 -- glb 분석: 연탄과 연탄2(다 탄 연탄)는 바닥 높이가 같고, 연탄 바닥은 화로 바닥에서 화로 높이의 8.3% 위.
 local COAL_BOTTOM = 0.185 / 2.2193
-local COAL_BLACK = Color3.fromRGB(30, 28, 28)
+local COAL_BLACK = Color3.fromRGB(98, 92, 88) -- 타는 연탄 윗면: 재가 앉은 회색 (2026-11-20 사진 참고, 예전엔 검정)
 local COAL_ASH = Color3.fromRGB(196, 192, 186) -- 잿더미 같은 밝은 회색
 
 local function brazierTemplates()
@@ -164,7 +164,11 @@ local function brazierTemplates()
 	return nil
 end
 
-local EMBER_T = 0.6 -- 연탄 윗면 불씨 원판 투명도 (클수록 붉은빛이 옅음)
+-- 불씨 원판 (2026-11-20 사진 "이런 느낌": 회색 윗면에 구멍만 주황색으로 빛남).
+-- 원판을 연탄 윗면보다 살짝 아래, 구멍 바닥보다는 위에 두면 메시 속에 묻혀 구멍 안에서만 보임.
+-- 높이 = 연탄 가운데 + 반높이 × 비율 (연탄 메시: 윗면 0.945 · 구멍 바닥 0.81, 다 탄 연탄 메시: 윗면 0.89 · 구멍 바닥 0.73)
+local EMBER_T = 0.05 -- 불씨 투명도 (새 연탄)
+local EMBER_IN, EMBER_IN_BURNT = 0.877, 0.8
 
 local function addFire(parent, offset, direction)
 	local fire = Instance.new("Attachment")
@@ -175,7 +179,7 @@ local function addFire(parent, offset, direction)
 	pe.Name = "Flame"
 	pe.Color = ColorSequence.new(Color3.fromRGB(255, 200, 80), Color3.fromRGB(255, 70, 20))
 	pe.LightEmission = 1
-	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.05) })
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.22), NumberSequenceKeypoint.new(1, 0.04) })
 	pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) })
 	pe.Lifetime = NumberRange.new(0.25, 0.45)
 	pe.Rate = 30
@@ -222,8 +226,8 @@ local function buildBrazierMesh(ws, bT, cT, c2T)
 	burnt.Color = COAL_ASH
 	burnt.Transparency = 1
 	burnt.CFrame = CFrame.new(coal.Position.X, bottomY + burnt.Size.Y / 2, coal.Position.Z)
-	-- 연탄 구멍 사이로만 보이는 불씨 (2026-11-20 "붉은 불 조금만 줄여": 투명도 0.35 → EMBER_T) (윗면 바로 아래에 깔린 빛나는 원판)
-	local ember = vcyl(m, "Ember", coal.Size.X * 0.9, 0.02, coal.Position + Vector3.new(0, coal.Size.Y / 2 - 0.04, 0), Color3.fromRGB(255, 110, 30), Enum.Material.Neon, { Transparency = EMBER_T })
+	-- 연탄 구멍 안에서만 보이는 불씨
+	local ember = vcyl(m, "Ember", coal.Size.X * 0.9, 0.02, coal.Position + Vector3.new(0, coal.Size.Y / 2 * EMBER_IN, 0), Color3.fromRGB(255, 128, 36), Enum.Material.Neon, { Transparency = EMBER_T })
 	ember.CastShadow = false
 	addFire(coal, Vector3.new(0, coal.Size.Y / 2 + 0.05, 0), Enum.NormalId.Top)
 	buildGrill(m, cx)
@@ -271,7 +275,8 @@ function Builder.setCoal(ws, left)
 	end
 	local ember = b:FindFirstChild("Ember")
 	if ember then
-		ember.CFrame = CFrame.new(coal.Position.X, top - 0.04, coal.Position.Z) * CFrame.Angles(0, 0, math.rad(90))
+		local y = useBurnt and burnt.Position.Y + small / 2 * EMBER_IN_BURNT or coal.Position.Y + h / 2 * EMBER_IN
+		ember.CFrame = CFrame.new(coal.Position.X, y, coal.Position.Z) * CFrame.Angles(0, 0, math.rad(90))
 		ember.Transparency = EMBER_T + (0.85 - EMBER_T) * (1 - left)
 	end
 end
