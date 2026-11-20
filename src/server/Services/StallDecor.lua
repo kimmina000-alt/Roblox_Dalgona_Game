@@ -362,8 +362,8 @@ local function sugarBed(f, ws)
 	local y = plate and (plate.Position.Y + plate.Size.Y / 2) or (c.Y - 0.01)
 	local rng = Random.new(17)
 	local WHITE = Color3.fromRGB(252, 252, 250)
-	-- 얇게 뭉친 가루 덩이 (겹쳐서 울퉁불퉁한 구름 모양)
-	for _ = 1, 22 do
+	-- 얇게 뭉친 가루 덩이 → 반투명한 원으로만 보여서 뺌 (2026-11-20 "반투명한 원들은 삭제하고 설탕 결정들만"). 알갱이만 남김
+	for _ = 1, 0 do
 		local a = rng:NextNumber(0, math.pi * 2)
 		local r = R * math.sqrt(rng:NextNumber()) * 0.72
 		local d = rng:NextNumber(0.45, 1.0)
@@ -385,7 +385,7 @@ local function sugarDust(f, ws)
 		return
 	end
 	local topY = plate.Position.Y + plate.Size.Y / 2
-	deco(f, "SugarDust", Vector3.new(plate.Size.X * 0.96, 0.004, plate.Size.Z * 0.96), CFrame.new(plate.Position.X, topY + 0.002, plate.Position.Z), Color3.fromRGB(250, 250, 248), Enum.Material.Sand, { Transparency = 0.8 })
+	-- 판 전체에 깔던 반투명 설탕 막도 뺌 (2026-11-20 설탕 결정만)
 	-- 가장자리에 조금 몰린 설탕 → 반투명한 동그라미로만 보여서 뺌 (2026-11-20)
 	local rng = Random.new(3)
 	for _ = 1, 0 do

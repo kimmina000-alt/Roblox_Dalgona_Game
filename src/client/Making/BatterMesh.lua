@@ -16,6 +16,9 @@ local RINGS = 54 -- 가운데 → 가장자리 고리
 -- 정점 색 (MeshPart.Color에 곱해짐, 2026-11-20): 옆면은 두께만큼 그림자진 진한 갈색, 찍힌 홈은 조금 진하게
 local SIDE_SHADE = Vector3.new(0.6, 0.45, 0.32)
 local GROOVE_SHADE = Vector3.new(0.72, 0.58, 0.46)
+-- 금 (2026-11-20 "금 간 거 안 보임, 진한 갈색 선 몇 개"): 위에 얹은 부품은 반죽 표면에 묻혀 안 보여서 메시 정점 색으로 칠함
+local CRACK_SHADE = Vector3.new(0.3, 0.22, 0.16)
+local CRACK_W = 0.028 -- 금 선 반폭 (stud)
 -- 누른 달고나 모양 (반지름 비율): 가운데 높이 · 턱이 솟기 시작 · 턱 꼭대기 · 바깥으로 둥글게 내려가기 시작
 local RIM_CENTER, RIM_IN, RIM_TOP, RIM_OUT = 0.6, 0.78, 0.88, 0.93
 local TOP_DIM = 0.9 -- 반점이 밝아 보이게 기본 정점 색을 이만큼 낮춤 (Dalgona가 부품 색을 1/TOP_DIM배로)
@@ -227,6 +230,10 @@ function Batter:rebuild()
 					gshade = g * math.min(k, 1.2) * 0.85
 				end
 				local idx2 = (i - 1) * SEG + j
+				local crk = self.crackK and self.crackK[idx2] or 0
+				if crk > 0 then
+					y -= crk * 0.06 * y -- 갈라진 틈은 살짝 파임
+				end
 				local pore = self.pore[idx2] * tex
 				if pore > 0 then
 					y -= pore * 0.16 * y
@@ -240,6 +247,10 @@ function Batter:rebuild()
 			-- 기본 윗면은 살짝 어둡게(0.9) 두고 반점만 원래 밝기(1) → 밝은 결정 반점 (MeshPart 색은 1/0.9배 밝게 칠함)
 			local speck = i < RINGS and self.speck[(i - 1) * SEG + j] * tex or 0
 			local m = Vector3.one:Lerp(SIDE_SHADE, math.clamp(shade, 0, 1)):Lerp(GROOVE_SHADE, math.clamp(gshade, 0, 1)) * (TOP_DIM + (1 - TOP_DIM) * speck)
+			local ck = self.crackK and i < RINGS and self.crackK[(i - 1) * SEG + j] or 0
+			if ck > 0 then
+				m = m:Lerp(CRACK_SHADE, ck)
+			end
 			em:SetColor(cring[j], Color3.new(m.X, m.Y, m.Z))
 		end
 	end
@@ -302,6 +313,47 @@ function Batter:surfaceY(world)
 	local i = math.clamp(math.floor(RINGS * (1 - (1 - t) ^ (2 / 3)) + 0.5), 1, RINGS)
 	local y = self.em:GetPosition(self.rings[i][j]).Y
 	return part.Position.Y - size.Y / 2 + y * size.Y
+end
+
+-- 금 칠하기: segs = { {a = Vector3, b = Vector3}, ... } (세계 좌표 선분). 지금 모양 기준으로 정점마다 선까지 거리를 재서
+-- 가까울수록 진한 갈색 (반폭 CRACK_W). 여러 번 부르면 쌓임
+function Batter:addCracks(segs)
+	local part = self.part
+	local size = part.Size
+	local sx, sz = size.X / (2 * BOUND), size.Z / (2 * BOUND)
+	local L = {}
+	for _, sg in ipairs(segs) do
+		local a = part.CFrame:PointToObjectSpace(sg.a)
+		local b = part.CFrame:PointToObjectSpace(sg.b)
+		-- 세계 거리로 재려고 메시 좌표 대신 크기를 곱한 평면 좌표 사용
+		table.insert(L, { a.X, a.Z, b.X, b.Z })
+	end
+	self.crackK = self.crackK or {}
+	local W = CRACK_W
+	for i = 1, RINGS - 1 do
+		local t = self.ringT[i]
+		for j = 1, SEG do
+			local r = t * self:edgeR(j)
+			local px, pz = self.cos[j] * r * sx, self.sin[j] * r * sz
+			local best = math.huge
+			for _, s in ipairs(L) do
+				local dx, dz = s[3] - s[1], s[4] - s[2]
+				local ll = dx * dx + dz * dz
+				local u = ll > 1e-9 and math.clamp(((px - s[1]) * dx + (pz - s[2]) * dz) / ll, 0, 1) or 0
+				local ex, ez = s[1] + dx * u - px, s[2] + dz * u - pz
+				local d2 = ex * ex + ez * ez
+				if d2 < best then
+					best = d2
+				end
+			end
+			local k = 1 - math.sqrt(best) / W
+			if k > 0 then
+				local idx = (i - 1) * SEG + j
+				self.crackK[idx] = math.max(self.crackK[idx] or 0, math.min(1, k * 1.6))
+			end
+		end
+	end
+	self:rebuild()
 end
 
 -- 정점 하나의 (메시 좌표) 위치 → 세계 좌표 (place로 정한 크기·자세 기준, 높이 무시)

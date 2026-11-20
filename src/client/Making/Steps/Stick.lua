@@ -10,6 +10,7 @@ local Stick = {}
 local LEN, WIDTH, THICK = 1.7, 0.17, 0.035
 local WOOD = Color3.fromRGB(232, 204, 156)
 local GRAB_PX = 130
+local HEM_TOP = 0.065 -- 철판 윗면에서 접은 테두리 꼭대기까지 (StallDecor galvanizedBoard)
 
 local function build(S)
 	local m = Instance.new("Model")
@@ -121,6 +122,29 @@ function Stick.follow(st)
 	local mid = c + s.dir * (innerDist + LEN / 2)
 	-- 철판 위에 납작하게 누움: 반죽 쪽은 반죽 속에 묻히고(반죽이 퍼질수록 더 덮임), 바깥쪽은 철판 위로 삐져나옴
 	local y = c.Y + THICK / 2 + 0.004
+	-- 철판 가장자리 접은 테두리(높이 약 0.06)에 막대가 묻혀 가려지지 않게 (2026-11-20 "막대기는 설탕판에 가려짐"):
+	-- 막대 바깥쪽이 테두리에 닿으면 반죽 속 끝을 축으로 살짝 들어 테두리 위로 걸침
+	local plate = dal.S and dal.S.Plate
+	local tilt = 0
+	if plate then
+		local d = s.dir
+		local hx, hz = plate.Size.X / 2, plate.Size.Z / 2
+		local ox, oz = c.X - plate.Position.X, c.Z - plate.Position.Z
+		local tx = math.abs(d.X) > 1e-3 and ((d.X > 0 and hx or -hx) - ox) / d.X or math.huge
+		local tz = math.abs(d.Z) > 1e-3 and ((d.Z > 0 and hz or -hz) - oz) / d.Z or math.huge
+		local tEdge = math.min(tx, tz) - 0.07 -- 테두리 안쪽 면
+		if innerDist + LEN > tEdge and tEdge > innerDist + 0.2 then
+			tilt = math.atan2(HEM_TOP - THICK / 2 - 0.004 + 0.008, tEdge - innerDist)
+		end
+	end
+	if tilt > 0 then
+		local up = Vector3.yAxis
+		local ax = (s.dir * math.cos(tilt) + up * math.sin(tilt)).Unit
+		local ay = (up * math.cos(tilt) - s.dir * math.sin(tilt)).Unit
+		local p0 = Vector3.new(c.X, y, c.Z) + s.dir * innerDist
+		st.stickPlace(CFrame.fromMatrix(p0 + ax * (LEN / 2), ax, ay))
+		return
+	end
 	local look = Vector3.new(s.dir.Z, 0, -s.dir.X)
 	st.stickPlace(CFrame.lookAt(Vector3.new(mid.X, y, mid.Z), Vector3.new(mid.X, y, mid.Z) + look))
 end

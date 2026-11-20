@@ -35,7 +35,7 @@ local function buildBag(parent, R, zNeck)
 		local zTop = R * 1.15
 		local zEnd = zNeck - 0.3
 		local zBody = -R * 0.72 -- 여기서부터 목 쪽으로 좁아짐
-		local yc = 0.05
+		local yc = 0.08 -- 달고나 두께 가운데쯤 (철판 윗면 = 0)
 		local verts = {}
 		for i = 1, NS do
 			verts[i] = {}
@@ -75,7 +75,7 @@ local function buildBag(parent, R, zNeck)
 					local capLen = R * 0.95 -- 위쪽은 반달처럼 둥글게 (네모난 어깨 없이)
 					local d = zTop - z
 					local f = d < capLen and math.sqrt(math.max(0, 1 - (1 - d / capLen) ^ 2)) or 1
-					local W, T = R * 1.12 * f, 0.17 * math.sqrt(f)
+					local W, T = R * 1.14 * f, 0.24 * math.sqrt(f)
 					if z < zBody then
 						local u = smooth((zBody - z) / (zBody - zNeck))
 						w = W + (wn - W) * u
@@ -95,7 +95,11 @@ local function buildBag(parent, R, zNeck)
 				for j = 1, NA do
 					local a = (j - 1) / NA * 2 * math.pi
 					local m = 1 + amp * math.sin(8 * a + i * 0.35) -- 오므린 곳의 비닐 주름
-					em:SetPosition(verts[i][j], Vector3.new(w * math.cos(a) * m, yc + t * math.sin(a) * m, z) - center)
+					-- 단면은 납작한 둥근 사각형(초타원): 가장자리까지 두께가 남아서 달고나 테두리가 비닐을 뚫고 나오지 않음 (2026-11-20)
+					local ca, sa = math.cos(a), math.sin(a)
+					ca = (ca < 0 and -1 or 1) * math.abs(ca) ^ 0.6
+					sa = (sa < 0 and -1 or 1) * math.abs(sa) ^ 0.6
+					em:SetPosition(verts[i][j], Vector3.new(w * ca * m, yc + t * sa * m, z) - center)
 				end
 			end
 		end
@@ -195,7 +199,12 @@ function Showcase.run(ctx, dal, st)
 	end
 	local neckZ = -(R * 1.2 + 0.18) -- 막대 쪽 (기준 틀 -Z)
 	local tieZ = neckZ - 0.22
-	local bag3 = buildBag(S.fx, R, neckZ)
+	-- 비닐 크기는 방울로 만든 실제 가장자리(가장 먼 곳) 기준 + 여유 (2026-11-20 "달고나가 비닐 뚫고 나옴")
+	local reach = 1
+	for _, v in ipairs(dal.dropOutline or {}) do
+		reach = math.max(reach, v)
+	end
+	local bag3 = buildBag(S.fx, R * reach * 1.04, neckZ)
 	if bag3 then
 		tieZ = neckZ -- 빵끈은 오므린 목에 감김
 		bag.Size = Vector3.new(0.01, 0.01, 0.01)

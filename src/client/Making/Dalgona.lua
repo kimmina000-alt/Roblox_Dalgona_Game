@@ -581,9 +581,15 @@ function Dalgona:crackLines(count)
 		local y = bat:surfaceY(p)
 		return y and Vector3.new(p.X, y + 0.022, p.Z) or nil
 	end
+	local painted = {}
 	local function seg(a, b, w)
 		local d = b - a
 		if d.Magnitude < 1e-3 then
+			return
+		end
+		if bat then
+			-- 3D 반죽: 부품 대신 메시에 진한 갈색 선으로 칠함 (부품은 표면에 묻혀 안 보였음)
+			table.insert(painted, { a = a, b = b })
 			return
 		end
 		local part = S:fxPart(S.fx, {
@@ -660,6 +666,9 @@ function Dalgona:crackLines(count)
 			local inPt = p:Lerp(Vector3.new(c.X, c.Y, c.Z), rng:NextNumber(0.25, 0.55))
 			walk(inPt, (p - inPt).Unit, w, R * 2)
 		end
+	end
+	if bat and #painted > 0 then
+		bat:addCracks(painted)
 	end
 end
 
