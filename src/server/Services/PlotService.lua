@@ -168,6 +168,9 @@ end
 
 -- 바닥 높이(Y)로 저장된 속성: 작업대를 올리면 같이 올려야 함 (WorkstationBuilder·StallDecor가 씀)
 local Y_ATTRS = { "GrillTopY", "BottomY", "TopY" }
+-- 틀: 서버 시작 때 꾸며진 공용 작업대(DalgonaWorkstation)를 복제해 둠.
+-- WorkstationBuilder.build는 실행 중에 국자 광택 텍스처(SurfaceAppearance)를 못 써서 실패하므로 복제해 씀.
+local template = nil
 
 local function buildWorkstation(i, player)
 	local plot = plots[i]
@@ -176,12 +179,22 @@ local function buildWorkstation(i, player)
 		old:Destroy()
 	end
 	local ok, ws = pcall(function()
-		-- 원래 자리(공용 작업대와 같은 좌표)에 만들고 옮김. 이름이 DalgonaWorkstation이라 workspace 바로 밑에는 두지 않음
-		local w = WorkstationBuilder.build(plot.model)
-		w.Name = "Workstation"
-		w:SetAttribute("OwnerUserId", player.UserId)
-		w:SetAttribute("PlotIndex", i)
-		StallDecor.dress(w)
+		-- 원래 자리(공용 작업대와 같은 좌표)의 복제를 옮김. 틀이 없으면(공용 작업대가 없을 때) 새로 만듦
+		local w
+		if template then
+			w = template:Clone()
+			w.Name = "Workstation"
+			w:SetAttribute("OwnerUserId", player.UserId)
+			w:SetAttribute("PlotIndex", i)
+			w.Parent = plot.model
+			StallDecor.watchOwners(w) -- 식탁보: 이 가게 주인 것만
+		else
+			w = WorkstationBuilder.build(plot.model)
+			w.Name = "Workstation"
+			w:SetAttribute("OwnerUserId", player.UserId)
+			w:SetAttribute("PlotIndex", i)
+			StallDecor.dress(w)
+		end
 		return w
 	end)
 	if not ok then
@@ -310,6 +323,16 @@ end
 
 function PlotService.init(opts)
 	notify = opts and opts.notify
+	local shared = workspace:FindFirstChild("DalgonaWorkstation")
+	if shared and P.buildWorkstation then
+		template = shared:Clone()
+		for _, c in ipairs(template:GetChildren()) do
+			if c.Name:sub(1, 11) == "HelperLadle" then
+				c:Destroy() -- 알바생 국자는 옮긴 뒤 LadleCount로 다시 만듦
+			end
+		end
+		template:SetAttribute("LadleCount", 1)
+	end
 	local folder = workspace:FindFirstChild("ShopPlots")
 	if folder then
 		folder:Destroy() -- 서버가 새로 만든다 (Studio에 남은 것 정리)

@@ -197,7 +197,7 @@ G.Plots = {
 	spacing = 40,
 	-- 부지 안 자리 (부지 기준 로컬 좌표, -Z = 앞/골목 쪽)
 	handStation = { pos = Vector3.new(0, 0, 2), size = Vector3.new(22, 0.2, 7) }, -- 손 작업대: 꾸미기 포함 가운데 (가게마다 작업대, 17b)
-	machineSlot = { pos = Vector3.new(11, 0, 11), size = Vector3.new(9, 0.2, 9) }, -- 기계 1자리 (D10), 작업대 뒤
+	machineSlot = { pos = Vector3.new(11, 0, 13), size = Vector3.new(9, 0.2, 9) }, -- 기계 1자리 (D10), 작업대·알바생 뒤
 	buildWorkstation = true, -- 부지를 배정하면 손 작업대를 만듦 (2026-11-21)
 	minimeBehind = 1.8, -- 미니미 알바생: 작업대 뒤쪽(테이블 끝에서) 거리
 	minimeGap = 2.2, -- 미니미끼리 간격 (화로 가운데 기준)
