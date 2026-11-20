@@ -130,8 +130,8 @@ function Stamp.run(ctx)
 	local fingerV = 0
 
 	ui:say(shapeName .. " 틀을 끌어 원판 가운데에 놓아요", "가운데에, 반듯하게")
-	-- 안 찍고 끝낼 수도 있음 (2026-11-20): 모양 점수 0점
-	local skip = ui.setSkip and ui:setSkip(true, "모양 안 찍고 끝내기")
+	-- 안 찍고 바로 포장할 수도 있음 (2026-11-20 "모양 안 찍고 끝내기 말고 포장하기 버튼으로"): 모양 점수 0점
+	local skip = ui.setSkip and ui:setSkip(true, "포장하기")
 
 	while true do
 		local dt = ctx.frame()
@@ -146,9 +146,10 @@ function Stamp.run(ctx)
 			end
 			cutter:PivotTo(S.rest.Cutter)
 			rec.skipped = 1
+			rec.packNow = true -- 결과 전에 포장할지 묻지 않고 바로 포장 (MakingClient)
 			rec.dist, rec.angle, rec.hold = 10, 0, 0
 			ctx.live("stamp", 0)
-			ui:say("모양을 안 찍었어요", "모양 점수는 0점이에요")
+			ui:say("모양 없이 포장해요", "모양 점수는 0점이에요")
 			local t = 0
 			while t < 0.8 do
 				local dt2 = ctx.frame()
