@@ -943,6 +943,76 @@ function Ui:showResult(res, shape, handlers)
 	}
 end
 
+-- 고르기 창 (2026-11-20 "결과에 따라 포장할지 말지 플레이어가 선택"): 제목 + 설명 + 버튼 두 개.
+-- 돌려준 표의 choice가 1(첫 버튼) 또는 2가 되면 고른 것. 고르면 창이 닫힘
+function Ui:ask(title, sub, first, second)
+	if not self.askPop then
+		local pop = new("Frame", {
+			Name = "Ask",
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.new(0.5, 0, 1, -24),
+			Size = UDim2.fromOffset(self.touch and 400 or 480, 132 + self.btn),
+			BackgroundColor3 = PAPER,
+			Visible = false,
+			ZIndex = 10,
+			Parent = self.root,
+		}, { corner(22) })
+		self.askTitle = label({ Text = "", TextSize = 24, Position = UDim2.fromOffset(0, 16), Size = UDim2.new(1, 0, 0, 30), ZIndex = 11, Parent = pop })
+		self.askSub = label({ Text = "", TextSize = 16, Font = FONT_REG, TextColor3 = Color3.fromRGB(110, 100, 90), Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 0, 40), TextWrapped = true, ZIndex = 11, Parent = pop })
+		local row = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -18), Size = UDim2.new(1, -36, 0, self.btn), ZIndex = 11, Parent = pop }, {
+			new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }),
+		})
+		local function btn(primary, order, name)
+			return new("TextButton", {
+				Name = name,
+				Text = "",
+				TextSize = 20,
+				Font = FONT,
+				TextColor3 = primary and Color3.new(1, 1, 1) or INK,
+				BackgroundColor3 = primary and INK or Color3.fromRGB(232, 226, 216),
+				Size = UDim2.new(0.5, -6, 1, 0),
+				LayoutOrder = order,
+				ZIndex = 12,
+				Parent = row,
+			}, { corner(18) })
+		end
+		self.askA = btn(true, 1, "First")
+		self.askB = btn(false, 2, "Second")
+		self.askPop = pop
+	end
+	if self.askConns then
+		for _, c in ipairs(self.askConns) do
+			c:Disconnect()
+		end
+	end
+	local state = { choice = nil }
+	self.askTitle.Text = title
+	self.askSub.Text = sub or ""
+	self.askA.Text = first
+	self.askB.Text = second
+	self.askPop.Visible = true
+	local function pick(i)
+		if state.choice then
+			return
+		end
+		state.choice = i
+		self.askPop.Visible = false
+		Sfx.play("pop", 0.6, i == 1 and 1.1 or 0.9)
+	end
+	self.askConns = {
+		self.askA.Activated:Connect(function()
+			pick(1)
+		end),
+		self.askB.Activated:Connect(function()
+			pick(2)
+		end),
+	}
+	function state.close()
+		self.askPop.Visible = false
+	end
+	return state
+end
+
 function Ui:hideResult()
 	self.result.Visible = false
 	self.topRow.Visible = true

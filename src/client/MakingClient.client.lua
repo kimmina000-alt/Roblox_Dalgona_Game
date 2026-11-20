@@ -22,6 +22,7 @@ local ChopstickPicker = require(Making:WaitForChild("ChopstickCup")) -- 2026-11-
 local CutterPicker = require(Making:WaitForChild("CutterPicker"))
 local Sfx = require(Making:WaitForChild("Sfx"))
 local Showcase = require(Making:WaitForChild("Showcase"))
+local Pack = require(Making:WaitForChild("Pack"))
 local StepsFolder = Making:WaitForChild("Steps")
 
 local STEP_MODULES = {}
@@ -252,9 +253,24 @@ local function runSession()
 		CameraRig.go("melt")
 	end
 	result.details = Scoring.explain(ctx.records)
-	-- 다 만든 달고나를 화면 가운데로 크게 → 포장지 씌우고 빵끈 묶기 → 완성 창 (2026-11-20)
+	-- 결과를 보고 포장할지 고름 (2026-11-20) → 포장하면 테이블 오른쪽 포장 공간에서 비닐·빵끈 →
+	-- 다 만든 달고나(포장했으면 포장째)를 화면 정중앙에 크게 → 완성 창
 	if dal and not result.burnt then
-		Showcase.run(ctx, dal, ctx.state)
+		local ask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "포장할까요? 비닐에 넣고 빵끈으로 묶어요", "포장하기", "그냥 두기")
+		while not ask.choice do
+			if not ctx.frame() then
+				ask.close()
+				return
+			end
+		end
+		local extras = nil
+		if ask.choice == 1 then
+			extras = Pack.run(ctx, dal, ctx.state)
+			if ctx.aborted or not extras then
+				return
+			end
+		end
+		Showcase.run(ctx, dal, ctx.state, extras)
 		if ctx.aborted then
 			return
 		end

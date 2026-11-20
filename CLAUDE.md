@@ -9,8 +9,8 @@
 | 폴더 | Studio 위치 | 내용 |
 |---|---|---|
 | `src/shared` | ReplicatedStorage.Shared | `DalgonaConfig`(수치), `Scoring`(Q 공식, 서버·클라 공용), `CutterShapes`(도안 외곽선, 자동 생성), `ShapeCatalog`(도안 목록·가격), `CutterRig`(작업대 틀에 도안 끼우기) |
-| `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수), `Services/WorkstationBuilder`(작업대를 Part로 생성), `Services/FactoryBuilder`(Lv5 공장 배치·색칠), `Services/StallDecor`(깅엄 식탁보·러그·색감 보정, 1단계 꾸미기: 은박지·설탕 가루·틀 쟁반·막대 통·포장 달고나 진열대) |
-| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker, Toon=도구 만화 외곽선, ChopstickCup=젓가락 통, BatterMesh=EditableMesh 반죽, Showcase=완성 달고나 크게 보여 주기 + 직접 포장(끌어서 비닐 씌우기·빙글빙글 빵끈 묶기, 6초 손 안 대면 자동), HelperLadles=화로 위 알바생 국자 움직임, FoamMesh=소다 많이 넣었을 때 국자 넘쳐 흘러내리는 거품 3D), `Making/Steps/`(Stick=막대 꽂기 포함)(단계마다 모듈 1개) |
+| `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수), `Services/WorkstationBuilder`(작업대를 Part로 생성), `Services/FactoryBuilder`(Lv5 공장 배치·색칠), `Services/StallDecor`(깅엄 식탁보·러그·색감 보정, 1단계 꾸미기: 은박지·설탕 결정·틀 쟁반·막대 통·포장 달고나 진열대, 테이블 오른쪽 +5 포장 공간 PackArea: 매트·비닐 통·빵끈 통) |
+| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker, Toon=도구 만화 외곽선, ChopstickCup=젓가락 통, BatterMesh=EditableMesh 반죽, Showcase=완성 달고나(포장했으면 포장째) 화면 정중앙에 띄워 보여 주기, Pack=모양 찍기 뒤 포장할지 고르면 테이블 오른쪽 포장 공간에서 네모 비닐 씌우기·빵끈 집어 두 번 끌어 묶기, HelperLadles=화로 위 알바생 국자 움직임, FoamMesh=소다 많이 넣었을 때 국자 넘쳐 흘러내리는 거품 3D), `Making/Steps/`(Stick=막대 꽂기 포함)(단계마다 모듈 1개) |
 
 미니게임 단계는 모듈 하나씩 (Luau 로컬 변수 200개 제한).
 
@@ -25,7 +25,7 @@
 - `ServerStorage.Assets.PresserMesh`: 누름판 (`dalgona_nulumpan.glb`), 금속 + 국자와 같은 광택 텍스처.
 - `ReplicatedStorage.Assets.Chopsticks`: 나무젓가락·포장지 7조각 (`dalgona_joggalack.glb`). 클라이언트도 써야 해서 ReplicatedStorage. 조각마다 속성 `Offset`(짝 안에서 상대 위치). 포장지 = 흰 종이, 젓가락 = 연한 나무. 제작 시작 때 `Making/ChopstickPicker`가 고르기 연출을 하고, 고른 한 짝(`Chosen`)으로 젓는다.
 - `ServerStorage.Assets.Factory`: Lv5 달고나 공장 (Claude가 `tools/blender/factory.py`로 만든 `레퍼런스/factory/dalgona_factory.glb`, 부품 45개, 텍스처 포함). `FactoryBuilder.place`가 복제해 (0,0,30)에 놓고 재질·색·조명을 넣음. 가져온 방향: Blender (x,y,z) → 모델 (-x, z, y), 앞 = -Z.
-- `ServerStorage.Assets.MachineLine`: Lv4 연속 생산 설비(컨베이어 라인, `factory.py ... line` → `레퍼런스/line/dalgona_line.glb`, 부품 39개). `FactoryBuilder.placeLine`이 시험 자리 (20,0,-14)에 180° 돌려 놓음 (정식 "기계 자리"는 가게 배치 뒤). 공장과 라인 모두 파스텔 사탕 공장 그림체(2026-11-19).
+- `ServerStorage.Assets.MachineLine`: Lv4 연속 생산 설비(컨베이어 라인, `factory.py ... line` → `레퍼런스/line/dalgona_line.glb`, 부품 39개). `FactoryBuilder.placeLine`이 시험 자리 (27,0,-14)에 180° 돌려 놓음 (정식 "기계 자리"는 가게 배치 뒤). 공장과 라인 모두 파스텔 사탕 공장 그림체(2026-11-19).
 - `ServerStorage.Assets.StarCutterMesh`: 예전 별 틀 (지금은 안 씀, 도안 틀 전체로 바뀜).
 - 도안 틀 전체 (`ReplicatedStorage.Assets.Cutters` — 클라이언트 미리 보기·교체에 필요, 메시 이름 `Cutter_<id>`, 금속 광택 SteelShine 넣어 둠): `tools/blender/cutters.py` → `레퍼런스/dalgona_cutters.glb`(Cutter_<id>, 23개). 사용자 모형틀(3D.blend 모형틀1~8)이 있는 도안은 그 모델, 없는 도안은 `shapes.py`로 생성. 안쪽 선이 있는 도안(문어·호랑이·공룡·궁전·Master 4종)은 먼저 `python tools/blender/design_shapes.py`(OpenCV) → `shape_data.json`. `src/shared/CutterShapes.lua`는 자동 생성.
 - `ServerStorage.Assets.SugarBowlMesh / SugarHeapMesh / SodaCanMesh / SodaLabelMesh / SodaPowderMesh / WoodSpoonMesh / TinSpoonMesh`: Claude가 `tools/blender/props.py`로 만든 양은 설탕 그릇·소다 깡통·숟가락 (`레퍼런스/dalgona_props.glb`). 빌더가 붙이고 게임용 부품은 투명하게 남김. 스크립트를 다시 돌리면 `PROP_CENTER` 값도 같이 고친다.

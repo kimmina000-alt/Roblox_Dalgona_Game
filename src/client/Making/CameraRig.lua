@@ -94,8 +94,9 @@ local function step(dt)
 			to = to:Lerp(trackPose(p), 1 - math.exp(-10 * (dt or 1 / 60)))
 		end
 	end
-	local a = math.clamp((os.clock() - t0) / (current == "front" and frontEase or EASE), 0, 1)
-	local e = current == "front" and a * a * (3 - 2 * a) or 1 - (1 - a) * (1 - a) -- 정면 보기는 부드럽게, 나머지는 Quad ease-out
+	local glide = current == "front" or current == "point"
+	local a = math.clamp((os.clock() - t0) / (glide and frontEase or EASE), 0, 1)
+	local e = glide and a * a * (3 - 2 * a) or 1 - (1 - a) * (1 - a) -- 정면 보기·옮겨 가기는 부드럽게, 나머지는 Quad ease-out
 	cam.CFrame = from:Lerp(to, e)
 end
 
@@ -134,6 +135,28 @@ function CameraRig.goFront(focus, ease)
 	to = CFrame.lookAt(pos, look, Vector3.yAxis)
 	t0 = os.clock()
 	frontEase = ease or 0.9
+	if not bound then
+		bound = true
+		RunService:BindToRenderStep("DalgonaCamera", Enum.RenderPriority.Camera.Value + 1, step)
+	end
+end
+
+-- 테이블 위 아무 곳(세계 좌표 focus)을 항공샷으로 보러 부드럽게 옮겨 감 (2026-11-20 포장 공간)
+-- height = 테이블 윗면 위 카메라 높이, tilt = 플레이어 쪽으로 기울인 정도
+function CameraRig.goPoint(focus, height, tilt, ease)
+	tracker = nil
+	current = "point"
+	local cam = workspace.CurrentCamera
+	local h = height
+	local vp = cam.ViewportSize
+	if vp.X / math.max(vp.Y, 1) < 1.2 then
+		h *= 1.6
+	end
+	local pos = focus + Vector3.new(0, h, 0) + origin:VectorToWorldSpace(Vector3.new(0, 0, h * (tilt or TILT)))
+	from = cam.CFrame
+	to = CFrame.lookAt(pos, focus, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))
+	t0 = os.clock()
+	frontEase = ease or 0.7
 	if not bound then
 		bound = true
 		RunService:BindToRenderStep("DalgonaCamera", Enum.RenderPriority.Camera.Value + 1, step)

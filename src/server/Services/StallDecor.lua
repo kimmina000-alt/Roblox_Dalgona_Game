@@ -513,6 +513,64 @@ local function stage1(ws, top)
 	display(f, floorY, top.Position.X - top.Size.X / 2 - 2.4, top.Position.Z + 1.0)
 end
 
+-- 포장 공간 (2026-11-20 "모양 찍은 다음에 테이블 더 길게 해서 오른쪽에 비닐이랑 포장끈 통에 담아 놓고 포장하는 공간"):
+-- 테이블을 오른쪽으로 PACK_W만큼 늘리고, 거기에 크라프트지 포장 매트 + 네모 투명 비닐 통 + 금색 빵끈 통.
+-- 클라이언트 Making/Pack이 PackArea의 Mat · BagTop · TieCup을 찾아 씀
+local PACK_W = 5
+local function packArea(ws, top)
+	if ws:FindFirstChild("PackArea") then
+		return
+	end
+	local oldRight = top.Position.X + top.Size.X / 2
+	local mid = top.Position.X
+	for _, leg in ipairs(ws:GetChildren()) do
+		if leg.Name == "TableLeg" and leg.Position.X > mid then
+			leg.CFrame += Vector3.new(PACK_W, 0, 0)
+		end
+	end
+	top.Size += Vector3.new(PACK_W, 0, 0)
+	top.CFrame += Vector3.new(PACK_W / 2, 0, 0)
+	-- 테이블에 붙은 것(앉기 안내 등)은 제자리에 그대로
+	for _, att in ipairs(top:GetChildren()) do
+		if att:IsA("Attachment") then
+			att.Position -= Vector3.new(PACK_W / 2, 0, 0)
+		end
+	end
+	local f = Instance.new("Folder")
+	f.Name = "PackArea"
+	f.Parent = ws
+	local y = top.Position.Y + top.Size.Y / 2
+	local cx, cz = oldRight + PACK_W / 2, top.Position.Z
+	-- 포장 매트 (크라프트지)
+	deco(f, "Mat", Vector3.new(3.4, 0.02, 3.4), CFrame.new(cx - 0.2, y + 0.01, cz + 0.9), Color3.fromRGB(214, 182, 136), Enum.Material.Fabric)
+	-- 네모 투명 비닐 통 (투명 아크릴 상자 + 차곡차곡 쌓인 비닐)
+	local bx, bz = cx - 1.2, cz - 2.0
+	local BW, BL, BH = 1.9, 1.5, 0.45
+	local ACRYL = { Transparency = 0.7, Reflectance = 0.2 }
+	deco(f, "BagBox", Vector3.new(BW, 0.04, BL), CFrame.new(bx, y + 0.02, bz), Color3.fromRGB(235, 245, 255), Enum.Material.Glass, ACRYL)
+	for _, e in ipairs({ { 0, BL / 2, BW, 0.04 }, { 0, -BL / 2, BW, 0.04 }, { BW / 2, 0, 0.04, BL }, { -BW / 2, 0, 0.04, BL } }) do
+		deco(f, "BagBoxWall", Vector3.new(e[3], BH, e[4]), CFrame.new(bx + e[1], y + BH / 2, bz + e[2]), Color3.fromRGB(235, 245, 255), Enum.Material.Glass, ACRYL)
+	end
+	local rng = Random.new(21)
+	local topBag
+	for i = 1, 7 do
+		topBag = deco(f, i == 7 and "BagTop" or "BagSheet", Vector3.new(BW - 0.3, 0.012, BL - 0.25), CFrame.new(bx + rng:NextNumber(-0.04, 0.04), y + 0.05 + i * 0.03, bz + rng:NextNumber(-0.04, 0.04)) * CFrame.Angles(0, rng:NextNumber(-0.06, 0.06), 0), Color3.fromRGB(250, 252, 255), Enum.Material.SmoothPlastic, { Transparency = 0.45, Reflectance = 0.25 })
+	end
+	-- 금색 빵끈 통 (작은 양철 통에 끈이 꽂혀 있음)
+	local tx, tz = cx + 1.4, cz - 2.0
+	local tin = { Shape = Enum.PartType.Cylinder }
+	deco(f, "TieCup", Vector3.new(0.6, 0.7, 0.7), CFrame.new(tx, y + 0.3, tz) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(196, 72, 72), Enum.Material.Metal, tin)
+	deco(f, "TieCupRim", Vector3.new(0.05, 0.74, 0.74), CFrame.new(tx, y + 0.6, tz) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(200, 200, 196), Enum.Material.Metal, tin)
+	for _ = 1, 12 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = math.sqrt(rng:NextNumber()) * 0.2
+		local len = rng:NextNumber(0.7, 0.95)
+		local pos = Vector3.new(tx + math.cos(a) * r, y + 0.35 + len / 2, tz + math.sin(a) * r)
+		deco(f, "CupTie", Vector3.new(0.07, len, 0.018), CFrame.new(pos) * CFrame.Angles(math.sin(a) * 0.3, rng:NextNumber(0, 6), -math.cos(a) * 0.3), Color3.fromRGB(226, 176, 52), Enum.Material.Metal, { Reflectance = 0.1 })
+	end
+	return topBag
+end
+
 function Decor.dress(ws)
 	local top = ws:FindFirstChild("TableTop")
 	if not top then
@@ -534,6 +592,7 @@ function Decor.dress(ws)
 	if not ws:FindFirstChild("Rug") then
 		rug(ws, top)
 	end
+	packArea(ws, top) -- 다른 꾸미기가 원래 테이블 크기로 자리 잡은 뒤에 늘림
 	grade()
 	Decor.watchOwners(ws)
 end
