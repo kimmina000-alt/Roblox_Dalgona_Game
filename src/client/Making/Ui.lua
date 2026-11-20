@@ -116,10 +116,14 @@ function Ui.new(player, steps)
 		self.qualityBox.Position = UDim2.new(1, -20, 0, qy)
 		self.qualityBox.Visible = false -- 2026-11-20 "오른쪽 상단에 퍼센트 보여 주는 거 삭제"
 		-- 2026-11-20 사용자 사진: 온도 막대는 국자 왼쪽, 속도 막대는 국자 오른쪽 (녹이기 화면에서 국자가 가운데)
-		self.meter.AnchorPoint = Vector2.new(0.5, 0.5)
-		self.meter.Position = UDim2.fromScale(0.23, 0.45)
-		self.vgauge.AnchorPoint = Vector2.new(0.5, 0.5)
-		self.vgauge.Position = UDim2.fromScale(0.76, 0.45)
+		-- 위 끝을 안내 문구(검은 칸)와 같은 높이로 (2026-11-20 사진: 빨간 선까지 올림)
+		self.meter.AnchorPoint = Vector2.new(0.5, 0)
+		self.meter.Position = UDim2.new(0.23, 0, 0, qy)
+		self.vgauge.AnchorPoint = Vector2.new(0.5, 0)
+		self.vgauge.Position = UDim2.new(0.76, 0, 0, qy)
+		-- 국자 들기 화살표는 온도 막대 바로 왼쪽 (2026-11-20 "온도 옆에 붙이고 바 더 두껍게")
+		self.coach.AnchorPoint = Vector2.new(1, 0)
+		self.coach.Position = UDim2.new(0.23, -37, 0, qy)
 		self.heightBox.Position = UDim2.fromOffset(76, qy)
 		-- 안내 문구(검은 글씨 칸 + 아래 설명)는 위 단계 줄 바로 아래 (2026-11-20)
 		self.pill.AnchorPoint = Vector2.new(0.5, 0)
@@ -383,16 +387,17 @@ function Ui:_buildHeight()
 	-- 높이 막대를 없앤 뒤(2026-11-20)에는 화면 왼쪽(팔이 있는 곳)에서 손가락이 위로 끄는 모습
 	-- 2026-11-20: 화면 왼쪽 아래(폰에서 이동 버튼이 있던 자리)에 화살표가 아래에서 위로 올라가는 모습
 	-- 2026-11-20 (다시): 화살표는 국자 손잡이 자리에서 위로 (setCoach에 손잡이 화면 위치를 넘김)
-	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Position = UDim2.new(0, 24, 0.42, 0), Size = UDim2.fromOffset(260, 220), Visible = false, ZIndex = 6, Parent = self.root })
-	new("Frame", { Name = "Track", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0, 56, 0.08, 0), Size = UDim2.new(0, 14, 0.86, 0), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.55, ZIndex = 6, Parent = coach }, { corner(7) })
-	self.coachFinger = label({ Text = "▲", TextSize = 54, TextColor3 = Color3.fromRGB(255, 120, 160), TextStrokeColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 56, 0.92, 0), Size = UDim2.fromOffset(60, 60), ZIndex = 7, Parent = coach })
+	-- 2026-11-20 (세 번째): 온도 막대 바로 왼쪽에 붙은 두꺼운 세로 길 + 아래에서 위로 올라가는 화살표 (위치는 rescale)
+	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Size = UDim2.fromOffset(70, self.touch and 150 or 200), Visible = false, ZIndex = 6, Parent = self.root })
+	new("Frame", { Name = "Track", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.new(0, 30, 1, -8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, ZIndex = 6, Parent = coach }, { corner(15) })
+	self.coachFinger = label({ Text = "▲", TextSize = 50, TextColor3 = Color3.fromRGB(255, 120, 160), TextStrokeColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.88, 0), Size = UDim2.fromOffset(56, 56), ZIndex = 7, Parent = coach })
 	local bubble = label({
-		Text = "여기를 아래에서 위로 끌면\n국자가 올라가요!",
+		Text = "이 줄을 아래에서 위로 끌면\n국자가 올라가요!",
 		TextSize = 15,
 		TextColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.05,
 		BackgroundColor3 = Color3.fromRGB(40, 150, 60),
-		Position = UDim2.new(0, 90, 0, -6),
+		Position = UDim2.new(0, -10, 1, 8),
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -447,6 +452,49 @@ function Ui:_buildHeight()
 	self.arrow = arrow
 end
 
+-- 반죽 붓기 판 (2026-11-20 사용자 요청): 화면 오른쪽에 철판과 같은 비율의 반투명 어두운 네모. 이 위를 누르고 끌면
+-- 철판의 같은 자리(위 = 철판 안쪽, 오른쪽 = 철판 오른쪽)에 반죽이 떨어짐. 가운데 원 = 설탕 원, 분홍 점 = 떨어지는 자리
+function Ui:setPad(visible, u, v, active, ringFrac)
+	if not self.pad then
+		local pad = new("Frame", { Name = "PourPad", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -24, 0.56, 0), Size = UDim2.fromOffset(self.touch and 230 or 260, self.touch and 230 or 260), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.5, Visible = false, ZIndex = 5, Parent = self.root }, { corner(16) })
+		new("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.5, Thickness = 2, Parent = pad })
+		self.padRing = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.69, 0.69), BackgroundTransparency = 1, ZIndex = 5, Parent = pad }, { corner(999) })
+		new("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.35, Thickness = 2, Parent = self.padRing })
+		self.padDot = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = Color3.fromRGB(255, 120, 160), ZIndex = 6, Parent = pad }, { corner(11) })
+		new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2, Parent = self.padDot })
+		label({ Text = "여기를 누르고 끌어요", TextSize = 15, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.4, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -6), Size = UDim2.new(1, 0, 0, 20), ZIndex = 5, Parent = pad })
+		self.pad = pad
+	end
+	self.pad.Visible = visible
+	if not visible then
+		return
+	end
+	if ringFrac then
+		self.padRing.Size = UDim2.fromScale(ringFrac, ringFrac)
+	end
+	self.padDot.Position = UDim2.fromScale(u or 0.5, v or 0.5)
+	self.padDot.Size = active and UDim2.fromOffset(28, 28) or UDim2.fromOffset(22, 22)
+	self.padDot.BackgroundTransparency = active and 0 or 0.25
+end
+
+-- 화면 점 → 판 위 (u, v) 0~1. 판 밖이면 nil (clamp면 판 끝에 붙여서 돌려줌)
+function Ui:padAt(pos, clamp)
+	local pad = self.pad
+	if not (pad and pad.Visible) then
+		return nil
+	end
+	local p, sz = pad.AbsolutePosition, pad.AbsoluteSize
+	local u, v = (pos.X - p.X) / sz.X, (pos.Y - p.Y) / sz.Y
+	if clamp then
+		return math.clamp(u, 0, 1), math.clamp(v, 0, 1)
+	end
+	local m = 0.08
+	if u < -m or u > 1 + m or v < -m or v > 1 + m then
+		return nil
+	end
+	return math.clamp(u, 0, 1), math.clamp(v, 0, 1)
+end
+
 -- pos = 가리킬 화면 좌표 (nil이면 숨김). 화살표 끝이 pos 바로 위에 오고 위아래로 통통 튐
 function Ui:setArrow(pos, text)
 	if not pos then
@@ -479,11 +527,6 @@ function Ui:setCoach(on, pos)
 	if not self.coach then
 		return
 	end
-	if on and pos then
-		-- 화살표가 손잡이에서 출발해 위로 (화살표 x = 프레임 안 56, 출발 y = 프레임 높이의 92%)
-		local sc = self.scale.Scale
-		self.coach.Position = UDim2.fromOffset(pos.X / sc - 56, pos.Y / sc - 220 * 0.92)
-	end
 	if self.coach.Visible == on then
 		return
 	end
@@ -493,9 +536,9 @@ function Ui:setCoach(on, pos)
 		self.coachTween = nil
 	end
 	if on then
-		self.coachFinger.Position = UDim2.new(0, 56, 0.92, 0)
+		self.coachFinger.Position = UDim2.new(0.5, 0, 0.88, 0)
 		self.coachFinger.TextTransparency = 0
-		self.coachTween = TweenService:Create(self.coachFinger, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1, false, 0.25), { Position = UDim2.new(0, 56, 0.12, 0), TextTransparency = 0.7 })
+		self.coachTween = TweenService:Create(self.coachFinger, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1, false, 0.25), { Position = UDim2.new(0.5, 0, 0.12, 0), TextTransparency = 0.7 })
 		self.coachTween:Play()
 	end
 end

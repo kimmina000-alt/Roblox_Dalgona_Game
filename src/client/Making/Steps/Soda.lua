@@ -146,7 +146,7 @@ local function burstFx(S, at, col)
 	end)
 end
 
-local function newPuff(S, amount, baseThick)
+local function newPuff(S, amount, baseThick, burn)
 	local cfg = Config.Soda
 	-- 넣은 소다 양에 따라 다르게 부풂 (사용자 요청 2026-11-19):
 	--   적게: 덜 부풀고(낮고 작음) 진하고 번들번들 (기포가 적어 단단함)
@@ -157,6 +157,10 @@ local function newPuff(S, amount, baseThick)
 	local huge = math.clamp((amount - 1.1) / 1.6, 0, 1) -- 아주 많이: 국자 밖으로 흘러넘침
 	local dark = math.max(high, 0.45 * low)
 	local final = FOAM:Lerp(CREAM, 0.6 * (1 - low)):Lerp(FOAM_DARK, dark)
+	-- 가만히 두거나 불에 가까워 탄 만큼 거품도 진하게 (2026-11-20)
+	if burn and burn > 0 then
+		final = final:Lerp(Color3.fromRGB(96, 50, 22), math.clamp(burn * 1.2, 0, 0.9))
+	end
 	local pf = {
 		u = 0, hold = 0, done = false, final = final, yaw = math.random() * 6, baseThick = baseThick,
 		-- 2026-11-20: 너무 많이 넣으면 훨씬 크게 부풀어 국자 밖으로 넘침
@@ -452,6 +456,8 @@ function Soda.run(ctx)
 			if idleS > Heat.IDLE_BURN then
 				st.burn = math.min(1, st.burn + dt / Heat.IDLE_BURN_T)
 				ui:hint("가만히 두면 타요! 소다를 넣어요")
+				-- 국자 속 시럽도 타는 만큼 진하게
+				S:setContents({ Color = S.Contents.Color:Lerp(Color3.fromRGB(70, 35, 15), math.min(1, dt / Heat.IDLE_BURN_T * 1.5)) })
 			end
 		end
 		if danger then
@@ -740,7 +746,7 @@ function Soda.run(ctx)
 						TweenService:Create(spot, TweenInfo.new(0.3), { Transparency = 1 }):Play()
 					end
 					ui:buzz(0.6, 0.12)
-					puff = newPuff(S, rec.amount, baseThick)
+					puff = newPuff(S, rec.amount, baseThick, st.burn)
 				end
 			end
 			if puffed then

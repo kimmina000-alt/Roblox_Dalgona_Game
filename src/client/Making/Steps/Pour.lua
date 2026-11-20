@@ -395,10 +395,19 @@ function Pour.run(ctx)
 	-- 반죽이 떨어질 자리 표시 (손가락 아래 철판 위 옅은 그림자)
 	local aimMark = S:fxPart(S.fx, { Name = "PourAim", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(60, 36, 20), Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(0.01, 0.34, 0.34) })
 
-	-- 2026-11-20 사용자 요청 (다시): 화면 아무 데나 누르고 있으면 반죽이 떨어짐. 처음엔 철판(설탕 원) 가운데,
-	-- 누른 채로 끌면 끈 방향·거리만큼 떨어지는 자리가 옮겨짐 (손가락이 반죽을 가리지 않게 손가락 아래가 아니라 상대 이동)
+	-- 2026-11-20 사용자 요청 (세 번째): 화면 오른쪽 반투명 판(철판과 같은 비율)을 누르고 끌면, 판 위 자리와 같은
+	-- 철판 자리에 반죽이 떨어짐 (손가락이 철판을 가리지 않음). 위 = 철판 안쪽(-Z), 오른쪽 = +X (항공샷과 같은 방향)
 	local aimPt = S.ringCenter -- 지금 떨어지는 자리
-	local aimAnchor, aim0 = nil, nil -- 누른 순간의 손가락 자리(철판 높이)와 그때의 떨어지는 자리
+	local function padToWorld(u, v)
+		local lim = half - 0.35
+		local x = math.clamp(plate.X + (u - 0.5) * 2 * half, plate.X - lim, plate.X + lim)
+		local z = math.clamp(plate.Z + (v - 0.5) * 2 * half, plate.Z - lim, plate.Z + lim)
+		return Vector3.new(x, S.plateTop, z)
+	end
+	local function worldToPad(w)
+		return 0.5 + (w.X - plate.X) / (2 * half), 0.5 + (w.Z - plate.Z) / (2 * half)
+	end
+	local ringFrac = (S.Ring and S.Ring.Size.Y or 2.9) / (2 * half)
 
 	-- 젓가락은 내려놓음
 	S:restChopsticks()
@@ -482,21 +491,27 @@ function Pour.run(ctx)
 		ladle:PivotTo(start:Lerp(hover, 1 - (1 - math.min(tc / 0.4, 1)) ^ 3))
 	end
 	home = hover
-	ui:say("화면을 꾹 누르고 있어요", "누르는 동안 반죽이 한 방울씩 · 누른 채로 끌면 떨어지는 자리가 움직여요")
+	ui:say("오른쪽 판을 꾹 누르고 있어요", "판 위 자리와 같은 곳에 반죽이 한 방울씩 · 누른 채로 끌면 따라 움직여요")
 
 	while true do
 		local dt = ctx.frame()
 		if not dt then
 			ui:setWorldTip(nil)
+			ui:setPad(false)
 			return nil
 		end
 		stepDrops(dt)
 		if not dropped then
+			local pu, pv = worldToPad(aimPt)
+			ui:setPad(dropMode, pu, pv, grabbing, ringFrac)
 			if P.down and not grabbing and P.presses ~= seenPress then
 				seenPress = P.presses
-				grabbing = true
-				aimAnchor, aim0 = P.toPlane(S.plateTop), aimPt
-				Sfx.play("pop", 0.5, 1.1)
+				if not dropMode or ui:padAt(P.pos) then
+					grabbing = true
+					Sfx.play("pop", 0.5, 1.1)
+				else
+					ui:hint("오른쪽 판 위를 누르고 끌어요")
+				end
 			end
 			if grabbing and not P.down then
 				grabbing = false
@@ -511,10 +526,11 @@ function Pour.run(ctx)
 				-- 방울 붓기: 국자는 숨기고 손가락 바로 아래로 반죽이 떨어짐 (2026-11-20)
 				local fingerLand = P.toPlane(S.plateTop, aimScreenPos(P))
 				if dropMode then
-					-- 누르고 있는 동안 떨어지는 자리 = 처음 자리 + 손가락을 끈 만큼 (철판 밖으로는 안 나감)
-					local d = P.toPlane(S.plateTop) - (aimAnchor or P.toPlane(S.plateTop))
-					local lim = half - 0.35
-					aimPt = Vector3.new(math.clamp(aim0.X + d.X, plate.X - lim, plate.X + lim), S.plateTop, math.clamp(aim0.Z + d.Z, plate.Z - lim, plate.Z + lim))
+					-- 누르고 있는 동안 떨어지는 자리 = 판 위 손가락 자리와 같은 철판 자리 (판 밖으로 끌면 끝에 붙음)
+					local u, v = ui:padAt(P.pos, true)
+					if u then
+						aimPt = padToWorld(u, v)
+					end
 					fingerLand = aimPt
 					over = true
 					aimMark.Transparency = over and 0.55 or 1
@@ -691,6 +707,7 @@ function Pour.run(ctx)
 			-- 다 부으면 남은 반죽이 저절로 똑 떨어짐 (사용자 요청 2026-11-19: 젓가락으로 국자 긁기 삭제)
 			aimMark.Transparency = 1
 			ui:setWorldTip(nil)
+			ui:setPad(false)
 			if os.clock() - dropTime > 0.5 then
 				local remainBlob = S:fxPart(S.fx, { Name = "Drip", Shape = Enum.PartType.Ball, Size = Vector3.one * 0.35, Color = color, Material = Enum.Material.SmoothPlastic, CFrame = CFrame.new(S.Bowl.Position) })
 				local target = st.dalgona.center + Vector3.new(0.1, st.dalgona.h * 0.6, 0)
@@ -736,6 +753,7 @@ function Pour.run(ctx)
 	setLadleHidden(ladle, 0)
 	S:hidePresser(false)
 	ui:setWorldTip(nil)
+	ui:setPad(false)
 	if st.dalgona then
 		st.dalgona.simple = false
 		st.dalgona:setThickness(st.dalgona.h)
