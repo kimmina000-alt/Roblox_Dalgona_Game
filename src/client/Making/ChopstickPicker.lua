@@ -115,7 +115,7 @@ function Picker.run(ctx, opts)
 	-- 만화 외곽선 (2026-11-20): ViewportFrame 안에서는 Highlight가 안 그려져서, 조각마다 조금 큰 짙은 갈색 복제본을
 	-- 바로 뒤(카메라 반대쪽)에 둬 테두리처럼 보이게 함
 	local OUTLINE = Color3.fromRGB(92, 52, 34)
-	local OUT_W = 0.07 -- 테두리 두께 (조각 크기에 더함)
+	local OUT_W = 0.025 -- 테두리 두께 (조각 크기에 더함). 2026-11-20 "너무 두꺼움": 다른 도구 외곽선만큼 가늘게
 	local function add(name, localCf, transparency)
 		local p = cs:FindFirstChild(name):Clone()
 		p.Transparency = transparency or 0
@@ -176,7 +176,7 @@ function Picker.run(ctx, opts)
 		holder:Destroy()
 		dim:Destroy()
 		if quality then
-			quality.Visible = true
+			quality.Visible = false -- 퍼센트 창은 안 씀 (2026-11-20)
 		end
 		return result
 	end

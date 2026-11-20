@@ -27,7 +27,7 @@ local LAYERS_MAX = 8 -- 한 번 들고 갈 때 최대 겹 수
 local LOAD_MAX = DIP_LAYER * LAYERS_MAX
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit
 local STICK_LEAN = Vector3.new(0.45, 0.6, 0.66).Unit -- 소다 넣을 때 젓가락 기울기 (눕혀서 끝에 묻은 소다가 위에서 보이게)
-local STIR_LIFT = 1.58 -- 소다 젓기: 국자를 이 높이까지 들어 올림 (거의 맨 위, 2026-11-20 "소다 넣은 후에는 더 높게")
+local STIR_LIFT = 1.3 -- 소다 젓기: 국자를 이 높이 넘게 들어야 함 (녹일 때보다 훨씬 위, 2026-11-20 "플레이어한테 더 높게 들라고")
 local TAP_PX = 110 -- 소다 통·국자 화면 위치에서 이만큼 안을 누르면 그 도구
 -- 영상 5·6번: 부푼 반죽은 밝은 땅콩버터 베이지, 젓가락이 지나간 자리에 결이 남음
 local FOAM = Color3.fromRGB(206, 152, 96)
@@ -439,10 +439,8 @@ function Soda.run(ctx)
 
 		-- 국자는 아직 불 위: 오래 끌면 탐 (너무 늦게 넣음). 높이는 왼쪽 막대로
 		local danger = Heat.control(st, P, ui, S)
-		-- 소다 넣고 저을 때는 국자를 불에서 높이 들어 올림 (2026-11-20 "소다 저을 때는 국자 더 높이"). 왼쪽을 잡고 있으면 손가락대로
-		if puffed and not P.side.down and st.h < STIR_LIFT then
-			st.h += (STIR_LIFT - st.h) * (1 - math.exp(-dt / 0.35))
-		end
+		-- 소다 넣고 저을 때는 플레이어가 국자를 더 높이 들어야 함 (2026-11-20: 저절로 들리지 않게, 화살표·글씨로 안내)
+		st.wantLift = puffed and st.h < STIR_LIFT
 		S.Ladle:PivotTo(S:ladleAt(st.h))
 		Heat.flame(S, st.h)
 		Heat.step(st, dt)
@@ -457,7 +455,7 @@ function Soda.run(ctx)
 			end
 		end
 		if danger then
-			ui:hint("불에 너무 가까워요! 왼쪽을 위로 끌어 국자를 올려요")
+			ui:hint("불에 너무 가까워요! 손잡이를 위로 끌어 국자를 올려요")
 		end
 		if st.burn >= 1 then
 			bubbles(S, false)
@@ -734,7 +732,7 @@ function Soda.run(ctx)
 				-- 소다 넣은 뒤엔 불에서 떼고 저어야 함: 불 가까이 저으면 금방 탐 (실제 영상 1:31)
 				if puffed and st.h < 0.8 then
 					st.burn = math.min(1, st.burn + dt * 0.2 * (0.8 - st.h) / 0.65)
-					ui:hint("불에서 떼고 저어요! 왼쪽을 위로 끌어 국자를 올려요")
+					ui:hint("불에서 떼고 저어요! 손잡이를 위로 끌어 국자를 올려요")
 				end
 				if not puffed and speed > 3 then
 					puffed = true
@@ -780,7 +778,11 @@ function Soda.run(ctx)
 			ui:setGauge(true, speed, mcfg.slow, cfg.fastMin, "STIR FAST! · 빠르게")
 			ui:setMeter(true, rec.puff, 0.95, 1, string.format("%d%%", math.floor(rec.puff * 100)), "거품")
 			rec.fastFrac = tStir > 0 and tFast / tStir or 0
-			ui:say("빠르게 저어요!", string.format("부풀기 %d%% · 크림처럼 될 때까지", math.floor(rec.puff * 100)))
+			if st.wantLift then
+				ui:say("국자를 더 높이 들어요!", "손잡이를 위로 끌어 불에서 멀리 · 그리고 빠르게 저어요")
+			else
+				ui:say("빠르게 저어요!", string.format("부풀기 %d%% · 크림처럼 될 때까지", math.floor(rec.puff * 100)))
+			end
 			-- 터졌으면 흘러내리는 걸 다 보여 준 뒤에 넘어감
 			local burstWait = puff and puff.burstT ~= nil and puff.burstT < 1.7
 			if puff and puff.done and puff.hold >= HOLD_TIME and not burstWait then
@@ -795,6 +797,7 @@ function Soda.run(ctx)
 
 	bubbles(S, false)
 	P.sideZone = nil
+	st.wantLift = false
 	tubTip(false)
 	ui:setHeight(false)
 	Sfx.stopStir()

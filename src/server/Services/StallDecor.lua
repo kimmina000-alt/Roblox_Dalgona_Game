@@ -571,22 +571,14 @@ local function packArea(ws, top)
 	return topBag
 end
 
--- 연탄에서 연하게 피어오르는 연기 (2026-11-20 "연탄에서 연기 올라오게, 연하게").
--- Roblox 기본 Smoke(부드러운 연기 모양): 아주 옅고 천천히 올라감
+-- 연탄 연기: 2026-11-20 넣었다가 "화면이 뿌예져서 안 보임"으로 뺌. 예전에 붙은 게 남아 있으면 지움
 local function coalSmoke(ws)
 	local b = ws:FindFirstChild("Brazier")
 	local coal = b and b:FindFirstChild("Briquette")
-	if not coal or coal:FindFirstChild("CoalSmoke") then
-		return
+	local old = coal and coal:FindFirstChild("CoalSmoke")
+	if old then
+		old:Destroy()
 	end
-	local sm = Instance.new("Smoke")
-	sm.Name = "CoalSmoke"
-	sm.Color = Color3.fromRGB(205, 202, 198)
-	sm.Opacity = 0.12
-	sm.RiseVelocity = 1.6
-	sm.Size = 0.7
-	sm.TimeScale = 0.6
-	sm.Parent = coal
 end
 
 function Decor.dress(ws)

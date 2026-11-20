@@ -395,16 +395,10 @@ function Pour.run(ctx)
 	-- 반죽이 떨어질 자리 표시 (손가락 아래 철판 위 옅은 그림자)
 	local aimMark = S:fxPart(S.fx, { Name = "PourAim", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(60, 36, 20), Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(0.01, 0.34, 0.34) })
 
-	-- 2026-11-20 사용자 요청: 철판 오른쪽(누름판 자리)의 동그란 버튼을 꾹 누르고 있으면 반죽이 철판 가운데로 한 방울씩 떨어짐
-	-- (손가락이 반죽을 가리지 않게). 버튼 = 테이블 위 동그란 판 + 위에 안내 글씨
-	local btnW = Vector3.new(plate.X + half + 1.15, S.plateTop, plate.Z + 0.3)
-	local button = S:fxPart(S.fx, { Name = "PourButton", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(255, 150, 175), Material = Enum.Material.SmoothPlastic, Size = Vector3.new(0.12, 1.2, 1.2), CFrame = CFrame.new(btnW + Vector3.new(0, 0.06, 0)) * CFrame.Angles(0, 0, math.rad(90)) })
-	local buttonRim = S:fxPart(S.fx, { Name = "PourButtonRim", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(255, 250, 240), Material = Enum.Material.SmoothPlastic, Size = Vector3.new(0.06, 1.42, 1.42), CFrame = CFrame.new(btnW + Vector3.new(0, 0.03, 0)) * CFrame.Angles(0, 0, math.rad(90)) })
-	local BTN_PX = 170
-	local function buttonScreen()
-		local v = workspace.CurrentCamera:WorldToScreenPoint(btnW)
-		return Vector2.new(v.X, v.Y)
-	end
+	-- 2026-11-20 사용자 요청 (다시): 화면 아무 데나 누르고 있으면 반죽이 떨어짐. 처음엔 철판(설탕 원) 가운데,
+	-- 누른 채로 끌면 끈 방향·거리만큼 떨어지는 자리가 옮겨짐 (손가락이 반죽을 가리지 않게 손가락 아래가 아니라 상대 이동)
+	local aimPt = S.ringCenter -- 지금 떨어지는 자리
+	local aimAnchor, aim0 = nil, nil -- 누른 순간의 손가락 자리(철판 높이)와 그때의 떨어지는 자리
 
 	-- 젓가락은 내려놓음
 	S:restChopsticks()
@@ -488,7 +482,7 @@ function Pour.run(ctx)
 		ladle:PivotTo(start:Lerp(hover, 1 - (1 - math.min(tc / 0.4, 1)) ^ 3))
 	end
 	home = hover
-	ui:say("분홍 버튼을 꾹 누르고 있어요", "누르고 있는 동안 반죽이 가운데로 한 방울씩 떨어져요")
+	ui:say("화면을 꾹 누르고 있어요", "누르는 동안 반죽이 한 방울씩 · 누른 채로 끌면 떨어지는 자리가 움직여요")
 
 	while true do
 		local dt = ctx.frame()
@@ -498,20 +492,12 @@ function Pour.run(ctx)
 		end
 		stepDrops(dt)
 		if not dropped then
-			local bs = buttonScreen()
-			ui:setWorldTip(not grabbing and "꾹 누르고 있어요" or nil, bs - Vector2.new(0, 70))
 			if P.down and not grabbing and P.presses ~= seenPress then
 				seenPress = P.presses
-				if not dropMode or (P.pos - bs).Magnitude < BTN_PX then
-					grabbing = true
-					Sfx.play("pop", 0.5, 1.1)
-				else
-					ui:hint("오른쪽 분홍 버튼을 꾹 누르고 있어요")
-				end
+				grabbing = true
+				aimAnchor, aim0 = P.toPlane(S.plateTop), aimPt
+				Sfx.play("pop", 0.5, 1.1)
 			end
-			-- 버튼이 눌린 모양
-			button.CFrame = CFrame.new(btnW + Vector3.new(0, grabbing and 0.03 or 0.06, 0)) * CFrame.Angles(0, 0, math.rad(90))
-			button.Color = grabbing and Color3.fromRGB(235, 115, 145) or Color3.fromRGB(255, 150, 175)
 			if grabbing and not P.down then
 				grabbing = false
 			end
@@ -525,8 +511,11 @@ function Pour.run(ctx)
 				-- 방울 붓기: 국자는 숨기고 손가락 바로 아래로 반죽이 떨어짐 (2026-11-20)
 				local fingerLand = P.toPlane(S.plateTop, aimScreenPos(P))
 				if dropMode then
-					-- 버튼을 누르고 있는 동안 철판(설탕 원) 가운데로 떨어짐
-					fingerLand = S.ringCenter
+					-- 누르고 있는 동안 떨어지는 자리 = 처음 자리 + 손가락을 끈 만큼 (철판 밖으로는 안 나감)
+					local d = P.toPlane(S.plateTop) - (aimAnchor or P.toPlane(S.plateTop))
+					local lim = half - 0.35
+					aimPt = Vector3.new(math.clamp(aim0.X + d.X, plate.X - lim, plate.X + lim), S.plateTop, math.clamp(aim0.Z + d.Z, plate.Z - lim, plate.Z + lim))
+					fingerLand = aimPt
 					over = true
 					aimMark.Transparency = over and 0.55 or 1
 					aimMark.CFrame = CFrame.new(fingerLand.X, S.plateTop + 0.006, fingerLand.Z) * CFrame.Angles(0, 0, math.rad(90))
@@ -747,8 +736,6 @@ function Pour.run(ctx)
 	setLadleHidden(ladle, 0)
 	S:hidePresser(false)
 	ui:setWorldTip(nil)
-	button:Destroy()
-	buttonRim:Destroy()
 	if st.dalgona then
 		st.dalgona.simple = false
 		st.dalgona:setThickness(st.dalgona.h)

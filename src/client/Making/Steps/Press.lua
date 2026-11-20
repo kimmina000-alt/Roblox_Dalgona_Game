@@ -47,8 +47,9 @@ local function placeRing(S, ring, dal)
 end
 
 -- 누르고 있는 시간 → 얇아지는 빠르기 (두께 비율/초). 0.35에서 시작해 1초 뒤 약 2.6
+-- 2026-11-20 "누름판으로 누를 때 바가 너무 빨리 움직임": 처음 속도와 빨라지는 정도를 줄여 느긋하게
 local function rateFor(holdT)
-	return 0.35 + 2.2 * holdT * holdT
+	return 0.22 + 1.0 * holdT * holdT
 end
 
 function Press.run(ctx)

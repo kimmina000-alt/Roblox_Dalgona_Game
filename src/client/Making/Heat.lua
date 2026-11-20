@@ -19,8 +19,12 @@ end
 
 -- 국자 높이 조작 (사용자 요청 2026-11-18): 화면 왼쪽 구역을 위로 끌면 국자가 올라가고(불에서 멀어짐),
 -- 아래로 끌면 불 가까이 내려감. 젓는 원은 높이와 상관없음. 왼쪽 막대에 높이 표시, 탈 만큼 가까우면 빨강
+Heat.handleScreen = nil -- 국자 손잡이 화면 위치 (Heat.control이 매 프레임 갱신)
 function Heat.sideZone(pos)
 	local v = workspace.CurrentCamera.ViewportSize
+	if Heat.handleScreen and (pos - Heat.handleScreen).Magnitude < 110 then
+		return true -- 손잡이를 잡고 위아래로 끌어도 됨 (2026-11-20: 화살표가 손잡이에 있음)
+	end
 	return pos.X < v.X * 0.24 and pos.Y > v.Y * 0.12
 end
 
@@ -57,8 +61,17 @@ function Heat.control(st, P, ui, S)
 	if P.side.down then
 		coached = true
 	end
-	-- 국자 들기 안내: 처음 한 번 끌어 보기 전, 그리고 불에 너무 가까울 때 (2026-11-20 "국자 들라고 할 때")
-	ui:setCoach(not coached or Heat.sourceTemp(st.h) > cfg.burnTemp or st.temp > cfg.tempHigh + 1)
+	-- 국자 들기 안내 (2026-11-20 "국자 들라고 할 때, 국자 손잡이 위치에"): 처음 한 번 끌어 보기 전, 불에 너무 가까울 때,
+	-- 단계가 더 높이 들라고 할 때(st.wantLift, 소다 젓기). 화살표는 국자 손잡이에서 아래 → 위로
+	local handle = nil
+	if S and S.ladleHandleWorld then
+		local v, on = workspace.CurrentCamera:WorldToScreenPoint(S:ladleHandleWorld())
+		if on then
+			handle = Vector2.new(v.X, v.Y)
+		end
+	end
+	Heat.handleScreen = handle
+	ui:setCoach(not coached or st.wantLift or Heat.sourceTemp(st.h) > cfg.burnTemp or st.temp > cfg.tempHigh + 1, handle)
 	if P.side.down and P.side.start and ui:heightHit(P.side.start) then
 		-- 막대를 잡고 끌면 손가락 자리 = 국자 높이 (바로 따라옴)
 		st.h = cfg.hMin + ui:heightAt(P.side.pos.Y) * (cfg.hMax - cfg.hMin)

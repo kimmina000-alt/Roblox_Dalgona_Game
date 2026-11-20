@@ -50,10 +50,9 @@ function Melt.run(ctx)
 	local rec = { t0 = ctx.now(), green = 0, tempOk = 0, scorch = 0, burn = 0, burnt = false, samples = {} }
 	local stir = Stir.new()
 	local samp = sampler(rec)
-	-- 2026-11-20 "설탕 넣고 저을 때는 국자 위치 중간 그대로": 알맞은 온도가 되는 높이 가운데에서 시작
-	-- (sourceTemp = 235 - 95 × h01 이 tempLow~tempHigh 사이의 가운데)
-	local mid01 = (235 - (cfg.tempLow + cfg.tempHigh) / 2) / 95
-	st.h = cfg.hMin + mid01 * (cfg.hMax - cfg.hMin)
+	-- 2026-11-20 "만들기 시작할 때 국자 위치 연탄 바로 위로 리셋": 판마다 국자는 연탄 위 철망에서 시작 (들어 올리는 건 플레이어)
+	st.h = cfg.hMin
+	st.wantLift = false
 	st.grace = 5 -- 처음 5초는 타지 않음 (그 사이 들어 올리기)
 	st.temp = st.temp or 30
 	st.burn = 0
@@ -68,7 +67,7 @@ function Melt.run(ctx)
 
 	Stir.placeChopsticks(S, S.Bowl.Position)
 	P.sideZone = Heat.sideZoneFor(ui)
-	ui:say("국자 안에서 원을 그리며 저어요", "왼쪽을 위아래로 끌면 국자 높이가 바뀌어요")
+	ui:say("국자 안에서 원을 그리며 저어요", "국자 손잡이를 위아래로 끌면 국자 높이가 바뀌어요")
 	local idle = 0 -- 아무것도 안 하고 있던 시간 (오래 두면 눌어붙어 탐)
 
 	while true do
@@ -136,9 +135,9 @@ function Melt.run(ctx)
 			ui:hint("멈추지 말고 계속 저어요 (바닥이 눌어붙어요)")
 		end
 		if st.temp > cfg.burnTemp then
-			ui:hint("타고 있어요! 왼쪽을 위로 끌어 국자를 올려요")
+			ui:hint("타고 있어요! 손잡이를 위로 끌어 국자를 올려요")
 		elseif danger or st.temp > cfg.tempHigh + 1 then
-			ui:hint("불에 너무 가까워요! 왼쪽을 위로 끌어 국자를 올려요")
+			ui:hint("불에 너무 가까워요! 손잡이를 위로 끌어 국자를 올려요")
 		elseif zone == 3 and stir.active then
 			ui:hint("너무 빨라요! 초록에 맞춰요")
 		end
@@ -155,7 +154,7 @@ function Melt.run(ctx)
 		rec.tempOk = tOkAll > 0 and tOkCount / tOkAll or 1
 		rec.burn = st.burn
 		ctx.live("melt", Scoring.melt(rec))
-		ui:say("국자 안에서 원을 그리며 저어요", string.format("%s · 녹은 정도 %d%% · 왼쪽을 위아래로 끌면 국자 높이", stage, math.floor(p * 100)))
+		ui:say("국자 안에서 원을 그리며 저어요", string.format("%s · 녹은 정도 %d%% · 손잡이를 위아래로 끌면 국자 높이", stage, math.floor(p * 100)))
 		if not started and elapsed > 1.5 then
 			ui:say("국자 안에서 원을 그리며 저어요", "손가락으로 국자 위에 동그라미를 그려요")
 		end

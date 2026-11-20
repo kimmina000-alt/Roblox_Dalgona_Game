@@ -248,6 +248,16 @@ end
 local ARM_KEEP = { RightUpperArm = true, RightLowerArm = true, RightHand = true, ["Right Arm"] = true }
 
 -- 국자 손잡이 잡는 자리를 국자 피벗 회전만 뺀 기준(제자리 회전 rest 기준)으로: 붓기에서 손가락이 이 점을 잡음
+-- 국자 손잡이 잡는 자리 (세계 좌표, 지금 국자 자세 그대로)
+function Station:ladleHandleWorld()
+	local mesh = self.Ladle:FindFirstChild("Mesh")
+	if mesh then
+		return (mesh.CFrame * CFrame.new(HAND_GRIP)).Position
+	end
+	local g = self.Ladle:FindFirstChild("Grip") or self.Ladle:FindFirstChild("Handle")
+	return g and g.Position or (self.Ladle:GetPivot().Position - Vector3.new(1.6, 0, 0))
+end
+
 function Station:ladleGripLocal()
 	local mesh = self.Ladle:FindFirstChild("Mesh")
 	local pv = self.Ladle:GetPivot()

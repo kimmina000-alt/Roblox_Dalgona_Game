@@ -243,8 +243,13 @@ function Pack.run(ctx, dal, st)
 	--    그 비닐을 왼쪽으로 끌어 달고나에 씌움 (열린 쪽이 달고나를 향함). 손을 안 대면 IDLE_T초 뒤 알아서
 	local OUT = Rb * 2.6 -- 꺼낸 비닐이 놓이는 자리 (달고나 가운데에서 오른쪽으로)
 	local slide = OUT -- 지금 비닐 자리 (오른쪽으로 떨어진 거리, 0 = 다 씌움)
-	-- 비닐이 들어오는 동안 달고나를 사선으로 틀었다가(가운데쯤 가장 많이) 다 들어가면 바로 섬
-	local DIAG = math.rad(38)
+	-- 비닐이 들어오는 동안 달고나를 사선으로 틀었다가(가운데쯤 가장 많이) 다 들어가면 바로 섬.
+	-- 2026-11-20: 비닐(반폭 1.2 Rb)에 그냥 들어가는 크기면 돌리지 않음 (길쭉해서 넘칠 때만)
+	local reach = 1
+	for _, v in ipairs(dal.dropOutline or {}) do
+		reach = math.max(reach, v)
+	end
+	local DIAG = (R * reach > Rb * 1.12) and math.rad(38) or 0
 	local function tiltDal()
 		local p = 1 - math.clamp(slide / OUT, 0, 1)
 		placeDal(R1 * CFrame.Angles(0, DIAG * math.sin(math.pi * p), 0))

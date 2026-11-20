@@ -114,12 +114,24 @@ function Ui.new(player, steps)
 			new("UIScale", { Name = "Shrink", Scale = 0.72, Parent = self.qualityBox })
 		end
 		self.qualityBox.Position = UDim2.new(1, -20, 0, qy)
-		self.meter.Position = UDim2.fromOffset(20, qy)
+		self.qualityBox.Visible = false -- 2026-11-20 "오른쪽 상단에 퍼센트 보여 주는 거 삭제"
+		-- 2026-11-20 사용자 사진: 온도 막대는 국자 왼쪽, 속도 막대는 국자 오른쪽 (녹이기 화면에서 국자가 가운데)
+		self.meter.AnchorPoint = Vector2.new(0.5, 0.5)
+		self.meter.Position = UDim2.fromScale(0.23, 0.45)
+		self.vgauge.AnchorPoint = Vector2.new(0.5, 0.5)
+		self.vgauge.Position = UDim2.fromScale(0.76, 0.45)
 		self.heightBox.Position = UDim2.fromOffset(76, qy)
-		self.vgauge.Position = UDim2.fromOffset(76, qy) -- 젓기 속도: 거품·온도 창 오른쪽 옆, 같은 길이
-		-- 누르기 두께 가로 게이지는 화면 위쪽 (2026-11-20: 아래쪽은 누르는 손가락에 가려짐)
+		-- 안내 문구(검은 글씨 칸 + 아래 설명)는 위 단계 줄 바로 아래 (2026-11-20)
+		self.pill.AnchorPoint = Vector2.new(0.5, 0)
+		self.pill.Position = UDim2.new(0.5, 0, 0, qy)
+		self.sub.AnchorPoint = Vector2.new(0.5, 0)
+		self.sub.Position = UDim2.new(0.5, 0, 0, qy + 62)
+		-- 누르기 두께 가로 게이지는 안내 문구 아래 (아래쪽은 누르는 손가락에 가려짐)
 		self.gauge.AnchorPoint = Vector2.new(0.5, 0)
-		self.gauge.Position = UDim2.new(0.5, 0, 0, qy)
+		self.gauge.Position = UDim2.new(0.5, 0, 0, qy + 96)
+		if self.toastLabel then
+			self.toastLabel.Position = UDim2.new(0.5, 0, 0, qy + 162)
+		end
 		root.Size = UDim2.fromOffset(v.X / s, v.Y / s)
 	end
 	rescale()
@@ -209,7 +221,8 @@ function Ui:_buildQuality()
 end
 
 function Ui:_buildBottom()
-	local pill = new("Frame", {
+	local pill
+	pill = new("Frame", {
 		Name = "Instruction",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -104), -- 2026-11-20: 위로 올림 (아래 끝은 손가락·홈 바에 가려짐)
@@ -222,6 +235,7 @@ function Ui:_buildBottom()
 		new("UIPadding", { PaddingLeft = UDim.new(0, 30), PaddingRight = UDim.new(0, 30) }),
 	})
 	self.main = label({ Text = "", TextSize = 26, TextColor3 = Color3.new(1, 1, 1), Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, Parent = pill })
+	self.pill = pill
 	self.sub = label({
 		Name = "Sub",
 		Text = "",
@@ -368,7 +382,8 @@ function Ui:_buildHeight()
 	-- 처음 하는 사람 안내 (사용자 요청 2026-11-20): 손가락이 막대를 따라 위로 끄는 모습 + 말풍선
 	-- 높이 막대를 없앤 뒤(2026-11-20)에는 화면 왼쪽(팔이 있는 곳)에서 손가락이 위로 끄는 모습
 	-- 2026-11-20: 화면 왼쪽 아래(폰에서 이동 버튼이 있던 자리)에 화살표가 아래에서 위로 올라가는 모습
-	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Position = UDim2.new(0, 24, 0.42, 0), Size = UDim2.new(0, 260, 0.5, 0), Visible = false, ZIndex = 6, Parent = self.root })
+	-- 2026-11-20 (다시): 화살표는 국자 손잡이 자리에서 위로 (setCoach에 손잡이 화면 위치를 넘김)
+	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Position = UDim2.new(0, 24, 0.42, 0), Size = UDim2.fromOffset(260, 220), Visible = false, ZIndex = 6, Parent = self.root })
 	new("Frame", { Name = "Track", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0, 56, 0.08, 0), Size = UDim2.new(0, 14, 0.86, 0), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.55, ZIndex = 6, Parent = coach }, { corner(7) })
 	self.coachFinger = label({ Text = "▲", TextSize = 54, TextColor3 = Color3.fromRGB(255, 120, 160), TextStrokeColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0, 56, 0.92, 0), Size = UDim2.fromOffset(60, 60), ZIndex = 7, Parent = coach })
 	local bubble = label({
@@ -460,8 +475,16 @@ function Ui:setWorldTip(text, pos)
 end
 
 -- 처음 하는 사람에게 국자 높이 끄는 법 보여 주기 (손가락이 막대 아래 → 위로 반복)
-function Ui:setCoach(on)
-	if not self.coach or self.coach.Visible == on then
+function Ui:setCoach(on, pos)
+	if not self.coach then
+		return
+	end
+	if on and pos then
+		-- 화살표가 손잡이에서 출발해 위로 (화살표 x = 프레임 안 56, 출발 y = 프레임 높이의 92%)
+		local sc = self.scale.Scale
+		self.coach.Position = UDim2.fromOffset(pos.X / sc - 56, pos.Y / sc - 220 * 0.92)
+	end
+	if self.coach.Visible == on then
 		return
 	end
 	self.coach.Visible = on
@@ -772,7 +795,7 @@ function Ui:setGauge(visible, speed, slow, fast, title)
 		self.needleT = now
 		local target = math.clamp(speed / maxS, 0, 1)
 		local x = self.needleX or target
-		x += (target - x) * (1 - math.exp(-7 * dt))
+		x += (target - x) * (1 - math.exp(-3 * dt)) -- 2026-11-20 "바가 너무 빨리 움직임": 느긋하게 따라감
 		self.needleX = x
 		self.vNeedle.Position = UDim2.fromScale(0.5, 1 - x)
 		self.vTitle.Text = speed < slow and "느림" or (speed > fast and "빠름" or "적당")
@@ -790,7 +813,7 @@ function Ui:setGauge(visible, speed, slow, fast, title)
 	self.needleT = now
 	local target = math.clamp(speed / maxS, 0, 1)
 	local x = self.needleX or target
-	x += (target - x) * (1 - math.exp(-7 * dt))
+	x += (target - x) * (1 - math.exp(-3 * dt)) -- 2026-11-20 "바가 너무 빨리 움직임": 느긋하게 따라감
 	self.needleX = x
 	self.needle.Position = UDim2.fromScale(x, 0.5)
 	self.gaugeTitle.Text = title or "STIR SPEED"
@@ -1074,7 +1097,7 @@ end
 function Ui:hideResult()
 	self.result.Visible = false
 	self.topRow.Visible = true
-	self.root.Quality.Visible = true
+	self.root.Quality.Visible = false -- 퍼센트 창은 안 씀 (2026-11-20)
 	self.root.Instruction.Visible = true
 	self.sub.Visible = true
 end
