@@ -82,6 +82,18 @@ function Stir.grip(y)
 	return tip, Stir.handleFor(tip)
 end
 
+-- 국자 안 젓기용 (2026-11-20 "젓가락 아예 위로 올리면 국자 아랫부분 설탕 저을 수 있게"):
+-- 젓가락이 화면 위쪽으로 서고, 젓는 끝은 손가락보다 살짝 아래(화면 아래 = +Z). 그래서 국자 아랫부분은 손가락을
+-- 국자 안에 둔 채로 닿고, 손가락이 국자 아래(화면 밖)로 내려갈 필요가 없음. 손잡이는 손가락 쪽으로 기울어 위로 뻗음
+Stir.GRIP_UP = 0.9
+local UP_DIR = Vector3.new(0, 1, -0.85).Unit
+function Stir.gripUp(y)
+	local f = Pointer.toPlane(y)
+	local tip = f + Vector3.new(0, 0, Stir.GRIP_UP)
+	-- 손잡이는 화면 위쪽(-Z)으로 비스듬히 뻗음 (손가락 시선 위로 두면 카메라 쪽으로 곧게 서서 화면에선 짧은 점처럼 보임)
+	return tip, tip + UP_DIR * HANDLE_LEN
+end
+
 -- 끝 위치 tip → 손잡이 끝 (손가락 시선 위, 끝에서 HANDLE_LEN 떨어진 카메라 쪽 점)
 function Stir.handleFor(tip)
 	local cam = workspace.CurrentCamera
