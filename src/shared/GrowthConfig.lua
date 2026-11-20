@@ -167,6 +167,8 @@ G.Helper = {
 		scale = 0.6, -- 키
 		headScale = 1.25, -- 머리 살짝 크게
 		maxAccessories = 3, -- 폰 부담 (미니미 3 + 손님 3)
+		ladleLength = 1.5, -- 손에 든 작은 국자 길이 (스터드)
+		ladleTilt = 0.1, -- 국자 그릇이 앞쪽 아래로 기운 정도 (손이 낮아서 거의 수평)
 		apron = { Color3.fromRGB(230, 70, 70), Color3.fromRGB(70, 130, 230), Color3.fromRGB(245, 200, 60) }, -- 1 빨강 / 2 파랑 / 3 노랑
 	},
 }

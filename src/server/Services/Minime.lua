@@ -2,7 +2,8 @@
 --  - 주인의 HumanoidDescription(접속 중이면 캐릭터에 입은 것, 아니면 userId)으로 R15 모델을 만들고 0.6배, 머리 조금 크게
 --  - 옷·얼굴·피부·액세서리 그대로 (폰 부담 때문에 액세서리는 최대 G.Helper.minime.maxAccessories개), 스크립트·이름표 없음
 --  - 구별: 앞치마 색(1 빨강 / 2 파랑 / 3 노랑) + 머리 위 번호표. 숙련도 = 모자 (0 없음 / 1 두건 / 2 요리사 모자)
---  - 제작 세션 연결용: 모델 속성 Minime = true, HelperIndex, OwnerUserId. 국자는 RightHand.RightGripAttachment에 붙이면 됨
+--  - 오른손(RightHand.RightGripAttachment)에 작은 구리 국자 (ServerStorage.Assets.LadleMesh 복제, 2026-11-21 제작 세션과 정함).
+--    손 작업대가 부지로 옮겨지면 제작 세션이 HelperLadles 국자를 이 손에 맞춤. 모델 속성 Minime = true, HelperIndex, OwnerUserId
 -- 만들 수 없으면 nil을 돌려주고, GrowthService가 예전 부품 인형을 씀.
 
 local Players = game:GetService("Players")
@@ -200,6 +201,28 @@ function Minime.build(player, parent, footCF, index, skill)
 	model:SetAttribute("HelperIndex", index)
 	model:SetAttribute("OwnerUserId", player.UserId)
 	model.Parent = parent
+	task.wait()
+	-- 오른손에 작은 국자 (모델을 놓은 뒤 붙임: 그 전에 붙이면 Humanoid가 크기를 다시 맞추며 같이 줄어듦): 손잡이 끝(+Z)을 그립에, 그릇(-Z)은 앞쪽 조금 아래로
+	local hand = model:FindFirstChild("RightHand")
+	local grip = hand and hand:FindFirstChild("RightGripAttachment")
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	local tpl = assets and assets:FindFirstChild("LadleMesh")
+	if hand and grip and tpl then
+		local ladle = tpl:Clone()
+		ladle.Name = "HandLadle"
+		ladle.Size = tpl.Size * (CFG.ladleLength / tpl.Size.Z)
+		ladle.Anchored = false
+		ladle.CanCollide = false
+		ladle.CanQuery = false
+		ladle.CanTouch = false
+		ladle.Massless = true
+		local dir = (footCF.LookVector + Vector3.new(0, -CFG.ladleTilt, 0)).Unit
+		local center = grip.WorldPosition + dir * (ladle.Size.Z / 2 - 0.05)
+		ladle.CFrame = CFrame.lookAt(center, center + dir)
+		ladle.Parent = model
+		weldTo(ladle, hand)
+	end
+
 	return model
 end
 
