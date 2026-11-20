@@ -15,6 +15,8 @@ local MOVE_T = 1.3 -- 떠올라 오는 시간
 local ROCK_A = math.rad(22) -- 좌우로 도는 각도
 local WRAP_T = 0.55 -- 포장지 씌우는 시간
 local TIE_T = 0.5 -- 빵끈 감는 시간
+local WRAP_PX = 260 -- 이만큼 끌면 비닐이 다 씌워짐
+local IDLE_T = 6 -- 이 시간 동안 손을 안 대면 알아서 마저 함
 local BAG = Color3.fromRGB(248, 250, 255)
 local TIE = Color3.fromRGB(226, 176, 52)
 
@@ -235,6 +237,7 @@ function Showcase.run(ctx, dal, st)
 		local k = smooth(t / MOVE_T)
 		local rock = math.sin(math.max(t - MOVE_T * 0.6, 0) * 1.5) * ROCK_A * math.min(math.max(t - MOVE_T * 0.6, 0) / 0.6, 1)
 		local base = R0:Lerp(finalBase(rock), k)
+		state.base = base
 		for i, p in ipairs(parts) do
 			if p.Parent then
 				p.CFrame = base * rel[i]
@@ -296,29 +299,110 @@ function Showcase.run(ctx, dal, st)
 		state.t += dt
 		draw()
 	end
+	-- 직접 포장 (2026-11-20 사용자 선택 "짧게 넣기"): 실패·점수 없이 손맛만. 가만히 있으면 IDLE_T초 뒤 알아서 됨
+	--   ① 화면을 끌면 끈 만큼 비닐이 위에서 내려와 씌워짐 (방향 상관없음, WRAP_PX만큼 끌면 다 씌워짐)
+	--   ② 빵끈 둘레를 빙글빙글 돌리면 돌린 만큼 감김 (두 바퀴)
+	local P, ui = ctx.pointer, ctx.ui
+	local cam = workspace.CurrentCamera
+	local function idleAuto(prog, idle, dt)
+		if idle > IDLE_T then
+			return math.min(1, prog + dt / 0.6)
+		end
+		return prog
+	end
 	Sfx.play("pop", 0.4, 0.8)
 	state.wrap = 0
-	while state.wrap < WRAP_T * 1.3 do
+	local prog, idle, last = 0, 0, nil
+	ui:say("비닐을 씌워요", "화면을 아래로 쓱 끌어요")
+	while prog < 1 do
+		local dt = ctx.frame()
+		if not dt then
+			return nil
+		end
+		if P and P.down then
+			idle = 0
+			if last then
+				local before = prog
+				prog = math.min(1, prog + (P.pos - last).Magnitude / WRAP_PX)
+				if math.floor(before * 4) ~= math.floor(prog * 4) then
+					Sfx.play("pop", 0.15, 1.6 + prog * 0.4) -- 비닐 바스락
+				end
+			end
+			last = P.pos
+		else
+			last = nil
+			idle += dt
+			prog = idleAuto(prog, idle, dt)
+		end
+		state.t += dt
+		-- 씌워지는 정도는 손을 따라가되 부드럽게
+		state.wrap += (prog * WRAP_T * 1.3 - state.wrap) * (1 - math.exp(-dt / 0.08))
+		draw()
+	end
+	while state.wrap < WRAP_T * 1.3 - 0.01 do
 		local dt = ctx.frame()
 		if not dt then
 			return nil
 		end
 		state.t += dt
-		state.wrap += dt
+		state.wrap = math.min(WRAP_T * 1.3, state.wrap + dt * 2)
 		draw()
 	end
 	state.tie = 0
 	Sfx.play("metalClink", 0.3, 1.8)
-	while state.tie < TIE_T do
+	ui:say("빵끈을 돌려 묶어요", "빵끈 둘레를 빙글빙글 두 바퀴")
+	prog, idle = 0, 0
+	local lastAng = nil
+	local turned = 0
+	while prog < 1 do
+		local dt = ctx.frame()
+		if not dt then
+			ui:setWorldTip(nil)
+			return nil
+		end
+		local tieW = state.base and (state.base * CFrame.new(0, 0.02, tieZ)).Position
+		local tieS = tieW and cam:WorldToScreenPoint(tieW)
+		if tieS then
+			ui:setWorldTip("빙글빙글", Vector2.new(tieS.X, tieS.Y - 40))
+		end
+		if P and P.down and tieS then
+			idle = 0
+			local v = P.pos - Vector2.new(tieS.X, tieS.Y)
+			if v.Magnitude > 12 then
+				local ang = math.atan2(v.Y, v.X)
+				if lastAng then
+					local d = (ang - lastAng + math.pi) % (2 * math.pi) - math.pi
+					turned += math.abs(d)
+					local before = prog
+					prog = math.min(1, turned / (4 * math.pi))
+					if math.floor(before * 8) ~= math.floor(prog * 8) then
+						Sfx.play("metalClink", 0.12, 1.6 + prog * 0.6) -- 철사 감기는 소리
+					end
+				end
+				lastAng = ang
+			end
+		else
+			lastAng = nil
+			idle += dt
+			prog = idleAuto(prog, idle, dt)
+		end
+		state.t += dt
+		state.wrap += dt
+		state.tie += (prog * TIE_T - state.tie) * (1 - math.exp(-dt / 0.08))
+		draw()
+	end
+	ui:setWorldTip(nil)
+	while state.tie < TIE_T - 0.005 do
 		local dt = ctx.frame()
 		if not dt then
 			return nil
 		end
 		state.t += dt
 		state.wrap += dt
-		state.tie += dt
+		state.tie = math.min(TIE_T, state.tie + dt * 2)
 		draw()
 	end
+	state.tie = TIE_T
 	Sfx.play("pop", 0.5, 1.3)
 	ctx.ui:buzz(0.3, 0.05)
 	-- ③ 완성 창이 떠 있는 동안 계속 천천히 돎
