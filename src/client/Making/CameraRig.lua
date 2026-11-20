@@ -42,8 +42,10 @@ local current = nil
 local from, to = CFrame.new(), CFrame.new()
 local t0 = 0
 
-function CameraRig.init(stationPivot)
+-- stationPivot = 작업대 기준 자리, model = 작업대 모델 (17b: 가게마다 작업대가 있어서 내 작업대를 넘김)
+function CameraRig.init(stationPivot, model)
 	origin = stationPivot
+	CameraRig.model = model
 end
 
 local trackPose -- 아래에서 정의 (젓가락 화면이 녹이기 화면을 그대로 옆으로 옮긴 것이라서 씀)
@@ -53,7 +55,7 @@ function CameraRig.poseFor(key)
 	if key == "pick" then
 		-- 2026-11-20 "나무젓가락 화면이랑 연탄 화로 화면 위치가 다름": 녹이기 카메라(국자를 따라가는 화면)를
 		-- 높이·기울기·거리 그대로 두고 옆(x)으로만 옮긴 화면. 그래서 젓가락 → 화로로 갈 때 오른쪽으로만 움직임
-		local ws = workspace:FindFirstChild("DalgonaWorkstation")
+		local ws = CameraRig.model -- 지금 쓰는 작업대 (17b: 내 가게 작업대)
 		local bowl = ws and ws:FindFirstChild("Ladle") and ws.Ladle:FindFirstChild("Bowl")
 		local by = bowl and origin:PointToObjectSpace(bowl.Position).Y or 8.1
 		local bz = bowl and origin:PointToObjectSpace(bowl.Position).Z or 0

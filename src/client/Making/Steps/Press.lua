@@ -31,8 +31,9 @@ local function makeRing(S)
 	return folder
 end
 
-local function placeRing(S, ring, dal)
-	local r = dal:radius()
+-- 원 크기 = 이번에 목표 두께(h)까지 눌렀을 때 퍼질 크기 (2026-11-21 사용자: 지금 크기 말고 커져야 할 크기)
+local function placeRing(S, ring, dal, h)
+	local r = h and dal:diameter(h) / 2 or dal:radius()
 	local c = dal.center
 	local disc = S.Presser.Disc
 	local y = math.max(dal:topY() + 0.02, disc.Position.Y + disc.Size.X / 2 + 0.03)
@@ -68,7 +69,7 @@ function Press.run(ctx)
 	end
 	S:presserSeeThrough(true)
 	local ring = makeRing(S)
-	placeRing(S, ring, dal)
+	placeRing(S, ring, dal, cfg.targets[1])
 	local pv = presser:GetPivot()
 	local grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0))
 	local cam = workspace.CurrentCamera
@@ -117,7 +118,7 @@ function Press.run(ctx)
 		grab.pos = fromPos:Lerp(Vector3.new(c.X, 0, c.Z), k)
 		grab.bottom = fromBottom + (hover - fromBottom) * k + math.sin(k * math.pi) * 0.5
 		grab:draw()
-		placeRing(S, ring, dal)
+		placeRing(S, ring, dal, cfg.targets[1])
 	end
 	seen = P.presses -- 집을 때 누른 것은 누르기로 치지 않음
 
@@ -220,8 +221,8 @@ function Press.run(ctx)
 		end
 		fade += ((pressedOnce and 1 or 0) - fade) * (1 - math.exp(-14 * dt))
 		fadePresser(fade)
-		placeRing(S, ring, dal)
 		local nt = cfg.targets[math.min(count + 1, 3)]
+		placeRing(S, ring, dal, nt)
 		if count < 3 then
 			ui:setPressGauge(true, h, hStart, hMin, nt * (1 - BAND), nt * (1 + BAND))
 			if holding and contact then

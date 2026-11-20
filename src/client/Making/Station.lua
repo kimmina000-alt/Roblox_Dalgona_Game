@@ -12,8 +12,9 @@ local Sfx = require(script.Parent:WaitForChild("Sfx"))
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("DalgonaConfig"))
 local Fx = require(script.Parent:WaitForChild("Fx"))
 
-function Station.new()
-	local m = workspace:WaitForChild("DalgonaWorkstation")
+-- m = 쓸 작업대 모델 (17b: 내 가게 작업대, MakingClient가 Workstations.mine()으로 찾아 넘김)
+function Station.new(m)
+	m = m or workspace:WaitForChild("DalgonaWorkstation")
 	local self = setmetatable({}, Station)
 	self.model = m
 	for _, name in ipairs(MOVABLE) do
