@@ -107,6 +107,44 @@ local function smooth01(x, a, b)
 	return t * t * (3 - 2 * t)
 end
 
+-- 펑: 거품 조각이 사방으로 튀고 '뻥' 소리
+local BURST_OVER = 0.6 -- 넘침 정도가 이 이상이면 (소다 약 0.95 이상) 터짐
+local function burstFx(S, at, col)
+	Sfx.play("pop", 0.9, 0.55)
+	Sfx.play("crack", 0.25, 1.6)
+	-- 동그란 거품 덩이들이 위·옆으로 튀었다가 떨어지며 작아짐 (파티클 기본 무늬는 별 모양이라 부품으로)
+	local bits = {}
+	for _ = 1, 26 do
+		local a = math.random() * 2 * math.pi
+		local up = 0.35 + math.random() * 0.9
+		local sp = 2.2 + math.random() * 3.2
+		local size = 0.08 + math.random() * 0.16
+		local part = Fx.ellipsoid(S:fxPart(S.Ladle, { Name = "FxBurstBit", Color = col:Lerp(Color3.new(1, 1, 1), math.random() * 0.15), Material = Enum.Material.SmoothPlastic, Size = Vector3.one * size, CFrame = CFrame.new(at) }))
+		table.insert(bits, { part = part, v = Vector3.new(math.cos(a), up, math.sin(a)).Unit * sp, size = size })
+	end
+	task.spawn(function()
+		local t, last = 0, os.clock()
+		while t < 0.85 do
+			task.wait()
+			local now = os.clock()
+			local dt = math.min(now - last, 0.05)
+			last = now
+			t += dt
+			for _, b in ipairs(bits) do
+				if b.part.Parent then
+					b.v += Vector3.new(0, -20 * dt, 0)
+					local k = 1 - (t / 0.85) ^ 2
+					b.part.Size = Vector3.new(b.size * (1 + 0.3 * t), b.size * k, b.size * (1 + 0.3 * t)) * math.max(k, 0.05)
+					b.part.CFrame = b.part.CFrame + b.v * dt
+				end
+			end
+		end
+		for _, b in ipairs(bits) do
+			b.part:Destroy()
+		end
+	end)
+end
+
 local function newPuff(S, amount, baseThick)
 	local cfg = Config.Soda
 	-- 넣은 소다 양에 따라 다르게 부풂 (사용자 요청 2026-11-19):
@@ -141,6 +179,11 @@ local function newPuff(S, amount, baseThick)
 	-- 넘칠 만큼 넣었으면 3D 거품 메시 (돔 → 테두리 넘어 → 바깥 면 따라 흘러내림). 안 되면 아래 방울 부품
 	if pf.over > 0 then
 		pf.mesh = FoamMesh.new(S.Ladle, pf.syrup, math.random(1, 1e6))
+		-- 너무 많이 넣음 (2026-11-20 "펑 터져서 흘러내리는 순서"): 크게 부풀었다가 → 펑 터지고 → 꺼지며 흘러내림
+		pf.willBurst = pf.mesh ~= nil and pf.over >= BURST_OVER
+		if pf.willBurst then
+			pf.collapse = 0 -- 꺼지는 건 터질 때 따로
+		end
 	end
 	if pf.over > 0 and not pf.mesh then
 		local n = math.floor(4 + 5 * math.min(pf.over, 1))
@@ -207,10 +250,37 @@ local function drawPuff(S, pf, dt, speed)
 		local rimY = S.Bowl.Position.Y + S.bowlHalf
 		local Rb = S.bowlRadius
 		local ov = math.min(pf.over, 1.3)
+		local rawApex = math.max(base.Y + foam.Size.Y - rimY, 0.04)
 		-- 넘치는 거품은 위로 솟기보다 옆으로 퍼져 흘러내림: 돔 높이에 상한
-		local apex = math.clamp(base.Y + foam.Size.Y - rimY, 0.04, Rb * (0.7 + 0.3 * math.min(ov, 1)))
+		local low = Rb * (0.7 + 0.3 * math.min(ov, 1))
+		local apex = math.clamp(rawApex, 0.04, low)
 		local domeR = math.max(Rb * 0.92, Rb + (diam / 2 - Rb) * 0.3)
-		pf.mesh:update(Vector3.new(S.Bowl.Position.X, rimY, S.Bowl.Position.Z), Rb, S.bowlHalf * 2, apex, domeR, 0.03 + 0.11 * math.min(ov, 1) * runK, ov * runK)
+		local sheet = 0.03 + 0.11 * math.min(ov, 1) * runK
+		local run = ov * runK
+		if pf.willBurst then
+			if not pf.burstT then
+				-- ① 터지기 전: 국자 위로 크게 부풀어 오름 (아직 안 흘러내림, 팽팽해서 살짝 떨림)
+				apex = math.clamp(rawApex * 1.15, 0.04, Rb * (1.1 + 0.4 * math.min(ov, 1)))
+				apex *= 1 + 0.02 * math.sin((pf.t or 0) * 40) * smooth01(h, 0.7, 0.95)
+				domeR = math.max(Rb * 0.95, Rb + (diam / 2 - Rb) * 0.2)
+				sheet, run = 0.03 + 0.04 * h, 0
+				if h >= 0.97 or (pf.done and h > 0.75) then
+					-- ② 펑!
+					pf.burstT = 0
+					pf.apexAtBurst = apex
+					pf.justBurst = true
+					burstFx(S, Vector3.new(S.Bowl.Position.X, rimY + apex, S.Bowl.Position.Z), col)
+				end
+			else
+				-- ③ 터진 뒤: 0.25초 만에 푹 꺼지고, 꺼진 거품이 테두리를 넘어 흘러내림
+				pf.burstT += dt
+				local k = smooth01(pf.burstT, 0, 0.25)
+				apex = pf.apexAtBurst + (low * 0.7 - pf.apexAtBurst) * k
+				sheet = 0.03 + 0.11 * math.min(ov, 1) * smooth01(pf.burstT, 0.05, 0.35)
+				run = ov * smooth01(pf.burstT, 0.12, 1.5)
+			end
+		end
+		pf.mesh:update(Vector3.new(S.Bowl.Position.X, rimY, S.Bowl.Position.Z), Rb, S.bowlHalf * 2, apex, domeR, sheet, run)
 		pf.mesh.part.Color = col
 		pf.mesh.part.Transparency = show > 0.02 and foam.Transparency or 1
 		if show > 0.02 then
@@ -681,6 +751,11 @@ function Soda.run(ctx)
 				end
 				rec.puff = puffCurve(puff.u)
 				drawPuff(S, puff, dt, speed)
+				if puff.justBurst then
+					puff.justBurst = false
+					ui:buzz(1, 0.25)
+					ui:hint("펑! 소다를 너무 많이 넣어서 터졌어요")
+				end
 				foamStreaks(S, puff, stir.active and stirTip or nil, dt, streaks)
 				-- 부푸는 동안 보글보글
 				Sfx.loop("foamBubble", puff.done and 0 or 0.45, 0.9 + 0.25 * rec.puff)
@@ -690,7 +765,9 @@ function Soda.run(ctx)
 			ui:setMeter(true, rec.puff, 0.95, 1, "거품")
 			rec.fastFrac = tStir > 0 and tFast / tStir or 0
 			ui:say("빠르게 저어요!", string.format("부풀기 %d%% · 크림처럼 될 때까지", math.floor(rec.puff * 100)))
-			if puff and puff.done and puff.hold >= HOLD_TIME then
+			-- 터졌으면 흘러내리는 걸 다 보여 준 뒤에 넘어감
+			local burstWait = puff and puff.burstT ~= nil and puff.burstT < 1.7
+			if puff and puff.done and puff.hold >= HOLD_TIME and not burstWait then
 				break
 			end
 		end

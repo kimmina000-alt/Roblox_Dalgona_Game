@@ -4,6 +4,7 @@
 -- 조작: 철판 오른쪽에 놓인 막대를 끌어 반죽 위에 놓기 (반죽 쪽 끝이 반죽 안에 들어가면 쏙 박힘). 막대를 한 번 누르기만 해도 알아서 꽂힘.
 
 local Sfx = require(script.Parent.Parent:WaitForChild("Sfx"))
+local Toon = require(script.Parent.Parent:WaitForChild("Toon"))
 
 local Stick = {}
 
@@ -95,6 +96,10 @@ function Stick.place(ctx)
 				if dir then
 					st.stick = { dir = dir }
 					Stick.follow(st)
+					-- 꽂은 뒤로는 막대도 다른 도구처럼 만화 외곽선 (2026-11-20)
+					if st.stickModel then
+						Toon.outline(st.stickModel)
+					end
 					Sfx.play("pressSticky", 0.4, 1.4)
 					ui:buzz(0.3, 0.05)
 					ui:toast("막대 쏙!", 0.7)
