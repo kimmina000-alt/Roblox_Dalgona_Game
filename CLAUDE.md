@@ -1,0 +1,49 @@
+# 달고나 골목 (Dalgona Alley) — 작업 메모
+
+- 사용자는 한국어로 쓴다. 답도 한국어로.
+- 원본은 GitHub(`kimmina000-alt/Roblox_Dalgona_Game`). 기능마다 브랜치, 사용자가 승인하면 `main`에 머지한다.
+- `레퍼런스/`는 커밋하지 않는다.
+- 계획: `docs/DEVELOPMENT_PLAN.md` (4장 미니게임, 6장 개발 순서), 움직임 기준값: `docs/MOTION_REFERENCE_ANALYSIS.md`.
+
+## 코드 구조 (Rojo, `default.project.json`)
+| 폴더 | Studio 위치 | 내용 |
+|---|---|---|
+| `src/shared` | ReplicatedStorage.Shared | `DalgonaConfig`(수치), `Scoring`(Q 공식, 서버·클라 공용), `CutterShapes`(도안 외곽선, 자동 생성), `ShapeCatalog`(도안 목록·가격), `CutterRig`(작업대 틀에 도안 끼우기) |
+| `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수), `Services/WorkstationBuilder`(작업대를 Part로 생성), `Services/FactoryBuilder`(Lv5 공장 배치·색칠), `Services/StallDecor`(깅엄 식탁보·러그·색감 보정, 1단계 꾸미기: 은박지·설탕 결정·틀 쟁반·막대 통·포장 달고나 진열대, 테이블 오른쪽 +6 포장 공간 PackArea: 매트·비닐 통·빵끈 통) |
+| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker, Toon=도구 만화 외곽선, ChopstickCup=젓가락 통, BatterMesh=EditableMesh 반죽, Showcase=완성 달고나(포장했으면 포장째) 화면 정중앙에 띄워 보여 주기, Pack=모양 찍기 뒤 포장할지 고르면 테이블 오른쪽 포장 공간에서 네모 비닐 씌우기·빵끈 집어 두 번 끌어 묶기, HelperLadles=화로 위 알바생 국자 움직임, FoamMesh=소다 많이 넣었을 때 국자 넘쳐 흘러내리는 거품 3D), `Making/Steps/`(Stick=막대 꽂기 포함)(단계마다 모듈 1개) |
+
+미니게임 단계는 모듈 하나씩 (Luau 로컬 변수 200개 제한).
+
+## 고정 (사용자가 "너무 좋다, 고정해" 한 것 — 바꾸지 말 것, 2026-11-20)
+- 반죽 붓기: `Steps/Pour` 한 방울씩 떨어뜨리기 (먼저 떨어진 방울과 경계가 흐려지며 이어짐). 2026-11-20 사용자가 바꿈: 화면 오른쪽 반투명 판(철판과 같은 비율, `Ui:setPad`)을 누르고 있으면 판 위 자리와 같은 철판 자리로 떨어지고, 누른 채로 끌면 따라 움직임 (손가락이 철판을 안 가림), 화면은 누르기와 같음.
+- 누른 모양: `BatterMesh.rebuild` 가운데 평평하게 내려앉고 가장자리 두툼한 둥근 턱 (RIM_* 값), 기포는 부을 때 보이다 서서히 사라짐.
+- 다른 기능을 고치다 이 둘이 달라지면 안 된다. 바꿔야 하면 먼저 사용자에게 묻는다.
+
+## 에셋 (Rojo 밖, Studio에만 있음)
+- `ServerStorage.Assets.LadleMesh`: 사용자가 만든 구리 국자 (`레퍼런스/dalgona_gukja.glb`를 Studio에서 가져옴). `WorkstationBuilder.attachLadleMesh`가 투명한 판정용 원기둥 `Ladle.Bowl`에 맞춰 붙인다. 게임 코드는 계속 `Bowl` 기준으로 움직인다.
+- `ServerStorage.Assets.BrazierMesh / CoalMesh / CoalBurntMesh`: 사용자가 만든 화로·연탄·다 탄 연탄 (`레퍼런스/dalgona_wharo.glb`). 화로는 CorrodedMetal(낡은 금속). 연탄은 `WorkstationBuilder.setCoal(ws, 남은 양)`으로 높이·색이 바뀌고, 작업대 속성 `CoalLeft`에 남는다. 한 판 끝날 때마다 서버가 0.1씩 줄이고, 0이면 다음 판 시작 때 새 연탄.
+- `ServerStorage.Assets.PresserMesh`: 누름판 (`dalgona_nulumpan.glb`), 금속 + 국자와 같은 광택 텍스처.
+- `ReplicatedStorage.Assets.Chopsticks`: 나무젓가락·포장지 7조각 (`dalgona_joggalack.glb`). 클라이언트도 써야 해서 ReplicatedStorage. 조각마다 속성 `Offset`(짝 안에서 상대 위치). 포장지 = 흰 종이, 젓가락 = 연한 나무. 제작 시작 때 `Making/ChopstickPicker`가 고르기 연출을 하고, 고른 한 짝(`Chosen`)으로 젓는다.
+- `ServerStorage.Assets.Factory`: Lv5 달고나 공장 (Claude가 `tools/blender/factory.py`로 만든 `레퍼런스/factory/dalgona_factory.glb`, 부품 45개, 텍스처 포함). `FactoryBuilder.place`가 복제해 (0,0,30)에 놓고 재질·색·조명을 넣음. 가져온 방향: Blender (x,y,z) → 모델 (-x, z, y), 앞 = -Z.
+- `ServerStorage.Assets.MachineLine`: Lv4 연속 생산 설비(컨베이어 라인, `factory.py ... line` → `레퍼런스/line/dalgona_line.glb`, 부품 39개). `FactoryBuilder.placeLine`이 시험 자리 (28,0,-14)에 180° 돌려 놓음 (정식 "기계 자리"는 가게 배치 뒤). 공장과 라인 모두 파스텔 사탕 공장 그림체(2026-11-19).
+- `ServerStorage.Assets.StarCutterMesh`: 예전 별 틀 (지금은 안 씀, 도안 틀 전체로 바뀜).
+- 도안 틀 전체 (`ReplicatedStorage.Assets.Cutters` — 클라이언트 미리 보기·교체에 필요, 메시 이름 `Cutter_<id>`, 금속 광택 SteelShine 넣어 둠): `tools/blender/cutters.py` → `레퍼런스/dalgona_cutters.glb`(Cutter_<id>, 23개). 사용자 모형틀(3D.blend 모형틀1~8)이 있는 도안은 그 모델, 없는 도안은 `shapes.py`로 생성. 안쪽 선이 있는 도안(문어·호랑이·공룡·궁전·Master 4종)은 먼저 `python tools/blender/design_shapes.py`(OpenCV) → `shape_data.json`. `src/shared/CutterShapes.lua`는 자동 생성.
+- `ServerStorage.Assets.SugarBowlMesh / SugarHeapMesh / SodaCanMesh / SodaLabelMesh / SodaPowderMesh / WoodSpoonMesh / TinSpoonMesh`: Claude가 `tools/blender/props.py`로 만든 양은 설탕 그릇·소다 깡통·숟가락 (`레퍼런스/dalgona_props.glb`). 빌더가 붙이고 게임용 부품은 투명하게 남김. 스크립트를 다시 돌리면 `PROP_CENTER` 값도 같이 고친다.
+- `ReplicatedStorage.Assets.Fx`: 설탕 결정·설탕 더미·소다 가루·부푼 거품 (`tools/blender/fx.py` → `레퍼런스/dalgona_fx.glb`). 클라이언트 `Making/Fx`가 쓰고, 없으면 예전 Part 모양.
+- `BatterMesh`(반죽 3D)는 EditableMesh (2026-11-20 사용자가 Experience Settings > Security에서 켬). 정점을 직접 움직여 부은 결·누른 모양·찍힌 홈을 표현. 삼각형 한도(약 2만 개) 때문에 SEG 160 × RINGS 48. 꺼지면 예전 접힌 메시로 돌아감.
+- glb는 Roblox로 가져오면 앞뒤(Z)가 뒤집힌다. 다른 메시를 바꿀 때도 방향을 화면으로 먼저 확인한다.
+- glb의 금속도·거칠기 값(Principled BSDF 숫자)은 Roblox로 넘어오지 않는다. 그래서 `LadleMesh` 안에 SurfaceAppearance `CopperShine`을 직접 넣었다: 금속도 텍스처 `rbxassetid://75555295293901`(0.95), 거칠기 텍스처 `rbxassetid://116334782975968`(0.25), 색 (214,132,72). `rbxasset://` 내장 텍스처는 게임 안에서 막혀서 쓸 수 없다.
+
+## Studio 동기화
+- Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).
+- 이 PC에는 Rojo가 없고, Studio Assistant의 HTTP 허용 목록 때문에 로컬 서버에서 받아 오는 방식도 막혀 있다.
+  그래서 지금은 Studio MCP(`multi_edit` / `execute_luau`로 `Source` 설정)로 넣는다. **`src/`와 Studio를 항상 같게 유지한다.**
+- 확인 방법: 양쪽에서 같은 체크섬(`x = (x*31 + byte) % 2147483647`)을 계산해 모든 스크립트가 같은지 본다.
+- Rojo를 설치하면 `rojo serve`로 바꾼다 (프로젝트 파일은 이미 맞춰 둠).
+
+## 테스트
+- Play → 작업대 앞에서 E (또는 클라이언트에서 `MakingClient.StartMaking:Fire()`).
+- Studio에서만 `MakingClient.TestPointer:Fire(down, x, y)`로 손가락 입력을 프레임 단위로 넣을 수 있다 (자동 테스트용).
+  MCP 마우스 입력은 실제 속도보다 느리게 실행돼서 젓기 속도 판정 테스트에는 맞지 않는다.
+- MCP `screen_capture`는 카메라 위치를 꼭 넘긴다 (안 넘기면 플레이 카메라를 Custom으로 되돌림). 제작 중에는 CameraRig가 매 프레임 카메라를 다시 고정한다.
+- 결과는 출력창 `[Making] result ...`(클라)와 `[Production] ...`(서버)에 단계별 점수가 찍힌다.
