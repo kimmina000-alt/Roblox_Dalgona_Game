@@ -260,23 +260,41 @@ function Decor.setTablecloth(ws, on)
 	cloth.Parent = on and ws or game:GetService("ServerStorage")
 end
 
+-- 가게 작업대(속성 OwnerUserId, 2026-11-21 가게마다 작업대)는 그 주인의 식탁보만 보고, 작업대가 없어지면 연결을 끊는다.
 function Decor.watchOwners(ws)
 	local Players = game:GetService("Players")
+	local conns = {}
 	local function refresh()
+		if not ws.Parent then
+			return
+		end
+		local owner = ws:GetAttribute("OwnerUserId")
 		local any = false
 		for _, p in ipairs(Players:GetPlayers()) do
-			if p:GetAttribute("OwnsTablecloth") then
+			if p:GetAttribute("OwnsTablecloth") and (not owner or owner == 0 or p.UserId == owner) then
 				any = true
 			end
 		end
 		Decor.setTablecloth(ws, any)
 	end
-	Players.PlayerAdded:Connect(function(p)
-		p:GetAttributeChangedSignal("OwnsTablecloth"):Connect(refresh)
+	local function watch(p)
+		table.insert(conns, p:GetAttributeChangedSignal("OwnsTablecloth"):Connect(refresh))
+	end
+	for _, p in ipairs(Players:GetPlayers()) do
+		watch(p)
+	end
+	table.insert(conns, Players.PlayerAdded:Connect(function(p)
+		watch(p)
 		refresh()
-	end)
-	Players.PlayerRemoving:Connect(function()
+	end))
+	table.insert(conns, Players.PlayerRemoving:Connect(function()
 		task.defer(refresh)
+	end))
+	table.insert(conns, ws:GetAttributeChangedSignal("OwnerUserId"):Connect(refresh))
+	ws.Destroying:Connect(function()
+		for _, c in ipairs(conns) do
+			c:Disconnect()
+		end
 	end)
 	refresh()
 end

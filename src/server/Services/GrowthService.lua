@@ -264,12 +264,27 @@ end
 
 ---------------------------------------------------------------- 알바생 생산
 
+-- 알바생이 설 자리: 그 부지 작업대의 화로 뒤쪽 (손님·주인 쪽 +Z를 봄). 작업대가 없으면 작업대 자리 앞
+local function helperFoot(plot, i)
+	local ws = plot.model:FindFirstChild("Workstation")
+	local brazier = ws and ws:FindFirstChild("Brazier")
+	local top = ws and ws:FindFirstChild("TableTop")
+	local y = G.Plots.size.Y
+	if brazier and top then
+		local bp = brazier:GetPivot().Position
+		local z = top.Position.Z - top.Size.Z / 2 - G.Plots.minimeBehind
+		local x = bp.X + (i - 2) * G.Plots.minimeGap
+		return CFrame.lookAt(Vector3.new(x, y, z), Vector3.new(x, y, z + 1))
+	end
+	local spot = G.Plots.handStation.pos
+	return plot.cframe * CFrame.new(spot.X - 8 + (i - 1) * 5, y, spot.Z - 2.5)
+end
+
 -- 미니미를 못 만들 때 쓰는 부품 인형
 local function helperModel(player, plot, i)
 	local m = Instance.new("Model")
 	m.Name = "Helper" .. i
-	local spot = G.Plots.handStation.pos
-	local cf = plot.cframe * CFrame.new(spot.X - 8 + (i - 1) * 5, G.Plots.size.Y, spot.Z - 2.5)
+	local cf = helperFoot(plot, i)
 	local function p(name, size, off, color, shape)
 		local x = Instance.new("Part")
 		x.Name = name
@@ -408,8 +423,7 @@ local function syncHelpers(player, d)
 			st.building = true
 			local h = d.partTimers[i]
 			task.spawn(function()
-				local spot = G.Plots.handStation.pos
-				local foot = plot.cframe * CFrame.new(spot.X - 8 + (i - 1) * 5, G.Plots.size.Y, spot.Z - 2.5)
+				local foot = helperFoot(plot, i)
 				local m = Minime.build(player, plot.model, foot, i, h and h.skill or 0)
 				if not player.Parent or helperState[player] ~= states then
 					if m then
@@ -589,6 +603,11 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 			end
 		end
 		player:SetAttribute("UnlockedShapes", table.concat(d.unlockedShapes, ","))
+		-- 가게 작업대 화로 위 국자 수 = 산 국자 수 (Making/HelperLadles가 그림)
+		local ws = Plots.workstation and Plots.workstation(player)
+		if ws and ws:GetAttribute("LadleCount") ~= d.ladles then
+			ws:SetAttribute("LadleCount", d.ladles)
+		end
 		syncHelpers(player, d)
 	end)
 	Players.PlayerRemoving:Connect(function(p)

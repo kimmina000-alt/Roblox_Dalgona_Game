@@ -4,14 +4,18 @@
 --  - 손 작업대 자리 (D10: 끝까지 남음)
 --  - 기계 1자리 (D10: 설비 2~4단계를 여기서 교체)
 --  - 가게 뒤 공장 문 자리 (D11: 지금은 문만, 누르면 "준비 중")
--- 지금 실제 작업대는 스폰 앞 하나(DalgonaWorkstation)뿐이라, 부지의 작업대 자리는 표시만 한다.
--- 수치·위치는 GrowthConfig.Plots.
+-- 손 작업대 (17b, 2026-11-21): 부지를 배정하면 그 부지의 작업대 자리에 WorkstationBuilder로 작업대를 만들고
+-- StallDecor 꾸미기(1단계·PackArea)를 붙인다. 반환하면 치운다. 두 세션이 같이 쓰는 규칙:
+--   모델 = 부지 안 "Workstation", 속성 OwnerUserId = 주인, 연탄 CoalLeft는 작업대마다 따로.
+-- 스폰 앞 공용 DalgonaWorkstation은 그대로 둔다 (사용자 결정 대기). 수치·위치는 GrowthConfig.Plots.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local G = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("GrowthConfig"))
 local P = G.Plots
+local WorkstationBuilder = require(script.Parent:WaitForChild("WorkstationBuilder"))
+local StallDecor = require(script.Parent:WaitForChild("StallDecor"))
 
 local PlotService = {}
 
@@ -160,6 +164,96 @@ local function buildPlot(index, parent)
 	return { model = m, owner = nil, cframe = cf, signLabel = label }
 end
 
+---------------------------------------------------------------- 손 작업대
+
+-- 바닥 높이(Y)로 저장된 속성: 작업대를 올리면 같이 올려야 함 (WorkstationBuilder·StallDecor가 씀)
+local Y_ATTRS = { "GrillTopY", "BottomY", "TopY" }
+-- 틀: 꾸며진 작업대(ServerStorage.Assets.WorkstationTemplate, 없으면 공용 DalgonaWorkstation)를 서버 시작 때 복제해 둠.
+-- WorkstationBuilder.build는 실행 중에 국자 광택 텍스처(SurfaceAppearance)를 못 써서 실패하므로 복제해 씀.
+local template = nil
+
+local function buildWorkstation(i, player)
+	local plot = plots[i]
+	local old = plot.model:FindFirstChild("Workstation")
+	if old then
+		old:Destroy()
+	end
+	local ok, ws = pcall(function()
+		-- 원래 자리(공용 작업대와 같은 좌표)의 복제를 옮김. 틀이 없으면(공용 작업대가 없을 때) 새로 만듦
+		local w
+		if template then
+			w = template:Clone()
+			w.Name = "Workstation"
+			w:SetAttribute("OwnerUserId", player.UserId)
+			w:SetAttribute("PlotIndex", i)
+			w.Parent = plot.model
+			StallDecor.watchOwners(w) -- 식탁보: 이 가게 주인 것만
+		else
+			w = WorkstationBuilder.build(plot.model)
+			w.Name = "Workstation"
+			w:SetAttribute("OwnerUserId", player.UserId)
+			w:SetAttribute("PlotIndex", i)
+			StallDecor.dress(w)
+		end
+		return w
+	end)
+	if not ok then
+		warn("[Plot] workstation build failed", ws)
+		return nil
+	end
+	-- 꾸미기까지 포함한 크기(러그 빼고)의 가운데를 작업대 자리로
+	local mn, mx = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
+	for _, d in ipairs(ws:GetDescendants()) do
+		if d:IsA("BasePart") and not d:FindFirstAncestor("Rug") then
+			mn = mn:Min(d.Position - d.Size / 2)
+			mx = mx:Max(d.Position + d.Size / 2)
+		end
+	end
+	local center = (mn + mx) / 2
+	local target = (plot.cframe * CFrame.new(P.handStation.pos)).Position
+	local dy = P.size.Y -- 부지 바닥 위로
+	local move = Vector3.new(target.X - center.X, dy, target.Z - center.Z)
+	ws:PivotTo(ws:GetPivot() + move) -- 돌리지 않음: 공용 작업대처럼 손님 쪽(+Z)에서 만듦
+	for _, d in ipairs(ws:GetDescendants()) do
+		for _, name in ipairs(Y_ATTRS) do
+			local v = d:GetAttribute(name)
+			if type(v) == "number" then
+				d:SetAttribute(name, v + dy)
+			end
+		end
+	end
+	WorkstationBuilder.setCoal(ws, 1) -- 연탄은 작업대마다 (CoalLeft)
+	WorkstationBuilder.watchLadles(ws) -- 국자 자리(Center 속성)를 옮긴 뒤 계산
+	-- 바닥 표시는 숨김 (진짜 작업대가 있음)
+	local spot = plot.model:FindFirstChild("HandStationSpot")
+	if spot then
+		spot.Transparency = 1
+		for _, c in ipairs(spot:GetChildren()) do
+			if c:IsA("SurfaceGui") then
+				c.Enabled = false
+			end
+		end
+	end
+	return ws
+end
+
+local function clearWorkstation(i)
+	local plot = plots[i]
+	local ws = plot.model:FindFirstChild("Workstation")
+	if ws then
+		ws:Destroy()
+	end
+	local spot = plot.model:FindFirstChild("HandStationSpot")
+	if spot then
+		spot.Transparency = 0.35
+		for _, c in ipairs(spot:GetChildren()) do
+			if c:IsA("SurfaceGui") then
+				c.Enabled = true
+			end
+		end
+	end
+end
+
 local function setOwner(i, player)
 	local plot = plots[i]
 	plot.owner = player
@@ -188,6 +282,9 @@ function PlotService.assign(player)
 			setOwner(i, player)
 			if typeof(player) == "Instance" then
 				player:SetAttribute("PlotIndex", i)
+				if P.buildWorkstation then
+					buildWorkstation(i, player)
+				end
 			end
 			print(string.format("[Plot] %s -> Plot%d", player.Name, i))
 			return i
@@ -204,7 +301,14 @@ function PlotService.release(player)
 	end
 	byPlayer[player] = nil
 	setOwner(i, nil)
+	clearWorkstation(i)
 	print(string.format("[Plot] %s released Plot%d", player.Name, i))
+end
+
+-- 그 플레이어 가게의 손 작업대 (없으면 nil)
+function PlotService.workstation(player)
+	local i = byPlayer[player]
+	return i and plots[i].model:FindFirstChild("Workstation") or nil
 end
 
 function PlotService.get(player)
@@ -219,6 +323,18 @@ end
 
 function PlotService.init(opts)
 	notify = opts and opts.notify
+	-- 틀: ServerStorage.Assets.WorkstationTemplate(공용 작업대를 없앤 뒤, U8) → 없으면 스폰 앞 공용 작업대
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	local shared = (assets and assets:FindFirstChild("WorkstationTemplate")) or workspace:FindFirstChild("DalgonaWorkstation")
+	if shared and P.buildWorkstation then
+		template = shared:Clone()
+		for _, c in ipairs(template:GetChildren()) do
+			if c.Name:sub(1, 11) == "HelperLadle" then
+				c:Destroy() -- 알바생 국자는 옮긴 뒤 LadleCount로 다시 만듦
+			end
+		end
+		template:SetAttribute("LadleCount", 1)
+	end
 	local folder = workspace:FindFirstChild("ShopPlots")
 	if folder then
 		folder:Destroy() -- 서버가 새로 만든다 (Studio에 남은 것 정리)
