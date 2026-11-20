@@ -38,6 +38,8 @@ local ui = Ui.new(player, Config.Steps)
 CameraRig.init(station.model:GetPivot())
 
 local running = false
+local roundsPlayed = 0 -- 이번 접속에서 시작한 판 수 (처음 SUB_ROUNDS판은 설명 글씨를 늘 보여 줌)
+local SUB_ROUNDS = 2
 local current = nil -- 지금 진행 중인 ctx
 local shape = ShapeCatalog.get(ShapeCatalog.default) -- 고른 도안 (다시 하기는 같은 도안)
 local pickShape = true -- 다음 판 시작 때 도안 고르기 화면을 띄울지
@@ -146,6 +148,8 @@ local function runSession()
 	station:reset()
 	ui:hideResult()
 	ui:setQuality(100, Config.StarCut)
+	roundsPlayed += 1
+	ui:setSubAlways(roundsPlayed <= SUB_ROUNDS)
 	ui:show(true)
 	Pointer.reset()
 	Pointer.enabled = true

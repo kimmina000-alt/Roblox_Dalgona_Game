@@ -54,6 +54,19 @@ function Ui.new(player, steps)
 	self.onExit = nil
 	self.hintUntil = 0
 	self.baseSub = ""
+	-- 아래 작은 설명 글씨 (2026-11-20 사용자 선택 "처음 몇 판 + 막혔을 때"): 처음 판들은 늘 보이고,
+	-- 그 뒤에는 SUB_IDLE초 동안 화면을 안 만지면(막힘) 다시 보임. 실수 힌트(빨간 글씨)는 언제나 보임
+	self.subAlways = true
+	self.lastInput = os.clock()
+	local function touched()
+		self.lastInput = os.clock()
+	end
+	UserInputService.InputBegan:Connect(touched)
+	UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+			touched()
+		end
+	end)
 	-- 폰: 기준 해상도를 작게 잡고 버튼을 키워서 실제 화면에서 64px 이상이 되게
 	self.touch = UserInputService.TouchEnabled
 	self.ref = self.touch and Vector2.new(820, 460) or Vector2.new(1280, 720)
@@ -659,11 +672,20 @@ function Ui:setStep(i)
 	end
 end
 
+local SUB_IDLE = 5
+function Ui:subShown()
+	return self.subAlways or os.clock() - self.lastInput > SUB_IDLE
+end
+
+function Ui:setSubAlways(on)
+	self.subAlways = on
+end
+
 function Ui:say(main, sub)
 	self.main.Text = main
 	self.baseSub = sub or ""
 	if os.clock() >= self.hintUntil then
-		self.sub.Text = self.baseSub
+		self.sub.Text = self:subShown() and self.baseSub or ""
 		self.sub.TextColor3 = Color3.fromRGB(70, 66, 62)
 	end
 end
@@ -682,8 +704,13 @@ end
 function Ui:tick()
 	if self.hintUntil > 0 and os.clock() >= self.hintUntil then
 		self.hintUntil = 0
-		self.sub.Text = self.baseSub
 		self.sub.TextColor3 = Color3.fromRGB(70, 66, 62)
+	end
+	if self.hintUntil == 0 then
+		local want = self:subShown() and self.baseSub or ""
+		if self.sub.Text ~= want then
+			self.sub.Text = want
+		end
 	end
 end
 
