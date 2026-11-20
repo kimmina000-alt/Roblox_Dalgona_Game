@@ -34,6 +34,22 @@ PlayerDataService.MIGRATIONS = {
 			or (type(data.upgrades) == "table" and (tonumber(data.upgrades.table) or 0) > 0)
 		data.shop = { state = bought and "rented" or "stall", rentTimer = 0, closed = false }
 	end,
+	[4] = function(data)
+		-- v3 → v4 (진열대에 직접 놓기, 2026-11-21): 달고나마다 번호, 있던 달고나는 앞에서부터 진열대 칸에 놓인 것으로
+		local n = 1
+		if type(data.stock) == "table" then
+			for i, item in ipairs(data.stock) do
+				if type(item) == "table" then
+					item.id = n
+					n += 1
+					if i <= 10 then
+						item.sl = i
+					end
+				end
+			end
+		end
+		data.nextItemId = n
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

@@ -108,7 +108,28 @@ local function buildShelf(shop, plot)
 			Shape = Enum.PartType.Cylinder,
 			Transparency = 1,
 		})
-		shop.slots[i] = { disc = d, rim = rim }
+		-- 진열대에 직접 놓기 (2026-11-21): 빈 칸을 누르면 들고 있는 달고나(없으면 보관함 것)를 그 칸에 놓음.
+		-- 클라이언트 ShelfClient가 내 가게 칸만 보이게 함
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "PlacePrompt"
+		prompt.ActionText = "여기에 놓기"
+		prompt.ObjectText = "진열대 " .. i .. "번"
+		prompt.KeyboardKeyCode = Enum.KeyCode.R
+		prompt.HoldDuration = 0
+		prompt.MaxActivationDistance = 7
+		prompt.RequiresLineOfSight = false
+		prompt.Style = Enum.ProximityPromptStyle.Default
+		prompt.Enabled = false
+		prompt:SetAttribute("Slot", i)
+		prompt.Parent = d
+		prompt.Triggered:Connect(function(player)
+			if shop.owner ~= player then
+				return
+			end
+			local ok, msg = Economy.place(player, i)
+			Economy.notify(player, msg)
+		end)
+		shop.slots[i] = { disc = d, rim = rim, prompt = prompt }
 	end
 	m.Parent = plot.model
 	shop.shelf = m
@@ -122,10 +143,22 @@ local function refreshShelf(index)
 	local data = shop.owner and Data.get(shop.owner)
 	local stock = data and data.stock or {}
 	local slots = data and G.shelfSlots(data) or G.Shop.stallSlots
-	local n = math.min(#stock, slots)
+	-- 칸마다 놓인 달고나 (item.sl)
+	local bySlot = {}
+	local n = 0
+	for _, it in ipairs(stock) do
+		if it.sl and it.sl <= slots and not bySlot[it.sl] then
+			bySlot[it.sl] = it
+			n += 1
+		end
+	end
 	for i, s in ipairs(shop.slots) do
-		local item = stock[i]
-		if i <= n and item then
+		local item = bySlot[i]
+		-- 빈 칸(열린 칸 안)에만 "여기에 놓기"
+		local open = shop.owner ~= nil and i <= slots and item == nil
+		s.prompt:SetAttribute("Open", open) -- 클라이언트 ShelfClient가 이 값 + 내 가게 + 놓을 것으로 거름
+		s.prompt.Enabled = open
+		if item then
 			s.disc.Transparency = 0
 			s.rim.Transparency = 0
 			s.rim.Color = GRADE_RIM[item.g] or GRADE_RIM.Normal
@@ -138,6 +171,66 @@ local function refreshShelf(index)
 		end
 	end
 	shop.label.Text = string.format(slots < SALES.shelfSlots and "쟁반 %d/%d" or "진열대 %d/%d", n, slots) -- 노점은 쟁반 5칸 (D21)
+end
+
+---------------------------------------------------------------- 들고 있는 달고나 (속성 Carrying, 2026-11-21)
+
+local function updateCarried(player)
+	local char = player.Character
+	local hand = char and (char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm"))
+	local old = char and char:FindFirstChild("CarriedDalgona")
+	local id = player:GetAttribute("Carrying") or 0
+	if id == 0 or not hand then
+		if old then
+			old:Destroy()
+		end
+		return
+	end
+	local data = Data.get(player)
+	local item = nil
+	for _, it in ipairs(data and data.stock or {}) do
+		if it.id == id then
+			item = it
+		end
+	end
+	if old then
+		old:Destroy()
+	end
+	local d = Instance.new("Part")
+	d.Name = "CarriedDalgona"
+	d.Shape = Enum.PartType.Cylinder
+	d.Size = Vector3.new(0.16, 1.2, 1.2)
+	d.Color = (item and item.g == "Burnt") and Color3.fromRGB(60, 40, 28) or DALGONA
+	d.Material = Enum.Material.SmoothPlastic
+	d.CanCollide = false
+	d.CanQuery = false
+	d.CanTouch = false
+	d.Massless = true
+	-- 손 앞에 세워 듦 (원판 면이 앞을 봄)
+	d.CFrame = hand.CFrame * CFrame.new(0, -0.3, -0.7) * CFrame.Angles(0, math.rad(90), 0)
+	if item and item.pk then
+		local bag = Instance.new("SelectionBox") -- 포장한 것은 비닐 느낌 테두리
+		bag.Adornee = d
+		bag.Color3 = Color3.fromRGB(240, 245, 255)
+		bag.LineThickness = 0.03
+		bag.Transparency = 0.4
+		bag.Parent = d
+	end
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = hand
+	w.Part1 = d
+	w.Parent = d
+	d.Parent = char
+end
+
+local function watchCarry(player)
+	player:GetAttributeChangedSignal("Carrying"):Connect(function()
+		updateCarried(player)
+	end)
+	player.CharacterAdded:Connect(function(char)
+		char:WaitForChild("RightHand", 5)
+		updateCarried(player)
+	end)
 end
 
 ---------------------------------------------------------------- 손님
@@ -348,12 +441,20 @@ function SalesService.init(dataService, economyService, plotService)
 		shop.folder = folder
 	end
 
+	Players.PlayerAdded:Connect(watchCarry)
+	for _, p in ipairs(Players:GetPlayers()) do
+		watchCarry(p)
+	end
+
 	-- 데이터가 바뀌면 그 플레이어 가게의 진열대를 다시 그림
 	Data.Changed:Connect(function(player)
 		local _, index = Plots.get(player)
 		if index then
 			shops[index].owner = player
 			refreshShelf(index)
+		end
+		if (player:GetAttribute("Carrying") or 0) ~= 0 then
+			updateCarried(player) -- 포장하면 들고 있는 모습도 바뀜
 		end
 	end)
 	Players.PlayerRemoving:Connect(function(player)

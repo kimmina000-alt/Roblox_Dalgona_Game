@@ -432,8 +432,11 @@ local function stepHelper(player, d, i, h, st, dt)
 		dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + wage
 		dd.stats.helperMade = (dd.stats.helperMade or 0) + 1
 		local q, grade, mult = rollHelperQuality()
-		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
+		local item = { id = Economy.newItemId(dd), s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
+		if G.Shop.autoShelveHelpers then
+			item.sl = Economy.freeSlot(dd) -- 빈 칸이 있으면 알바생이 진열 (없으면 보관함)
+		end
 		table.insert(dd.stock, item)
 		ups = Economy.addExp(dd, G.ExpHelper)
 		if #ups > 0 then

@@ -217,7 +217,7 @@ local function buildPlot(index, parent)
 	canopy.Shape = Enum.PartType.Cylinder
 
 	-- 들어오는 자리 (스폰을 부지로 옮길 때 씀)
-	part(m, "Entry", Vector3.new(4, 0.2, 4), cf * CFrame.new(0, P.size.Y + 0.1, -12), FLOOR, Enum.Material.SmoothPlastic, {
+	part(m, "Entry", Vector3.new(4, 0.2, 4), cf * CFrame.new(P.entry or Vector3.new(0, 0, -12)) * CFrame.new(0, P.size.Y + 0.1, 0), FLOOR, Enum.Material.SmoothPlastic, {
 		Transparency = 1,
 		CanCollide = false,
 	})
@@ -263,7 +263,22 @@ local function buildWorkstation(i, player)
 		warn("[Plot] workstation build failed", ws)
 		return nil
 	end
-	-- 꾸미기까지 포함한 크기(러그 빼고)의 가운데를 작업대 자리로
+	-- 장식용 계단 진열대는 뺌 (진짜 진열대가 옆에 있음, 2026-11-21)
+	if P.removeDecorDisplay then
+		local decor = ws:FindFirstChild("Stage1Decor")
+		if decor then
+			for _, d in ipairs(decor:GetDescendants()) do
+				if d:IsA("BasePart") and d.Name:sub(1, 4) == "Show" then
+					d:Destroy()
+				end
+			end
+		end
+	end
+	-- 180° 돌림: 주인이 작업대 뒤(건물 쪽)에서 간판을 보고 만듦, 간판에서 보면 화로가 오른쪽 (2026-11-21)
+	if (P.workstationTurn or 0) ~= 0 then
+		ws:PivotTo(ws:GetPivot() * CFrame.Angles(0, math.rad(P.workstationTurn), 0))
+	end
+	-- 꾸미기까지 포함한 크기(러그 빼고)
 	local mn, mx = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
 	for _, d in ipairs(ws:GetDescendants()) do
 		if d:IsA("BasePart") and not d:FindFirstAncestor("Rug") then
@@ -271,11 +286,18 @@ local function buildWorkstation(i, player)
 			mx = mx:Max(d.Position + d.Size / 2)
 		end
 	end
-	local center = (mn + mx) / 2
-	local target = (plot.cframe * CFrame.new(P.handStation.pos)).Position
+	-- 한 줄로: 앞선(골목 쪽, 월드 +Z) = 진열대 앞선, 왼쪽(간판에서 볼 때) = 진열대 오른쪽 끝 + 틈
+	local SH = G.Sales.shelf
+	local shelfFront = (plot.cframe * CFrame.new(SH.pos.X, 0, SH.pos.Z - SH.size.Z / 2)).Position.Z
+	local shelfRight = (plot.cframe * CFrame.new(SH.pos.X - SH.size.X / 2, 0, 0)).Position.X
+	local fenceRight = (plot.cframe * CFrame.new(-(P.size.X / 2 - 0.5), 0, 0)).Position.X
+	local dx = (shelfRight + (P.rowGap or 0.3)) - mn.X
+	if mx.X + dx > fenceRight then
+		dx = fenceRight - mx.X -- 울타리 밖으로 나가지 않게 (진열대 쪽으로 붙음)
+	end
 	local dy = P.size.Y -- 부지 바닥 위로
-	local move = Vector3.new(target.X - center.X, dy, target.Z - center.Z)
-	ws:PivotTo(ws:GetPivot() + move) -- 돌리지 않음: 공용 작업대처럼 손님 쪽(+Z)에서 만듦
+	local move = Vector3.new(dx, dy, shelfFront - mx.Z)
+	ws:PivotTo(ws:GetPivot() + move)
 	for _, d in ipairs(ws:GetDescendants()) do
 		for _, name in ipairs(Y_ATTRS) do
 			local v = d:GetAttribute(name)
