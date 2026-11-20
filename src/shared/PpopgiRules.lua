@@ -17,7 +17,7 @@ R.SAFE = 0.45 -- 안전 속도 (stud/초). 넘으면 금 갈 힘이 쌓임
 R.FAST_K = 2.0 -- (속도/SAFE − 1) × FAST_K × 시간
 R.OFF_K = 1.4 -- 선 밖에서 긁으면 초당 쌓이는 힘
 R.RELAX = 0.12 -- 천천히 긁는 동안 초당 빠지는 힘
-R.TAU = 0.3 -- 속도는 이 시간(초)만큼 부드럽게 잼 (손 떨림을 빠르기로 안 셈)
+R.WIN = 0.35 -- 속도 = 최근 이 시간(초) 동안 선을 따라 간 길이 ÷ 시간 (손 떨림은 상쇄, 별 꼭짓점에서도 제 속도)
 R.BREAK = 3 -- 금이 이만큼이면 쪼개짐
 R.DONE = 0.96 -- 따라간 비율이 이만큼이면 뽑기 성공
 R.RATE = 20 -- 초당 표본 수
@@ -115,7 +115,7 @@ function R.newRun(path)
 	for li in ipairs(path.loops) do
 		hit[li] = {}
 	end
-	return { path = path, hit = hit, covered = 0, stress = 0, cracks = 0, crackAt = {}, offT = 0, downT = 0, vx = 0, vy = 0, last = nil, t = 0, newBins = {} }
+	return { path = path, hit = hit, covered = 0, stress = 0, cracks = 0, crackAt = {}, offT = 0, downT = 0, hist = {}, last = nil, t = 0, newBins = {} }
 end
 
 local function mark(run, li, b)
@@ -153,7 +153,7 @@ function R.feed(run, t, x, y, down)
 	run.t = t
 	if not down then
 		run.last = nil
-		run.vx, run.vy = 0, 0
+		run.hist = {}
 		return nil, nil
 	end
 	local li, s, d = R.nearest(run.path, x, y)
@@ -169,13 +169,28 @@ function R.feed(run, t, x, y, down)
 			mark(run, li, math.floor(s / run.path.loops[li].binLen))
 		end
 	end
+	local hist = run.hist
+	table.insert(hist, { t, x, y, li, s, on })
+	while #hist > 1 and hist[2][1] <= t - R.WIN do
+		table.remove(hist, 1)
+	end
 	if last and not far then
 		local dt = math.clamp(t - last.t, 0, 0.25)
 		if dt > 0 then
-			local k = math.min(1, dt / R.TAU)
-			run.vx += ((x - last.x) / dt - run.vx) * k
-			run.vy += ((y - last.y) / dt - run.vy) * k
-			local speed = math.sqrt(run.vx * run.vx + run.vy * run.vy)
+			local ref = hist[1]
+			local span = t - ref[1]
+			local speed = 0
+			if span >= 0.1 then
+				local dd
+				if on and ref[6] and ref[4] == li then
+					local len = run.path.loops[li].len
+					dd = (s - ref[5]) % len
+					dd = math.min(dd, len - dd)
+				else
+					dd = math.sqrt((x - ref[2]) ^ 2 + (y - ref[3]) ^ 2)
+				end
+				speed = dd / span
+			end
 			state.speed = speed
 			run.downT += dt
 			local add = 0
@@ -242,8 +257,11 @@ function R.evaluate(path, flat, maxT)
 		if type(t) ~= "number" or type(x) ~= "number" or type(y) ~= "number" or t ~= t or x ~= x or y ~= y then
 			return nil, "bad number"
 		end
-		if t < prevT or t > maxT or math.abs(x) > 5 or math.abs(y) > 5 then
+		if t < prevT or t > maxT then
 			return nil, "bad time"
+		end
+		if dn == 1 and (math.abs(x) > 5 or math.abs(y) > 5) then
+			return nil, "bad position" -- 누르고 있을 때만 (안 누를 땐 손가락이 화면 어디든 있음)
 		end
 		prevT = t
 		R.feed(run, t, x, y, dn == 1)

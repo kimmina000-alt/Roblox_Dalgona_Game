@@ -17,6 +17,8 @@ local SCRAPED = Color3.fromRGB(104, 58, 24) -- 긁어 낸 선
 local CRACK_RED = Color3.fromRGB(228, 42, 36)
 local STEEL = Color3.fromRGB(205, 208, 214)
 local NEEDLE_LEN = 1.15
+-- 3D 반죽 정점 높이(surfaceY)보다 이만큼 위에 그려야 보임 (2026-11-20 Studio 확인: +0.02는 묻힘, +0.06 보임)
+local LIFT = 0.06
 
 -- ctx.frame()으로 기다림. 반환 { samples, res(클라 계산), quit } 또는 nil(중단·준비 안 됨)
 function Ppopgi.run(ctx, dal, shapeId)
@@ -33,8 +35,15 @@ function Ppopgi.run(ctx, dal, shapeId)
 		local v = frame:PointToObjectSpace(w)
 		return v.X, -v.Z
 	end
+	-- 반죽 윗면 높이 (3D 반죽은 가장자리 턱·홈이 있어서 정점 높이로, 아니면 윗면)
+	local function surfY(w)
+		local b = dal.batter
+		local y = b and b.surfaceY and b:surfaceY(w)
+		return y or topY
+	end
 	local function toWorld(x, y, lift)
-		return frame:PointToWorldSpace(Vector3.new(x, lift or 0, -y))
+		local w = frame:PointToWorldSpace(Vector3.new(x, 0, -y))
+		return Vector3.new(w.X, surfY(w) + (lift or 0), w.Z)
 	end
 	local function tangent(li, s)
 		local ax, ay = Rules.pointAt(path, li, s - 0.01)
@@ -44,9 +53,14 @@ function Ppopgi.run(ctx, dal, shapeId)
 		return d.Magnitude > 1e-5 and d.Unit or Vector3.xAxis
 	end
 
-	-- 카메라: 달고나를 위에서 크게
-	local R = dal:radius()
-	CameraRig.goPoint(Vector3.new(dal.center.X, topY, dal.center.Z), math.max(R * 4.2, 3), 0.1, 0.6)
+	-- 카메라: 긁을 선(틀 자국)을 위에서 크게 (선 전체가 화면 높이의 약 60%)
+	local ext = 0
+	for _, L in ipairs(path.loops) do
+		for i = 1, L.n do
+			ext = math.max(ext, math.abs(L.x[i]), math.abs(L.y[i]))
+		end
+	end
+	CameraRig.goPoint(Vector3.new(root.Position.X, topY, root.Position.Z), math.max(ext * 4.6, 2.2), 0.1, 0.6)
 
 	-- 점선 (칸마다 짧은 줄 하나, 긁으면 진한 홈으로 이어짐)
 	local dashes = {}
@@ -55,7 +69,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 		for b = 0, L.nb - 1 do
 			local s = (b + 0.5) * L.binLen
 			local x, y = Rules.pointAt(path, li, s)
-			local pos = toWorld(x, y, 0.014)
+			local pos = toWorld(x, y, LIFT)
 			local dir = tangent(li, s)
 			dashes[li][b] = S:fxPart(S.fx, {
 				Name = "Engrave",
@@ -80,7 +94,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 		local li, s = Rules.nearest(path, x, y)
 		local along = tangent(li, s)
 		local across = along:Cross(Vector3.yAxis).Unit
-		local p = toWorld(x, y, 0.016)
+		local p = toWorld(x, y, LIFT + 0.004)
 		local side = math.random() < 0.5 and 1 or -1
 		for k = 1, 3 do
 			local len = 0.09 + math.random() * 0.07
@@ -103,7 +117,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 			Material = Enum.Material.Neon,
 			Transparency = 0.25,
 			Size = Vector3.new(0.01, 0.16, 0.16),
-			CFrame = CFrame.new(toWorld(x, y, 0.018)) * CFrame.Angles(0, 0, math.pi / 2),
+			CFrame = CFrame.new(toWorld(x, y, LIFT + 0.008)) * CFrame.Angles(0, 0, math.pi / 2),
 		})
 	end
 
@@ -123,7 +137,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 		shaft.Color = STEEL:Lerp(CRACK_RED, math.clamp(stress, 0, 1) * 0.8)
 	end
 	local function tipFromPointer()
-		local f = P.toPlane(topY)
+		local f = P.toPlane(topY + 0.03)
 		if touch then
 			-- 폰: 손가락에 바늘 끝이 가리지 않게 화면 위쪽으로 조금
 			local up = workspace.CurrentCamera.CFrame.UpVector
@@ -132,7 +146,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 				f += flat.Unit * 0.35
 			end
 		end
-		return Vector3.new(f.X, topY, f.Z)
+		return Vector3.new(f.X, surfY(f) + LIFT - 0.01, f.Z)
 	end
 
 	ui:say("바늘로 점선을 따라 긁어요", "천천히! 빠르게 긋거나 선을 벗어나면 금이 가요")
@@ -176,8 +190,8 @@ function Ppopgi.run(ctx, dal, shapeId)
 			wasDown = downNow
 			if #samples < Rules.MAX_SAMPLES * 4 then
 				local x, y = toLocal(tip)
-				x = math.floor(x * 1000 + 0.5) / 1000
-				y = math.floor(y * 1000 + 0.5) / 1000
+				x = math.floor(math.clamp(x, -4, 4) * 1000 + 0.5) / 1000
+				y = math.floor(math.clamp(y, -4, 4) * 1000 + 0.5) / 1000
 				local st = math.floor(t * 1000 + 0.5) / 1000
 				table.insert(samples, st)
 				table.insert(samples, x)
