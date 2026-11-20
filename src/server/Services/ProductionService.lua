@@ -17,8 +17,10 @@ local COAL_PER_MAKE = 0.1 -- 연탄 1장으로 10번 만듦
 local ProductionService = {}
 
 -- 저장·가게(Phase 2) 연결: canStart(player, shape) -> ok, 이유 / onStart(player, shape) 세션 열림(젓가락) /
--- onResult(player, shape, result) -> 보상
+-- onResult(player, shape, result) -> 보상 / mods(player) -> { stove = 화로 Lv, presser = 누르개 Lv } (장비 업그레이드, Phase 4)
 ProductionService.hooks = {}
+local STOVE_BAND = 0.08 -- GrowthConfig.StoveBandPerLevel 과 같은 값 (서버만 씀)
+local PRESSER_BAND = 0.08
 
 local sessions = {} -- [player] = { id, t0, lastStart }
 
@@ -40,12 +42,16 @@ local FIELDS = {
 }
 
 -- 표본으로 비율 다시 계산: 표본 = { zone(1 느림, 2 적당, 3 빠름), temp }
-local function recomputeMelt(rec, samples)
+local function recomputeMelt(rec, samples, bandMul)
 	if type(samples) ~= "table" or #samples < 5 then
 		return
 	end
 	local n, green, ok, counted = 0, 0, 0, 0
 	local started = false
+	-- 화로 업그레이드: 적정 온도 구간을 가운데 기준으로 넓힘
+	local mid = (Config.Melt.tempLow + Config.Melt.tempHigh) / 2
+	local half = (Config.Melt.tempHigh - Config.Melt.tempLow) / 2 * (bandMul or 1)
+	local okLow, okHigh = mid - half, mid + half
 	for i, s in ipairs(samples) do
 		if i > Config.Server.maxSamples then
 			break
@@ -62,7 +68,7 @@ local function recomputeMelt(rec, samples)
 			end
 			if started then
 				counted += 1
-				if temp >= Config.Melt.tempLow - 5 and temp <= Config.Melt.tempHigh + 3 then
+				if temp >= okLow - 5 and temp <= okHigh + 3 then
 					ok += 1
 				end
 			end
@@ -98,7 +104,8 @@ local function recomputeSoda(rec, samples)
 end
 
 -- 반환: records(정리된 것) 또는 nil, 이유
-local function sanitize(session, raw)
+local function sanitize(session, raw, mods)
+	mods = mods or {}
 	if type(raw) ~= "table" then
 		return nil, "bad payload"
 	end
@@ -132,7 +139,7 @@ local function sanitize(session, raw)
 		if step.key == "melt" then
 			rec.burnt = r.burnt == true or rec.burn >= 1
 			burnt = rec.burnt
-			recomputeMelt(rec, r.samples)
+			recomputeMelt(rec, r.samples, 1 + STOVE_BAND * ((mods.stove or 1) - 1))
 		elseif step.key == "soda" then
 			recomputeSoda(rec, r.samples)
 		elseif step.key == "press" then
@@ -142,6 +149,7 @@ local function sanitize(session, raw)
 				rec.thick[i] = num(thick[i], 0, 2, 1)
 			end
 			rec.cracked = r.cracked == true or rec.thick[3] < Config.Press.crack
+			rec.tolMul = 1 + PRESSER_BAND * ((mods.presser or 1) - 1) -- 누르개 업그레이드: 두께 판정 폭
 		end
 		out[step.key] = rec
 	end
@@ -182,7 +190,8 @@ function ProductionService.submit(player, sessionId, raw)
 	end
 	sessions[player] = nil -- 한 세션은 한 번만 제출
 	local now = workspace:GetServerTimeNow()
-	local records, lastEnd = sanitize(s, raw)
+	local mods = ProductionService.hooks.mods and ProductionService.hooks.mods(player) or nil
+	local records, lastEnd = sanitize(s, raw, mods)
 	if not records then
 		warn("[Production] rejected", player.Name, lastEnd)
 		return { ok = false, reason = lastEnd }

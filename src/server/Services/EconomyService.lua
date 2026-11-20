@@ -19,6 +19,20 @@ local remotes = nil
 local lastBuy = {} -- [player] = os.clock()
 local lastMade = {} -- [player] = { item, t } 방금 만든 달고나 (포장 대상)
 
+-- 다른 서비스(GrowthService)가 듣는 일: "handMade"(player, shape, result) / "sold"(player, n, coins) /
+-- "packed"(player) / "levelUp"(player, level)
+local listeners = {}
+function EconomyService.on(name, fn)
+	listeners[name] = listeners[name] or {}
+	table.insert(listeners[name], fn)
+end
+local function fire(name, ...)
+	for _, fn in ipairs(listeners[name] or {}) do
+		task.spawn(fn, ...)
+	end
+end
+EconomyService.extendSnapshot = nil -- function(player, data, snap) (GrowthService가 채움)
+
 local ingredientById = {}
 for _, ing in ipairs(G.Ingredients) do
 	ingredientById[ing.id] = ing
@@ -38,10 +52,44 @@ local function snapshot(player, data)
 			return t
 		end)(),
 		stock = #data.stock,
-		stockMax = G.StockMax,
+		stockMax = G.stockMax(data),
 		plot = player:GetAttribute("PlotIndex"),
 		saving = Data.canSave(player),
 	}
+end
+
+local function fullSnapshot(player, data)
+	local snap = snapshot(player, data)
+	if EconomyService.extendSnapshot then
+		EconomyService.extendSnapshot(player, data, snap)
+	end
+	return snap
+end
+
+-- data 안에서 EXP를 더하고 레벨업 처리 (Data.update 안에서 부름). 반환: 오른 레벨 목록, 받은 코인
+function EconomyService.addExp(d, amount)
+	local ups, coins = {}, 0
+	d.exp += amount
+	while d.level < G.MaxLevel and d.exp >= G.expToNext(d.level) do
+		d.exp -= G.expToNext(d.level)
+		d.level += 1
+		local c = G.LevelCoins[d.level] or 0
+		d.coins += c
+		coins += c
+		table.insert(ups, d.level)
+	end
+	if d.level >= G.MaxLevel then
+		d.exp = 0
+	end
+	return ups, coins
+end
+
+-- 레벨업 알림 + GrowthService(해금)에 알림
+function EconomyService.announceLevels(player, ups)
+	for _, lv in ipairs(ups) do
+		EconomyService.notify(player, string.format("레벨 업! Lv%d (+%d 코인)", lv, G.LevelCoins[lv] or 0))
+		fire("levelUp", player, lv)
+	end
 end
 
 function EconomyService.push(player)
@@ -50,7 +98,7 @@ function EconomyService.push(player)
 		player:SetAttribute("Chopsticks", data.ingredients.chopsticks or 0) -- 제작 화면이 젓가락 꺼내기 전에 봄
 	end
 	if data and remotes then
-		remotes.PlayerState:FireClient(player, snapshot(player, data))
+		remotes.PlayerState:FireClient(player, fullSnapshot(player, data))
 	end
 end
 
@@ -100,8 +148,8 @@ function EconomyService.canMake(player, shape)
 	if G.EnforceUnlocks and not table.find(data.unlockedShapes, shape.id) then
 		return false, "아직 안 열린 도안이에요"
 	end
-	if #data.stock >= G.StockMax then
-		return false, string.format("달고나 보관함이 가득 찼어요 (%d개)", G.StockMax)
+	if #data.stock >= G.stockMax(data) then
+		return false, string.format("달고나 보관함이 가득 찼어요 (%d개)", G.stockMax(data))
 	end
 	local need = G.recipe(shape.grade)
 	need.chopsticks = G.ChopsticksPerRound
@@ -145,6 +193,9 @@ function EconomyService.sell(player, n)
 		d.stats.sold = (d.stats.sold or 0) + sold
 		d.stats.coinsEarned = (d.stats.coinsEarned or 0) + coins
 	end)
+	if sold > 0 then
+		fire("sold", player, sold, coins)
+	end
 	return sold, coins
 end
 
@@ -180,6 +231,7 @@ function EconomyService.pack(player)
 		item.p = G.salePrice(item.b or item.p, item.b and item.m or 1, G.GachaBonusDefault, true)
 	end)
 	lastMade[player] = nil
+	fire("packed", player)
 	return { ok = true, price = item.p }
 end
 
@@ -196,7 +248,7 @@ function EconomyService.onMade(player, shape, result)
 		for id, n in pairs(need) do
 			d.ingredients[id] = math.max(0, (d.ingredients[id] or 0) - n)
 		end
-		if #d.stock < G.StockMax then
+		if #d.stock < G.stockMax(d) then
 			local item = {
 				s = shape.id,
 				g = result.grade,
@@ -211,19 +263,10 @@ function EconomyService.onMade(player, shape, result)
 			reward.stocked = true
 		end
 		d.stats.made = (d.stats.made or 0) + 1
-		d.exp += reward.exp
-		while d.level < G.MaxLevel and d.exp >= G.expToNext(d.level) do
-			d.exp -= G.expToNext(d.level)
-			d.level += 1
-			local c = G.LevelCoins[d.level] or 0
-			d.coins += c
-			reward.coins += c
-			table.insert(reward.levelUps, d.level)
-		end
+		reward.levelUps, reward.coins = EconomyService.addExp(d, reward.exp)
 	end)
-	for _, lv in ipairs(reward.levelUps) do
-		EconomyService.notify(player, string.format("레벨 업! Lv%d (+%d 코인)", lv, G.LevelCoins[lv] or 0))
-	end
+	EconomyService.announceLevels(player, reward.levelUps)
+	fire("handMade", player, shape, result)
 	print(string.format("[Economy] %s made %s %s +%dEXP stock=%d", player.Name, shape.id, result.grade, reward.exp, #(Data.get(player) or { stock = {} }).stock))
 	return reward
 end
@@ -237,7 +280,7 @@ function EconomyService.init(dataService, r)
 	remotes.BuyIngredient.OnServerInvoke = EconomyService.buy
 	remotes.GetPlayerState.OnServerInvoke = function(player)
 		local data = Data.get(player, true)
-		return data and snapshot(player, data) or nil
+		return data and fullSnapshot(player, data) or nil
 	end
 	-- 부지 번호가 정해지면 HUD에도 보이게
 	local function watch(player)
