@@ -153,6 +153,11 @@ function Dalgona.new(station, center, color, volume, ellipse)
 end
 
 -- 3D 메시 모드: 두께에 맞는 메시 하나만 보이고, 지름·높이를 맞춤
+-- 첫 방울 때 멈칫하지 않게 3D 반죽 메시를 미리 만들어 둠 (붓기 시작할 때 부름, 2026-11-20)
+function Dalgona.prewarm(station, color)
+	BatterMesh.prewarm(station.fx, color)
+end
+
 function Dalgona:placeMeshes(h, d, k)
 	local c = self.center
 	local stage = h >= MOUND_H and "DalgonaMound" or (h >= FLAT_H and "DalgonaPuff" or "DalgonaFlat")

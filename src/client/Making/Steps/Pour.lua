@@ -385,6 +385,7 @@ function Pour.run(ctx)
 	local plate = S.Plate.Position
 	local half = S.Plate.Size.X / 2
 	local color = st.batterColor or S.Contents.Color
+	Dalgona.prewarm(S, color) -- 첫 방울 렉 없애기: 반죽 메시를 미리 만들어 둠 (붓는 방식은 그대로)
 	local volume = math.pi * 0.55 ^ 2 * Config.Press.h0
 	-- 국자 손잡이 잡는 자리 (국자 피벗 기준, 기울이기 전 자세). 메시 손잡이 = 손 붙이는 자리와 같음
 	local gripLocal = S:ladleGripLocal()

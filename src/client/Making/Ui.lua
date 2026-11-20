@@ -372,6 +372,23 @@ function Ui:_buildMeter()
 	self.meterBand = new("Frame", { BackgroundColor3 = Color3.fromRGB(80, 190, 90), BorderSizePixel = 0, Parent = track })
 	self.meterFill = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), BackgroundColor3 = INK, BackgroundTransparency = 0.25, BorderSizePixel = 0, Parent = track }, { corner(6) })
 	self.meterLabel = label({ Text = "", TextSize = 12, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 16), Parent = m })
+	-- 국자 높이 ↔ 온도 연결 (2026-11-20 사용자 요청 "국자 올리면 온도 바 내려가는 거 한눈에"):
+	-- 온도 막대 오른쪽 옆 화살표. 국자를 올리는 동안 파란 ▼(온도 내려감), 내리는 동안 빨간 ▲.
+	-- 국자 들기 안내(왼쪽 아래 ▲)가 떠 있으면 그 화살표와 같은 박자로 ▼가 내려감
+	self.meterTrend = label({
+		Name = "TempTrend",
+		Text = "▼",
+		TextSize = 56,
+		TextColor3 = Color3.fromRGB(70, 140, 235),
+		TextStrokeColor3 = Color3.new(1, 1, 1),
+		TextStrokeTransparency = 0,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(1, 4, 0.3, 0),
+		Size = UDim2.fromOffset(60, 60),
+		Visible = false,
+		ZIndex = 6,
+		Parent = m,
+	})
 	self.meter = m
 end
 
@@ -423,7 +440,7 @@ function Ui:_buildHeight()
 	new("Frame", { Name = "Track", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.new(0, 70, 1, -8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, ZIndex = 6, Parent = coach }, { corner(35) })
 	self.coachFinger = label({ Text = "▲", TextSize = 96, TextColor3 = Color3.fromRGB(255, 120, 160), TextStrokeColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.88, 0), Size = UDim2.fromOffset(110, 100), ZIndex = 7, Parent = coach })
 	local bubble = label({
-		Text = "이 줄을 아래에서 위로 끌면\n국자가 올라가요!",
+		Text = "이 줄을 위로 끌면 국자가 올라가고\n온도가 내려가요 ▼",
 		TextSize = 21,
 		TextColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.05,
@@ -573,6 +590,11 @@ function Ui:setCoach(on, pos)
 		self.coachFinger.TextTransparency = 0
 		self.coachTween = TweenService:Create(self.coachFinger, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1, false, 0.25), { Position = UDim2.new(0.5, 0, 0.12, 0), TextTransparency = 0.7 })
 		self.coachTween:Play()
+		-- 온도 옆 ▼도 같은 순간에 다시 시작 (같은 박자)
+		if self.trendTween then
+			self.trendTween:Cancel()
+			self.trendTween = nil
+		end
 	end
 end
 
@@ -695,8 +717,9 @@ function Ui:_buildResult()
 		TextSize = 22,
 		TextColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0,
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -18, 0, 16),
+		-- 2026-11-20 "노멀·페일 창 더 위로, 베이지 팝업에 반 걸치게": 팝업 위 테두리에 가운데가 오게
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -18, 0, 0),
 		Size = UDim2.fromOffset(130, 40),
 		Rotation = 8,
 		ZIndex = 12,
@@ -978,6 +1001,48 @@ function Ui:setThick(visible, h, h0, lo, hi, color)
 end
 
 -- title = 막대 위 이름 (온도·소다·거품), text = 아래 값 (151° 등)
+-- 온도 막대 옆 화살표 (국자 높이 ↔ 온도). dir: -1 = 국자를 올리는 중(온도 ↓), 1 = 내리는 중(온도 ↑), 0 = 손 안 댐.
+-- 매 프레임 부름. 손을 안 대고 국자 들기 안내가 떠 있으면 안내 화살표와 같은 박자로 ▼가 내려가는 모습
+local TREND_BLUE, TREND_RED = Color3.fromRGB(70, 140, 235), Color3.fromRGB(230, 70, 60)
+function Ui:setTempTrend(dir)
+	local a = self.meterTrend
+	if not a then
+		return
+	end
+	local now = os.clock()
+	if dir ~= 0 then
+		self.trendUntil = now + 0.5
+		self.trendDir = dir
+	end
+	local live = self.trendUntil and now < self.trendUntil
+	local coach = self.coach and self.coach.Visible
+	-- 온도 막대일 때만 (소다 단계 막대는 거품 양이라 국자 높이와 상관없음)
+	local isTemp = self.meter.Visible and self.meterTitle.Text == "온도"
+	local mode = (not isTemp) and "off" or (live and "live" or (coach and "coach" or "off"))
+	if mode ~= "coach" and self.trendTween then
+		self.trendTween:Cancel()
+		self.trendTween = nil
+	end
+	if mode == "off" then
+		a.Visible = false
+	elseif mode == "live" then
+		a.Visible = true
+		a.TextTransparency = 0
+		a.Text = self.trendDir < 0 and "▼" or "▲"
+		a.TextColor3 = self.trendDir < 0 and TREND_BLUE or TREND_RED
+		a.Position = UDim2.new(1, 4, 0.5, 0)
+	elseif not self.trendTween then
+		a.Visible = true
+		a.Text = "▼"
+		a.TextColor3 = TREND_BLUE
+		a.Position = UDim2.new(1, 4, 0.2, 0)
+		a.TextTransparency = 0
+		-- 국자 들기 안내 화살표(setCoach)와 같은 길이·박자
+		self.trendTween = TweenService:Create(a, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, -1, false, 0.25), { Position = UDim2.new(1, 4, 0.8, 0), TextTransparency = 0.7 })
+		self.trendTween:Play()
+	end
+end
+
 function Ui:setMeter(visible, value01, lo01, hi01, text, title)
 	self.meter.Visible = visible
 	if not visible then

@@ -156,7 +156,14 @@ end
 local OLD_WOOD = Color3.fromRGB(116, 86, 62)
 local STAIN = Color3.fromRGB(70, 48, 34)
 local function wornTable(ws, top)
-	if ws:FindFirstChild("Stains") then
+	local old = ws:FindFirstChild("Stains")
+	if old then
+		-- 2026-11-20 "반죽 떨어트리기 직전에 왼쪽에 하얀 원 뭐야, 삭제": 동그란 얼룩은 하얀 원처럼 보여서 뺌
+		for _, p in ipairs(old:GetChildren()) do
+			if p.Name == "Stain" then
+				p:Destroy()
+			end
+		end
 		return
 	end
 	top.Color = OLD_WOOD
@@ -170,13 +177,8 @@ local function wornTable(ws, top)
 	f.Name = "Stains"
 	local rng = Random.new(7)
 	local y = top.Size.Y / 2 + 0.006
-	for _ = 1, 9 do
-		local d = rng:NextNumber(0.5, 1.4)
-		local x = rng:NextNumber(-top.Size.X / 2 + 1, top.Size.X / 2 - 1)
-		local z = rng:NextNumber(-top.Size.Z / 2 + 0.6, top.Size.Z / 2 - 0.6)
-		local p = part(f, "Stain", Vector3.new(0.01, d, d * rng:NextNumber(0.6, 1)), top.CFrame * CFrame.new(x, y, z) * CFrame.Angles(0, rng:NextNumber(0, 6), math.rad(90)), STAIN, { Transparency = 0.7, Material = Enum.Material.SmoothPlastic })
-		p.Shape = Enum.PartType.Cylinder
-	end
+	-- 동그란 얼룩(Stain)은 2026-11-20에 뺌: 화면에서 하얀 원처럼 보임
+	local _ = rng
 	-- 모서리가 닳아 밝아진 가장자리
 	for _, s in ipairs({ -1, 1 }) do
 		part(f, "WornEdge", Vector3.new(top.Size.X, 0.05, 0.12), top.CFrame * CFrame.new(0, y - 0.02, s * (top.Size.Z / 2 - 0.05)), OLD_WOOD:Lerp(Color3.fromRGB(200, 170, 130), 0.35), { Transparency = 0.3, Material = Enum.Material.Wood })
@@ -206,7 +208,8 @@ local function chopstickCup(ws)
 	m.Name = "ChopstickCup"
 	local tableY = top.Position.Y + top.Size.Y / 2
 	-- 2026-11-20 폰 사진: 화면 위 안내 문구에 가려짐 → 앞(화면 아래)으로 1.2 당김
-	local base = Vector3.new(chop:GetPivot().Position.X, tableY, top.Position.Z - 1.0)
+	-- 2026-11-20 (다시): 젓가락 화면이 녹이기 화면과 같은 높이가 되면서 꺼낸 젓가락 끝이 안내 문구에 닿음 → 0.8 더 앞으로
+	local base = Vector3.new(chop:GetPivot().Position.X, tableY, top.Position.Z - 0.2)
 	local CUP_D, CUP_H = 1.0, 1.25
 	local tin = { Material = Enum.Material.CorrodedMetal, CanQuery = false }
 	local body = part(m, "Cup", Vector3.new(CUP_H, CUP_D, CUP_D), CFrame.new(base + Vector3.new(0, CUP_H / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(168, 172, 168), tin)

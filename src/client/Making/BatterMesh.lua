@@ -124,9 +124,39 @@ local function build(parent, color, seed)
 end
 
 local unavailable = false
+-- 미리 만들어 둔 반죽 메시 (2026-11-20 "반죽 떨어질 때 처음에 렉"): 첫 방울이 떨어지는 순간 메시를 만들면
+-- 정점 수천 개 + CreateMeshPartAsync 때문에 한 번 멈칫함 → 붓기 단계가 시작될 때 안 보이게 미리 만들어 둠
+local warm, warming = nil, false
+function Batter.prewarm(parent, color)
+	if warm and not (warm.part and warm.part.Parent) then
+		warm = nil -- 지난 판 정리 때 지워짐
+	end
+	if unavailable or warm or warming then
+		return
+	end
+	warming = true
+	task.spawn(function()
+		local ok, res = pcall(build, parent, color, math.random(1, 9999))
+		warming = false
+		if ok and res then
+			res.part.Transparency = 1
+			res.part.CFrame = CFrame.new(0, -500, 0)
+			warm = res
+		end
+	end)
+end
+
 function Batter.new(parent, color, seed)
 	if unavailable then
 		return nil
+	end
+	if warm and warm.part and warm.part.Parent then
+		local b = warm
+		warm = nil
+		b.part.Parent = parent
+		b.part.Color = color
+		b.part.Transparency = 0
+		return b
 	end
 	local ok, res = pcall(build, parent, color, seed)
 	if ok and res then

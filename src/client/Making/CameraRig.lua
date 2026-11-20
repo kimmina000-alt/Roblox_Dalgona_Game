@@ -18,7 +18,7 @@ local TILT = 0.12 -- 완전 수직이면 도구가 납작해 보여서 플레이
 -- 망원(FOV 40)으로 높이서 찍어서 높은 국자(화로 1.95배, y 약 8.1)와 테이블 위 그릇이 덜 찌그러짐
 local POSES = {
 	-- 2026-11-19 도구 간격 1.5씩 넓힘 (StallDecor.layout): 화로·국자·젓가락은 x -1.5, 철판·누름판·틀은 x +1.5
-	pick = { Vector2.new(-9.7, -1.7), 12.6 }, -- 테이블 왼쪽 끝 나무젓가락 통 + 꺼낸 젓가락
+	pick = { Vector2.new(-9.7, -1.7), 12.6 }, -- (안 씀: 2026-11-20부터 poseFor가 녹이기 화면을 옆으로 옮겨 만듦)
 	sugar = { Vector2.new(-4.9, 0.4), 17.0 }, -- 설탕 그릇 두 개 + 국자
 	melt = { Vector2.new(-5.9, 0.0), 16.2 }, -- 국자 (CameraRig.track으로 국자를 따라가며 화면 가운데에 둠)
 	soda = { Vector2.new(-4.4, 0.0), 16.4 }, -- 국자 + 소다 통 (게이지 위로). 통에 담가 휘저으니 통이 화면 안쪽에 오게 (2026-11-19)
@@ -46,7 +46,19 @@ function CameraRig.init(stationPivot)
 	origin = stationPivot
 end
 
+local trackPose -- 아래에서 정의 (젓가락 화면이 녹이기 화면을 그대로 옆으로 옮긴 것이라서 씀)
+local PICK_X = -9.7 -- 젓가락 화면 가운데 x (작업대 기준)
+
 function CameraRig.poseFor(key)
+	if key == "pick" then
+		-- 2026-11-20 "나무젓가락 화면이랑 연탄 화로 화면 위치가 다름": 녹이기 카메라(국자를 따라가는 화면)를
+		-- 높이·기울기·거리 그대로 두고 옆(x)으로만 옮긴 화면. 그래서 젓가락 → 화로로 갈 때 오른쪽으로만 움직임
+		local ws = workspace:FindFirstChild("DalgonaWorkstation")
+		local bowl = ws and ws:FindFirstChild("Ladle") and ws.Ladle:FindFirstChild("Bowl")
+		local by = bowl and origin:PointToObjectSpace(bowl.Position).Y or 8.1
+		local bz = bowl and origin:PointToObjectSpace(bowl.Position).Z or 0
+		return trackPose(origin:PointToWorldSpace(Vector3.new(PICK_X, by, bz + 0.3)), "melt")
+	end
 	local p = POSES[STEP_POSE[key] or key] or POSES.sugar
 	local c, y = p[1], p[2]
 	local tilt = p[3] or TILT
@@ -75,16 +87,19 @@ function CameraRig.track(fn)
 	tracker = fn
 end
 
-local function trackPose(p)
-	local pose = POSES[current] or POSES.sugar
+-- 따라가는 화면(녹이기)은 카메라가 국자에 가까워서 같은 SHIFT면 국자가 화면 아래로 너무 내려감
+-- (2026-11-20 "화면 너무 내려와서 국자 아래쪽은 나무젓가락으로 안 저어져") → 국자까지 거리의 이 비율만큼만
+local TRACK_SHIFT = 0.04
+function trackPose(p, poseKey)
+	local pose = POSES[poseKey or current] or POSES.sugar
 	local y = pose[2]
 	local vp = workspace.CurrentCamera.ViewportSize
 	if vp.X / math.max(vp.Y, 1) < 1.2 then
 		y = TABLE_TOP + (y - TABLE_TOP) * 1.6
 	end
 	local h = y - TABLE_TOP
-	p += origin:VectorToWorldSpace(Vector3.new(0, 0, -h * SHIFT))
 	local camY = origin:PointToWorldSpace(Vector3.new(0, y, 0)).Y
+	p += origin:VectorToWorldSpace(Vector3.new(0, 0, -(camY - p.Y) * TRACK_SHIFT))
 	local pos = Vector3.new(p.X, camY, p.Z) + origin:VectorToWorldSpace(Vector3.new(0, 0, h * (pose[3] or TILT)))
 	return CFrame.lookAt(pos, p, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))
 end

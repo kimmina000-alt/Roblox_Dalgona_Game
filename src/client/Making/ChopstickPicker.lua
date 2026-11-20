@@ -245,10 +245,17 @@ function Picker.run(ctx, opts)
 	end
 	-- 2) 화면 가운데로 사선으로 커지며 줌
 	local rootSize = ui.root.Size
-	local h = rootSize.Y.Offset * 0.82
+	-- 2026-11-20: 젓가락 화면이 녹이기 화면과 같아지면서 크게 띄운 젓가락 위 끝이 안내 문구에 가려짐 →
+	-- 안내 문구(설명 줄 포함) 아래 남는 칸 가운데에, 그 칸에 맞는 크기로
+	local topY = 0
+	if ui.pill and ui.pill.Visible then
+		topY = (ui.pill.AbsolutePosition.Y + ui.pill.AbsoluteSize.Y) / ui.scale.Scale + 36
+	end
+	local avail = rootSize.Y.Offset - topY - 8
+	local h = math.min(rootSize.Y.Offset * 0.82, avail)
 	TweenService:Create(holder, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
+		Position = UDim2.fromOffset(rootSize.X.Offset / 2, topY + avail / 2),
 		Size = UDim2.fromOffset(math.min(h * 0.75, rootSize.X.Offset * 0.6), h),
 	}):Play()
 	-- 2026-11-20 "젓가락 꺼내고 뽀갤 때 배경에 검은색 깔리는 거 삭제": 뒤 화면을 어둡게 하지 않음

@@ -331,8 +331,20 @@ function Pack.run(ctx, dal, st)
 	ui:setWorldTip(nil)
 	Sfx.play("bagYank", 0.7, 1.1)
 	bag3.part.Transparency = 0.68
-	-- 비닐 통에서 달고나 위쪽으로 살짝 떠서 날아옴
-	if not flyTo(bagBox.Position, OUT, 0.6, 0.45) then
+	-- 비닐은 화면 밖 위쪽에서 내려와 달고나 위에 떠 있음 (2026-11-20 "포장 비닐 화면 밖 상단에서부터 내려오기")
+	local startPos
+	do
+		local cam = workspace.CurrentCamera
+		local vp = cam.ViewportSize
+		local sx = screenOf(m + up * OUT).X
+		local ray = cam:ViewportPointToRay(sx, -vp.Y * 0.3)
+		local y = m.Y + LIFT
+		local dy = ray.Direction.Y
+		local tHit = (math.abs(dy) > 1e-3) and (y - ray.Origin.Y) / dy or 20
+		startPos = ray.Origin + ray.Direction * math.max(tHit, 1)
+		startPos = Vector3.new(startPos.X, m.Y, startPos.Z)
+	end
+	if not flyTo(startPos, OUT, LIFT, 0.6) then
 		return nil
 	end
 	ui:say("비닐에 넣어요", "비닐을 아래로 끌어 달고나에 씌워요")

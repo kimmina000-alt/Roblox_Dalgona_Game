@@ -72,6 +72,10 @@ function Heat.control(st, P, ui, S)
 	end
 	Heat.handleScreen = handle
 	ui:setCoach(not coached or st.wantLift or Heat.sourceTemp(st.h) > cfg.burnTemp or st.temp > cfg.tempHigh + 1, handle)
+	-- 온도 막대 옆 화살표: 국자를 올리면 ▼(온도 내려감), 내리면 ▲ (2026-11-20 "국자 올려서 온도 조절하는 거 한눈에")
+	if ui.setTempTrend then
+		ui:setTempTrend((d.Y < -0.01 and -1) or (d.Y > 0.01 and 1) or 0)
+	end
 	if P.side.down and P.side.start and ui:heightHit(P.side.start) then
 		-- 막대를 잡고 끌면 손가락 자리 = 국자 높이 (바로 따라옴)
 		st.h = cfg.hMin + ui:heightAt(P.side.pos.Y) * (cfg.hMax - cfg.hMin)
