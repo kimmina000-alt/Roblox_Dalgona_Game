@@ -10,7 +10,7 @@
 |---|---|---|
 | `src/shared` | ReplicatedStorage.Shared | `DalgonaConfig`(수치), `Scoring`(Q 공식, 서버·클라 공용), `CutterShapes`(도안 외곽선, 자동 생성), `ShapeCatalog`(도안 목록·가격), `CutterRig`(작업대 틀에 도안 끼우기) |
 | `src/server` | ServerScriptService.Server | `ServerMain`, `Services/ProductionService`(세션·서버 점수), `Services/WorkstationBuilder`(작업대를 Part로 생성), `Services/FactoryBuilder`(Lv5 공장 배치·색칠), `Services/StallDecor`(깅엄 식탁보·러그·색감 보정, 1단계 꾸미기: 은박지·설탕 결정·틀 쟁반·막대 통·포장 달고나 진열대, 테이블 오른쪽 +6 포장 공간 PackArea: 매트·비닐 통·빵끈 통) |
-| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker, Toon=도구 만화 외곽선, ChopstickCup=젓가락 통, BatterMesh=EditableMesh 반죽, Showcase=완성 달고나(포장했으면 포장째) 화면 정중앙에 띄워 보여 주기, Pack=모양 찍기 뒤 포장할지 고르면 테이블 오른쪽 포장 공간에서 네모 비닐 씌우기·빵끈 집어 두 번 끌어 묶기, HelperLadles=화로 위 알바생 국자 움직임, FoamMesh=소다 많이 넣었을 때 국자 넘쳐 흘러내리는 거품 3D), `Making/Steps/`(Stick=막대 꽂기 포함)(단계마다 모듈 1개) |
+| `src/client` | StarterPlayerScripts.Client | `MakingClient`(진입점), `Making/`(Ui, CameraRig, Pointer, Station, Stir, Heat, Dalgona, SugarLook, Fx, Sfx, ChopstickPicker, CutterPicker, Toon=도구 만화 외곽선, ChopstickCup=젓가락 통, BatterMesh=EditableMesh 반죽, Showcase=완성 달고나(포장했으면 포장째) 화면 정중앙에 띄워 보여 주기, Pack=모양 찍기 뒤 포장할지 고르면 테이블 오른쪽 포장 공간에서 네모 비닐 씌우기·빵끈 집어 두 번 끌어 묶기, HelperLadles=화로 위 알바생 국자 움직임, FoamMesh=소다 많이 넣었을 때 국자 넘쳐 흘러내리는 거품 3D, BagShape=입구 벌린 포장 봉투 정점 데이터(자동 생성, `tools/blender/bag.py`)), `Making/Steps/`(Stick=막대 꽂기 포함)(단계마다 모듈 1개) |
 
 미니게임 단계는 모듈 하나씩 (Luau 로컬 변수 200개 제한).
 
@@ -30,6 +30,7 @@
 - 도안 틀 전체 (`ReplicatedStorage.Assets.Cutters` — 클라이언트 미리 보기·교체에 필요, 메시 이름 `Cutter_<id>`, 금속 광택 SteelShine 넣어 둠): `tools/blender/cutters.py` → `레퍼런스/dalgona_cutters.glb`(Cutter_<id>, 23개). 사용자 모형틀(3D.blend 모형틀1~8)이 있는 도안은 그 모델, 없는 도안은 `shapes.py`로 생성. 안쪽 선이 있는 도안(문어·호랑이·공룡·궁전·Master 4종)은 먼저 `python tools/blender/design_shapes.py`(OpenCV) → `shape_data.json`. `src/shared/CutterShapes.lua`는 자동 생성.
 - `ServerStorage.Assets.SugarBowlMesh / SugarHeapMesh / SodaCanMesh / SodaLabelMesh / SodaPowderMesh / WoodSpoonMesh / TinSpoonMesh`: Claude가 `tools/blender/props.py`로 만든 양은 설탕 그릇·소다 깡통·숟가락 (`레퍼런스/dalgona_props.glb`). 빌더가 붙이고 게임용 부품은 투명하게 남김. 스크립트를 다시 돌리면 `PROP_CENTER` 값도 같이 고친다.
 - `ReplicatedStorage.Assets.Fx`: 설탕 결정·설탕 더미·소다 가루·부푼 거품 (`tools/blender/fx.py` → `레퍼런스/dalgona_fx.glb`). 클라이언트 `Making/Fx`가 쓰고, 없으면 예전 Part 모양.
+- 포장 봉투(입구 벌린 모양)는 Studio 에셋 없이 `tools/blender/bag.py`가 `src/client/Making/BagShape.lua`(정점)를 만들고, `Pack`이 EditableMesh로 조립. 실행: `"D:\Blender 5.2lender.exe" -b --factory-startup -P tools/blender/bag.py -- <레퍼런스/bag> <저장소 루트>`
 - `BatterMesh`(반죽 3D)는 EditableMesh (2026-11-20 사용자가 Experience Settings > Security에서 켬). 정점을 직접 움직여 부은 결·누른 모양·찍힌 홈을 표현. 삼각형 한도(약 2만 개) 때문에 SEG 160 × RINGS 48. 꺼지면 예전 접힌 메시로 돌아감.
 - glb는 Roblox로 가져오면 앞뒤(Z)가 뒤집힌다. 다른 메시를 바꿀 때도 방향을 화면으로 먼저 확인한다.
 - glb의 금속도·거칠기 값(Principled BSDF 숫자)은 Roblox로 넘어오지 않는다. 그래서 `LadleMesh` 안에 SurfaceAppearance `CopperShine`을 직접 넣었다: 금속도 텍스처 `rbxassetid://75555295293901`(0.95), 거칠기 텍스처 `rbxassetid://116334782975968`(0.25), 색 (214,132,72). `rbxasset://` 내장 텍스처는 게임 안에서 막혀서 쓸 수 없다.
