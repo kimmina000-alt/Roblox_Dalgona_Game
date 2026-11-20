@@ -732,4 +732,44 @@ function Builder.build(parent)
 	return ws
 end
 
+-- 화로를 테이블 속으로 내림 (2026-11-21 사용자: "연탄 화로 높이가 높으니까 테이블 아래로 내리자").
+-- 화로·국자·알바생 국자를 같이 내리고, 높이로 저장된 속성(GrillTopY, 연탄 BottomY)도 맞춤. 여러 번 불러도 한 번만 내려감
+-- (속성 BrazierDrop = 지금 내려간 양). 클라이언트 CameraRig도 BrazierDrop만큼 녹이기 화면을 내림
+Builder.BRAZIER_DROP = 2.4 -- 철망이 테이블 윗면 위 약 1.4에 오게 (원래 약 3.8)
+function Builder.lowerBrazier(ws, drop)
+	drop = drop or Builder.BRAZIER_DROP
+	local d = drop - (ws:GetAttribute("BrazierDrop") or 0)
+	if math.abs(d) < 1e-3 then
+		return
+	end
+	local down = Vector3.new(0, -d, 0)
+	for _, c in ipairs(ws:GetChildren()) do
+		if c.Name == "Brazier" or c.Name == "Ladle" or c.Name:sub(1, 11) == "HelperLadle" then
+			c:PivotTo(c:GetPivot() + down)
+		end
+	end
+	local b = ws:FindFirstChild("Brazier")
+	if b then
+		local g = b:GetAttribute("GrillTopY")
+		if type(g) == "number" then
+			b:SetAttribute("GrillTopY", g - d)
+		end
+		for _, p in ipairs(b:GetDescendants()) do
+			local by = p:GetAttribute("BottomY")
+			if type(by) == "number" then
+				p:SetAttribute("BottomY", by - d)
+			end
+		end
+	end
+	for _, c in ipairs(ws:GetChildren()) do
+		if c.Name:sub(1, 11) == "HelperLadle" then
+			local ctr = c:GetAttribute("Center")
+			if typeof(ctr) == "Vector3" then
+				c:SetAttribute("Center", ctr + down)
+			end
+		end
+	end
+	ws:SetAttribute("BrazierDrop", drop)
+end
+
 return Builder

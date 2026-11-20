@@ -94,7 +94,8 @@ end
 local TRACK_SHIFT = 0.04
 function trackPose(p, poseKey)
 	local pose = POSES[poseKey or current] or POSES.sugar
-	local y = pose[2]
+	-- 화로를 테이블 속으로 내린 만큼(작업대 속성 BrazierDrop, 2026-11-21) 국자 따라가는 화면도 내려서 크기를 그대로
+	local y = pose[2] - ((CameraRig.model and CameraRig.model:GetAttribute("BrazierDrop")) or 0)
 	local vp = workspace.CurrentCamera.ViewportSize
 	if vp.X / math.max(vp.Y, 1) < 1.2 then
 		y = TABLE_TOP + (y - TABLE_TOP) * 1.6
