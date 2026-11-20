@@ -528,7 +528,12 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 
 	-- 처음 불러올 때: 레벨에 맞게 해금, 오늘 목표, 해금 목록을 속성으로 (제작 화면 도안 고르기가 봄)
 	local ready = {}
-	Data.Changed:Connect(function(player, d)
+	Data.Changed:Connect(function(player)
+		-- BindableEvent는 표를 복사해서 넘기므로 진짜 데이터를 다시 가져온다
+		local d = Data.get(player)
+		if not d then
+			return
+		end
 		if not ready[player] then
 			ready[player] = true
 			local changed = false
@@ -550,6 +555,27 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 		lastAction[p] = nil
 		clearHelpers(p)
 	end)
+
+	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP) (실서버에서는 안 만듦)
+	if game:GetService("RunService"):IsStudio() then
+		local dev = Instance.new("BindableFunction")
+		dev.Name = "DevGrant"
+		dev.OnInvoke = function(userId, coins, exp)
+			local p = Players:GetPlayerByUserId(userId)
+			if not p then
+				return "no player"
+			end
+			local ups = {}
+			Data.update(p, function(d)
+				d.coins += coins or 0
+				ups = Economy.addExp(d, exp or 0)
+			end)
+			Economy.announceLevels(p, ups)
+			local d = Data.get(p)
+			return string.format("coins=%d lv=%d exp=%d", d.coins, d.level, d.exp)
+		end
+		dev.Parent = game:GetService("ServerStorage")
+	end
 
 	-- 알바생: 1초마다 진행
 	task.spawn(function()
