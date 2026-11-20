@@ -41,10 +41,22 @@ function Scoring.soda(r)
 	return math.clamp(0.3 * timing + 0.35 * amountS + 0.35 * puff, 0, 100)
 end
 
+-- 동그란 정도 (2026-11-20 "전체 외곽선을 봤을 때 원형에 가까운 게 제일 잘 만든 거, 들쑥날쑥하면 엉망"):
+-- 가장자리 반지름이 평균에서 벗어난 정도(dev, 평균 반지름 1 기준) → 0~1. 0.03까지는 완전한 원으로 침, 0.25면 0
+function Scoring.roundFromDev(dev)
+	return c01(1 - (dev - 0.03) / 0.22)
+end
+
+-- 모양 점수 (0~1): 동그란 정도 × 길쭉하지 않음
+function Scoring.pourShape(r)
+	return c01(r.round or 1) * c01(1 - ((r.spread or 1) - 1.15) / 0.65)
+end
+
 function Scoring.pour(r)
-	local s = 80 * c01(1 - r.dist / 1.4) + 20 * c01(1 - r.remain / 0.15)
-	-- 한 곳에 모아 붓지 않고 끌면서 부으면 길쭉해져 감점 (1.15배까지는 괜찮음)
-	s *= c01(1 - ((r.spread or 1) - 1.15) / 0.65)
+	-- 가운데 30 · 동그랗게 55 · 다 부음 15
+	local s = 30 * c01(1 - r.dist / 1.4) + 55 * Scoring.pourShape(r) + 15 * c01(1 - r.remain / 0.15)
+	-- 길쭉하면 틀이 안 맞아 전체 감점
+	s *= 0.5 + 0.5 * c01(1 - ((r.spread or 1) - 1.15) / 0.65)
 	return math.clamp(s, 0, 100)
 end
 
@@ -187,7 +199,7 @@ function Scoring.explain(records)
 				table.insert(parts, { "부풀기", round(100 * c01(r.fastFrac) * c01(r.puff)) })
 			elseif step.key == "pour" then
 				table.insert(parts, { "가운데", round(100 * c01(1 - r.dist / 1.4)) })
-				table.insert(parts, { "동그랗게", round(100 * c01(1 - ((r.spread or 1) - 1.15) / 0.65)) })
+				table.insert(parts, { "동그랗게", round(100 * Scoring.pourShape(r)) })
 			elseif step.key == "press" then
 				for i = 1, 3 do
 					table.insert(parts, { i .. "번째", round(Scoring.pressOne(i, r.thick and r.thick[i] or 1)) })
@@ -260,6 +272,9 @@ function Scoring.tip(key, r)
 		end
 		if (r.spread or 1) > 1.3 then
 			add("끌면서 부어서 길쭉해졌어요")
+		end
+		if (r.round or 1) < 0.6 then
+			add("가장자리가 들쑥날쑥해요 · 한 곳에 모아 떨어뜨려요")
 		end
 		if (r.remain or 0) > 0.1 then
 			add("국자에 반죽이 남았어요")

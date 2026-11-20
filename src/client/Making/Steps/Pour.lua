@@ -16,6 +16,17 @@ local Fx = require(script.Parent.Parent:WaitForChild("Fx"))
 
 local Pour = {}
 
+local UserInputService = game:GetService("UserInputService")
+-- 터치 화면에서는 반죽이 손가락 바로 아래가 아니라 조금 위(화면 높이의 이 비율만큼)에 떨어짐
+-- (2026-11-20 "반죽 부을 때 손가락에 가려져서 잘 안 보여")
+local FINGER_UP = 0.1
+local function aimScreenPos(P)
+	if UserInputService:GetLastInputType() == Enum.UserInputType.Touch then
+		return P.pos - Vector2.new(0, workspace.CurrentCamera.ViewportSize.Y * FINGER_UP)
+	end
+	return P.pos
+end
+
 local MAX_TILT = math.rad(95)
 local POUR_TILT = math.rad(48) -- 이 각도부터 흘러내리기 시작
 local REMAIN = 0.15
@@ -430,6 +441,7 @@ function Pour.run(ctx)
 		local flat = Vector3.new(blob.center.X - S.ringCenter.X, 0, blob.center.Z - S.ringCenter.Z)
 		rec.dist = flat.Magnitude
 		rec.spread = math.clamp(blob.elong or 1, 1, 4)
+		rec.round = Scoring.roundFromDev(blob.roundDev or 0)
 		blob:setThickness(Config.Press.h0 * (1.15 - 0.15 * poured / total))
 	end
 	local function stepDrops(dt)
@@ -462,7 +474,7 @@ function Pour.run(ctx)
 		ladle:PivotTo(start:Lerp(hover, 1 - (1 - math.min(tc / 0.4, 1)) ^ 3))
 	end
 	home = hover
-	ui:say("철판 위를 누르고 있으면 반죽이 한 방울씩 떨어져요", "누른 채로 움직이면 그 모양대로 · 설탕 원 안에")
+	ui:say("철판 위를 누르고 있으면 반죽이 한 방울씩 떨어져요", UserInputService:GetLastInputType() == Enum.UserInputType.Touch and "손가락 조금 위 동그라미에 떨어져요 · 한 곳에 모아 동그랗게" or "한 곳에 모아 떨어뜨리면 동그랗게 · 설탕 원 안에")
 
 	while true do
 		local dt = ctx.frame()
@@ -487,10 +499,10 @@ function Pour.run(ctx)
 				w = Vector3.new(w.X, carryY, w.Z)
 				local over = math.abs(w.X - plate.X) < half and math.abs(w.Z - plate.Z) < half
 				-- 방울 붓기: 국자는 숨기고 손가락 바로 아래로 반죽이 떨어짐 (2026-11-20)
-				local fingerLand = P.toPlane(S.plateTop)
+				local fingerLand = P.toPlane(S.plateTop, aimScreenPos(P))
 				if dropMode then
 					over = math.abs(fingerLand.X - plate.X) < half and math.abs(fingerLand.Z - plate.Z) < half
-					aimMark.Transparency = over and 0.7 or 1
+					aimMark.Transparency = over and 0.55 or 1
 					aimMark.CFrame = CFrame.new(fingerLand.X, S.plateTop + 0.006, fingerLand.Z) * CFrame.Angles(0, 0, math.rad(90))
 				end
 				if over then

@@ -332,6 +332,13 @@ function Dalgona:updateDrops()
 	for j = 1, SEG do
 		outline[j] = R[j] / Req
 	end
+	-- 동그란 정도 (점수용, 2026-11-20 "전체 외곽선이 원형에 가까운 게 제일 잘 만든 거"):
+	-- 가장자리 반지름이 평균에서 벗어난 정도의 평균 (0 = 완전한 원, 들쑥날쑥할수록 큼)
+	local dev = 0
+	for j = 1, SEG do
+		dev += math.abs(outline[j] - 1)
+	end
+	self.roundDev = dev / SEG
 	-- 길쭉함 (점수용): 주축 비
 	local a, b = (mxx + mzz) / 2, math.sqrt(((mxx - mzz) / 2) ^ 2 + mxz * mxz)
 	self.elong = math.sqrt((a + b) / math.max(a - b, 1e-9))

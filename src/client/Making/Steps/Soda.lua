@@ -14,6 +14,7 @@ local Stir = require(Making:WaitForChild("Stir"))
 local Heat = require(Making:WaitForChild("Heat"))
 local Fx = require(Making:WaitForChild("Fx"))
 local Sfx = require(Making:WaitForChild("Sfx"))
+local FoamMesh = require(Making:WaitForChild("FoamMesh"))
 
 local Soda = {}
 
@@ -137,7 +138,11 @@ local function newPuff(S, amount, baseThick)
 	pf.foam = Fx.ellipsoid(S:fxPart(S.Ladle, { Name = "FxFoam", Color = pf.syrup, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.one * 0.1 }))
 	-- 넘친 반죽: 국자 테두리를 넘어 바깥으로 흘러내리는 방울 줄기
 	pf.drips = {}
+	-- 넘칠 만큼 넣었으면 3D 거품 메시 (돔 → 테두리 넘어 → 바깥 면 따라 흘러내림). 안 되면 아래 방울 부품
 	if pf.over > 0 then
+		pf.mesh = FoamMesh.new(S.Ladle, pf.syrup, math.random(1, 1e6))
+	end
+	if pf.over > 0 and not pf.mesh then
 		local n = math.floor(4 + 5 * math.min(pf.over, 1))
 		for i = 1, n do
 			local part = Fx.ellipsoid(S:fxPart(S.Ladle, { Name = "FxFoamDrip", Color = pf.syrup, Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.one * 0.05 }))
@@ -194,6 +199,23 @@ local function drawPuff(S, pf, dt, speed)
 	else
 		foam.Size = Vector3.new(diam, height * 2, diam)
 		foam.CFrame = CFrame.new(base)
+	end
+	-- 넘침 3D: 거품이 테두리 높이에 닿을 즈음부터 공 대신 메시로 바뀌어 테두리를 넘어 흘러내림
+	if pf.mesh then
+		local runK = pf.done and 1 or smooth01(h, 0.4, 1)
+		local show = smooth01(h, 0.25, 0.4)
+		local rimY = S.Bowl.Position.Y + S.bowlHalf
+		local Rb = S.bowlRadius
+		local ov = math.min(pf.over, 1.3)
+		-- 넘치는 거품은 위로 솟기보다 옆으로 퍼져 흘러내림: 돔 높이에 상한
+		local apex = math.clamp(base.Y + foam.Size.Y - rimY, 0.04, Rb * (0.7 + 0.3 * math.min(ov, 1)))
+		local domeR = math.max(Rb * 0.92, Rb + (diam / 2 - Rb) * 0.3)
+		pf.mesh:update(Vector3.new(S.Bowl.Position.X, rimY, S.Bowl.Position.Z), Rb, S.bowlHalf * 2, apex, domeR, 0.03 + 0.11 * math.min(ov, 1) * runK, ov * runK)
+		pf.mesh.part.Color = col
+		pf.mesh.part.Transparency = show > 0.02 and foam.Transparency or 1
+		if show > 0.02 then
+			foam.Transparency = 1
+		end
 	end
 	-- 넘침: 거품이 국자보다 커지면(빠른 상승 뒤쪽부터) 테두리 밖으로 반죽이 흘러내림
 	local edgeR = math.max(diam / 2 * 0.93, S.bowlRadius + 0.04)

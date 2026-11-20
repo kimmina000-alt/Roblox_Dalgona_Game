@@ -30,7 +30,7 @@ local FIELDS = {
 	sugar = { { "white", 0, 3, 0 }, { "brown", 0, 1, 0 }, { "spill", 0, 10, 10 } },
 	melt = { { "green", 0, 1, 0 }, { "tempOk", 0, 1, 0 }, { "scorch", 0, 5, 5 }, { "burn", 0, 1, 1 } },
 	soda = { { "delay", 0, 120, 120 }, { "amount", 0, 3, 0 }, { "fastFrac", 0, 1, 0 }, { "puff", 0, 1, 0 } },
-	pour = { { "dist", 0, 10, 10 }, { "remain", 0, 1, 1 }, { "spread", 1, 5, 1 } },
+	pour = { { "dist", 0, 10, 10 }, { "remain", 0, 1, 1 }, { "spread", 1, 5, 1 }, { "round", 0, 1, 1 } },
 	press = {},
 	stamp = { { "dist", 0, 10, 10 }, { "angle", -180, 180, 180 }, { "hold", 0, 10, 10 } },
 }
