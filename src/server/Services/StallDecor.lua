@@ -205,7 +205,8 @@ local function chopstickCup(ws)
 	local m = Instance.new("Model")
 	m.Name = "ChopstickCup"
 	local tableY = top.Position.Y + top.Size.Y / 2
-	local base = Vector3.new(chop:GetPivot().Position.X, tableY, top.Position.Z - 2.2)
+	-- 2026-11-20 폰 사진: 화면 위 안내 문구에 가려짐 → 앞(화면 아래)으로 1.2 당김
+	local base = Vector3.new(chop:GetPivot().Position.X, tableY, top.Position.Z - 1.0)
 	local CUP_D, CUP_H = 1.0, 1.25
 	local tin = { Material = Enum.Material.CorrodedMetal, CanQuery = false }
 	local body = part(m, "Cup", Vector3.new(CUP_H, CUP_D, CUP_D), CFrame.new(base + Vector3.new(0, CUP_H / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(168, 172, 168), tin)
@@ -545,7 +546,8 @@ local function packArea(ws, top)
 	deco(f, "Mat", Vector3.new(3.4, 0.02, 3.4), CFrame.new(cx - 1.3, y + 0.01, cz + 0.9), Color3.fromRGB(214, 182, 136), Enum.Material.Fabric)
 	-- 네모 투명 비닐 통 (투명 아크릴 상자 + 차곡차곡 쌓인 비닐)
 	-- 2026-11-20 "비닐이랑 빵끈 지금 위에 있는데 오른쪽으로": 매트 오른쪽 (비닐 통은 오른쪽 뒤, 빵끈 통은 오른쪽 앞)
-	local bx, bz = cx + 1.9, cz - 1.5 -- (2026-11-20 플레이 테스트: -2.3은 화면 맨 위 안내 문구에 가려짐)
+	-- 2026-11-20 폰 사진: 위쪽은 안내 문구에 가려짐 → 매트 바로 오른쪽, 매트 가운데 높이로 내림
+	local bx, bz = cx + 1.75, cz + 0.6
 	local BW, BL, BH = 1.9, 1.5, 0.45
 	local ACRYL = { Transparency = 0.7, Reflectance = 0.2 }
 	deco(f, "BagBox", Vector3.new(BW, 0.04, BL), CFrame.new(bx, y + 0.02, bz), Color3.fromRGB(235, 245, 255), Enum.Material.Glass, ACRYL)
@@ -558,7 +560,7 @@ local function packArea(ws, top)
 		topBag = deco(f, i == 7 and "BagTop" or "BagSheet", Vector3.new(BW - 0.3, 0.012, BL - 0.25), CFrame.new(bx + rng:NextNumber(-0.04, 0.04), y + 0.05 + i * 0.03, bz + rng:NextNumber(-0.04, 0.04)) * CFrame.Angles(0, rng:NextNumber(-0.06, 0.06), 0), Color3.fromRGB(250, 252, 255), Enum.Material.SmoothPlastic, { Transparency = 0.45, Reflectance = 0.25 })
 	end
 	-- 금색 빵끈 통 (작은 양철 통에 끈이 꽂혀 있음)
-	local tx, tz = cx + 2.3, cz + 3.0
+	local tx, tz = cx + 2.3, cz + 2.7 -- 화면 아래 끝에 걸치지 않게 조금 안으로
 	local tin = { Shape = Enum.PartType.Cylinder }
 	deco(f, "TieCup", Vector3.new(0.6, 0.7, 0.7), CFrame.new(tx, y + 0.3, tz) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(196, 72, 72), Enum.Material.Metal, tin)
 	deco(f, "TieCupRim", Vector3.new(0.05, 0.74, 0.74), CFrame.new(tx, y + 0.6, tz) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(200, 200, 196), Enum.Material.Metal, tin)

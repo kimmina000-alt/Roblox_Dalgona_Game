@@ -122,8 +122,9 @@ function Ui.new(player, steps)
 		self.vgauge.AnchorPoint = Vector2.new(0.5, 0)
 		self.vgauge.Position = UDim2.new(0.76, 0, 0, qy)
 		-- 국자 들기 화살표는 온도 막대 바로 왼쪽 (2026-11-20 "온도 옆에 붙이고 바 더 두껍게")
-		self.coach.AnchorPoint = Vector2.new(1, 0)
-		self.coach.Position = UDim2.new(0.23, -37, 0, qy)
+		-- 2026-11-20 (폰 사진): 화면 왼쪽 아래 (설명 말풍선은 그 위)
+		self.coach.AnchorPoint = Vector2.new(0, 1)
+		self.coach.Position = UDim2.new(0, 34, 1, -28)
 		self.heightBox.Position = UDim2.fromOffset(76, qy)
 		-- 안내 문구(검은 글씨 칸 + 아래 설명)는 위 단계 줄 바로 아래 (2026-11-20)
 		self.pill.AnchorPoint = Vector2.new(0.5, 0)
@@ -133,6 +134,8 @@ function Ui.new(player, steps)
 		-- 누르기 두께 가로 게이지는 안내 문구 아래 (아래쪽은 누르는 손가락에 가려짐)
 		self.gauge.AnchorPoint = Vector2.new(0.5, 0)
 		self.gauge.Position = UDim2.new(0.5, 0, 0, qy + 96)
+		-- 누르기 두께 세로 막대는 철판 왼쪽 (안내 문구와 같은 높이에서 시작)
+		self.pgauge.Position = UDim2.new(0.25, 0, 0, qy + 20)
 		if self.toastLabel then
 			self.toastLabel.Position = UDim2.new(0.5, 0, 0, qy + 162)
 		end
@@ -326,6 +329,30 @@ function Ui:_buildGauge()
 	self.vNeedle = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 1), Size = UDim2.new(1, 14, 0, 6), BackgroundColor3 = INK, BorderSizePixel = 0, ZIndex = 3, Parent = vt }, { corner(3) })
 	self.vTitle = label({ Text = "속도", TextSize = 12, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 16), Parent = v })
 	self.vgauge = v
+	-- 누르기 두께 (2026-11-20 폰 사진: 가로 게이지가 반죽을 가림 → 왼쪽 세로 막대). 위 두꺼움 → 아래 너무 얇음,
+	-- 누를수록 바늘이 아래로 내려감. 칸 이름은 막대 오른쪽에
+	local pg = new("Frame", {
+		Name = "PressGaugeV",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Size = UDim2.fromOffset(58, self.touch and 190 or 230),
+		BackgroundColor3 = PAPER,
+		BackgroundTransparency = 0.08,
+		Visible = false,
+		Parent = self.root,
+	}, { corner(12) })
+	label({ Text = "두께", TextSize = 13, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(1, 0, 0, 16), Parent = pg })
+	local pt = new("Frame", { Position = UDim2.fromOffset(15, 26), Size = UDim2.new(1, -30, 1, -54), BackgroundTransparency = 1, Parent = pg })
+	self.pSegs = {}
+	for i, s in ipairs({ { "두꺼움", Color3.fromRGB(80, 140, 230) }, { "딱 좋아", Color3.fromRGB(80, 190, 90) }, { "너무 얇음", Color3.fromRGB(230, 80, 70) } }) do
+		local f = new("Frame", { BackgroundColor3 = s[2], BorderSizePixel = 0, Parent = pt })
+		local tag = label({ Text = s[1], TextSize = 13, TextColor3 = Color3.new(1, 1, 1), BackgroundColor3 = s[2], BackgroundTransparency = 0, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(1, 22, 0.5, 0), Size = UDim2.fromOffset(0, 22), AutomaticSize = Enum.AutomaticSize.X, Parent = f })
+		corner(8).Parent = tag
+		new("UIPadding", { PaddingLeft = UDim.new(0, 7), PaddingRight = UDim.new(0, 7), Parent = tag })
+		self.pSegs[i] = f
+	end
+	self.pNeedle = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0), Size = UDim2.new(1, 14, 0, 6), BackgroundColor3 = INK, BorderSizePixel = 0, ZIndex = 3, Parent = pt }, { corner(3) })
+	self.pTitle = label({ Text = "", TextSize = 12, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 16), Parent = pg })
+	self.pgauge = pg
 end
 
 -- 오른쪽 세로 막대: 누르기 두께 / 소다 양 같은 "얼마나"를 보여 줌
@@ -391,16 +418,18 @@ function Ui:_buildHeight()
 	-- 2026-11-20: 화면 왼쪽 아래(폰에서 이동 버튼이 있던 자리)에 화살표가 아래에서 위로 올라가는 모습
 	-- 2026-11-20 (다시): 화살표는 국자 손잡이 자리에서 위로 (setCoach에 손잡이 화면 위치를 넘김)
 	-- 2026-11-20 (세 번째): 온도 막대 바로 왼쪽에 붙은 두꺼운 세로 길 + 아래에서 위로 올라가는 화살표 (위치는 rescale)
-	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Size = UDim2.fromOffset(70, self.touch and 150 or 200), Visible = false, ZIndex = 6, Parent = self.root })
-	new("Frame", { Name = "Track", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.new(0, 30, 1, -8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, ZIndex = 6, Parent = coach }, { corner(15) })
-	self.coachFinger = label({ Text = "▲", TextSize = 50, TextColor3 = Color3.fromRGB(255, 120, 160), TextStrokeColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.88, 0), Size = UDim2.fromOffset(56, 56), ZIndex = 7, Parent = coach })
+	-- 2026-11-20 (네 번째, 폰 사진): 화면 왼쪽 아래로, 길과 화살표를 훨씬 두껍게. 글씨는 길 위에 크게 (위치는 rescale)
+	local coach = new("Frame", { Name = "Coach", BackgroundTransparency = 1, Size = UDim2.fromOffset(120, self.touch and 210 or 250), Visible = false, ZIndex = 6, Parent = self.root })
+	new("Frame", { Name = "Track", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.new(0, 70, 1, -8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, ZIndex = 6, Parent = coach }, { corner(35) })
+	self.coachFinger = label({ Text = "▲", TextSize = 96, TextColor3 = Color3.fromRGB(255, 120, 160), TextStrokeColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.88, 0), Size = UDim2.fromOffset(110, 100), ZIndex = 7, Parent = coach })
 	local bubble = label({
 		Text = "이 줄을 아래에서 위로 끌면\n국자가 올라가요!",
-		TextSize = 15,
+		TextSize = 21,
 		TextColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.05,
 		BackgroundColor3 = Color3.fromRGB(40, 150, 60),
-		Position = UDim2.new(0, -10, 1, 8),
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.new(0, 0, 0, -8),
 		Size = UDim2.fromOffset(0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -463,7 +492,8 @@ function Ui:setPad(visible, u, v, active, ringFrac)
 		new("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.5, Thickness = 2, Parent = pad })
 		self.padRing = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.69, 0.69), BackgroundTransparency = 1, ZIndex = 5, Parent = pad }, { corner(999) })
 		new("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.35, Thickness = 2, Parent = self.padRing })
-		self.padDot = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = Color3.fromRGB(255, 120, 160), ZIndex = 6, Parent = pad }, { corner(11) })
+		-- 2026-11-20 "오른쪽 분홍 버튼 삭제": 판 위 점은 숨김 (링 = 설탕 원만 남김)
+		self.padDot = new("Frame", { Visible = false, AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(22, 22), BackgroundColor3 = Color3.fromRGB(255, 120, 160), ZIndex = 6, Parent = pad }, { corner(11) })
 		new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2, Parent = self.padDot })
 		label({ Text = "여기를 누르고 끌어요", TextSize = 15, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.4, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -6), Size = UDim2.new(1, 0, 0, 20), ZIndex = 5, Parent = pad })
 		self.pad = pad
@@ -730,6 +760,7 @@ function Ui:show(on)
 	if not on then
 		self.result.Visible = false
 		self.gauge.Visible = false
+		self.pgauge.Visible = false
 		self.meter.Visible = false
 	end
 end
@@ -872,7 +903,8 @@ end
 -- 누르기 게이지 (사용자 요청 2026-11-19): 이번 누르기 시작 두께(왼쪽) → 가장 얇게(오른쪽). 초록 = 멈출 두께.
 -- 바늘이 초록 칸에 있을 때 손을 떼면 됨. 처음엔 천천히, 오래 누를수록 빨리 움직임
 function Ui:setPressGauge(visible, h, hStart, hMin, lo, hi)
-	self.gauge.Visible = visible
+	self.gauge.Visible = false
+	self.pgauge.Visible = visible
 	if not visible then
 		return
 	end
@@ -881,15 +913,12 @@ function Ui:setPressGauge(visible, h, hStart, hMin, lo, hi)
 		return math.clamp((hStart - v) / span, 0, 1)
 	end
 	local a, b = x(hi), x(lo)
-	local segs = self.gaugeSegs
-	segs[1].Position, segs[1].Size = UDim2.fromScale(0, 0), UDim2.fromScale(a, 1)
-	segs[2].Position, segs[2].Size = UDim2.fromScale(a, 0), UDim2.fromScale(math.max(b - a, 0.02), 1)
-	segs[3].Position, segs[3].Size = UDim2.fromScale(b, 0), UDim2.fromScale(1 - b, 1)
-	for i, t in ipairs({ "두꺼움", "딱 좋아", "너무 얇음" }) do
-		segs[i]:FindFirstChildOfClass("TextLabel").Text = t
-	end
-	self.needle.Position = UDim2.fromScale(x(h), 0.5)
-	self.gaugeTitle.Text = string.format("두께 %.1fmm · 오래 누를수록 빨라져요", h / Config.Press.h0 * 10)
+	local segs = self.pSegs
+	segs[1].Position, segs[1].Size = UDim2.fromScale(0, 0), UDim2.fromScale(1, a)
+	segs[2].Position, segs[2].Size = UDim2.fromScale(0, a), UDim2.fromScale(1, math.max(b - a, 0.02))
+	segs[3].Position, segs[3].Size = UDim2.fromScale(0, b), UDim2.fromScale(1, 1 - b)
+	self.pNeedle.Position = UDim2.fromScale(0.5, x(h))
+	self.pTitle.Text = string.format("%.1fmm", h / Config.Press.h0 * 10)
 end
 
 -- 누르기 두께 (사용자 요청 2026-11-19: 두께를 표시하고 점점 얇아지는 게 눈에 보이게).
@@ -996,6 +1025,7 @@ function Ui:showResult(res, shape, handlers)
 		Burnt = Color3.fromRGB(60, 40, 30),
 	}
 	self.gauge.Visible = false
+	self.pgauge.Visible = false
 	self.meter.Visible = false
 	if self.touch then
 		-- 폰: 팝업을 오른쪽에 두고 카드·링을 숨겨 달고나가 보이게
