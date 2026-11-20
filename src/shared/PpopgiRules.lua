@@ -17,6 +17,7 @@ R.SAFE = 0.45 -- 안전 속도 (stud/초). 넘으면 금 갈 힘이 쌓임
 R.FAST_K = 2.0 -- (속도/SAFE − 1) × FAST_K × 시간
 R.OFF_K = 1.4 -- 선 밖에서 긁으면 초당 쌓이는 힘
 R.RELAX = 0.12 -- 천천히 긁는 동안 초당 빠지는 힘
+R.TAU = 0.3 -- 속도는 이 시간(초)만큼 부드럽게 잼 (손 떨림을 빠르기로 안 셈)
 R.BREAK = 3 -- 금이 이만큼이면 쪼개짐
 R.DONE = 0.96 -- 따라간 비율이 이만큼이면 뽑기 성공
 R.RATE = 20 -- 초당 표본 수
@@ -114,7 +115,7 @@ function R.newRun(path)
 	for li in ipairs(path.loops) do
 		hit[li] = {}
 	end
-	return { path = path, hit = hit, covered = 0, stress = 0, cracks = 0, crackAt = {}, offT = 0, downT = 0, last = nil, t = 0, newBins = {} }
+	return { path = path, hit = hit, covered = 0, stress = 0, cracks = 0, crackAt = {}, offT = 0, downT = 0, vx = 0, vy = 0, last = nil, t = 0, newBins = {} }
 end
 
 local function mark(run, li, b)
@@ -152,6 +153,7 @@ function R.feed(run, t, x, y, down)
 	run.t = t
 	if not down then
 		run.last = nil
+		run.vx, run.vy = 0, 0
 		return nil, nil
 	end
 	local li, s, d = R.nearest(run.path, x, y)
@@ -170,7 +172,10 @@ function R.feed(run, t, x, y, down)
 	if last and not far then
 		local dt = math.clamp(t - last.t, 0, 0.25)
 		if dt > 0 then
-			local speed = math.sqrt((x - last.x) ^ 2 + (y - last.y) ^ 2) / dt
+			local k = math.min(1, dt / R.TAU)
+			run.vx += ((x - last.x) / dt - run.vx) * k
+			run.vy += ((y - last.y) / dt - run.vy) * k
+			local speed = math.sqrt(run.vx * run.vx + run.vy * run.vy)
 			state.speed = speed
 			run.downT += dt
 			local add = 0
