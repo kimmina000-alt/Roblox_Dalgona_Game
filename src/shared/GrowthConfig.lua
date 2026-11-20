@@ -124,11 +124,24 @@ G.Plots = {
 G.Sales = {
 	shelfSlots = 10, -- 진열대 칸 (보관함 앞쪽 10개가 진열됨, 먼저 만든 것부터 팔림)
 	maxCustomers = 3, -- 가게당 동시 손님
-	-- 설비 단계(1 연탄 화로 ~ 5 공장)별 손님 방문 간격(초). 단계가 오를수록 자주 옴 (D12)
-	visitInterval = { 12, 9, 7, 5, 4 },
+	-- 손님 수요 (GDD 5-1장 D12, 기획 세션 2026-11-20: 수요 ≈ 생산의 80%, 시뮬레이션 전 기획안)
+	-- { 방문 간격(초), 1명당 최소, 최대 }
+	-- 1단계(연탄 화로)는 국자 수로: 국자 1 → 30초·1개(분당 2) … 국자 4 → 15초·1~2개(분당 약 5~6)
+	demandByLadles = {
+		{ 30, 1, 1 },
+		{ 24, 1, 1 }, -- 국자 2·3개는 사이 값 (임시)
+		{ 19, 1, 2 },
+		{ 15, 1, 2 },
+	},
+	-- 2~5단계: 기계·공장
+	demandByStage = {
+		[2] = { 12, 1, 2 },
+		[3] = { 10, 1, 3 },
+		[4] = { 8, 1, 3 },
+		[5] = { 6, 1, 3 },
+	},
 	jitter = 0.3, -- 간격 ±30%
-	buyMin = 1,
-	buyMax = 3, -- 손님 1명당 1~3개 (D12)
+	testSpeed = 1, -- 테스트용 배율: 2면 손님이 2배 자주 옴 (출시 때는 1)
 	walkSpeed = 9, -- 스터드/초
 	browseSeconds = 1.6, -- 진열대 앞에서 고르는 시간
 	-- 부지 기준 로컬 좌표 (-Z = 골목 쪽)
@@ -137,6 +150,17 @@ G.Sales = {
 	streetZ = -26, -- 골목 길
 	streetHalf = 22, -- 골목에서 나타나고 사라지는 곳 (부지 중심에서 좌우)
 }
+
+-- 설비 단계·국자 수 → 방문 간격(초, testSpeed 반영), 1명당 최소·최대 개수
+function G.salesDemand(stage, ladles)
+	local row
+	if (stage or 1) <= 1 then
+		row = G.Sales.demandByLadles[math.clamp(ladles or 1, 1, #G.Sales.demandByLadles)]
+	else
+		row = G.Sales.demandByStage[math.min(stage, 5)]
+	end
+	return row[1] / math.max(G.Sales.testSpeed, 0.01), row[2], row[3]
+end
 
 ---------------------------------------------------------------- 상점·요청 제한
 G.ShopCooldown = 0.25 -- 초당 4번까지 구매

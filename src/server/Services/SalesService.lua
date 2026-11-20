@@ -1,7 +1,7 @@
 -- 판매: 진열대 + 손님 NPC (Phase 3, 2026-11-20)
 --  - 부지마다 진열대 10칸. 보관함(저장 데이터 stock) 앞쪽 10개가 진열되고, 먼저 만든 것부터 팔린다 (FIFO).
---  - 주인이 접속해 있고 진열대에 달고나가 있으면 손님이 골목에서 걸어와(웨이포인트) 1~3개를 사 간다. 가게당 동시 3명.
---  - 방문 간격은 설비 단계(machineStage)가 오를수록 짧아진다 (D12).
+--  - 주인이 접속해 있고 진열대에 달고나가 있으면 손님이 골목에서 걸어와(웨이포인트) 사 간다. 가게당 동시 3명.
+--  - 방문 간격·1명당 개수는 설비 단계(machineStage)와 1단계 국자 수로 정해진다 (D12, GrowthConfig.salesDemand).
 --  - 중복 판매 방지: 손님이 나타날 때 살 개수를 "예약"하고(예약 합 ≤ 진열 개수), 진열대에 닿으면
 --    EconomyService.sell이 한 번에 꺼내고 지운다. 그 사이 yield가 없어서 같은 달고나가 두 번 팔리지 않는다.
 -- 손님은 Humanoid 없이 부품으로 만든 작은 인형(서버가 위치를 옮김) — 폰 부담을 줄이려고.
@@ -238,10 +238,13 @@ local function stepWalkers(dt)
 	end
 end
 
-local function interval(player)
+local function demand(player)
 	local data = Data.get(player)
-	local stage = math.clamp(data and data.machineStage or 1, 1, #SALES.visitInterval)
-	local base = SALES.visitInterval[stage]
+	return G.salesDemand(data and data.machineStage or 1, data and data.ladles or 1)
+end
+
+local function interval(player)
+	local base = demand(player)
 	return base * (1 + (math.random() * 2 - 1) * SALES.jitter)
 end
 
@@ -257,7 +260,8 @@ local function spawnCustomer(index)
 	if available <= 0 then
 		return
 	end
-	local want = math.random(SALES.buyMin, SALES.buyMax)
+	local _, buyMin, buyMax = demand(owner)
+	local want = math.random(buyMin, buyMax)
 	local n = math.min(want, available)
 	shop.reserved += n
 	local sx = SALES.shelf.pos.X
