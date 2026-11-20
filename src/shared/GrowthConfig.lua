@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 2 -- v2 (2026-11-20 성장): 레벨로 도안 해금, 도감, 일일 목표, 알바생
+G.SchemaVersion = 3 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -32,6 +32,8 @@ G.DefaultData = {
 	partTimers = {}, -- 알바생 { { shape = 만들 도안 id, skill = 숙련(자리만) } } 국자 2번째부터 1명씩
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
 	factory = { unlocked = false }, -- 가게 뒤 공장 (D11, Phase 5)
+	-- 가게 (D21): state = "stall"(야외 노점) | "rented"(월세) | "owned"(매입). rentTimer = 지난 월세 뒤 접속한 초, closed = 월세 못 내 문 닫힘
+	shop = { state = "stall", rentTimer = 0, closed = false },
 	stats = { made = 0, sold = 0, coinsEarned = 0, helperMade = 0, wagesPaid = 0 },
 	collection = {}, -- 도감 [도안 id] = { best = 손으로 만든 최고 등급, n = 손으로 만든 수 } (자동 생산은 안 셈)
 	daily = { day = "", goals = {} }, -- 일일 목표 3개 (UTC 날짜가 바뀌면 새로)
@@ -208,8 +210,41 @@ G.Plots = {
 	minimeGap = 2.2, -- 미니미끼리 간격 (화로 가운데 기준)
 	factoryDoor = { pos = Vector3.new(0, 0, 17.5) }, -- 가게 뒤 공장 문 (D11, 지금은 자리만)
 	sign = { pos = Vector3.new(0, 0, -17.5), height = 9 },
+	-- 가게 건물 (D21): 작업대 뒤. 앞면(셔터)이 골목 쪽. 부지 로컬 z = front ~ back
+	building = { front = 8.5, back = 17.6, halfWidth = 16.8, height = 10.5 }, -- 높이는 공장 문(9.7)보다 높게
+	parasol = { pos = Vector3.new(0, 0, 7.2), height = 11.5, radius = 8 }, -- 작업대 위 파라솔 (노점)
 	teleportOnSpawn = false, -- 손 작업대를 부지로 옮기기 전까지는 스폰 그대로 (작업대가 하나뿐)
 }
+
+---------------------------------------------------------------- 야외 노점 → 월세 가게 → 기계 (D21, 2026-11-21, GDD 4-0장, 금액은 기획안)
+G.Shop = {
+	rentLevel = 3, -- 가게 임대 레벨
+	deposit = 1000, -- 보증금 (매입 때 값에서 빼 줌)
+	rentEvery = 600, -- 접속 10분마다
+	rentAmount = 60, -- 월세 (분당 6). 오프라인일 때는 안 냄
+	buyLevel = 15, -- 가게 매입
+	buyPrice = 50000, -- 보증금은 빼 줌 → 실제 49,000
+	stallSlots = 5, -- 노점(또는 문 닫힘) 쟁반 진열 칸
+	-- 노점·문 닫힘에서 막히는 것: 국자 확장, 알바생 고용, 작업대 업그레이드 (화로·누르개는 됨)
+	lockedWhenStall = { ladle = true, hire = true, table = true },
+}
+
+-- 가게 문이 열려 있나 (임대 중이고 월세 밀리지 않음, 또는 매입)
+function G.shopOpen(d)
+	local s = d and d.shop
+	if not s then
+		return false
+	end
+	if s.state == "owned" then
+		return true
+	end
+	return s.state == "rented" and not s.closed
+end
+
+-- 진열 칸: 가게가 열려 있으면 진열대 10칸, 아니면 노점 쟁반 5칸
+function G.shelfSlots(d)
+	return G.shopOpen(d) and G.Sales.shelfSlots or G.Shop.stallSlots
+end
 
 ---------------------------------------------------------------- 판매: 진열대 + 손님 NPC (Phase 3, D12)
 G.Sales = {
@@ -251,6 +286,14 @@ function G.salesDemand(stage, ladles)
 		row = G.Sales.demandByStage[math.min(stage, 5)]
 	end
 	return row[1] / math.max(G.Sales.testSpeed, 0.01), row[2], row[3]
+end
+
+-- 플레이어 데이터로 손님 수요: 가게 문이 닫혀 있으면(노점) 국자 1개 수요, 기계도 가게 안에서만 (D21)
+function G.salesDemandFor(d)
+	if not G.shopOpen(d) then
+		return G.salesDemand(1, 1)
+	end
+	return G.salesDemand(d.machineStage or 1, d.ladles or 1)
 end
 
 ---------------------------------------------------------------- 상점·요청 제한

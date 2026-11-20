@@ -179,13 +179,38 @@ local function render()
 	local page = pages.shop
 	clear(page)
 	local order = 0
+	-- 가게 (D21): 노점 → 임대 → 매입
+	local SH = G.Shop
+	local shop = gr.shop or { state = "stall" }
+	local shopOpen = shop.state == "owned" or (shop.state == "rented" and not shop.closed)
+	order += 1
+	if shop.state == "stall" then
+		row(page, order, "🏪 야외 노점", string.format("가게 임대: Lv%d + 보증금 %d · 월세 %d분마다 %d", SH.rentLevel, SH.deposit, SH.rentEvery // 60, SH.rentAmount),
+			state.level < SH.rentLevel and ("Lv" .. SH.rentLevel .. "부터") or (SH.deposit .. " 코인"),
+			state.level >= SH.rentLevel and state.coins >= SH.deposit, function()
+				act("buy", "rent")
+			end)
+	elseif shop.state == "rented" then
+		local sub = shop.closed and string.format("월세 %d코인이 모자라 문 닫힘 (코인이 생기면 바로 열려요)", SH.rentAmount)
+			or string.format("다음 월세 %d코인까지 %d:%02d (접속 중에만)", SH.rentAmount, (shop.rentLeft or 0) // 60, (shop.rentLeft or 0) % 60)
+		local price = SH.buyPrice - SH.deposit
+		row(page, order, shop.closed and "🏪 가게 (문 닫힘)" or "🏪 월세 가게", sub,
+			state.level < SH.buyLevel and ("매입 Lv" .. SH.buyLevel) or (price .. " 코인"),
+			state.level >= SH.buyLevel and state.coins >= price, function()
+				act("buy", "buyShop")
+			end)
+	else
+		row(page, order, "🏪 내 가게", "월세 없음")
+	end
+	local lockText = shop.state == "stall" and "가게 임대 필요" or "문 닫힘"
 	for _, kind in ipairs(G.UpgradeOrder) do
 		local up = G.Upgrades[kind]
 		local lv = gr.upgrades[kind] or 1
 		local cost = up.costs[lv]
 		order += 1
-		local can = cost and state.level >= G.UpgradeUnlockLevel and state.coins >= cost
-		local btn = not cost and "최고 단계" or (state.level < G.UpgradeUnlockLevel and ("Lv" .. G.UpgradeUnlockLevel .. "부터")) or (cost .. " 코인")
+		local locked = SH.lockedWhenStall[kind] and not shopOpen
+		local can = cost and not locked and state.level >= G.UpgradeUnlockLevel and state.coins >= cost
+		local btn = not cost and "최고 단계" or (locked and lockText) or (state.level < G.UpgradeUnlockLevel and ("Lv" .. G.UpgradeUnlockLevel .. "부터")) or (cost .. " 코인")
 		row(page, order, string.format("%s Lv%d / %d", up.name, lv, #up.costs + 1), up.desc, btn, can, function()
 			act("buy", kind)
 		end)
@@ -193,8 +218,8 @@ local function render()
 	local nextL = G.Ladles[gr.ladles + 1]
 	order += 1
 	row(page, order, string.format("국자 %d / 4개", gr.ladles), "국자 2번째부터 알바생 1명씩",
-		not nextL and "최고 단계" or (state.level < nextL.level and ("Lv" .. nextL.level .. "부터")) or (nextL.cost .. " 코인"),
-		nextL ~= nil and state.level >= nextL.level and state.coins >= nextL.cost, function()
+		not nextL and "최고 단계" or (not shopOpen and lockText) or (state.level < nextL.level and ("Lv" .. nextL.level .. "부터")) or (nextL.cost .. " 코인"),
+		nextL ~= nil and shopOpen and state.level >= nextL.level and state.coins >= nextL.cost, function()
 			act("buy", "ladle")
 		end)
 	local nHelp = #gr.helpers
@@ -202,8 +227,8 @@ local function render()
 	local seats = gr.ladles - 1
 	order += 1
 	row(page, order, string.format("알바생 %d / %d명", nHelp, seats), string.format("%d초에 1개 · 급여 30초당 %d · 젓가락 1쌍", G.Helper.seconds, G.Helper.wagePer30s),
-		(nHelp >= seats and "자리 없음") or (hireCost and (hireCost .. " 코인")) or "최대",
-		nHelp < seats and hireCost ~= nil and state.coins >= hireCost, function()
+		(not shopOpen and lockText) or (nHelp >= seats and "자리 없음") or (hireCost and (hireCost .. " 코인")) or "최대",
+		shopOpen and nHelp < seats and hireCost ~= nil and state.coins >= hireCost, function()
 			act("buy", "hire")
 		end)
 	local choices = helperShapes(gr.unlocked)

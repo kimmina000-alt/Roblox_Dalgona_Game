@@ -178,7 +178,7 @@ end
 function EconomyService.sell(player, n)
 	local sold, coins = 0, 0
 	Data.update(player, function(d)
-		local shelf = math.min(#d.stock, G.Sales.shelfSlots)
+		local shelf = math.min(#d.stock, G.shelfSlots(d))
 		n = math.min(n, shelf)
 		if n <= 0 then
 			return false
@@ -240,7 +240,7 @@ end
 
 function EconomyService.shelfCount(player)
 	local data = Data.get(player)
-	return data and math.min(#data.stock, G.Sales.shelfSlots) or 0
+	return data and math.min(#data.stock, G.shelfSlots(data)) or 0
 end
 
 -- 뽑기 결과 (15번, ProductionService.hooks.onPpopgi): 방금 만든 달고나 판매가에 뽑기 보너스, 쪼개지면 Poor 가격.

@@ -121,7 +121,8 @@ local function refreshShelf(index)
 	end
 	local data = shop.owner and Data.get(shop.owner)
 	local stock = data and data.stock or {}
-	local n = math.min(#stock, SALES.shelfSlots)
+	local slots = data and G.shelfSlots(data) or G.Shop.stallSlots
+	local n = math.min(#stock, slots)
 	for i, s in ipairs(shop.slots) do
 		local item = stock[i]
 		if i <= n and item then
@@ -136,7 +137,7 @@ local function refreshShelf(index)
 			s.rim.Transparency = 1
 		end
 	end
-	shop.label.Text = string.format("진열대 %d/%d", n, SALES.shelfSlots)
+	shop.label.Text = string.format(slots < SALES.shelfSlots and "쟁반 %d/%d" or "진열대 %d/%d", n, slots) -- 노점은 쟁반 5칸 (D21)
 end
 
 ---------------------------------------------------------------- 손님
@@ -240,7 +241,7 @@ end
 
 local function demand(player)
 	local data = Data.get(player)
-	return G.salesDemand(data and data.machineStage or 1, data and data.ladles or 1)
+	return G.salesDemandFor(data) -- 노점·문 닫힘이면 국자 1개 수요 (D21)
 end
 
 local function interval(player)

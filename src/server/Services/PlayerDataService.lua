@@ -26,6 +26,14 @@ PlayerDataService.MIGRATIONS = {
 		-- 여기서는 비우기만 하고, reconcile이 Common을 넣고 GrowthService가 접속 때 레벨만큼 더한다.
 		data.unlockedShapes = nil
 	end,
+	[3] = function(data)
+		-- v2 → v3 (D21 노점 → 월세 가게): 이미 국자·알바생·작업대 업그레이드를 산 플레이어는 임대 중으로 (보증금은 낸 것으로 봄),
+		-- 나머지는 야외 노점에서 시작
+		local bought = (tonumber(data.ladles) or 1) > 1
+			or (type(data.partTimers) == "table" and #data.partTimers > 0)
+			or (type(data.upgrades) == "table" and (tonumber(data.upgrades.table) or 0) > 0)
+		data.shop = { state = bought and "rented" or "stall", rentTimer = 0, closed = false }
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))
