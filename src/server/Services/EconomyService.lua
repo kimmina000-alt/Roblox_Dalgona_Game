@@ -96,6 +96,10 @@ function EconomyService.push(player)
 	local data = Data.get(player)
 	if data then
 		player:SetAttribute("Chopsticks", data.ingredients.chopsticks or 0) -- 제작 화면이 젓가락 꺼내기 전에 봄
+		-- 재료마다 남은 양 (클라이언트 Making/Supplies: 0이면 작업대 통이 빈 통으로 보임, 2026-11-21)
+		for _, ing in ipairs(G.Ingredients) do
+			player:SetAttribute("Ing_" .. ing.id, data.ingredients[ing.id] or 0)
+		end
 	end
 	if data and remotes then
 		remotes.PlayerState:FireClient(player, fullSnapshot(player, data))
@@ -243,8 +247,9 @@ function EconomyService.shelfCount(player)
 	return data and math.min(#data.stock, G.Sales.shelfSlots) or 0
 end
 
--- 뽑기 결과 (15번, ProductionService.hooks.onPpopgi): 방금 만든 달고나 판매가에 뽑기 보너스, 쪼개지면 Poor 가격.
--- 순서: 모양 찍기 → 뽑기(선택) → 포장(선택, ×1.1). 쪼개진 것은 포장 못 함. 반환 { price, dexNew }
+-- 뽑기 결과 (15번, ProductionService.hooks.onPpopgi): 방금 만든 달고나 판매가에 뽑기 보너스.
+-- 쪼개지면 보관함에서 빠짐 = 못 팖 (2026-11-21 사용자: "뽑기 실패한 건 못 팔게").
+-- 순서: 모양 찍기 → 뽑기(선택) → 포장(선택, ×1.1). 반환 { price, dexNew, broken }
 -- dexNew: 이 도안을 처음 완벽하게 뽑았는지 — 도감(19번)이 생기면 채움. 지금은 자리만
 function EconomyService.onPpopgi(player, shape, res)
 	local data = Data.get(player)
@@ -253,14 +258,19 @@ function EconomyService.onPpopgi(player, shape, res)
 		return nil
 	end
 	local item = last.item
+	if res.broken then
+		Data.update(player, function(d)
+			local i = table.find(d.stock, item)
+			if i then
+				table.remove(d.stock, i)
+			end
+		end)
+		lastMade[player] = nil
+		EconomyService.notify(player, "뽑다가 쪼개진 달고나는 팔 수 없어요")
+		return { price = 0, broken = true }
+	end
 	Data.update(player, function()
-		if res.broken then
-			item.br = true
-			item.m = 0.5 -- Poor 배율 (PpopgiRules.BROKEN_MULT)
-			item.gb = 1
-		else
-			item.gb = res.bonus
-		end
+		item.gb = res.bonus
 		item.p = G.salePrice(item.b or item.p, item.b and item.m or 1, item.gb, item.pk)
 	end)
 	last.t = os.clock() -- 뽑기 뒤에 포장할 시간

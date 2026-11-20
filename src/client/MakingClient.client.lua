@@ -35,6 +35,7 @@ end
 local station = Station.new()
 require(Making:WaitForChild("Toon")).apply(station.model) -- 도구 만화 외곽선
 require(Making:WaitForChild("HelperLadles")).start() -- 화로 위 알바생 국자 (LadleCount 2~4)
+require(Making:WaitForChild("Supplies")).start() -- 재료가 없으면 작업대 통이 빈 통으로 (2026-11-21)
 local ui = Ui.new(player, Config.Steps)
 CameraRig.init(station.model:GetPivot())
 

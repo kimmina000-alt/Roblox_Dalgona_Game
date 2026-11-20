@@ -1,6 +1,6 @@
 -- 뽑기 (7단계, 선택. 15번, 2026-11-20): 모양 찍기 뒤 "뽑기 도전"을 고르면
 --   바늘로 점선(찍힌 틀 자국)을 따라 긁음. 빠르게 긋거나 선을 벗어나면 금이 가고 금 간 곳이 빨갛게.
---   금 3번 = 쪼개짐(Poor 가격). 점선을 다 긁으면 성공 → 판매가 × (1 + 0.5 × 정확도). 언제든 "그만하기".
+--   금 3번 = 쪼개짐(못 팖, 2026-11-21). 점선을 다 긁으면 성공 → 판매가 × (1 + 0.5 × 정확도). 언제든 "그만하기".
 -- 판정은 shared/PpopgiRules (서버가 같은 표본으로 다시 계산). 목표 시간 10~20초.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -237,7 +237,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 	local wait = 0.7
 	if ended == "broken" then
 		dal:crack(6, 1)
-		ui:say("쩌적… 쪼개졌어요", "Poor 가격으로 팔려요")
+		ui:say("쩌적… 쪼개졌어요", "쪼개진 달고나는 팔 수 없어요")
 		wait = 1.3
 	elseif ended == "done" then
 		for li, L in ipairs(path.loops) do

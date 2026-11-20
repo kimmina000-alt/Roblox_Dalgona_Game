@@ -1237,7 +1237,7 @@ function Ui:showResult(res, shape, handlers)
 	if pp then
 		local priceTxt = pp.price and string.format(" → %d코인", pp.price) or ""
 		if pp.broken then
-			self.resPrice.Text = "뽑다가 쪼개졌어요 · Poor 가격" .. priceTxt
+			self.resPrice.Text = "뽑다가 쪼개졌어요 · 팔 수 없어요"
 			self.resPp.Text = "쪼개짐"
 			self.resPp.BackgroundColor3 = Color3.fromRGB(150, 120, 110)
 			self.resPp.Visible = true

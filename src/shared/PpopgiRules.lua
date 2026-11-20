@@ -2,7 +2,7 @@
 -- 바늘 끝 자리 표본(틀 기준 좌표)을 차례로 넣으면 따라간 비율·금·쪼개짐이 나온다.
 -- 클라이언트는 화면에 보여 주려고 같은 표본을 그대로 넣고, 서버는 받은 표본으로 다시 계산한다 (같은 결과).
 -- 좌표: CutterShapes 외곽선 × 틀 배율(stud). x 오른쪽, y 화면 위쪽 (틀 Root 기준 X = x, Z = -y)
--- 가격: 판매가 × (1 + 0.5 × 정확도), Q에는 안 넣음. 쪼개지면 Poor 가격 (GDD 2-3, DEVELOPMENT_PLAN 5장)
+-- 가격: 판매가 × (1 + 0.5 × 정확도), Q에는 안 넣음. 쪼개지면 못 팖 (2026-11-21 사용자, 원래 기획은 Poor 가격)
 
 local CutterShapes = require(script.Parent:WaitForChild("CutterShapes"))
 
@@ -24,7 +24,6 @@ R.RATE = 20 -- 초당 표본 수
 R.MAX_SAMPLES = 1600
 R.MAX_TIME = 75 -- 이보다 길면 저절로 그만 (초)
 R.BONUS = 0.5 -- 판매가 × (1 + BONUS × 정확도)
-R.BROKEN_MULT = 0.5 -- 쪼개지면 Poor 가격 배율 (DalgonaConfig.Grades Poor)
 R.PERFECT_ACC = 0.9 -- 금 없이 이 정확도 이상이면 "완벽 뽑기"
 
 local function find(id)

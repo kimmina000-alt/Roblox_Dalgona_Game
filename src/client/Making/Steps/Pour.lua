@@ -415,20 +415,6 @@ function Pour.run(ctx)
 	-- 반죽이 떨어질 자리 표시 (손가락 아래 철판 위 옅은 그림자)
 	local aimMark = S:fxPart(S.fx, { Name = "PourAim", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(60, 36, 20), Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(0.01, 0.34, 0.34) })
 
-	-- 2026-11-20 사용자 요청 (세 번째): 화면 오른쪽 반투명 판(철판과 같은 비율)을 누르고 끌면, 판 위 자리와 같은
-	-- 철판 자리에 반죽이 떨어짐 (손가락이 철판을 가리지 않음). 위 = 철판 안쪽(-Z), 오른쪽 = +X (항공샷과 같은 방향)
-	local aimPt = S.ringCenter -- 지금 떨어지는 자리
-	local function padToWorld(u, v)
-		local lim = half - 0.35
-		local x = math.clamp(plate.X + (u - 0.5) * 2 * half, plate.X - lim, plate.X + lim)
-		local z = math.clamp(plate.Z + (v - 0.5) * 2 * half, plate.Z - lim, plate.Z + lim)
-		return Vector3.new(x, S.plateTop, z)
-	end
-	local function worldToPad(w)
-		return 0.5 + (w.X - plate.X) / (2 * half), 0.5 + (w.Z - plate.Z) / (2 * half)
-	end
-	local ringFrac = (S.Ring and S.Ring.Size.Y or 2.9) / (2 * half)
-
 	-- 젓가락은 내려놓음
 	S:restChopsticks()
 
@@ -511,7 +497,11 @@ function Pour.run(ctx)
 		ladle:PivotTo(start:Lerp(hover, 1 - (1 - math.min(tc / 0.4, 1)) ^ 3))
 	end
 	home = hover
-	ui:say("오른쪽 판을 꾹 누르고 있어요", "판 위 자리와 같은 곳에 반죽이 한 방울씩 · 누른 채로 끌면 따라 움직여요")
+	-- 2026-11-21 사용자 요청: 오른쪽 판 대신 "국자를 누르고 드래그하면 부어지게". 국자를 잡아 철판 위로 끌면
+	-- 국자 아래로 한 방울씩 떨어짐 (방울이 이어지는 모양·누른 모양은 그대로). 국자는 붓는 동안에도 보임
+	local grabOff = Vector3.zero -- 잡은 자리 → 국자 피벗 (잡을 때 국자가 손가락으로 튀지 않게)
+	local GRAB_PX = 150 -- 국자(그릇·손잡이) 화면 위치에서 이만큼 안을 누르면 잡음
+	ui:say("국자를 꾹 눌러 철판 위로 끌어요", "철판 위에서 누르고 있으면 한 방울씩 떨어져요 · 끌면 따라 떨어져요")
 
 	while true do
 		local dt = ctx.frame()
@@ -522,15 +512,25 @@ function Pour.run(ctx)
 		end
 		stepDrops(dt)
 		if not dropped then
-			local pu, pv = worldToPad(aimPt)
-			ui:setPad(dropMode, pu, pv, grabbing, ringFrac)
+			ui:setPad(false)
 			if P.down and not grabbing and P.presses ~= seenPress then
 				seenPress = P.presses
-				if not dropMode or ui:padAt(P.pos) then
+				local near = not dropMode
+				if dropMode then
+					local bowlS = P.toScreen(S.Bowl.Position)
+					local gripS = P.toScreen(ladle:GetPivot():PointToWorldSpace(gripLocal))
+					near = (P.pos - bowlS).Magnitude < GRAB_PX or (P.pos - gripS).Magnitude < GRAB_PX
+				end
+				if near then
 					grabbing = true
+					if dropMode then
+						local f0 = P.toPlane(carryY)
+						local lp = ladle:GetPivot().Position
+						grabOff = Vector3.new(lp.X - f0.X, 0, lp.Z - f0.Z)
+					end
 					Sfx.play("pop", 0.5, 1.1)
 				else
-					ui:hint("오른쪽 판 위를 누르고 끌어요")
+					ui:hint("국자를 눌러서 철판 위로 끌어요")
 				end
 			end
 			if grabbing and not P.down then
@@ -546,13 +546,12 @@ function Pour.run(ctx)
 				-- 방울 붓기: 국자는 숨기고 손가락 바로 아래로 반죽이 떨어짐 (2026-11-20)
 				local fingerLand = P.toPlane(S.plateTop, aimScreenPos(P))
 				if dropMode then
-					-- 누르고 있는 동안 떨어지는 자리 = 판 위 손가락 자리와 같은 철판 자리 (판 밖으로 끌면 끝에 붙음)
-					local u, v = ui:padAt(P.pos, true)
-					if u then
-						aimPt = padToWorld(u, v)
-					end
-					fingerLand = aimPt
-					over = true
+					-- 국자를 잡은 채로 끎: 국자 그릇 바로 아래 철판에 떨어짐 (철판 밖이면 안 떨어짐)
+					local g = P.toPlane(carryY) + grabOff
+					w = Vector3.new(g.X, carryY, g.Z)
+					local lim = half - 0.35
+					over = math.abs(w.X - plate.X) < half and math.abs(w.Z - plate.Z) < half
+					fingerLand = Vector3.new(math.clamp(w.X, plate.X - lim, plate.X + lim), S.plateTop, math.clamp(w.Z, plate.Z - lim, plate.Z + lim))
 					aimMark.Transparency = over and 0.55 or 1
 					aimMark.CFrame = CFrame.new(fingerLand.X, S.plateTop + 0.006, fingerLand.Z) * CFrame.Angles(0, 0, math.rad(90))
 				end
@@ -564,19 +563,14 @@ function Pour.run(ctx)
 				-- 기울일 때는 그릇 자리를 그대로 두고 그릇 가장자리 쪽으로 기울임 (손잡이를 손가락에 붙여 두면
 				-- 기울이는 만큼 그릇이 손 쪽으로 1.6 넘게 밀려 철판 밖에 부어짐 → 플레이 테스트에서 확인)
 				if dropMode then
-					-- 방울 붓기: 국자는 철판 왼쪽 자리에 그대로, 누르는 동안 철판 쪽으로 살짝 기울기만 함
-					ladle:PivotTo(CFrame.new(hover.Position) * CFrame.Angles(0, 0, -tilt * 0.45) * rot)
+					-- 방울 붓기: 잡은 국자가 손가락을 따라 움직이고, 철판 위에서는 살짝 기울어 그릇 안이 보임
+					ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, -tilt * 0.45) * rot)
 				else
 					ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, -tilt) * rot)
 				end
 				-- 국자 가장자리(손잡이 반대쪽 +X)와 흘러나가는 방향
 				local out = Vector3.new(1, 0, 0)
 				local lip = (CFrame.new(w) * CFrame.Angles(0, 0, -tilt)):PointToWorldSpace(Vector3.new(S.bowlRadius - 0.04, S.bowlHalf, 0))
-				if dropMode and tilt > POUR_TILT and poured < total and hideK < 0.5 then
-					-- 2026-11-20 "반죽 붓기 시작하면 국자 안 보이게": 첫 방울이 떨어질 때부터 국자를 숨김 (붓기 전에는 철판 왼쪽에 보임)
-					hideK = 1
-					setLadleHidden(ladle, 1)
-				end
 				if dropMode and tilt > POUR_TILT and poured < total then
 					-- 한 방울씩: 많이 기울일수록 자주. 국자를 움직이며 떨어뜨리면 그 길대로 모양이 됨 (하트를 그리면 하트)
 					local rate = (tilt - POUR_TILT) / (MAX_TILT - POUR_TILT)
@@ -591,7 +585,8 @@ function Pour.run(ctx)
 						poured += amt
 						local size = 0.3
 						local part = Fx.ellipsoid(S:fxPart(S.fx, { Name = "PourDrop", Color = color, Material = Enum.Material.SmoothPlastic, Size = Vector3.one * size }))
-						local from = landing + Vector3.new(0, 6, 0) -- 화면 밖 높은 곳(숨긴 국자)에서
+						local from = Vector3.new(landing.X, w.Y - 0.15, landing.Z) -- 국자 그릇 아래에서
+						S:setContents({ thickness = math.max(0.06, contentsThick * (1 - poured / total)) }) -- 국자 안 반죽이 줄어듦
 						part.CFrame = CFrame.new(from)
 						table.insert(drops, { part = part, from = from, to = landing + Vector3.new(0, 0.12, 0), t = 0, amt = amt, size = size })
 					end
