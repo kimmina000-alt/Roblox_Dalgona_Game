@@ -5,7 +5,7 @@
 local Toon = {}
 
 local OUTLINE = Color3.fromRGB(92, 52, 34) -- 짙은 초콜릿색 (검정보다 부드러움)
-local TOOLS = { "Ladle", "Presser", "Cutter", "SodaTub", "ChopstickCup","WoodSpoon", "SugarBowlWhite", "SugarBowlBrown", "Brazier", "IronPlate" }
+local TOOLS = { "Ladle", "Presser", "Cutter", "SodaTub", "ChopstickCup","WoodSpoon", "SugarBowlWhite", "SugarBowlBrown", "Brazier" } -- 철판은 뺌 (2026-11-20: 위에 뿌린 설탕 알갱이마다 테두리가 그려짐)
 
 function Toon.apply(model)
 	for _, name in ipairs(TOOLS) do

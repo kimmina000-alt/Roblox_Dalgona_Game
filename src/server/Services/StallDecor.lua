@@ -344,6 +344,41 @@ local function galvanizedBoard(f, ws)
 	end
 end
 
+-- 가운데 설탕 (2026-11-20 "입자들로 표현해, 너무 동그래"): 매끈한 원판 대신 뭉친 설탕 가루 덩이 몇 개 + 흩뿌린 알갱이.
+-- 가장자리는 들쭉날쭉하게 흩어짐. 판정용 SugarRing(가운데·반지름)은 그대로 두고 투명하게
+local function sugarBed(f, ws)
+	local ring = ws:FindFirstChild("SugarRing")
+	if not ring then
+		return
+	end
+	ring.Transparency = 1
+	local inner = ws:FindFirstChild("SugarRingInner")
+	if inner then
+		inner.Transparency = 1
+	end
+	local R = ring.Size.Y / 2
+	local c = ring.Position
+	local plate = ws:FindFirstChild("IronPlate")
+	local y = plate and (plate.Position.Y + plate.Size.Y / 2) or (c.Y - 0.01)
+	local rng = Random.new(17)
+	local WHITE = Color3.fromRGB(252, 252, 250)
+	-- 얇게 뭉친 가루 덩이 (겹쳐서 울퉁불퉁한 구름 모양)
+	for _ = 1, 22 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = R * math.sqrt(rng:NextNumber()) * 0.72
+		local d = rng:NextNumber(0.45, 1.0)
+		deco(f, "SugarClump", Vector3.new(0.006 + rng:NextNumber(0, 0.01), d, d * rng:NextNumber(0.55, 1)), CFrame.new(c.X + math.cos(a) * r, y + 0.004 + rng:NextNumber(0, 0.004), c.Z + math.sin(a) * r) * CFrame.Angles(0, rng:NextNumber(0, math.pi), math.rad(90)), WHITE, Enum.Material.Sand, { Shape = Enum.PartType.Cylinder, Transparency = rng:NextNumber(0.35, 0.6) })
+	end
+	-- 흩뿌린 알갱이: 가운데는 촘촘, 가장자리로 갈수록 드문드문, 원 밖으로도 조금 튐
+	for _ = 1, 240 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = R * (rng:NextNumber() ^ 0.65) * rng:NextNumber(0.9, 1.15)
+		local g = rng:NextNumber(0.03, 0.065)
+		local tone = WHITE:Lerp(Color3.fromRGB(226, 222, 214), rng:NextNumber(0, 0.6))
+		deco(f, "SugarGrain", Vector3.new(g, g * 0.6, g * rng:NextNumber(0.7, 1.2)), CFrame.new(c.X + math.cos(a) * r, y + g * 0.3, c.Z + math.sin(a) * r) * CFrame.Angles(rng:NextNumber(-0.4, 0.4), rng:NextNumber(0, math.pi), rng:NextNumber(-0.4, 0.4)), tone, Enum.Material.SmoothPlastic, { Reflectance = 0.05 })
+	end
+end
+
 local function sugarDust(f, ws)
 	local plate = ws:FindFirstChild("IronPlate")
 	if not plate then
@@ -470,6 +505,7 @@ local function stage1(ws, top)
 	foil(f, ws, tableY)
 	galvanizedBoard(f, ws)
 	sugarDust(f, ws)
+	sugarBed(f, ws)
 	cutterTray(f, ws, tableY, rightX, top.Position.Z)
 	stickCup(f, tableY, rightX - 1.4, frontZ - 0.9)
 	local floorY = top.Position.Y - top.Size.Y / 2 - 2.9 -- 테이블 다리 높이만큼 아래 = 바닥
