@@ -23,6 +23,7 @@ local CutterPicker = require(Making:WaitForChild("CutterPicker"))
 local Sfx = require(Making:WaitForChild("Sfx"))
 local Showcase = require(Making:WaitForChild("Showcase"))
 local Pack = require(Making:WaitForChild("Pack"))
+local Ppopgi = require(Making:WaitForChild("Ppopgi"))
 local StepsFolder = Making:WaitForChild("Steps")
 
 local STEP_MODULES = {}
@@ -281,8 +282,48 @@ local function runSession()
 	if dal and not result.burnt then
 		-- 모양 단계에서 "포장하기"를 눌렀으면 (모양 안 찍음, 2026-11-20) 묻지 않고 바로 포장
 		local stampRec = ctx.records.stamp
+		-- 7. 뽑기 (선택, 15번): 모양을 찍었으면 도전할지 고름. 순서 = 뽑기 → 포장. 쪼개지면 포장 못 함
+		local canPpopgi = not result.misshaped and ctx.state.stampRoot ~= nil and not (stampRec and stampRec.packNow)
+			and (result.ppopgiOk or not result.verified)
+		if canPpopgi then
+			local pask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "뽑기에 도전할까요? 바늘로 점선을 긁어 모양을 떼어 내요 · 잘 뽑으면 판매가 최대 ×1.5", "뽑기 도전", "그만하고 넘어가기")
+			while not pask.choice do
+				if not ctx.frame() then
+					pask.close()
+					return
+				end
+			end
+			if pask.choice == 1 then
+				local out = Ppopgi.run(ctx, dal, shape.id)
+				if ctx.aborted then
+					return
+				end
+				if out then
+					local pres = out.res
+					if result.verified then
+						local okP, server = pcall(function()
+							return Remotes.SubmitPpopgi:InvokeServer({ samples = out.samples, quit = out.quit })
+						end)
+						if okP and type(server) == "table" and server.ok then
+							pres = server
+							pres.verified = true
+						else
+							warn("[Making] ppopgi rejected:", okP and server and server.reason or server)
+						end
+					end
+					pres.quit = out.quit
+					result.ppopgi = pres
+					if pres.price then
+						result.price = pres.price
+					end
+				end
+				CameraRig.go("result")
+			end
+		end
 		local ask = { choice = 1 }
-		if not (stampRec and stampRec.packNow) then
+		if result.ppopgi and result.ppopgi.broken then
+			ask = { choice = 2 } -- 쪼개진 달고나는 포장 안 함
+		elseif not (stampRec and stampRec.packNow) then
 			ask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "포장할까요? 비닐에 넣고 빵끈으로 묶어요", "포장하기", "그냥 두기")
 			while not ask.choice do
 				if not ctx.frame() then
@@ -335,6 +376,10 @@ local function runSession()
 	})
 	current = nil
 	local s = result.steps or {}
+	if result.ppopgi then
+		local pp = result.ppopgi
+		print(string.format("[Making] ppopgi cov=%.2f cracks=%d acc=%.2f broken=%s perfect=%s bonus=%.2f verified=%s", pp.coverage or 0, pp.cracks or 0, pp.acc or 0, tostring(pp.broken), tostring(pp.perfect), pp.bonus or 1, tostring(pp.verified)))
+	end
 	print(string.format("[Making] result %s Q=%d %s price=%s stars=%d (verified=%s) sugar=%s melt=%s soda=%s pour=%s press=%s stamp=%s", shape.id, result.Q, result.grade, tostring(result.price), result.stars, tostring(result.verified), tostring(s.sugar), tostring(s.melt), tostring(s.soda), tostring(s.pour), tostring(s.press), tostring(s.stamp)))
 end
 

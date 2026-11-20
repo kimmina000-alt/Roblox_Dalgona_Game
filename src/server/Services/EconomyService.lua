@@ -159,6 +159,9 @@ function EconomyService.pack(player)
 	if last.item.pk then
 		return { ok = false, reason = "이미 포장했어요" }
 	end
+	if last.item.br then
+		return { ok = false, reason = "쪼개진 달고나는 포장할 수 없어요" }
+	end
 	local missing = {}
 	for _, ing in ipairs(G.Ingredients) do
 		local n = G.PackCost[ing.id]
@@ -177,7 +180,7 @@ function EconomyService.pack(player)
 			d.ingredients[id] = math.max(0, (d.ingredients[id] or 0) - n)
 		end
 		item.pk = true
-		item.p = G.salePrice(item.b or item.p, item.b and item.m or 1, G.GachaBonusDefault, true)
+		item.p = G.salePrice(item.b or item.p, item.b and item.m or 1, item.gb or G.GachaBonusDefault, true)
 	end)
 	lastMade[player] = nil
 	return { ok = true, price = item.p }
@@ -186,6 +189,34 @@ end
 function EconomyService.shelfCount(player)
 	local data = Data.get(player)
 	return data and math.min(#data.stock, G.Sales.shelfSlots) or 0
+end
+
+-- 뽑기 결과 (15번, ProductionService.hooks.onPpopgi): 방금 만든 달고나 판매가에 뽑기 보너스, 쪼개지면 Poor 가격.
+-- 순서: 모양 찍기 → 뽑기(선택) → 포장(선택, ×1.1). 쪼개진 것은 포장 못 함. 반환 { price, dexNew }
+-- dexNew: 이 도안을 처음 완벽하게 뽑았는지 — 도감(19번)이 생기면 채움. 지금은 자리만
+function EconomyService.onPpopgi(player, shape, res)
+	local data = Data.get(player)
+	local last = lastMade[player]
+	if not data or not last or not table.find(data.stock, last.item) then
+		return nil
+	end
+	local item = last.item
+	Data.update(player, function()
+		if res.broken then
+			item.br = true
+			item.m = 0.5 -- Poor 배율 (PpopgiRules.BROKEN_MULT)
+			item.gb = 1
+		else
+			item.gb = res.bonus
+		end
+		item.p = G.salePrice(item.b or item.p, item.b and item.m or 1, item.gb, item.pk)
+	end)
+	last.t = os.clock() -- 뽑기 뒤에 포장할 시간
+	local dexNew = nil
+	if res.perfect and EconomyService.onPerfectPpopgi then
+		dexNew = EconomyService.onPerfectPpopgi(player, shape) -- 19번 도감 연결 자리
+	end
+	return { price = item.p, dexNew = dexNew }
 end
 
 -- 제작 끝. 반환: 보상 정보 (결과 표에 붙음)
