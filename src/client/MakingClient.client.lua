@@ -128,6 +128,13 @@ local function finish()
 		station:removeHand()
 		station.Prompt.Enabled = true
 	end
+	-- 손으로 만든 달고나는 직접 진열 (2026-11-21): 들고 있으면 진열대로 안내 (서버 속성 Carrying = 들고 있는 달고나 번호)
+	local carrying = player:GetAttribute("Carrying")
+	if type(carrying) == "number" and carrying ~= 0 then
+		pcall(function()
+			game:GetService("StarterGui"):SetCore("SendNotification", { Title = "달고나 진열", Text = "진열대 빈 칸에서 R을 눌러 놓아요", Duration = 6 })
+		end)
+	end
 end
 
 local startMaking

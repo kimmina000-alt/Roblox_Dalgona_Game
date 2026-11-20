@@ -647,13 +647,16 @@ function Builder.setLadleCount(ws, n)
 		return
 	end
 	-- 플레이어 국자의 메시·내용물 자리 (손잡이 방향 기준 틀)를 그대로 옮겨 씀
-	local hd0 = (CFrame.Angles(0, math.rad(HANDLE_YAW), 0)).RightVector
+	-- 작업대를 돌려 놓았으면(가게 작업대 180°, 2026-11-21) 자리·손잡이 방향도 같이 돎
+	local wpv = ws:GetPivot()
+	local wr = wpv - wpv.Position
+	local hd0 = wr:VectorToWorldSpace((CFrame.Angles(0, math.rad(HANDLE_YAW), 0)).RightVector)
 	local c0 = bowl.Position
 	local frame0 = CFrame.lookAt(c0, c0 - hd0)
 	local meshRel = frame0:ToObjectSpace(mesh.CFrame)
 	local contentsRel = CFrame.new(c0):ToObjectSpace(contents.CFrame)
 	for k = 2, n do
-		local off = HELPER_SLOTS[k - 1]
+		local off = wr:VectorToWorldSpace(HELPER_SLOTS[k - 1])
 		local c = c0 + off
 		-- 알바생 국자는 철망 위에 내려놓음 (플레이어 국자는 들고 있는 높이)
 		local brazier = ws:FindFirstChild("Brazier")
