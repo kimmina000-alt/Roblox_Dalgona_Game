@@ -293,6 +293,17 @@ local function runSession()
 		end
 		local extras = nil
 		if ask.choice == 1 then
+			-- 포장지·빵끈은 포장할 때 씀 (2026-11-20): 서버가 재료를 확인하고 판매가 ×1.1
+			local okPack, packRes = pcall(function()
+				return Remotes.PackDalgona:InvokeServer()
+			end)
+			if okPack and type(packRes) == "table" and not packRes.ok and packRes.reason ~= "no item" then
+				ui:say(tostring(packRes.reason), "상점에서 사 와요 · 이번엔 포장 없이 끝나요")
+				task.wait(2)
+				ask.choice = 2
+			end
+		end
+		if ask.choice == 1 then
 			extras = Pack.run(ctx, dal, ctx.state)
 			if ctx.aborted or not extras then
 				return

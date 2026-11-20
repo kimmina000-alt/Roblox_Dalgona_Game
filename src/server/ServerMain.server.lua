@@ -17,7 +17,7 @@ if not remotes then
 	remotes.Name = "Remotes"
 	remotes.Parent = ReplicatedStorage
 end
-for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", "GetPlayerState" }) do
+for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", "GetPlayerState", "PackDalgona" }) do
 	if not remotes:FindFirstChild(name) then
 		local rf = Instance.new("RemoteFunction")
 		rf.Name = name

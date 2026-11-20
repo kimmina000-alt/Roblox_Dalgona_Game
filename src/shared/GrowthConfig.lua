@@ -23,8 +23,8 @@ G.DefaultData = {
 	coins = 100, -- 시작 자금 (ECONOMY_BALANCE 6장 "시작 자금 100")
 	exp = 0,
 	level = 1,
-	ingredients = { sugar = 5, soda = 5, wrapper = 5, chopsticks = 5 }, -- 첫 판을 바로 해 볼 수 있게 5회분 (사용자 확정, 2026-11-20)
-	stock = {}, -- 만든 달고나 { s = 도안 id, g = 등급, q = 완성도, p = 판매가 } (판매는 Phase 3)
+	ingredients = { sugar = 5, soda = 5, wrapper = 5, chopsticks = 5, twistTie = 5 }, -- 첫 판을 바로 해 볼 수 있게 5회분 (사용자 확정, 2026-11-20)
+	stock = {}, -- 만든 달고나 { s = 도안 id, g = 등급, q = 완성도, p = 판매가, b = 도안 가격, m = 품질 배율, pk = 포장 여부 }
 	unlockedShapes = { "Circle", "Square", "Triangle", "Star" },
 	upgrades = { stove = 0, presser = 0, table = 0 }, -- 화로·누르개·작업대 장비 Lv (Phase 4)
 	ladles = 1, -- 국자 수 1~4 (SHOP_GROWTH_PLAN 2장)
@@ -40,10 +40,11 @@ G.Ingredients = {
 	{ id = "soda", name = "소다", icon = "🧂", pack = 10, price = 10 },
 	{ id = "wrapper", name = "포장지", icon = "🛍️", pack = 10, price = 10 },
 	{ id = "chopsticks", name = "나무젓가락", icon = "🥢", pack = 10, price = 5 }, -- 10쌍 5코인 (GDD 7장, 2026-11-20)
+	{ id = "twistTie", name = "빵끈", icon = "🎀", pack = 10, price = 5 }, -- 10개 5코인 (사용자 요청 2026-11-20, 임시값)
 }
 G.IngredientMax = 999 -- 재료마다 최대 보관량
 
--- 1개당 재료 (D4): 설탕은 도안 등급에 따라 1/2/3회분 → 원가 5/8/11. 소다·포장지 1개씩.
+-- 1개당 재료 (D4): 설탕은 도안 등급에 따라 1/2/3회분, 소다 1. 포장지·빵끈은 포장할 때만 (사용자 확정 2026-11-20)
 G.SugarByGrade = {
 	Common = 1, Uncommon = 1,
 	Rare = 2, Epic = 2,
@@ -53,7 +54,19 @@ G.FactoryExtraCost = 1 -- 공장 운영비 +1 (D4, Phase 5에서 씀)
 
 -- 다 만든 뒤(서버 판정) 쓰는 재료
 function G.recipe(shapeGrade)
-	return { sugar = G.SugarByGrade[shapeGrade] or 1, soda = 1, wrapper = 1 }
+	return { sugar = G.SugarByGrade[shapeGrade] or 1, soda = 1 }
+end
+
+-- 포장할 때 쓰는 재료 (손 제작만. 기계·공장은 안 씀 — 포장 원가 1에 포함)
+G.PackCost = { wrapper = 1, twistTie = 1 }
+G.PackWindowSeconds = 180 -- 다 만든 뒤 이 시간 안에 포장해야 함
+
+-- 판매가 (GDD 13장, 기획 확정 2026-11-20): round(도안 가격 × 품질 배율 × 뽑기 보너스 × 포장 1.1)
+G.PackedPriceMult = 1.1
+G.GachaBonusDefault = 1 -- 뽑기(15번)는 아직 없음: 자리만
+function G.salePrice(basePrice, qualityMult, gachaBonus, packed)
+	local v = (basePrice or 0) * (qualityMult or 1) * (gachaBonus or G.GachaBonusDefault) * (packed and G.PackedPriceMult or 1)
+	return math.floor(v + 0.5)
 end
 
 -- 나무젓가락: 한 판 시작(젓가락을 꺼낼 때)에 1쌍. "다시 하기"도 새 판이라 1쌍. 0쌍이면 시작 못 함

@@ -17,6 +17,7 @@ local EconomyService = {}
 local Data = nil -- PlayerDataService
 local remotes = nil
 local lastBuy = {} -- [player] = os.clock()
+local lastMade = {} -- [player] = { item, t } 방금 만든 달고나 (포장 대상)
 
 local ingredientById = {}
 for _, ing in ipairs(G.Ingredients) do
@@ -147,6 +148,41 @@ function EconomyService.sell(player, n)
 	return sold, coins
 end
 
+-- 방금 만든 달고나 포장: 포장지 1 + 빵끈 1을 쓰고 판매가 ×1.1. 반환 { ok, reason, price }
+-- reason "no item"이면 저장된 달고나가 없음 (서버 판정 실패 등) → 화면 연출만 해도 됨
+function EconomyService.pack(player)
+	local data = Data.get(player)
+	local last = lastMade[player]
+	if not data or not last or os.clock() - last.t > G.PackWindowSeconds or not table.find(data.stock, last.item) then
+		return { ok = false, reason = "no item" }
+	end
+	if last.item.pk then
+		return { ok = false, reason = "이미 포장했어요" }
+	end
+	local missing = {}
+	for _, ing in ipairs(G.Ingredients) do
+		local n = G.PackCost[ing.id]
+		if n and (data.ingredients[ing.id] or 0) < n then
+			table.insert(missing, ing.name)
+		end
+	end
+	if #missing > 0 then
+		local why = table.concat(missing, "·") .. "이(가) 없어요"
+		EconomyService.notify(player, why .. " → 상점에서 사요 (이번엔 포장 없이 끝나요)")
+		return { ok = false, reason = why }
+	end
+	local item = last.item
+	Data.update(player, function(d)
+		for id, n in pairs(G.PackCost) do
+			d.ingredients[id] = math.max(0, (d.ingredients[id] or 0) - n)
+		end
+		item.pk = true
+		item.p = G.salePrice(item.b or item.p, item.b and item.m or 1, G.GachaBonusDefault, true)
+	end)
+	lastMade[player] = nil
+	return { ok = true, price = item.p }
+end
+
 function EconomyService.shelfCount(player)
 	local data = Data.get(player)
 	return data and math.min(#data.stock, G.Sales.shelfSlots) or 0
@@ -161,7 +197,17 @@ function EconomyService.onMade(player, shape, result)
 			d.ingredients[id] = math.max(0, (d.ingredients[id] or 0) - n)
 		end
 		if #d.stock < G.StockMax then
-			table.insert(d.stock, { s = shape.id, g = result.grade, q = result.Q, p = result.price })
+			local item = {
+				s = shape.id,
+				g = result.grade,
+				q = result.Q,
+				b = shape.price,
+				m = result.mult or 1,
+				pk = false,
+			}
+			item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
+			table.insert(d.stock, item)
+			lastMade[player] = { item = item, t = os.clock() }
 			reward.stocked = true
 		end
 		d.stats.made = (d.stats.made or 0) + 1
@@ -203,8 +249,10 @@ function EconomyService.init(dataService, r)
 	for _, p in ipairs(Players:GetPlayers()) do
 		watch(p)
 	end
+	remotes.PackDalgona.OnServerInvoke = EconomyService.pack
 	Players.PlayerRemoving:Connect(function(p)
 		lastBuy[p] = nil
+		lastMade[p] = nil
 	end)
 end
 
