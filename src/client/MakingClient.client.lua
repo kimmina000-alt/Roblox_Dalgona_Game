@@ -168,6 +168,18 @@ local function runSession()
 	station:setCutter(shape.id)
 	ctx.state.shape = shape
 
+	-- 나무젓가락이 없으면 꺼내기 전에 상점으로 안내 (재료, 2026-11-20)
+	if (player:GetAttribute("Chopsticks") or 1) < 1 then
+		ui:say("나무젓가락이 없어요", "재료 상점에서 사 와요 (10쌍 5코인)")
+		task.wait(2)
+		finish()
+		local hud = script.Parent:FindFirstChild("Hud")
+		local open = hud and hud:FindFirstChild("OpenShop")
+		if open then
+			open:Fire("chopsticks")
+		end
+		return
+	end
 	-- 0. 나무젓가락 꺼내기 (통을 누르면 한 짝이 뽑혀 테이블 위에 놓임)
 	CameraRig.go("pick") -- 테이블 왼쪽 끝 젓가락 쪽으로
 	local pick = ChopstickPicker.run(ctx)

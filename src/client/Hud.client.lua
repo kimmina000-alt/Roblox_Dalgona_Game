@@ -81,9 +81,9 @@ local ingText = {}
 for i, ing in ipairs(G.Ingredients) do
 	ingText[ing.id] = label({
 		Name = ing.id,
-		Position = UDim2.fromOffset((12 + (i - 1) * 78) * S, 68 * S),
-		Size = UDim2.fromOffset(76 * S, 24 * S),
-		TextSize = 17 * S,
+		Position = UDim2.fromOffset((12 + (i - 1) * 58) * S, 68 * S),
+		Size = UDim2.fromOffset(58 * S, 24 * S),
+		TextSize = 15 * S,
 		Text = ing.icon .. " 0",
 		Parent = panel,
 	})
@@ -186,6 +186,21 @@ end
 shopBtn.Activated:Connect(function()
 	shop.Visible = not shop.Visible
 	shopMsg.Text = ""
+end)
+-- 다른 스크립트(제작 화면)가 상점을 열 수 있게: OpenShop:Fire(재료 id)
+local openShop = Instance.new("BindableEvent")
+openShop.Name = "OpenShop"
+openShop.Parent = script
+openShop.Event:Connect(function(id)
+	shop.Visible = true
+	local ing = nil
+	for _, x in ipairs(G.Ingredients) do
+		if x.id == id then
+			ing = x
+		end
+	end
+	shopMsg.TextColor3 = Color3.fromRGB(200, 70, 60)
+	shopMsg.Text = ing and (ing.name .. "이(가) 없어요. 사 가세요!") or ""
 end)
 closeBtn.Activated:Connect(function()
 	shop.Visible = false

@@ -16,7 +16,8 @@ local COAL_PER_MAKE = 0.1 -- 연탄 1장으로 10번 만듦
 
 local ProductionService = {}
 
--- 저장·가게(Phase 2) 연결: canStart(player, shape) -> ok, 이유 / onResult(player, shape, result) -> 보상
+-- 저장·가게(Phase 2) 연결: canStart(player, shape) -> ok, 이유 / onStart(player, shape) 세션 열림(젓가락) /
+-- onResult(player, shape, result) -> 보상
 ProductionService.hooks = {}
 
 local sessions = {} -- [player] = { id, t0, lastStart }
@@ -168,6 +169,9 @@ function ProductionService.start(player, shapeId)
 	end
 	local s = { id = HttpService:GenerateGUID(false), t0 = now, shape = shape }
 	sessions[player] = s
+	if ProductionService.hooks.onStart then
+		ProductionService.hooks.onStart(player, shape)
+	end
 	return s.id, s.t0
 end
 

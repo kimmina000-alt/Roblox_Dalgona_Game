@@ -1,7 +1,9 @@
 -- 코인·재료·재고·EXP (Phase 2, 2026-11-20)
 --  - 재료 상점: 묶음 구매 (GrowthConfig.Ingredients)
 --  - 제작 시작 전: 재료·재고 자리 확인 (ProductionService.hooks.canStart)
+--  - 제작 시작: 나무젓가락 1쌍 (hooks.onStart, "다시 하기"도 새 판이라 1쌍)
 --  - 제작 끝 (서버 판정 결과): 재료 쓰고 재고에 달고나 1개, EXP·레벨업 코인 (hooks.onResult)
+--  - 판매: 진열대 앞쪽(먼저 만든 것)부터 꺼내 코인으로 (SalesService가 손님이 왔을 때 부름)
 --  - HUD로 상태를 보냄 (Remotes.PlayerState), 짧은 알림 (Remotes.Notify)
 
 local Players = game:GetService("Players")
@@ -27,11 +29,13 @@ local function snapshot(player, data)
 		level = data.level,
 		exp = data.exp,
 		expToNext = data.level >= G.MaxLevel and 0 or G.expToNext(data.level),
-		ingredients = {
-			sugar = data.ingredients.sugar or 0,
-			soda = data.ingredients.soda or 0,
-			wrapper = data.ingredients.wrapper or 0,
-		},
+		ingredients = (function()
+			local t = {}
+			for _, ing in ipairs(G.Ingredients) do
+				t[ing.id] = data.ingredients[ing.id] or 0
+			end
+			return t
+		end)(),
 		stock = #data.stock,
 		stockMax = G.StockMax,
 		plot = player:GetAttribute("PlotIndex"),
@@ -41,6 +45,9 @@ end
 
 function EconomyService.push(player)
 	local data = Data.get(player)
+	if data then
+		player:SetAttribute("Chopsticks", data.ingredients.chopsticks or 0) -- 제작 화면이 젓가락 꺼내기 전에 봄
+	end
 	if data and remotes then
 		remotes.PlayerState:FireClient(player, snapshot(player, data))
 	end
@@ -96,6 +103,7 @@ function EconomyService.canMake(player, shape)
 		return false, string.format("달고나 보관함이 가득 찼어요 (%d개)", G.StockMax)
 	end
 	local need = G.recipe(shape.grade)
+	need.chopsticks = G.ChopsticksPerRound
 	local missing = {}
 	for _, ing in ipairs(G.Ingredients) do
 		local n = need[ing.id] or 0
@@ -107,6 +115,41 @@ function EconomyService.canMake(player, shape)
 		return false, "재료가 모자라요: " .. table.concat(missing, ", ") .. " 필요 (상점에서 사요)"
 	end
 	return true
+end
+
+-- 제작 시작 (세션이 열림): 나무젓가락 1쌍
+function EconomyService.onStart(player, _shape)
+	Data.update(player, function(d)
+		d.ingredients.chopsticks = math.max(0, (d.ingredients.chopsticks or 0) - G.ChopsticksPerRound)
+	end)
+end
+
+-- 진열대에서 n개 팔기 (앞쪽 = 먼저 만든 것부터). 한 번에 꺼내고 지우므로 같은 달고나가 두 번 팔리지 않음.
+-- 반환: 판 개수, 받은 코인
+function EconomyService.sell(player, n)
+	local sold, coins = 0, 0
+	Data.update(player, function(d)
+		local shelf = math.min(#d.stock, G.Sales.shelfSlots)
+		n = math.min(n, shelf)
+		if n <= 0 then
+			return false
+		end
+		for _ = 1, n do
+			local item = table.remove(d.stock, 1)
+			local p = math.max(0, math.floor(tonumber(item.p) or 0))
+			coins += p
+			sold += 1
+		end
+		d.coins += coins
+		d.stats.sold = (d.stats.sold or 0) + sold
+		d.stats.coinsEarned = (d.stats.coinsEarned or 0) + coins
+	end)
+	return sold, coins
+end
+
+function EconomyService.shelfCount(player)
+	local data = Data.get(player)
+	return data and math.min(#data.stock, G.Sales.shelfSlots) or 0
 end
 
 -- 제작 끝. 반환: 보상 정보 (결과 표에 붙음)

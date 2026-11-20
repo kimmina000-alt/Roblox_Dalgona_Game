@@ -212,6 +212,11 @@ function PlotService.get(player)
 	return i and plots[i] or nil, i
 end
 
+-- 번호로 부지 { model, owner, cframe, signLabel }
+function PlotService.plotAt(i)
+	return plots[i]
+end
+
 function PlotService.init(opts)
 	notify = opts and opts.notify
 	local folder = workspace:FindFirstChild("ShopPlots")
