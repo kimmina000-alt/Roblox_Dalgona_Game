@@ -224,11 +224,13 @@ function Pack.run(ctx, dal, st)
 	-- 아래로 끌면 내려오면서 씌워짐 (2026-11-20 "위에서 비닐 내려와서 씌우는"). 테이블 밖으로 안 나가게 짧게
 	local OUT = math.max(R * 0.7, 1.2)
 	local LIFT = 1.4
-	-- 카메라: 막대 끝 ~ 처음 비닐 윗끝이 다 보이게
-	local lowZ = z0 - stickLen
+	-- 카메라: 막대 끝 ~ 처음 비닐 윗끝이 다 보이게. 빵끈 통(매트 오른쪽 아래)도 안 잘리게 (2026-11-20 사용자 요청)
+	local lowZ = z0 - stickLen - 0.4
+	local cupZ = (cup.Position - m):Dot(up) - 0.7
+	lowZ = math.min(lowZ, cupZ)
 	local highZ = zTop + OUT
 	local span = highZ - lowZ
-	local camH = math.clamp(span / (2 * math.tan(math.rad(20)) * 0.82), 11, 19)
+	local camH = math.clamp(span / (2 * math.tan(math.rad(20)) * 0.74), 11, 20)
 	CameraRig.goPoint(m + up * ((highZ + lowZ) / 2), camH, 0.3)
 
 	local t = 0
