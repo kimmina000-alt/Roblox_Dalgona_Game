@@ -8,7 +8,7 @@ local RunService = game:GetService("RunService")
 local Showcase = {}
 
 local MOVE_T = 1.3 -- 떠올라 오는 시간
-local HOLD_T = 1.2 -- 정중앙에서 보여 주는 시간
+local HOLD_T = 0.3 -- 정중앙에서 보여 주는 시간 (2026-11-20 "완성 창 한 박자 늦게 뜸": 1.2 → 0.3, 떠오르자마자 창이 뜨고 달고나는 옆으로 비킴)
 local SIDE_T = 0.5 -- 완성 창 옆으로 비키는 시간
 local ROCK_A = math.rad(22) -- 좌우로 도는 각도
 
