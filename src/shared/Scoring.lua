@@ -95,6 +95,10 @@ function Scoring.stampForce(hold)
 end
 
 function Scoring.stamp(r)
+	-- 틀을 안 찍고 끝냄 (2026-11-20): 0점
+	if (r.skipped or 0) >= 0.5 then
+		return 0
+	end
 	local center = 100 * c01(1 - r.dist / 0.6)
 	local angle = 100 * c01(1 - math.abs(r.angle) / 30)
 	local s = 0.5 * center + 0.2 * angle + 0.3 * Scoring.stampForce(r.hold)
@@ -207,6 +211,8 @@ function Scoring.explain(records)
 				if r.cracked then
 					table.insert(parts, { "금", -35 })
 				end
+			elseif step.key == "stamp" and (r.skipped or 0) >= 0.5 then
+				table.insert(parts, { "안 찍음", 0 })
 			elseif step.key == "stamp" then
 				table.insert(parts, { "가운데", round(100 * c01(1 - r.dist / 0.6)) })
 				table.insert(parts, { "반듯하게", round(100 * c01(1 - math.abs(r.angle) / 30)) })
@@ -293,6 +299,8 @@ function Scoring.tip(key, r)
 			end
 		end
 		add("세 번 모두 딱 맞게 눌렀어요")
+	elseif key == "stamp" and (r.skipped or 0) >= 0.5 then
+		add("모양 틀을 안 찍었어요")
 	elseif key == "stamp" then
 		local cfg = Config.Stamp
 		if r.hold > cfg.crackHold then

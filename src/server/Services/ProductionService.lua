@@ -32,7 +32,7 @@ local FIELDS = {
 	soda = { { "delay", 0, 120, 120 }, { "amount", 0, 3, 0 }, { "fastFrac", 0, 1, 0 }, { "puff", 0, 1, 0 } },
 	pour = { { "dist", 0, 10, 10 }, { "remain", 0, 1, 1 }, { "spread", 1, 5, 1 }, { "round", 0, 1, 1 } },
 	press = {},
-	stamp = { { "dist", 0, 10, 10 }, { "angle", -180, 180, 180 }, { "hold", 0, 10, 10 } },
+	stamp = { { "dist", 0, 10, 10 }, { "angle", -180, 180, 180 }, { "hold", 0, 10, 10 }, { "skipped", 0, 1, 0 } }, -- skipped: 틀을 안 찍고 끝냄 (2026-11-20)
 }
 
 -- 표본으로 비율 다시 계산: 표본 = { zone(1 느림, 2 적당, 3 빠름), temp }

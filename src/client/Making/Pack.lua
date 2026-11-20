@@ -13,6 +13,7 @@ local Sfx = require(script.Parent:WaitForChild("Sfx"))
 local CameraRig = require(script.Parent:WaitForChild("CameraRig"))
 local Showcase = require(script.Parent:WaitForChild("Showcase"))
 local Stick = require(script.Parent:WaitForChild("Steps"):WaitForChild("Stick"))
+local BagShape = require(script.Parent:WaitForChild("BagShape")) -- Blender로 만든 입구 벌린 봉투 (tools/blender/bag.py)
 
 local Pack = {}
 
@@ -148,6 +149,86 @@ local function buildBag(parent, D)
 		return res
 	end
 	warn("[Pack] 비닐을 만들 수 없어요:", res)
+	return nil
+end
+
+-- 입구가 동그랗게 벌어진 봉투 (2026-11-20 사용자 그림, Blender 모델 BagShape). 내려와서 씌우는 동안만 보이고,
+-- 다 씌우면 아래 EditableMesh 봉투(묶기 모양이 바뀌는 것)로 바뀜. 몸통은 많이 투명, 입구 테두리·이음매는 또렷
+-- 모델 좌표: 폭 X ±0.5, 두께 Y, 길이 Z(+1 막힌 윗끝, -1 입구). 경계 상자를 고정해서 Size로 늘이면 그대로 커짐
+local OPEN_BOUND = Vector3.new(0.62, 0.42, 1.04)
+local function buildOpenBag(parent)
+	local ok, res = pcall(function()
+		local out = {}
+		local NS, NA, TN = BagShape.NS, BagShape.NA, BagShape.TN
+		for _, key in ipairs({ "body", "trim" }) do
+			local em = AssetService:CreateEditableMesh()
+			local ids = {}
+			local v = BagShape[key]
+			for i = 1, #v, 3 do
+				ids[#ids + 1] = em:AddVertex(Vector3.new(v[i], v[i + 1], v[i + 2]))
+			end
+			-- 격자 사각형 → 삼각형 두 개 (Blender 좌표를 바꾸며 감는 방향이 뒤집혀서 A,C,B / A,D,C)
+			local function quad(a, b, c, d)
+				em:AddTriangle(ids[a], ids[c], ids[b])
+				em:AddTriangle(ids[a], ids[d], ids[c])
+			end
+			if key == "body" then
+				-- 고리 NS개 × 둘레 NA점 + 윗끝 가운데 점
+				for i = 0, NS - 2 do
+					for j = 0, NA - 1 do
+						local j2 = (j + 1) % NA
+						quad(i * NA + j + 1, i * NA + j2 + 1, (i + 1) * NA + j2 + 1, (i + 1) * NA + j + 1)
+					end
+				end
+				local c = NS * NA + 1
+				for j = 0, NA - 1 do
+					em:AddTriangle(ids[c], ids[j + 1], ids[(j + 1) % NA + 1])
+				end
+			else
+				-- 입구 테두리 관 NA × TN점 + 이음매 상자
+				for j = 0, NA - 1 do
+					local j2 = (j + 1) % NA
+					for k = 0, TN - 1 do
+						local k2 = (k + 1) % TN
+						quad(j * TN + k + 1, j2 * TN + k + 1, j2 * TN + k2 + 1, j * TN + k2 + 1)
+					end
+				end
+				local off = NA * TN
+				local bt = BagShape.boxTris
+				for i = 1, #bt, 3 do
+					em:AddTriangle(ids[off + bt[i]], ids[off + bt[i + 1]], ids[off + bt[i + 2]])
+				end
+			end
+			local b = OPEN_BOUND
+			local q1 = em:AddVertex(-b)
+			local q2 = em:AddVertex(-b + Vector3.new(0.001, 0, 0))
+			local q3 = em:AddVertex(b)
+			local q4 = em:AddVertex(b - Vector3.new(0.001, 0, 0))
+			em:AddTriangle(q1, q2, q1)
+			em:AddTriangle(q3, q4, q3)
+			local mp = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+			mp.Name = key == "body" and "PackBagOpen" or "PackBagOpenTrim"
+			mp.Anchored = true
+			mp.CanCollide = false
+			mp.CanQuery = false
+			mp.CanTouch = false
+			mp.CastShadow = false
+			mp.Material = Enum.Material.SmoothPlastic
+			mp.Color = BAG
+			mp.Reflectance = 0.04
+			mp.Transparency = 1
+			mp.Parent = parent
+			mp.Destroying:Connect(function()
+				em:Destroy()
+			end)
+			out[key] = mp
+		end
+		return out
+	end)
+	if ok then
+		return res
+	end
+	warn("[Pack] 입구 벌린 봉투를 만들 수 없어요:", res)
 	return nil
 end
 
@@ -289,8 +370,22 @@ function Pack.run(ctx, dal, st)
 		return {}
 	end
 	local rot = R1 - R1.Position
+	-- 내려오는 동안 보일 입구 벌린 봉투: EditableMesh 봉투와 같은 자리·같은 길이·폭
+	local open3 = buildOpenBag(S.fx)
+	if open3 then
+		local sx = 2 * hw / 1.0
+		local sz = (zTop - (neckZ - 0.45) + 0.1) / 2.0
+		local scale = Vector3.new(sx, sx * 0.85, sz)
+		for _, p in pairs(open3) do
+			p.Size = OPEN_BOUND * 2 * scale
+		end
+	end
 	local function bagAt(pos, lift)
 		bag3.part.CFrame = (rot + pos + Vector3.new(0, lift or 0, 0)) * CFrame.new(bag3.center)
+		if open3 then
+			open3.body.CFrame = bag3.part.CFrame
+			open3.trim.CFrame = bag3.part.CFrame
+		end
 	end
 
 	-- ② 비닐 씌우기: 비닐 통을 누르면 비닐 한 장이 달고나 위쪽(화면 위)에 놓이고, 아래로 끌어 달고나에 씌움.
@@ -341,7 +436,13 @@ function Pack.run(ctx, dal, st)
 	ui:setWorldTip(nil)
 	Sfx.play("bagYank", 0.7, 1.1)
 	bag3.shape(0, 1) -- 입구를 벌린 채로 내려옴
-	bag3.part.Transparency = 0.68
+	if open3 then
+		-- 내려오는 동안은 Blender 봉투 (입구 테두리가 동그랗게 보임)
+		open3.body.Transparency = 0.62
+		open3.trim.Transparency = 0.2
+	else
+		bag3.part.Transparency = 0.68
+	end
 	-- 비닐은 화면 밖 위쪽에서 내려와 달고나 위에 떠 있음 (2026-11-20 "포장 비닐 화면 밖 상단에서부터 내려오기")
 	local startPos
 	do
@@ -410,6 +511,14 @@ function Pack.run(ctx, dal, st)
 	ui:setWorldTip(nil)
 	bagAt(m, 0)
 	placeDal(R1)
+	-- 다 씌웠으면 Blender 봉투 → 묶을 수 있는 봉투로 바꿔 끼움
+	if open3 then
+		bag3.part.Transparency = 0.68
+		for _, p in pairs(open3) do
+			p:Destroy()
+		end
+		open3 = nil
+	end
 	-- 달고나가 벌린 입구 사이로 다 들어가면 비닐이 납작하게 닫힘
 	do
 		local tt = 0

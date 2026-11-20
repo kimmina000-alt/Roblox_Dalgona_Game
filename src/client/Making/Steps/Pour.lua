@@ -226,6 +226,23 @@ local function setLadleHidden(ladle, k)
 			end
 		end
 	end
+	-- 부품이 아닌 것(무늬·거품 입자)도 같이 숨김: 안 숨기면 국자 자리에 하얀 원만 남아 보임 (2026-11-20)
+	for _, d in ipairs(ladle:GetDescendants()) do
+		if d:IsA("Decal") or d:IsA("Texture") then
+			if k > 0.5 then
+				if d:GetAttribute("PourOrigT") == nil then
+					d:SetAttribute("PourOrigT", d.Transparency)
+				end
+				d.Transparency = 1
+			elseif d:GetAttribute("PourOrigT") ~= nil then
+				d.Transparency = d:GetAttribute("PourOrigT")
+				d:SetAttribute("PourOrigT", nil)
+			end
+		elseif d:IsA("ParticleEmitter") and k > 0.5 then
+			d.Enabled = false
+			d:Clear()
+		end
+	end
 	local outline = ladle:FindFirstChild("ToonOutline")
 	if outline then
 		outline.Enabled = k < 0.3
@@ -555,6 +572,11 @@ function Pour.run(ctx)
 				-- 국자 가장자리(손잡이 반대쪽 +X)와 흘러나가는 방향
 				local out = Vector3.new(1, 0, 0)
 				local lip = (CFrame.new(w) * CFrame.Angles(0, 0, -tilt)):PointToWorldSpace(Vector3.new(S.bowlRadius - 0.04, S.bowlHalf, 0))
+				if dropMode and tilt > POUR_TILT and poured < total and hideK < 0.5 then
+					-- 2026-11-20 "반죽 붓기 시작하면 국자 안 보이게": 첫 방울이 떨어질 때부터 국자를 숨김 (붓기 전에는 철판 왼쪽에 보임)
+					hideK = 1
+					setLadleHidden(ladle, 1)
+				end
 				if dropMode and tilt > POUR_TILT and poured < total then
 					-- 한 방울씩: 많이 기울일수록 자주. 국자를 움직이며 떨어뜨리면 그 길대로 모양이 됨 (하트를 그리면 하트)
 					local rate = (tilt - POUR_TILT) / (MAX_TILT - POUR_TILT)
