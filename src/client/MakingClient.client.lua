@@ -95,8 +95,24 @@ local function setCharacterHidden(hidden)
 	end
 end
 
+-- 노점 파라솔 (D21)이 위에서 내려다보는 제작 화면을 가림 → 만드는 동안 내 화면에서만 숨김 (2026-11-21)
+local function setParasolHidden(hidden)
+	local plot = station and station.model.Parent
+	if not plot then
+		return
+	end
+	for _, name in ipairs({ "ParasolPole", "ParasolCanopy" }) do
+		for _, p in ipairs(plot:GetDescendants()) do
+			if p.Name == name and p:IsA("BasePart") then
+				p.LocalTransparencyModifier = hidden and 1 or 0
+			end
+		end
+	end
+end
+
 local function finish()
 	running = false
+	setParasolHidden(false)
 	if current then
 		current.aborted = true
 		current = nil
@@ -421,6 +437,7 @@ function startMaking(restart)
 	end
 	running = true
 	station.Prompt.Enabled = false
+	setParasolHidden(true)
 	setControls(false)
 	setCharacterHidden(true)
 	local ok, err = pcall(runSession)
