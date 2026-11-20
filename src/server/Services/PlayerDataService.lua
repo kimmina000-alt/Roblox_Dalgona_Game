@@ -30,6 +30,7 @@ PlayerDataService.Changed = changed.Event -- (player, data)
 
 local profiles = {} -- [player] = { data, canSave, released, saving, lost, loaded }
 local store = nil
+local inFlight = 0 -- 지금 진행 중인 저장 수 (BindToClose가 다 끝날 때까지 기다림)
 
 local function deepCopy(t)
 	if type(t) ~= "table" then
@@ -198,7 +199,9 @@ function PlayerDataService.save(player, release)
 	if release then
 		profile.released = true
 	end
+	inFlight += 1
 	local ok = saveRecord(player, profile, release)
+	inFlight -= 1
 	profile.saving = false
 	if ok then
 		print(string.format("[Data] saved %s coins=%d lv=%d stock=%d%s", player.Name, profile.data.coins, profile.data.level, #profile.data.stock, release and " (release)" or ""))
@@ -306,18 +309,15 @@ function PlayerDataService.init()
 	end)
 
 	game:BindToClose(function()
-		local pending = 0
+		-- 아직 안 푼 플레이어는 저장하고, PlayerRemoving에서 이미 시작된 저장도 끝날 때까지 기다린다
 		for p, prof in pairs(profiles) do
 			if prof.loaded and not prof.released then
-				pending += 1
-				task.spawn(function()
-					PlayerDataService.save(p, true)
-					pending -= 1
-				end)
+				task.spawn(PlayerDataService.save, p, true)
 			end
 		end
+		task.wait() -- 위 저장들이 inFlight를 올릴 시간
 		local t0 = os.clock()
-		while pending > 0 and os.clock() - t0 < SAVE.closeTimeout do
+		while inFlight > 0 and os.clock() - t0 < SAVE.closeTimeout do
 			task.wait(0.1)
 		end
 	end)
