@@ -303,13 +303,54 @@ local function foil(f, ws, tableY)
 	end
 end
 
+-- 반죽 붓는 판 (2026-11-20, 레퍼런스/3.jpg: 문방구 앞 아이들이 둘러선 판). 검은 철판이 아니라
+-- 함석(아연 도금 철판) 판: 은회색에 얼룩덜룩한 아연 무늬, 가장자리는 접어 올린 테두리, 판 이음매에 리벳, 긁힌 자국.
+-- 판정용 IronPlate(크기·높이)는 그대로 두고 겉모습만 바꿈
+local function galvanizedBoard(f, ws)
+	local plate = ws:FindFirstChild("IronPlate")
+	if not plate then
+		return
+	end
+	plate.Color = Color3.fromRGB(140, 144, 151)
+	plate.Material = Enum.Material.Metal
+	plate.Reflectance = 0.12
+	local sx, sz = plate.Size.X, plate.Size.Z
+	local topY = plate.Position.Y + plate.Size.Y / 2
+	local base = CFrame.new(plate.Position.X, topY, plate.Position.Z)
+	local EDGE = Color3.fromRGB(150, 154, 160)
+	-- 접어 올린 테두리 (둥근 감김)
+	for _, e in ipairs({ { 0, sz / 2, sx + 0.1, 0.1 }, { 0, -sz / 2, sx + 0.1, 0.1 }, { sx / 2, 0, 0.1, sz + 0.1 }, { -sx / 2, 0, 0.1, sz + 0.1 } }) do
+		deco(f, "BoardHem", Vector3.new(e[3], 0.1, e[4]), base * CFrame.new(e[1], 0.01, e[2]), EDGE, Enum.Material.Metal, { Reflectance = 0.15 })
+	end
+	-- 판 이음매 + 리벳 (뒤쪽, 설탕 원 밖)
+	local seamZ = -sz / 2 + 0.38
+	deco(f, "BoardSeam", Vector3.new(sx, 0.025, 0.07), base * CFrame.new(0, 0.012, seamZ), EDGE, Enum.Material.Metal, { Reflectance = 0.15 })
+	for i = 0, 8 do
+		local x = -sx / 2 + 0.25 + i * (sx - 0.5) / 8
+		deco(f, "BoardRivet", Vector3.new(0.03, 0.08, 0.08), base * CFrame.new(x, 0.02, seamZ) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(196, 198, 202), Enum.Material.Metal, { Shape = Enum.PartType.Cylinder, Reflectance = 0.2 })
+	end
+	-- 아연 도금 얼룩 무늬 (밝고 어두운 조각이 겹쳐 얼룩덜룩)
+	local rng = Random.new(13)
+	for _ = 1, 26 do
+		local w, l = rng:NextNumber(0.25, 0.9), rng:NextNumber(0.25, 0.9)
+		local x, z = rng:NextNumber(-sx / 2 + w / 2, sx / 2 - w / 2), rng:NextNumber(-sz / 2 + l / 2, sz / 2 - l / 2)
+		local light = rng:NextNumber() < 0.5
+		deco(f, "BoardSpangle", Vector3.new(w, 0.002, l), base * CFrame.new(x, 0.001, z) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0), light and Color3.fromRGB(214, 218, 224) or Color3.fromRGB(138, 142, 150), Enum.Material.Metal, { Transparency = rng:NextNumber(0.72, 0.86) })
+	end
+	-- 긁힌 자국
+	for _ = 1, 14 do
+		local len = rng:NextNumber(0.3, 1.1)
+		deco(f, "BoardScratch", Vector3.new(0.012, 0.002, len), base * CFrame.new(rng:NextNumber(-sx / 2 + 0.4, sx / 2 - 0.4), 0.0015, rng:NextNumber(-sz / 2 + 0.4, sz / 2 - 0.4)) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0), Color3.fromRGB(110, 112, 118), Enum.Material.SmoothPlastic, { Transparency = 0.55 })
+	end
+end
+
 local function sugarDust(f, ws)
 	local plate = ws:FindFirstChild("IronPlate")
 	if not plate then
 		return
 	end
 	local topY = plate.Position.Y + plate.Size.Y / 2
-	deco(f, "SugarDust", Vector3.new(plate.Size.X * 0.96, 0.004, plate.Size.Z * 0.96), CFrame.new(plate.Position.X, topY + 0.002, plate.Position.Z), Color3.fromRGB(250, 250, 248), Enum.Material.Sand, { Transparency = 0.6 })
+	deco(f, "SugarDust", Vector3.new(plate.Size.X * 0.96, 0.004, plate.Size.Z * 0.96), CFrame.new(plate.Position.X, topY + 0.002, plate.Position.Z), Color3.fromRGB(250, 250, 248), Enum.Material.Sand, { Transparency = 0.8 })
 	-- 가장자리에 조금 몰린 설탕
 	local rng = Random.new(3)
 	for _ = 1, 7 do
@@ -427,6 +468,7 @@ local function stage1(ws, top)
 	local rightX = top.Position.X + top.Size.X / 2
 	local frontZ = top.Position.Z + top.Size.Z / 2
 	foil(f, ws, tableY)
+	galvanizedBoard(f, ws)
 	sugarDust(f, ws)
 	cutterTray(f, ws, tableY, rightX, top.Position.Z)
 	stickCup(f, tableY, rightX - 1.4, frontZ - 0.9)
