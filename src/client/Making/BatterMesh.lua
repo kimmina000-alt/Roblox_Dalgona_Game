@@ -16,6 +16,8 @@ local RINGS = 54 -- 가운데 → 가장자리 고리
 -- 정점 색 (MeshPart.Color에 곱해짐, 2026-11-20): 옆면은 두께만큼 그림자진 진한 갈색, 찍힌 홈은 조금 진하게
 local SIDE_SHADE = Vector3.new(0.6, 0.45, 0.32)
 local GROOVE_SHADE = Vector3.new(0.72, 0.58, 0.46)
+-- 누른 달고나 모양 (반지름 비율): 가운데 높이 · 턱이 솟기 시작 · 턱 꼭대기 · 바깥으로 둥글게 내려가기 시작
+local RIM_CENTER, RIM_IN, RIM_TOP, RIM_OUT = 0.6, 0.78, 0.88, 0.93
 local TOP_DIM = 0.9 -- 반점이 밝아 보이게 기본 정점 색을 이만큼 낮춤 (Dalgona가 부품 색을 1/TOP_DIM배로)
 Batter.TOP_DIM = TOP_DIM
 local TOP = 0.88 -- 기본 모양 꼭대기 높이 (찍은 모양 안쪽이 솟을 여유)
@@ -160,6 +162,8 @@ function Batter:rebuild()
 	local bumps = self.bumps
 	-- 기포 세기 (2026-11-20: 막 부었을 때만 또렷하고 시간이 지나며 매끈해짐 → Dalgona가 setPores로 낮춤)
 	local tex = self.poreAmt or 0
+	local rimK = math.clamp((flat - 0.4) / 0.5, 0, 1)
+	rimK = rimK * rimK * (3 - 2 * rimK)
 	local edges = {}
 	for j = 1, SEG do
 		edges[j] = self:edgeR(j)
@@ -169,8 +173,25 @@ function Batter:rebuild()
 		local ring = self.rings[i]
 		local cring = self.cols[i]
 		local base = i < RINGS and (1 - t ^ n) ^ p or 0
+		-- 누를수록 누름판이 닿은 가운데는 평평하게 낮아지고, 밀려난 반죽이 가장자리에 둥근 턱으로 볼록 솟음
+		-- (2026-11-20, 사용자 사진: 가운데 눌린 면과 가장자리 두툼한 테두리 사이에 계단)
+		if rimK > 0 and i < RINGS then
+			local yp
+			if t < RIM_IN then
+				yp = RIM_CENTER
+			elseif t < RIM_TOP then
+				local q = (t - RIM_IN) / (RIM_TOP - RIM_IN)
+				yp = RIM_CENTER + (1 - RIM_CENTER) * q * q * (3 - 2 * q)
+			elseif t < RIM_OUT then
+				yp = 1
+			else
+				local q = math.min((t - RIM_OUT) / (1 - RIM_OUT), 1)
+				yp = math.sqrt(math.max(0, 1 - q * q))
+			end
+			base = base + (yp - base) * rimK
+		end
 		-- 옆면 그림자: 가장자리로 내려가는 만큼 진하게 (누를수록 또렷한 옆면)
-		local side = t > 0.4 and math.clamp((1 - base) / 0.75, 0, 1) or 0
+		local side = t > 0.4 + 0.5 * rimK and math.clamp((1 - base) / 0.75, 0, 1) or 0 -- 누른 뒤엔 바깥 턱 옆면만
 		side = side ^ 0.8 * (0.55 + 0.45 * flat)
 		for j = 1, SEG do
 			local r = t * edges[j]
