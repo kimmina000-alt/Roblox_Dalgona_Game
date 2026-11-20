@@ -67,7 +67,10 @@ local panel = new("Frame", {
 	Parent = gui,
 }, { corner(14), stroke(CARAMEL, 2) })
 
-local coinText = label({ Name = "Coins", Position = UDim2.fromOffset(12 * S, 8 * S), Size = UDim2.fromOffset(150 * S, 28 * S), TextSize = 24 * S, Font = Enum.Font.GothamBlack, Text = "🪙 0", Parent = panel })
+local coinText = label({ Name = "Coins", Position = UDim2.fromOffset(40 * S, 8 * S), Size = UDim2.fromOffset(120 * S, 28 * S), TextSize = 24 * S, Font = Enum.Font.GothamBlack, Text = "0", Parent = panel })
+-- 코인 아이콘 (🪙 이모지는 Roblox 글꼴에 없어 네모로 나옴)
+local coinIcon = new("Frame", { Name = "CoinIcon", Position = UDim2.fromOffset(12 * S, 11 * S), Size = UDim2.fromOffset(22 * S, 22 * S), BackgroundColor3 = Color3.fromRGB(255, 200, 60), Parent = panel }, { corner(11 * S), stroke(Color3.fromRGB(200, 140, 30), 2) })
+label({ Text = "C", Size = UDim2.fromScale(1, 1), TextSize = 13 * S, Font = Enum.Font.GothamBlack, TextColor3 = Color3.fromRGB(170, 110, 20), TextXAlignment = Enum.TextXAlignment.Center, Parent = coinIcon })
 local plotText = label({ Name = "Plot", Position = UDim2.fromOffset(150 * S, 10 * S), Size = UDim2.fromOffset(90 * S, 24 * S), TextSize = 14 * S, TextXAlignment = Enum.TextXAlignment.Right, Text = "", TextColor3 = Color3.fromRGB(150, 110, 80), Parent = panel })
 local levelText = label({ Name = "Level", Position = UDim2.fromOffset(12 * S, 40 * S), Size = UDim2.fromOffset(60 * S, 20 * S), TextSize = 17 * S, Font = Enum.Font.GothamBlack, Text = "Lv1", Parent = panel })
 local expBack = new("Frame", { Name = "ExpBar", Position = UDim2.fromOffset(70 * S, 44 * S), Size = UDim2.fromOffset(168 * S, 14 * S), BackgroundColor3 = Color3.fromRGB(240, 222, 196), Parent = panel }, { corner(7) })
@@ -113,7 +116,7 @@ local shop = new("Frame", {
 }, { corner(18), stroke(CARAMEL, 3) })
 label({ Text = "재료 상점", Position = UDim2.fromOffset(18 * S, 12 * S), Size = UDim2.fromOffset(200 * S, 32 * S), TextSize = 24 * S, Font = Enum.Font.GothamBlack, ZIndex = 11, Parent = shop })
 local closeBtn = new("TextButton", {
-	Text = "✕",
+	Text = "X",
 	AnchorPoint = Vector2.new(1, 0),
 	Position = UDim2.new(1, -10 * S, 0, 10 * S),
 	Size = UDim2.fromOffset(34 * S, 34 * S),
@@ -144,7 +147,7 @@ for i, ing in ipairs(G.Ingredients) do
 		Position = UDim2.new(1, -8 * S, 0.5, 0),
 		Size = UDim2.fromOffset(110 * S, 40 * S),
 		BackgroundColor3 = GREEN,
-		Text = string.format("🪙 %d", ing.price),
+		Text = string.format("%d 코인", ing.price),
 		TextColor3 = Color3.new(1, 1, 1),
 		TextSize = 18 * S,
 		Font = Enum.Font.GothamBlack,
@@ -232,12 +235,12 @@ local function apply(s)
 	local v = Instance.new("NumberValue")
 	v.Value = from
 	v.Changed:Connect(function(x)
-		coinText.Text = "🪙 " .. tostring(math.floor(x + 0.5))
+		coinText.Text = tostring(math.floor(x + 0.5))
 	end)
 	TweenService:Create(v, TweenInfo.new(prev and 0.4 or 0), { Value = to }):Play()
 	task.delay(0.5, function()
 		v:Destroy()
-		coinText.Text = "🪙 " .. tostring(to)
+		coinText.Text = tostring(to)
 	end)
 	shownCoins = to
 

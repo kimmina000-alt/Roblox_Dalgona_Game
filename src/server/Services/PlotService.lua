@@ -65,7 +65,8 @@ end
 
 -- 바닥에 그린 자리 표시 (밟고 지나갈 수 있음)
 local function spot(m, name, cf, size, color, text)
-	local p = part(m, name, size, cf * CFrame.new(0, size.Y / 2 + P.size.Y, 0), color, Enum.Material.SmoothPlastic, {
+	-- Top 면 글씨는 부품의 Z축을 따라 써진다: 90° 돌리고 X·Z 크기를 바꿔서 골목(앞) 쪽에서 가로로 읽히게
+	local p = part(m, name, Vector3.new(size.Z, size.Y, size.X), cf * CFrame.new(0, size.Y / 2 + P.size.Y, 0) * CFrame.Angles(0, math.pi * 0.5, 0), color, Enum.Material.SmoothPlastic, {
 		CanCollide = false,
 		Transparency = 0.35,
 	})

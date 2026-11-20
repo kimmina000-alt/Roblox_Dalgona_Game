@@ -69,7 +69,7 @@ G.LevelCoins = {
 	[16] = 1000, [17] = 1000, [18] = 1000, [19] = 1000, [20] = 1000,
 }
 G.ExpHand = { base = 10, Excellent = 10, Perfect = 20 } -- 손 제작 성공 EXP + 등급 보너스
-G.ExpBurnt = 2 -- 태워도 조금은 배움
+G.ExpBurnt = 2 -- 태우거나 모양이 망가져도(Fail) 조금은 배움
 
 function G.expToNext(level)
 	if level >= G.MaxLevel then
@@ -79,7 +79,7 @@ function G.expToNext(level)
 end
 
 function G.expFor(grade)
-	if grade == "Burnt" then
+	if grade == "Burnt" or grade == "Fail" then -- 태움 / 모양 망가짐
 		return G.ExpBurnt
 	end
 	return G.ExpHand.base + (G.ExpHand[grade] or 0)
