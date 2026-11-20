@@ -21,7 +21,7 @@ end
 
 local function apply(prompt)
 	local plot = watched[prompt]
-	local want = prompt:GetAttribute("Open") == true and plot ~= nil and plot:GetAttribute("OwnerUserId") == player.UserId and canPlace()
+	local want = prompt:GetAttribute("Open") == true and plot ~= false and plot ~= nil and plot:GetAttribute("OwnerUserId") == player.UserId and canPlace()
 	if prompt.Enabled ~= want then
 		prompt.Enabled = want
 	end
