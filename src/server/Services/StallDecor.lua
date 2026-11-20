@@ -277,6 +277,164 @@ function Decor.watchOwners(ws)
 	refresh()
 end
 
+-- ── 1단계 가게 꾸미기 (2026-11-20 사용자 참고 사진 3장) ──
+--   ① 화로 밑에 구겨진 은박지 ② 철판 위에 고운 설탕 가루가 옅게 깔림 ③ 스테인리스 쟁반에 모양 틀 여러 개
+--   ④ 아이스크림 막대가 꽂힌 양철 통 ⑤ 테이블 오른쪽 옆 나무 계단 진열대에 비닐 포장한 달고나들 (막대로 세움)
+local STEEL = Color3.fromRGB(198, 200, 206)
+local WOOD = Color3.fromRGB(170, 122, 78)
+local DALGONA = Color3.fromRGB(204, 150, 96)
+local function deco(parent, name, size, cf, color, material, props)
+	local p = part(parent, name, size, cf, color, props)
+	p.Material = material or Enum.Material.SmoothPlastic
+	return p
+end
+
+local function foil(f, ws, tableY)
+	local b = ws:FindFirstChild("Brazier")
+	if not b then
+		return
+	end
+	local c = b:GetPivot().Position
+	local rng = Random.new(7)
+	-- 여러 장이 겹친 것처럼 (구겨진 느낌: 조금씩 돌아가고 높이가 다름)
+	for i, sz in ipairs({ Vector3.new(6.2, 0.02, 5.4), Vector3.new(3.4, 0.02, 2.6), Vector3.new(2.8, 0.02, 3.0) }) do
+		local off = i == 1 and Vector3.zero or Vector3.new(rng:NextNumber(-1.6, 1.6), 0, rng:NextNumber(-1.4, 1.4))
+		deco(f, "Foil", sz, CFrame.new(c.X + off.X, tableY + 0.01 + i * 0.004, c.Z + off.Z) * CFrame.Angles(0, math.rad(rng:NextNumber(-8, 8)), 0), Color3.fromRGB(168, 170, 176), Enum.Material.Foil, { Reflectance = 0.25 })
+	end
+end
+
+local function sugarDust(f, ws)
+	local plate = ws:FindFirstChild("IronPlate")
+	if not plate then
+		return
+	end
+	local topY = plate.Position.Y + plate.Size.Y / 2
+	deco(f, "SugarDust", Vector3.new(plate.Size.X * 0.96, 0.004, plate.Size.Z * 0.96), CFrame.new(plate.Position.X, topY + 0.002, plate.Position.Z), Color3.fromRGB(250, 250, 248), Enum.Material.Sand, { Transparency = 0.6 })
+	-- 가장자리에 조금 몰린 설탕
+	local rng = Random.new(3)
+	for _ = 1, 7 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = plate.Size.X * rng:NextNumber(0.36, 0.46)
+		local d = rng:NextNumber(0.25, 0.5)
+		deco(f, "SugarDrift", Vector3.new(0.01, d, d * rng:NextNumber(1.2, 2)), CFrame.new(plate.Position.X + math.cos(a) * r, topY + 0.005, plate.Position.Z + math.sin(a) * r) * CFrame.Angles(0, a, math.rad(90)), Color3.fromRGB(252, 252, 250), Enum.Material.Sand, { Transparency = 0.35, Shape = Enum.PartType.Cylinder })
+	end
+end
+
+local function cutterTray(f, ws, tableY, rightX, midZ)
+	local cx, cz = rightX - 1.4, midZ - 0.3
+	local W, L = 2.2, 3.0
+	local base = CFrame.new(cx, tableY, cz)
+	deco(f, "Tray", Vector3.new(W, 0.06, L), base * CFrame.new(0, 0.03, 0), STEEL, Enum.Material.Metal, { Reflectance = 0.15 })
+	for _, e in ipairs({ { 0, L / 2, W, 0.06 }, { 0, -L / 2, W, 0.06 }, { W / 2, 0, 0.06, L }, { -W / 2, 0, 0.06, L } }) do
+		deco(f, "TrayRim", Vector3.new(e[3], 0.16, e[4]), base * CFrame.new(e[1], 0.08, e[2]), STEEL, Enum.Material.Metal, { Reflectance = 0.15 })
+	end
+	local assets = game:GetService("ReplicatedStorage"):FindFirstChild("Assets")
+	local cutters = assets and assets:FindFirstChild("Cutters")
+	if not cutters then
+		return
+	end
+	local list = cutters:GetChildren()
+	local rng = Random.new(5)
+	local n = 0
+	for i = 1, math.min(#list, 8) do
+		local tpl = list[i]
+		if tpl:IsA("BasePart") then
+			n += 1
+			local col, row = (n - 1) % 2, math.floor((n - 1) / 2)
+			local p = tpl:Clone()
+			p.Name = "TrayCutter"
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.CanTouch = false
+			p.Size = p.Size * 0.42
+			p.CFrame = base * CFrame.new(-W / 4 + col * W / 2, 0.06 + p.Size.Y / 2, -L / 2 + 0.4 + row * 0.72) * CFrame.Angles(0, rng:NextNumber(-0.5, 0.5), 0)
+			p.Parent = f
+		end
+	end
+end
+
+local function stickCup(f, tableY, x, z)
+	local base = Vector3.new(x, tableY, z)
+	local tin = { Shape = Enum.PartType.Cylinder }
+	deco(f, "StickCup", Vector3.new(0.9, 0.8, 0.8), CFrame.new(base + Vector3.new(0, 0.45, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(170, 174, 170), Enum.Material.CorrodedMetal, tin)
+	deco(f, "StickCupRim", Vector3.new(0.06, 0.84, 0.84), CFrame.new(base + Vector3.new(0, 0.9, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(120, 122, 118), Enum.Material.Metal, tin)
+	local rng = Random.new(9)
+	for _ = 1, 11 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local r = math.sqrt(rng:NextNumber()) * 0.22
+		local len = 1.5
+		local pos = base + Vector3.new(math.cos(a) * r, 0.1 + len / 2 + rng:NextNumber(0, 0.12), math.sin(a) * r)
+		deco(f, "CupPopsicle", Vector3.new(0.03, len, 0.15), CFrame.new(pos) * CFrame.Angles(math.sin(a) * 0.14, rng:NextNumber(0, 6), -math.cos(a) * 0.14), Color3.fromRGB(232, 204, 156), Enum.Material.Wood)
+	end
+end
+
+-- 포장한 달고나 하나 (진열대용): 세운 원판 + 찍힌 자국 + 막대 + 비닐 + 빵끈. pos = 막대 아래 끝, 앞 = +Z
+local function wrappedDalgona(f, pos, lean, rng)
+	local D = 1.0
+	local cf = CFrame.new(pos) * CFrame.Angles(-lean, 0, 0)
+	local disc = cf * CFrame.new(0, 0.75 + D / 2, 0)
+	local tone = DALGONA:Lerp(Color3.fromRGB(176, 112, 60), rng:NextNumber(0, 0.35))
+	deco(f, "ShowDalgona", Vector3.new(0.06, D, D), disc * CFrame.Angles(0, math.rad(90), 0), tone, Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Cylinder })
+	deco(f, "ShowStamp", Vector3.new(0.065, D * 0.5, D * 0.5), disc * CFrame.Angles(0, math.rad(90), 0), tone:Lerp(Color3.fromRGB(110, 62, 28), 0.35), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Cylinder, Transparency = 0.25 })
+	deco(f, "ShowStick", Vector3.new(0.14, 0.95, 0.03), cf * CFrame.new(0, 0.48, 0), Color3.fromRGB(232, 204, 156), Enum.Material.Wood)
+	deco(f, "ShowBag", Vector3.new(D * 1.12, D * 1.15, 0.2), disc * CFrame.new(0, 0.02, 0), Color3.fromRGB(248, 250, 255), Enum.Material.SmoothPlastic, { Transparency = 0.72, Reflectance = 0.3 })
+	deco(f, "ShowBagNeck", Vector3.new(0.18, 0.22, 0.12), cf * CFrame.new(0, 0.62, 0), Color3.fromRGB(248, 250, 255), Enum.Material.SmoothPlastic, { Transparency = 0.6, Reflectance = 0.3 })
+	deco(f, "ShowTie", Vector3.new(0.06, 0.18, 0.18), cf * CFrame.new(0, 0.55, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(226, 176, 52), Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
+end
+
+local function display(f, floorY, x, z)
+	-- 3단 나무 계단 (앞 = +Z, 뒤로 갈수록 높음)
+	local W, DEPTH = 3.8, 1.1
+	local rng = Random.new(21)
+	for i = 1, 3 do
+		local h = 0.9 + (i - 1) * 0.8
+		local sz = z - (i - 1) * DEPTH
+		deco(f, "ShowStep", Vector3.new(W, h, DEPTH), CFrame.new(x, floorY + h / 2, sz), WOOD:Lerp(Color3.fromRGB(120, 84, 52), (i - 1) * 0.15), Enum.Material.Wood)
+		for k = 1, 3 do
+			local px = x - W / 2 + W * (k - 0.5) / 3 + rng:NextNumber(-0.1, 0.1)
+			wrappedDalgona(f, Vector3.new(px, floorY + h, sz - 0.1), math.rad(rng:NextNumber(8, 16)), rng)
+		end
+	end
+	-- 뒤 간판
+	local sign = deco(f, "ShowSign", Vector3.new(W, 1.0, 0.12), CFrame.new(x, floorY + 0.9 + 1.6 + 2.2, z - 2 * DEPTH - 0.2), Color3.fromRGB(255, 196, 210), Enum.Material.SmoothPlastic)
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.CanvasSize = Vector2.new(380, 100)
+	gui.Parent = sign
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.fromScale(1, 1)
+	l.BackgroundTransparency = 1
+	l.Font = Enum.Font.GothamBlack
+	l.TextScaled = true
+	l.TextColor3 = Color3.fromRGB(150, 60, 80)
+	l.Text = "달고나"
+	l.Parent = gui
+	-- 간판 기둥
+	for _, dx in ipairs({ -W / 2 + 0.1, W / 2 - 0.1 }) do
+		deco(f, "ShowPole", Vector3.new(0.12, 4.6, 0.12), CFrame.new(x + dx, floorY + 2.3, z - 2 * DEPTH - 0.2), WOOD, Enum.Material.Wood)
+	end
+end
+
+local function stage1(ws, top)
+	if ws:FindFirstChild("Stage1Decor") then
+		return
+	end
+	local f = Instance.new("Folder")
+	f.Name = "Stage1Decor"
+	f.Parent = ws
+	local tableY = top.Position.Y + top.Size.Y / 2
+	local rightX = top.Position.X + top.Size.X / 2
+	local frontZ = top.Position.Z + top.Size.Z / 2
+	foil(f, ws, tableY)
+	sugarDust(f, ws)
+	cutterTray(f, ws, tableY, rightX, top.Position.Z)
+	stickCup(f, tableY, rightX - 1.4, frontZ - 0.9)
+	local floorY = top.Position.Y - top.Size.Y / 2 - 2.9 -- 테이블 다리 높이만큼 아래 = 바닥
+	-- 진열대는 테이블 왼쪽 옆 (오른쪽은 Lv4 연속 생산 설비 시험 자리)
+	display(f, floorY, top.Position.X - top.Size.X / 2 - 2.4, top.Position.Z + 1.0)
+end
+
 function Decor.dress(ws)
 	local top = ws:FindFirstChild("TableTop")
 	if not top then
@@ -294,6 +452,7 @@ function Decor.dress(ws)
 		end
 	end
 	chopstickCup(ws)
+	stage1(ws, top)
 	if not ws:FindFirstChild("Rug") then
 		rug(ws, top)
 	end

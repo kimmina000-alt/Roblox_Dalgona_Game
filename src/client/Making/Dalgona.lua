@@ -75,18 +75,19 @@ function Dalgona.new(station, center, color, volume, ellipse)
 	self.e = ellipse or 0
 	self.yaw = 0 -- 길쭉할 때 긴 쪽 방향 (붓는 경로 따라, Pour가 정함)
 	self.h = Config.Press.h0
-	self.body = station:fxPart(station.fx, { Name = "Dalgona", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic })
+	-- 처음엔 숨겨 둠 (2026-11-20: 3D 반죽 메시를 만드는 0.5초 동안 냄비 같은 원기둥이 보였음). 3D가 안 될 때만 아래에서 보이게
+	self.body = station:fxPart(station.fx, { Name = "Dalgona", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
 	-- 가장자리 띠 2겹 (본체보다 살짝 낮고 넓음 → 위에서 보면 진한 테두리 그러데이션)
-	self.rim = station:fxPart(station.fx, { Name = "DalgonaRim", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic })
-	self.rim2 = station:fxPart(station.fx, { Name = "DalgonaRim2", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic })
+	self.rim = station:fxPart(station.fx, { Name = "DalgonaRim", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
+	self.rim2 = station:fxPart(station.fx, { Name = "DalgonaRim2", Shape = Enum.PartType.Cylinder, Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 })
 	self.rimW = 0.06
 	self.details = {}
 	-- 가운데 볼록: 납작한 공이어야 해서 늘어나는 공으로 (Ball 부품은 크기가 같은 공으로만 보임)
-	self.dome = Fx.ellipsoid(station:fxPart(station.fx, { Name = "DalgonaDome", Color = color, Material = Enum.Material.SmoothPlastic }))
+	self.dome = Fx.ellipsoid(station:fxPart(station.fx, { Name = "DalgonaDome", Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 }))
 	self.lumps = {}
 	for i = 1, 4 do
 		local a = i * math.pi / 2 + 0.4
-		self.lumps[i] = { part = station:fxPart(station.fx, { Name = "DalgonaLump", Shape = Enum.PartType.Ball, Color = color, Material = Enum.Material.SmoothPlastic }), a = a, r = 0.25 + 0.08 * (i % 2) }
+		self.lumps[i] = { part = station:fxPart(station.fx, { Name = "DalgonaLump", Shape = Enum.PartType.Ball, Color = color, Material = Enum.Material.SmoothPlastic, Transparency = 1 }), a = a, r = 0.25 + 0.08 * (i % 2) }
 	end
 	-- 정교한 3D 반죽 메시 하나 (2026-11-19): 붓는 동안·부은 뒤·누른 뒤 모두 같은 메시가 모양만 바뀜.
 	-- EditableMesh를 쓸 수 없으면(Experience Settings > Security에서 꺼짐) 아래 예전 방식
@@ -111,6 +112,12 @@ function Dalgona.new(station, center, color, volume, ellipse)
 		end
 		for _, l in ipairs(self.lumps) do
 			l.part.Transparency = 1
+		end
+	end
+	if not self.batter and not self.meshes then
+		-- 예전 원판 방식 (3D도 접힌 메시도 없을 때)
+		for _, p in ipairs({ self.body, self.rim, self.rim2 }) do
+			p.Transparency = 0
 		end
 	end
 	self:setThickness(self.h)

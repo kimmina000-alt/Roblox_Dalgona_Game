@@ -124,6 +124,7 @@ function Press.run(ctx)
 	end
 	local presserOutline = S.Presser:FindFirstChild("ToonOutline")
 	local fade = 0
+	local pressedOnce = false
 	local function fadePresser(k)
 		for _, d in ipairs(presserParts) do
 			d.LocalTransparencyModifier = k
@@ -204,7 +205,11 @@ function Press.run(ctx)
 		end
 		grab.bottom = bottom
 		grab:draw()
-		fade += (((holding and contact) and 1 or 0) - fade) * (1 - math.exp(-14 * dt))
+		-- 한 번 눌러 닿은 뒤로는 누르기가 끝날 때까지 계속 숨김 (2026-11-20: 누르는 중간중간 다시 보이지 않게)
+		if contact then
+			pressedOnce = true
+		end
+		fade += ((pressedOnce and 1 or 0) - fade) * (1 - math.exp(-14 * dt))
 		fadePresser(fade)
 		placeRing(S, ring, dal)
 		local nt = cfg.targets[math.min(count + 1, 3)]

@@ -198,6 +198,20 @@ local function setLadleHidden(ladle, k)
 	for _, p in ipairs(ladle:GetDescendants()) do
 		if p:IsA("BasePart") then
 			p.LocalTransparencyModifier = k
+			-- 광택 메시(SurfaceAppearance)는 LocalTransparencyModifier로 다 안 사라지고 그림자도 남음 (2026-11-20 "냄비 같은 원통형")
+			if k > 0.5 then
+				if p:GetAttribute("PourOrigT") == nil then
+					p:SetAttribute("PourOrigT", p.Transparency)
+					p:SetAttribute("PourOrigShadow", p.CastShadow)
+				end
+				p.Transparency = 1
+				p.CastShadow = false
+			elseif p:GetAttribute("PourOrigT") ~= nil then
+				p.Transparency = p:GetAttribute("PourOrigT")
+				p.CastShadow = p:GetAttribute("PourOrigShadow")
+				p:SetAttribute("PourOrigT", nil)
+				p:SetAttribute("PourOrigShadow", nil)
+			end
 		end
 	end
 	local outline = ladle:FindFirstChild("ToonOutline")
@@ -586,7 +600,7 @@ function Pour.run(ctx)
 					local remain = 1 - poured / volume
 					S:setContents({ thickness = math.max(0.06, contentsThick * remain / 1) })
 					local foam = ladle:FindFirstChild("FxFoam")
-					if foam then
+					if foam and hideK < 0.5 then
 						foam.Transparency = math.clamp(fill * 1.3, 0, 1)
 						for _, c in ipairs(foam:GetDescendants()) do -- 기포 구멍 등도 같이
 							if c:IsA("BasePart") then
@@ -682,6 +696,13 @@ function Pour.run(ctx)
 		S:springTo(ladle, S.rest.Ladle, dt, 14)
 	end
 	ladle:PivotTo(S.rest.Ladle)
+	-- 다 부은 국자는 비어 있음: 부푼 거품·소다 자국은 치우고 국자만 다시 보이게
+	for _, c in ipairs(ladle:GetChildren()) do
+		if c.Name:sub(1, 2) == "Fx" then
+			c:Destroy()
+		end
+	end
+	S:setContents({ Transparency = 1 })
 	setLadleHidden(ladle, 0)
 	if st.dalgona then
 		st.dalgona.simple = false

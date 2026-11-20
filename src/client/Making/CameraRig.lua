@@ -66,6 +66,7 @@ end
 -- 움직이는 물체 따라가기 (사용자 요청 2026-11-19: 국자를 들면 화면 가운데에서 어긋남).
 -- fn()이 돌려주는 점이 화면 가운데에 오게, 지금 화면의 카메라 높이·기울기 그대로 부드럽게 따라감. nil이면 멈춤
 local tracker = nil
+local frontEase = 0.9
 function CameraRig.track(fn)
 	tracker = fn
 end
@@ -93,8 +94,8 @@ local function step(dt)
 			to = to:Lerp(trackPose(p), 1 - math.exp(-10 * (dt or 1 / 60)))
 		end
 	end
-	local a = math.clamp((os.clock() - t0) / EASE, 0, 1)
-	local e = 1 - (1 - a) * (1 - a) -- Quad ease-out
+	local a = math.clamp((os.clock() - t0) / (current == "front" and frontEase or EASE), 0, 1)
+	local e = current == "front" and a * a * (3 - 2 * a) or 1 - (1 - a) * (1 - a) -- 정면 보기는 부드럽게, 나머지는 Quad ease-out
 	cam.CFrame = from:Lerp(to, e)
 end
 
@@ -118,6 +119,25 @@ function CameraRig.go(key, instant)
 		RunService:BindToRenderStep("DalgonaCamera", Enum.RenderPriority.Camera.Value + 1, step)
 	end
 	step()
+end
+
+-- 정면 보기 (2026-11-20: 비닐 씌울 때는 항공뷰 말고 정면에서). focus = 보여 줄 곳(세계 좌표).
+-- 테이블 앞(플레이어 쪽 +Z)에서 눈높이로 수평에 가깝게 바라봄. ease초에 걸쳐 부드럽게 옮겨 감
+function CameraRig.goFront(focus, ease)
+	tracker = nil
+	current = "front"
+	local cam = workspace.CurrentCamera
+	local fwd = origin:VectorToWorldSpace(Vector3.new(0, 0, 1))
+	local look = focus + Vector3.new(0, 1.4, 0)
+	local pos = look + fwd * 8 + Vector3.new(0, 0.9, 0)
+	from = cam.CFrame
+	to = CFrame.lookAt(pos, look, Vector3.yAxis)
+	t0 = os.clock()
+	frontEase = ease or 0.9
+	if not bound then
+		bound = true
+		RunService:BindToRenderStep("DalgonaCamera", Enum.RenderPriority.Camera.Value + 1, step)
+	end
 end
 
 function CameraRig.release()

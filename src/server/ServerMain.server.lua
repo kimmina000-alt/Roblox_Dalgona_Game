@@ -28,6 +28,8 @@ if not ws:FindFirstChild("Cutter") then
 end
 -- 식탁보·러그·색감 (2026-11-19 귀엽게)
 StallDecor.dress(ws)
+-- 국자 여러 개 (화로 위 알바생 국자, 속성 LadleCount 1~4)
+WorkstationBuilder.watchLadles(ws)
 if ws:GetAttribute("CoalLeft") == nil then
 	WorkstationBuilder.setCoal(ws, 1)
 end

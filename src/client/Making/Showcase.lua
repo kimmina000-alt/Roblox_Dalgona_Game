@@ -7,6 +7,7 @@
 local RunService = game:GetService("RunService")
 
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
+local CameraRig = require(script.Parent:WaitForChild("CameraRig"))
 
 local Showcase = {}
 
@@ -276,7 +277,18 @@ function Showcase.run(ctx, dal, st)
 		state.t += dt
 		draw()
 	end
-	-- ② 포장지 씌우기 → 빵끈
+	-- ② 포장지 씌우기 → 빵끈. 카메라는 항공뷰에서 정면으로 내려와 세운 달고나를 마주 봄 (2026-11-20)
+	CameraRig.goFront(c, 0.9)
+	local tc = 0
+	while tc < 0.9 do
+		local dt = ctx.frame()
+		if not dt then
+			return nil
+		end
+		tc += dt
+		state.t += dt
+		draw()
+	end
 	Sfx.play("pop", 0.4, 0.8)
 	state.wrap = 0
 	while state.wrap < WRAP_T * 1.3 do

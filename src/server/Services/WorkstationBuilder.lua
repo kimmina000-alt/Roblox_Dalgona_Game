@@ -618,6 +618,93 @@ function Builder.rebuildBrazier(ws)
 	Builder.setCoal(ws, ws:GetAttribute("CoalLeft") or 1)
 end
 
+-- ── 국자 여러 개 (MACHINE_ERAS 1단계: Lv3·5·8에 하나씩, 최대 4개) ──
+-- 첫 국자(Ladle)는 플레이어 손 미니게임용 그대로. 2~4번째는 알바생이 알아서 만드는 국자로, 화로 철망 위
+-- 플레이어 국자 둘레(오른쪽 뒤 · 왼쪽 뒤 · 오른쪽 앞)에 손잡이가 바깥을 보게 놓인다 (참고 사진: 큰 화로 둘레에 국자 여러 개).
+-- 젓가락이 저절로 젓고 설탕 → 녹음 → 부풂 → 비움을 되풀이하는 움직임은 클라이언트 Making/HelperLadles가 그림.
+-- 작업대 속성 LadleCount(1~4)로 정함. 성장 시스템이 생기면 레벨에 맞춰 이 속성을 바꾸면 됨.
+local HELPER_SLOTS = { Vector3.new(1.55, 0, -1.2), Vector3.new(-1.55, 0, -1.2), Vector3.new(1.55, 0, 1.2) }
+function Builder.setLadleCount(ws, n)
+	n = math.clamp(math.floor(n or 1), 1, 4)
+	ws:SetAttribute("LadleCount", n)
+	for _, c in ipairs(ws:GetChildren()) do
+		if c.Name:sub(1, 11) == "HelperLadle" then
+			c:Destroy()
+		end
+	end
+	local ladle = ws:FindFirstChild("Ladle")
+	local bowl = ladle and ladle:FindFirstChild("Bowl")
+	local mesh = ladle and ladle:FindFirstChild("Mesh")
+	local contents = ladle and ladle:FindFirstChild("Contents")
+	if not (bowl and mesh and contents) then
+		return
+	end
+	-- 플레이어 국자의 메시·내용물 자리 (손잡이 방향 기준 틀)를 그대로 옮겨 씀
+	local hd0 = (CFrame.Angles(0, math.rad(HANDLE_YAW), 0)).RightVector
+	local c0 = bowl.Position
+	local frame0 = CFrame.lookAt(c0, c0 - hd0)
+	local meshRel = frame0:ToObjectSpace(mesh.CFrame)
+	local contentsRel = CFrame.new(c0):ToObjectSpace(contents.CFrame)
+	for k = 2, n do
+		local off = HELPER_SLOTS[k - 1]
+		local c = c0 + off
+		-- 알바생 국자는 철망 위에 내려놓음 (플레이어 국자는 들고 있는 높이)
+		local brazier = ws:FindFirstChild("Brazier")
+		local grillY = brazier and brazier:GetAttribute("GrillTopY")
+		if grillY then
+			c = Vector3.new(c.X, grillY + bowl.Size.X / 2 + 0.02, c.Z)
+		end
+		local hd = Vector3.new(off.X, 0, off.Z).Unit -- 손잡이는 화로 바깥쪽
+		local m = Instance.new("Model")
+		m.Name = "HelperLadle" .. k
+		local frame = CFrame.lookAt(c, c - hd)
+		local mm = mesh:Clone()
+		mm.CFrame = frame * meshRel
+		mm.Parent = m
+		local cc = contents:Clone()
+		cc.Name = "Contents"
+		cc.CFrame = CFrame.new(c) * contentsRel
+		cc.Transparency = 0
+		cc.Color = Color3.fromRGB(250, 250, 250)
+		cc.Material = Enum.Material.Sand
+		cc:SetAttribute("BaseThick", cc.Size.X)
+		cc.Parent = m
+		-- 알바생 나무젓가락 (클라이언트가 국자 안에서 원을 그리며 움직임)
+		local stick = Instance.new("Part")
+		stick.Name = "Stick"
+		stick.Shape = Enum.PartType.Cylinder
+		stick.Size = Vector3.new(2.6, 0.07, 0.07)
+		stick.Color = Color3.fromRGB(224, 196, 150)
+		stick.Material = Enum.Material.Wood
+		stick.Anchored = true
+		stick.CanCollide = false
+		stick.CanQuery = false
+		stick.CanTouch = false
+		stick.CFrame = CFrame.new(c + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, 0, math.rad(90))
+		stick.Parent = m
+		m:SetAttribute("Phase", (k - 1) * 0.31)
+		m:SetAttribute("Center", c)
+		m:SetAttribute("BowlR", bowl.Size.Y / 2)
+		m.Parent = ws
+	end
+end
+
+function Builder.watchLadles(ws)
+	Builder.setLadleCount(ws, ws:GetAttribute("LadleCount") or 1)
+	ws:GetAttributeChangedSignal("LadleCount"):Connect(function()
+		local n = ws:GetAttribute("LadleCount") or 1
+		local have = 1
+		for _, c in ipairs(ws:GetChildren()) do
+			if c.Name:sub(1, 11) == "HelperLadle" then
+				have += 1
+			end
+		end
+		if have ~= n then
+			Builder.setLadleCount(ws, n)
+		end
+	end)
+end
+
 function Builder.build(parent)
 	local ws = Instance.new("Model")
 	ws.Name = "DalgonaWorkstation"

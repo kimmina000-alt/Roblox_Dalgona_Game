@@ -280,7 +280,8 @@ function Ui:_buildGauge()
 		Visible = false,
 		Parent = self.root,
 	}, { corner(12) })
-	local vt = new("Frame", { Position = UDim2.fromOffset(13, 12), Size = UDim2.new(1, -26, 1, -40), BackgroundTransparency = 1, Parent = v })
+	label({ Text = "속도", TextSize = 13, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(1, 0, 0, 16), Parent = v }) -- 위에 이름 (2026-11-20)
+	local vt = new("Frame", { Position = UDim2.fromOffset(13, 26), Size = UDim2.new(1, -26, 1, -54), BackgroundTransparency = 1, Parent = v })
 	self.vSegs = {}
 	for i, c in ipairs({ Color3.fromRGB(80, 140, 230), Color3.fromRGB(80, 190, 90), Color3.fromRGB(230, 80, 70) }) do
 		self.vSegs[i] = new("Frame", { BackgroundColor3 = c, BorderSizePixel = 0, Parent = vt })

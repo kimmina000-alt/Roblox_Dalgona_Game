@@ -116,8 +116,9 @@ local function newPuff(S, amount, baseThick)
 	local final = FOAM:Lerp(CREAM, 0.6 * (1 - low)):Lerp(FOAM_DARK, dark)
 	local pf = {
 		u = 0, hold = 0, done = false, final = final, yaw = math.random() * 6, baseThick = baseThick,
-		size = 1 - 0.45 * low + 0.25 * high, -- 높이 배율
-		wide = 1 - 0.12 * low + 0.18 * high, -- 지름 배율 (많으면 국자 밖으로)
+		-- 2026-11-20: 너무 많이 넣으면 훨씬 크게 부풀어 국자 밖으로 넘침
+		size = 1 - 0.45 * low + 0.9 * high, -- 높이 배율
+		wide = 1 - 0.12 * low + 0.5 * high, -- 지름 배율 (많으면 국자 밖으로)
 		collapse = 0.3 * high, -- 다 부푼 뒤 꺼지는 정도
 		glossy = low > 0.3, -- 적으면 끝까지 번들번들
 	}
