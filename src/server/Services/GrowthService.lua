@@ -433,7 +433,7 @@ local function growthSnapshot(player, d, snap)
 	end
 	local collection = {}
 	for id, c in pairs(d.collection) do
-		collection[id] = { best = c.best, n = c.n }
+		collection[id] = { best = c.best, n = c.n, pp = c.pp }
 	end
 	snap.growth = {
 		upgrades = ups,
@@ -515,6 +515,29 @@ end
 function GrowthService.init(dataService, economyService, plotService, remotes)
 	Data, Economy, Plots = dataService, economyService, plotService
 	Economy.extendSnapshot = growthSnapshot
+	-- 뽑기(15번) 연결: 처음으로 완벽하게 뽑으면 도감에 표시 (collection[id].pp = true). 처음이면 true → 결과창 "도감 등록!"
+	Economy.onPerfectPpopgi = function(player, shape)
+		local first = false
+		if type(shape) ~= "table" or type(shape.id) ~= "string" then
+			return false
+		end
+		Data.update(player, function(d)
+			local c = d.collection[shape.id]
+			if not c then
+				c = { best = "Poor", n = 0 }
+				d.collection[shape.id] = c
+			end
+			if c.pp then
+				return false
+			end
+			c.pp = true
+			first = true
+		end)
+		if first then
+			Economy.notify(player, "도감 등록: " .. (shape.name or shape.id) .. " 완벽 뽑기!")
+		end
+		return first
+	end
 	Economy.on("handMade", onHandMade)
 	Economy.on("levelUp", onLevelUp)
 	Economy.on("sold", function(player, n, coins)
