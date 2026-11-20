@@ -131,6 +131,18 @@ function EconomyService.freeSlot(d)
 	return nil
 end
 
+-- 알바생·기계·공장이 만든 달고나 넣기 (D26, 2026-11-21): 빈 칸이 있으면 미니미가 들고 가서 진열(서버는 바로 그 칸에),
+-- 없으면 보관함. 반환: 진열한 칸 번호(또는 nil). by = "helper" | "machine" | "factory" (기계·공장은 Phase 5에서 이걸 부름)
+function EconomyService.stockProduced(d, item, by)
+	item.id = item.id or EconomyService.newItemId(d)
+	item.by = by
+	if G.Shop.autoShelveHelpers then
+		item.sl = EconomyService.freeSlot(d)
+	end
+	table.insert(d.stock, item)
+	return item.sl
+end
+
 local function findItem(d, id)
 	for i, item in ipairs(d.stock) do
 		if item.id == id then
