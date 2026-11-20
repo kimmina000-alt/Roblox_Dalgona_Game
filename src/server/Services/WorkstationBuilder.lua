@@ -164,6 +164,8 @@ local function brazierTemplates()
 	return nil
 end
 
+local EMBER_T = 0.6 -- 연탄 윗면 불씨 원판 투명도 (클수록 붉은빛이 옅음)
+
 local function addFire(parent, offset, direction)
 	local fire = Instance.new("Attachment")
 	fire.Name = "FireAtt"
@@ -174,7 +176,7 @@ local function addFire(parent, offset, direction)
 	pe.Color = ColorSequence.new(Color3.fromRGB(255, 200, 80), Color3.fromRGB(255, 70, 20))
 	pe.LightEmission = 1
 	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.35), NumberSequenceKeypoint.new(1, 0.05) })
-	pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+	pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) })
 	pe.Lifetime = NumberRange.new(0.25, 0.45)
 	pe.Rate = 30
 	pe.Speed = NumberRange.new(1.2, 2)
@@ -184,7 +186,7 @@ local function addFire(parent, offset, direction)
 	local light = Instance.new("PointLight")
 	light.Color = Color3.fromRGB(255, 140, 60)
 	light.Range = 9
-	light.Brightness = 2
+	light.Brightness = 1.4
 	light.Parent = fire
 	return fire
 end
@@ -220,8 +222,8 @@ local function buildBrazierMesh(ws, bT, cT, c2T)
 	burnt.Color = COAL_ASH
 	burnt.Transparency = 1
 	burnt.CFrame = CFrame.new(coal.Position.X, bottomY + burnt.Size.Y / 2, coal.Position.Z)
-	-- 연탄 구멍 사이로만 보이는 불씨 (윗면 바로 아래에 깔린 빛나는 원판)
-	local ember = vcyl(m, "Ember", coal.Size.X * 0.9, 0.02, coal.Position + Vector3.new(0, coal.Size.Y / 2 - 0.04, 0), Color3.fromRGB(255, 110, 30), Enum.Material.Neon, { Transparency = 0.35 })
+	-- 연탄 구멍 사이로만 보이는 불씨 (2026-11-20 "붉은 불 조금만 줄여": 투명도 0.35 → EMBER_T) (윗면 바로 아래에 깔린 빛나는 원판)
+	local ember = vcyl(m, "Ember", coal.Size.X * 0.9, 0.02, coal.Position + Vector3.new(0, coal.Size.Y / 2 - 0.04, 0), Color3.fromRGB(255, 110, 30), Enum.Material.Neon, { Transparency = EMBER_T })
 	ember.CastShadow = false
 	addFire(coal, Vector3.new(0, coal.Size.Y / 2 + 0.05, 0), Enum.NormalId.Top)
 	buildGrill(m, cx)
@@ -264,13 +266,13 @@ function Builder.setCoal(ws, left)
 		fire.Position = Vector3.new(0, top - coal.Position.Y + 0.05, 0)
 		local light = fire:FindFirstChildOfClass("PointLight")
 		if light then
-			light.Brightness = 0.8 + 1.2 * left
+			light.Brightness = 0.6 + 0.8 * left
 		end
 	end
 	local ember = b:FindFirstChild("Ember")
 	if ember then
 		ember.CFrame = CFrame.new(coal.Position.X, top - 0.04, coal.Position.Z) * CFrame.Angles(0, 0, math.rad(90))
-		ember.Transparency = 0.35 + 0.45 * (1 - left)
+		ember.Transparency = EMBER_T + (0.85 - EMBER_T) * (1 - left)
 	end
 end
 
