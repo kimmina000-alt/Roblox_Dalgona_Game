@@ -258,11 +258,12 @@ function ProductionService.submitPpopgi(player, raw)
 		if ok and type(out) == "table" then
 			res.price = out.price
 			res.dexNew = out.dexNew
+			res.extraAdded = out.extraAdded
 		elseif not ok then
 			warn("[Production] onPpopgi failed", out)
 		end
 	end
-	print(string.format("[Production] %s ppopgi %s cov=%.2f cracks=%d acc=%.2f broken=%s bonus=%.2f price=%s t=%.1f", player.Name, open.shape.id, res.coverage, res.cracks, res.acc, tostring(res.broken), res.bonus, tostring(res.price), res.time))
+	print(string.format("[Production] %s ppopgi %s cov=%.2f cracks=%d acc=%.2f broken=%s extra=%d price=%s t=%.1f", player.Name, open.shape.id, res.coverage, res.cracks, res.acc, tostring(res.broken), res.extraAdded or 0, tostring(res.price), res.time))
 	return res
 end
 

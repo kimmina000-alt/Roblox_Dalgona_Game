@@ -2,7 +2,8 @@
 -- 바늘 끝 자리 표본(틀 기준 좌표)을 차례로 넣으면 따라간 비율·금·쪼개짐이 나온다.
 -- 클라이언트는 화면에 보여 주려고 같은 표본을 그대로 넣고, 서버는 받은 표본으로 다시 계산한다 (같은 결과).
 -- 좌표: CutterShapes 외곽선 × 틀 배율(stud). x 오른쪽, y 화면 위쪽 (틀 Root 기준 X = x, Z = -y)
--- 가격: 판매가 × (1 + 0.5 × 정확도), Q에는 안 넣음. 쪼개지면 못 팖 (2026-11-21 사용자, 원래 기획은 Poor 가격)
+-- 보상 (2026-11-21 사용자 "덤 하나 더"): 성공하면 같은 달고나 1개 덤, 완벽하면 2개 (판매가는 그대로, Q에도 안 넣음).
+-- 쪼개지면 못 팖. (원래 기획: 판매가 × (1 + 0.5 × 정확도), 쪼개지면 Poor 가격)
 
 local CutterShapes = require(script.Parent:WaitForChild("CutterShapes"))
 
@@ -23,7 +24,8 @@ R.DONE = 0.96 -- 따라간 비율이 이만큼이면 뽑기 성공
 R.RATE = 20 -- 초당 표본 수
 R.MAX_SAMPLES = 1600
 R.MAX_TIME = 75 -- 이보다 길면 저절로 그만 (초)
-R.BONUS = 0.5 -- 판매가 × (1 + BONUS × 정확도)
+R.EXTRA = 1 -- 성공하면 덤 개수
+R.EXTRA_PERFECT = 2 -- 완벽하면 덤 개수
 R.PERFECT_ACC = 0.9 -- 금 없이 이 정확도 이상이면 "완벽 뽑기"
 
 local function find(id)
@@ -239,7 +241,7 @@ function R.result(run)
 		done = done,
 		acc = acc,
 		perfect = done and run.cracks == 0 and acc >= R.PERFECT_ACC,
-		bonus = (done and not broken) and (1 + R.BONUS * acc) or 1,
+		extra = (done and not broken) and ((done and run.cracks == 0 and acc >= R.PERFECT_ACC) and R.EXTRA_PERFECT or R.EXTRA) or 0,
 		time = math.floor(run.t * 10 + 0.5) / 10,
 	}
 end

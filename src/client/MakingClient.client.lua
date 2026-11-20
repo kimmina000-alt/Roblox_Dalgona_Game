@@ -11,6 +11,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
+local GrowthConfig = require(Shared:WaitForChild("GrowthConfig"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 local Making = script.Parent:WaitForChild("Making")
@@ -170,17 +171,34 @@ local function runSession()
 	station:setCutter(shape.id)
 	ctx.state.shape = shape
 
-	-- 나무젓가락이 없으면 꺼내기 전에 상점으로 안내 (재료, 2026-11-20)
-	if (player:GetAttribute("Chopsticks") or 1) < 1 then
-		ui:say("나무젓가락이 없어요", "재료 상점에서 사 와요 (10쌍 5코인)")
-		task.wait(2)
-		finish()
-		local hud = script.Parent:FindFirstChild("Hud")
-		local open = hud and hud:FindFirstChild("OpenShop")
-		if open then
-			open:Fire("chopsticks")
+	-- 재료가 모자라면 나무젓가락을 꺼내기 전에 상점으로 안내 (2026-11-20 젓가락, 2026-11-21 모든 재료:
+	-- "젓가락 쪼갰는데 다른 재료 없어서 못 만들면 젓가락 소진 안 되게" → 쪼개기 전에 확인)
+	do
+		local need = GrowthConfig.recipe(shape.grade)
+		need.chopsticks = GrowthConfig.ChopsticksPerRound or 1
+		local missing, first = {}, nil
+		for _, ing in ipairs(GrowthConfig.Ingredients) do
+			local n = need[ing.id] or 0
+			local have = player:GetAttribute("Ing_" .. ing.id)
+			if ing.id == "chopsticks" and have == nil then
+				have = player:GetAttribute("Chopsticks")
+			end
+			if n > 0 and have ~= nil and have < n then
+				table.insert(missing, string.format("%s %d", ing.name, n))
+				first = first or ing.id
+			end
 		end
-		return
+		if #missing > 0 then
+			ui:say("재료가 모자라요", table.concat(missing, ", ") .. " 필요 · 재료 상점에서 사 와요")
+			task.wait(2)
+			finish()
+			local hud = script.Parent:FindFirstChild("Hud")
+			local open = hud and hud:FindFirstChild("OpenShop")
+			if open then
+				open:Fire(first)
+			end
+			return
+		end
 	end
 	-- 0. 나무젓가락 꺼내기 (통을 누르면 한 짝이 뽑혀 테이블 위에 놓임)
 	CameraRig.go("pick") -- 테이블 왼쪽 끝 젓가락 쪽으로
@@ -287,7 +305,7 @@ local function runSession()
 		local canPpopgi = not result.misshaped and ctx.state.stampRoot ~= nil and not (stampRec and stampRec.packNow)
 			and (result.ppopgiOk or not result.verified)
 		if canPpopgi then
-			local pask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "뽑기에 도전할까요? 바늘로 점선을 긁어 모양을 떼어 내요 · 잘 뽑으면 판매가 최대 ×1.5", "뽑기 도전", "그만하고 넘어가기")
+			local pask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "뽑기에 도전할까요? 바늘로 점선을 긁어 모양을 떼어 내요 · 성공하면 달고나 하나 덤 (완벽하면 2개)", "뽑기 도전", "그만하고 넘어가기")
 			while not pask.choice do
 				if not ctx.frame() then
 					pask.close()
@@ -379,7 +397,7 @@ local function runSession()
 	local s = result.steps or {}
 	if result.ppopgi then
 		local pp = result.ppopgi
-		print(string.format("[Making] ppopgi cov=%.2f cracks=%d acc=%.2f broken=%s perfect=%s bonus=%.2f verified=%s", pp.coverage or 0, pp.cracks or 0, pp.acc or 0, tostring(pp.broken), tostring(pp.perfect), pp.bonus or 1, tostring(pp.verified)))
+		print(string.format("[Making] ppopgi cov=%.2f cracks=%d acc=%.2f broken=%s perfect=%s extra=%d verified=%s", pp.coverage or 0, pp.cracks or 0, pp.acc or 0, tostring(pp.broken), tostring(pp.perfect), pp.extraAdded or pp.extra or 0, tostring(pp.verified)))
 	end
 	print(string.format("[Making] result %s Q=%d %s price=%s stars=%d (verified=%s) sugar=%s melt=%s soda=%s pour=%s press=%s stamp=%s", shape.id, result.Q, result.grade, tostring(result.price), result.stars, tostring(result.verified), tostring(s.sugar), tostring(s.melt), tostring(s.soda), tostring(s.pour), tostring(s.press), tostring(s.stamp)))
 end

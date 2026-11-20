@@ -1,6 +1,6 @@
 -- 뽑기 (7단계, 선택. 15번, 2026-11-20): 모양 찍기 뒤 "뽑기 도전"을 고르면
 --   바늘로 점선(찍힌 틀 자국)을 따라 긁음. 빠르게 긋거나 선을 벗어나면 금이 가고 금 간 곳이 빨갛게.
---   금 3번 = 쪼개짐(못 팖, 2026-11-21). 점선을 다 긁으면 성공 → 판매가 × (1 + 0.5 × 정확도). 언제든 "그만하기".
+--   금 3번 = 쪼개짐(못 팖, 2026-11-21). 점선을 다 긁으면 성공 → 달고나 1개 덤 (완벽하면 2개, 2026-11-21). 언제든 "그만하기".
 -- 판정은 shared/PpopgiRules (서버가 같은 표본으로 다시 계산). 목표 시간 10~20초.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -248,9 +248,9 @@ function Ppopgi.run(ctx, dal, shapeId)
 		Sfx.play("stepDone", 0.6, 1.1)
 		if res.perfect then
 			dal:sparkle()
-			ui:say("완벽 뽑기!", string.format("판매가 ×%.2f", res.bonus))
+			ui:say("완벽 뽑기!", string.format("덤으로 달고나 %d개 더!", res.extra))
 		else
-			ui:say("뽑기 성공!", string.format("금 %d개 · 판매가 ×%.2f", res.cracks, res.bonus))
+			ui:say("뽑기 성공!", string.format("덤으로 달고나 %d개 더!", res.extra))
 		end
 		wait = 1.1
 	else

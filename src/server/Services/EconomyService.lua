@@ -247,9 +247,10 @@ function EconomyService.shelfCount(player)
 	return data and math.min(#data.stock, G.Sales.shelfSlots) or 0
 end
 
--- 뽑기 결과 (15번, ProductionService.hooks.onPpopgi): 방금 만든 달고나 판매가에 뽑기 보너스.
--- 쪼개지면 보관함에서 빠짐 = 못 팖 (2026-11-21 사용자: "뽑기 실패한 건 못 팔게").
--- 순서: 모양 찍기 → 뽑기(선택) → 포장(선택, ×1.1). 반환 { price, dexNew, broken }
+-- 뽑기 결과 (15번, ProductionService.hooks.onPpopgi). 2026-11-21 사용자:
+--   성공 = "덤 하나 더": 방금 만든 것과 같은 달고나를 보관함에 1개(완벽하면 2개) 더 넣음 (재료 안 씀, 포장 안 된 것)
+--   쪼개짐 = 보관함에서 빠짐 (못 팖). 판매가는 그대로 (예전 뽑기 보너스 배율은 안 씀)
+-- 순서: 모양 찍기 → 뽑기(선택) → 포장(선택, ×1.1, 방금 만든 것만). 반환 { price, dexNew, broken, extraAdded }
 -- dexNew: 이 도안을 처음 완벽하게 뽑았는지 — 도감(19번)이 생기면 채움. 지금은 자리만
 function EconomyService.onPpopgi(player, shape, res)
 	local data = Data.get(player)
@@ -269,16 +270,29 @@ function EconomyService.onPpopgi(player, shape, res)
 		EconomyService.notify(player, "뽑다가 쪼개진 달고나는 팔 수 없어요")
 		return { price = 0, broken = true }
 	end
-	Data.update(player, function()
-		item.gb = res.bonus
-		item.p = G.salePrice(item.b or item.p, item.b and item.m or 1, item.gb, item.pk)
-	end)
+	local added = 0
+	if res.done and (res.extra or 0) > 0 then
+		Data.update(player, function(d)
+			for _ = 1, res.extra do
+				if #d.stock >= G.stockMax(d) then
+					break
+				end
+				local copy = table.clone(item)
+				copy.pk = false
+				copy.gb = nil
+				copy.p = G.salePrice(copy.b or copy.p, copy.b and copy.m or 1, G.GachaBonusDefault, false)
+				copy.x = true -- 뽑기 덤
+				table.insert(d.stock, copy)
+				added += 1
+			end
+		end)
+	end
 	last.t = os.clock() -- 뽑기 뒤에 포장할 시간
 	local dexNew = nil
 	if res.perfect and EconomyService.onPerfectPpopgi then
 		dexNew = EconomyService.onPerfectPpopgi(player, shape) -- 19번 도감 연결 자리
 	end
-	return { price = item.p, dexNew = dexNew }
+	return { price = item.p, dexNew = dexNew, extraAdded = added }
 end
 
 -- 제작 끝. 반환: 보상 정보 (결과 표에 붙음)

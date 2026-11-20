@@ -498,8 +498,8 @@ function Pour.run(ctx)
 	end
 	home = hover
 	-- 2026-11-21 사용자 요청: 오른쪽 판 대신 "국자를 누르고 드래그하면 부어지게". 국자를 잡아 철판 위로 끌면
-	-- 국자 아래로 한 방울씩 떨어짐 (방울이 이어지는 모양·누른 모양은 그대로). 국자는 붓는 동안에도 보임
-	local grabOff = Vector3.zero -- 잡은 자리 → 국자 피벗 (잡을 때 국자가 손가락으로 튀지 않게)
+	-- 국자 아래로 한 방울씩 떨어짐 (방울이 이어지는 모양·누른 모양은 그대로). 잡고 있는 동안 국자는 숨김 (손가락 아래 그림자 = 떨어질 자리)
+	local grabOff = Vector3.zero -- 손가락 → 떨어질 자리 (국자를 숨기므로 0: 손가락 바로 아래)
 	local GRAB_PX = 150 -- 국자(그릇·손잡이) 화면 위치에서 이만큼 안을 누르면 잡음
 	ui:say("국자를 꾹 눌러 철판 위로 끌어요", "철판 위에서 누르고 있으면 한 방울씩 떨어져요 · 끌면 따라 떨어져요")
 
@@ -524,9 +524,11 @@ function Pour.run(ctx)
 				if near then
 					grabbing = true
 					if dropMode then
-						local f0 = P.toPlane(carryY)
-						local lp = ladle:GetPivot().Position
-						grabOff = Vector3.new(lp.X - f0.X, 0, lp.Z - f0.Z)
+						-- 국자가 숨으니 반죽은 손가락 바로 아래로 떨어짐 (잡은 자리 차이를 두지 않음)
+						grabOff = Vector3.zero
+						-- 2026-11-21 사용자: "국자 클릭해서 드래그하면 국자는 안 보이게" → 잡고 있는 동안 숨김, 놓으면 다시 보임
+						hideK = 1
+						setLadleHidden(ladle, 1)
 					end
 					Sfx.play("pop", 0.5, 1.1)
 				else
@@ -710,6 +712,10 @@ function Pour.run(ctx)
 			else
 				tilt = 0
 				aimMark.Transparency = 1
+				if hideK > 0.5 then
+					hideK = 0
+					setLadleHidden(ladle, 0)
+				end
 				S:springTo(ladle, home, dt, 22)
 				if blob and blob.lobes and poured >= total - 1e-4 and #drops == 0 then
 					-- 방울을 다 떨어뜨린 뒤 손을 뗌: 다 부은 것으로

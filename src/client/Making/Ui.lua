@@ -1242,7 +1242,7 @@ function Ui:showResult(res, shape, handlers)
 			self.resPp.BackgroundColor3 = Color3.fromRGB(150, 120, 110)
 			self.resPp.Visible = true
 		elseif pp.done then
-			self.resPrice.Text = string.format("뽑기 정확도 %d%% · 금 %d개 · 판매가 ×%.2f%s", math.floor((pp.acc or 0) * 100 + 0.5), pp.cracks or 0, pp.bonus or 1, priceTxt)
+			self.resPrice.Text = string.format("뽑기 성공 · 덤으로 달고나 %d개 더!%s", pp.extraAdded or pp.extra or 1, (pp.extraAdded and pp.extraAdded < (pp.extra or 0)) and " (보관함이 가득 차서 일부만)" or "")
 			self.resPp.Text = pp.perfect and "완벽 뽑기!" or "뽑기 성공"
 			self.resPp.BackgroundColor3 = pp.perfect and Color3.fromRGB(226, 92, 120) or Color3.fromRGB(110, 170, 120)
 			self.resPp.Visible = true
