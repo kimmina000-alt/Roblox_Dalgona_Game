@@ -92,9 +92,132 @@ function EconomyService.announceLevels(player, ups)
 	end
 end
 
+---------------------------------------------------------------- 진열대에 직접 놓기 (2026-11-21 사용자 결정 "들고 가서 놓기")
+-- 손으로 만든 달고나는 진열대에 저절로 안 올라감: 다 만들면 캐릭터가 들고 있고(속성 Carrying = 달고나 번호),
+-- 진열대 빈 칸을 누르면 그 칸에 놓임(item.sl = 칸). 진열한 것만 손님이 삼. 안 놓은 것은 보관함(sl 없음)에 남음.
+local carrying = {} -- [player] = 달고나 번호
+
+function EconomyService.newItemId(d)
+	local id = d.nextItemId or 1
+	d.nextItemId = id + 1
+	return id
+end
+
+-- 진열된(지금 열린 칸 안) 달고나, 먼저 만든 것부터
+function EconomyService.shelved(d)
+	local slots = G.shelfSlots(d)
+	local list = {}
+	for _, item in ipairs(d.stock) do
+		if item.sl and item.sl <= slots then
+			table.insert(list, item)
+		end
+	end
+	return list
+end
+
+-- 빈 칸 번호 (없으면 nil)
+function EconomyService.freeSlot(d)
+	local used = {}
+	for _, item in ipairs(d.stock) do
+		if item.sl then
+			used[item.sl] = true
+		end
+	end
+	for i = 1, G.shelfSlots(d) do
+		if not used[i] then
+			return i
+		end
+	end
+	return nil
+end
+
+-- 알바생·기계·공장이 만든 달고나 넣기 (D26, 2026-11-21): 빈 칸이 있으면 미니미가 들고 가서 진열(서버는 바로 그 칸에),
+-- 없으면 보관함. 반환: 진열한 칸 번호(또는 nil). by = "helper" | "machine" | "factory" (기계·공장은 Phase 5에서 이걸 부름)
+function EconomyService.stockProduced(d, item, by)
+	item.id = item.id or EconomyService.newItemId(d)
+	item.by = by
+	if G.Shop.autoShelveHelpers then
+		item.sl = EconomyService.freeSlot(d)
+	end
+	table.insert(d.stock, item)
+	return item.sl
+end
+
+local function findItem(d, id)
+	for i, item in ipairs(d.stock) do
+		if item.id == id then
+			return item, i
+		end
+	end
+	return nil
+end
+
+local function setCarrying(player, id)
+	carrying[player] = id
+	player:SetAttribute("Carrying", id or 0)
+end
+
+function EconomyService.carrying(player)
+	return carrying[player]
+end
+
+-- 진열대 slot 칸에 놓기: 들고 있는 것, 없으면 보관함에서 먼저 만든 것. 반환 ok, 글
+function EconomyService.place(player, slot)
+	local data = Data.get(player)
+	if not data then
+		return false, "불러오는 중이에요"
+	end
+	if type(slot) ~= "number" or slot < 1 or slot > G.shelfSlots(data) then
+		return false, "그 칸은 쓸 수 없어요"
+	end
+	for _, item in ipairs(data.stock) do
+		if item.sl == slot then
+			return false, "이미 놓인 칸이에요"
+		end
+	end
+	local target = carrying[player] and findItem(data, carrying[player]) or nil
+	if target and target.sl then
+		target = nil
+	end
+	local fromHand = target ~= nil
+	if not target then
+		for _, item in ipairs(data.stock) do
+			if not item.sl then
+				target = item
+				break
+			end
+		end
+	end
+	if not target then
+		return false, "놓을 달고나가 없어요"
+	end
+	Data.update(player, function()
+		target.sl = slot
+	end)
+	if fromHand then
+		setCarrying(player, nil)
+	end
+	return true, string.format("진열대 %d번 칸에 놓았어요", slot)
+end
+
 function EconomyService.push(player)
 	local data = Data.get(player)
 	if data then
+		-- 들고 있는 달고나가 팔렸거나(쪼개짐 등) 진열됐으면 손에서 내림
+		local id = carrying[player]
+		if id then
+			local item = findItem(data, id)
+			if not item or item.sl then
+				setCarrying(player, nil)
+			end
+		end
+		local unshelved = 0
+		for _, item in ipairs(data.stock) do
+			if not item.sl then
+				unshelved += 1
+			end
+		end
+		player:SetAttribute("Unshelved", unshelved) -- 보관함에서 꺼내 놓을 수 있는 수 (진열대 칸 안내에 씀)
 		player:SetAttribute("Chopsticks", data.ingredients.chopsticks or 0) -- 제작 화면이 젓가락 꺼내기 전에 봄
 		-- 재료마다 남은 양 (클라이언트 Making/Supplies: 0이면 작업대 통이 빈 통으로 보임, 2026-11-21)
 		for _, ing in ipairs(G.Ingredients) do
@@ -182,13 +305,18 @@ end
 function EconomyService.sell(player, n)
 	local sold, coins = 0, 0
 	Data.update(player, function(d)
-		local shelf = math.min(#d.stock, G.shelfSlots(d))
-		n = math.min(n, shelf)
+		-- 진열대에 놓인 것만, 먼저 만든 것부터 (2026-11-21 진열대에 직접 놓기)
+		local list = EconomyService.shelved(d)
+		n = math.min(n, #list)
 		if n <= 0 then
 			return false
 		end
-		for _ = 1, n do
-			local item = table.remove(d.stock, 1)
+		for k = 1, n do
+			local item = list[k]
+			local i = table.find(d.stock, item)
+			if i then
+				table.remove(d.stock, i)
+			end
 			local p = math.max(0, math.floor(tonumber(item.p) or 0))
 			coins += p
 			sold += 1
@@ -244,7 +372,7 @@ end
 
 function EconomyService.shelfCount(player)
 	local data = Data.get(player)
-	return data and math.min(#data.stock, G.shelfSlots(data)) or 0
+	return data and #EconomyService.shelved(data) or 0
 end
 
 -- 뽑기 결과 (15번, ProductionService.hooks.onPpopgi). 2026-11-21 사용자:
@@ -278,6 +406,8 @@ function EconomyService.onPpopgi(player, shape, res)
 					break
 				end
 				local copy = table.clone(item)
+				copy.id = EconomyService.newItemId(d) -- 덤은 새 번호, 보관함으로 (2026-11-21)
+				copy.sl = nil
 				copy.pk = false
 				copy.gb = nil
 				copy.p = G.salePrice(copy.b or copy.p, copy.b and copy.m or 1, G.GachaBonusDefault, false)
@@ -307,6 +437,7 @@ function EconomyService.onMade(player, shape, result)
 		end
 		if #d.stock < G.stockMax(d) then
 			local item = {
+				id = EconomyService.newItemId(d),
 				s = shape.id,
 				g = result.grade,
 				q = result.Q,
@@ -319,11 +450,16 @@ function EconomyService.onMade(player, shape, result)
 			table.insert(d.stock, item)
 			lastMade[player] = { item = item, t = os.clock() }
 			reward.stocked = true
+			reward.carryId = item.id
 		end
 		d.stats.made = (d.stats.made or 0) + 1
 		reward.levelUps, reward.coins = EconomyService.addExp(d, reward.exp)
 	end)
 	EconomyService.announceLevels(player, reward.levelUps)
+	-- 다 만든 달고나를 손에 듦 (진열대 빈 칸을 눌러 놓음). 전에 들고 있던 것은 보관함에 남음
+	if reward.carryId then
+		setCarrying(player, reward.carryId)
+	end
 	fire("handMade", player, shape, result)
 	print(string.format("[Economy] %s made %s %s +%dEXP stock=%d", player.Name, shape.id, result.grade, reward.exp, #(Data.get(player) or { stock = {} }).stock))
 	return reward
@@ -354,6 +490,7 @@ function EconomyService.init(dataService, r)
 	Players.PlayerRemoving:Connect(function(p)
 		lastBuy[p] = nil
 		lastMade[p] = nil
+		carrying[p] = nil
 	end)
 end
 

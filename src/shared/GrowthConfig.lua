@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 3 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게
+G.SchemaVersion = 4 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -25,7 +25,8 @@ G.DefaultData = {
 	exp = 0,
 	level = 1,
 	ingredients = { sugar = 5, soda = 5, wrapper = 5, chopsticks = 5, twistTie = 5 }, -- 첫 판을 바로 해 볼 수 있게 5회분 (사용자 확정, 2026-11-20)
-	stock = {}, -- 만든 달고나 { s = 도안 id, g = 등급, q = 완성도, p = 판매가, b = 도안 가격, m = 품질 배율, pk = 포장 여부 }
+	stock = {}, -- 만든 달고나 { id, s = 도안 id, g = 등급, q = 완성도, p = 판매가, b = 도안 가격, m = 품질 배율, pk = 포장 여부, sl = 진열대 칸(없으면 보관함) }
+	nextItemId = 1, -- 달고나 번호 (들고 다니기·진열 칸을 찾는 데 씀)
 	unlockedShapes = { "Circle", "Square", "Triangle", "Bone" }, -- Common (레벨이 오르면 GrowthService가 더함)
 	upgrades = { stove = 0, presser = 0, table = 0 }, -- 화로·누르개·작업대 장비 Lv (Phase 4)
 	ladles = 1, -- 국자 수 1~4 (SHOP_GROWTH_PLAN 2장)
@@ -212,8 +213,14 @@ G.Plots = {
 	sign = { pos = Vector3.new(0, 0, -17.5), height = 9 },
 	-- 가게 건물 (D21): 작업대 뒤. 앞면(셔터)이 골목 쪽. 부지 로컬 z = front ~ back
 	building = { front = 8.5, back = 17.6, halfWidth = 16.8, height = 10.5 }, -- 높이는 공장 문(9.7)보다 높게
-	parasol = { pos = Vector3.new(0, 0, 7.2), height = 11.5, radius = 8 }, -- 작업대 위 파라솔 (노점)
-	teleportOnSpawn = false, -- 손 작업대를 부지로 옮기기 전까지는 스폰 그대로 (작업대가 하나뿐)
+	parasol = { pos = Vector3.new(3, 0, -2), height = 11.5, radius = 7 }, -- 작업대 위 파라솔 (노점). 기둥은 주인이 서는 쪽, 천은 작업대 위
+	-- 노점 배치 (사용자 2026-11-21): 작업대 앞선을 진열대 앞선에 맞춰 한 줄로. 장식용 계단 진열대(Show*)는 뺌
+	-- 180° 회전은 사용자가 되돌림 (2026-11-21: 제작 화면도 같이 돌아감). 회전 없음 = 0
+	workstationTurn = 0, -- 도
+	removeDecorDisplay = true,
+	rowGap = 0.3, -- 진열대와 작업대 사이
+	entry = Vector3.new(0, 0, -21), -- 접속하면 서는 곳: 내 가게 앞 골목 (간판 앞)
+	teleportOnSpawn = true, -- 스폰을 내 가게 앞으로 (사용자 2026-11-21)
 }
 
 ---------------------------------------------------------------- 야외 노점 → 월세 가게 → 기계 (D21, 2026-11-21, GDD 4-0장, 금액은 기획안)
@@ -225,6 +232,7 @@ G.Shop = {
 	buyLevel = 15, -- 가게 매입
 	buyPrice = 50000, -- 보증금은 빼 줌 → 실제 49,000
 	stallSlots = 5, -- 노점(또는 문 닫힘) 쟁반 진열 칸
+	autoShelveHelpers = true, -- 알바생이 만든 것은 빈 칸에 저절로 진열 (가게 직원이라). 손으로 만든 것은 들고 가서 놓음
 	-- 노점·문 닫힘에서 막히는 것: 국자 확장, 알바생 고용, 작업대 업그레이드 (화로·누르개는 됨)
 	lockedWhenStall = { ladle = true, hire = true, table = true },
 }
@@ -271,7 +279,7 @@ G.Sales = {
 	walkSpeed = 9, -- 스터드/초
 	browseSeconds = 1.6, -- 진열대 앞에서 고르는 시간
 	-- 부지 기준 로컬 좌표 (-Z = 골목 쪽)
-	shelf = { pos = Vector3.new(11, 0, -10), size = Vector3.new(9, 3, 2.4) },
+	shelf = { pos = Vector3.new(14.1, 0, -10), size = Vector3.new(7, 3, 2.4) }, -- 작업대와 한 줄, 간판에서 볼 때 왼쪽 끝 (2026-11-21)
 	standZ = -13.2, -- 손님이 서는 곳 (진열대 앞)
 	streetZ = -26, -- 골목 길
 	streetHalf = 22, -- 골목에서 나타나고 사라지는 곳 (부지 중심에서 좌우)

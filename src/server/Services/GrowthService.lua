@@ -424,6 +424,7 @@ local function stepHelper(player, d, i, h, st, dt)
 	st.t = 0
 	-- 1개 완성: 재료·젓가락·급여를 쓰고 보관함에 (자동 생산 표시 a = true, 포장 안 함)
 	local ups, newShapes = {}, {}
+	local deliverSlot = nil
 	Data.update(player, function(dd)
 		for id, n in pairs(need) do
 			dd.ingredients[id] = math.max(0, (dd.ingredients[id] or 0) - n)
@@ -434,7 +435,7 @@ local function stepHelper(player, d, i, h, st, dt)
 		local q, grade, mult = rollHelperQuality()
 		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
-		table.insert(dd.stock, item)
+		deliverSlot = Economy.stockProduced(dd, item, "helper") -- 빈 칸이면 진열, 아니면 보관함 (D26)
 		ups = Economy.addExp(dd, G.ExpHelper)
 		if #ups > 0 then
 			newShapes = refreshUnlocks(dd)
@@ -444,7 +445,12 @@ local function stepHelper(player, d, i, h, st, dt)
 	if #newShapes > 0 then
 		Economy.notify(player, "새 도안: " .. table.concat(newShapes, ", "))
 	end
-	print(string.format("[Helper] %s #%d made %s (-%d wage)", player.Name, i, shape.id, wage))
+	-- 미니미가 그 칸으로 들고 가는 연출 신호 (클라이언트 HelperLadles가 그림, 칸 = DisplayShelf.Slot<n>)
+	if deliverSlot and st.model and st.model.Parent then
+		st.model:SetAttribute("DeliverSlot", deliverSlot)
+		st.model:SetAttribute("DeliverAt", workspace:GetServerTimeNow())
+	end
+	print(string.format("[Helper] %s #%d made %s (-%d wage) shelf=%s", player.Name, i, shape.id, wage, tostring(deliverSlot)))
 end
 
 local function syncHelpers(player, d)
