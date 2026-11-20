@@ -58,14 +58,20 @@ local function buildBag(parent, D)
 		-- 경계 고정 (가운데 기준 좌표)
 		local center = Vector3.new(xoff, yc, (zTop + 0.05 + zEnd - 0.05) / 2)
 		local B = W0 * 1.1
-		local p1 = em:AddVertex(Vector3.new(xoff - B, yc - 0.3, zEnd - 0.05) - center)
-		local p2 = em:AddVertex(Vector3.new(xoff - B + 0.001, yc - 0.3, zEnd - 0.05) - center)
-		local p3 = em:AddVertex(Vector3.new(xoff + B, yc + 0.3, zTop + 0.05) - center)
-		local p4 = em:AddVertex(Vector3.new(xoff + B - 0.001, yc + 0.3, zTop + 0.05) - center)
+		-- 위아래 경계는 입구를 다 벌렸을 때(두께 0.23 + MOUTH 0.8)까지 넉넉히 (넘으면 메시 크기 기준이 바뀌어 비닐이 줄어듦)
+		local BY = 1.2
+		local p1 = em:AddVertex(Vector3.new(xoff - B, yc - BY, zEnd - 0.05) - center)
+		local p2 = em:AddVertex(Vector3.new(xoff - B + 0.001, yc - BY, zEnd - 0.05) - center)
+		local p3 = em:AddVertex(Vector3.new(xoff + B, yc + BY, zTop + 0.05) - center)
+		local p4 = em:AddVertex(Vector3.new(xoff + B - 0.001, yc + BY, zTop + 0.05) - center)
 		em:AddTriangle(p1, p2, p1)
 		em:AddTriangle(p3, p4, p3)
 		local self = {}
-		function self.shape(g)
+		-- open(0~1): 입구 벌림 (2026-11-20 "입구 벌린 상태로 내려와서 사이에 달고나 넣는"). 막힌 윗끝은 그대로,
+		-- 입구(막대 쪽 끝)로 갈수록 윗장은 위로·아랫장은 아래로 벌어짐 (아랫장은 매트 밑이라 안 보임)
+		local MOUTH = 0.8
+		function self.shape(g, open)
+			open = open or 0
 			-- 묶었을 때 폭 (2026-11-20 "달고나 모양에 맞춰서 비닐 아래 좁아지게, 너무 사각임"):
 			-- 위쪽 절반은 네모 그대로, 가운데 아래로는 달고나 가장자리(타원)를 따라 좁아지다가 막대 쪽 끈에서 꽉 모임
 			local zLow = zc - rz * 0.55
@@ -103,6 +109,10 @@ local function buildBag(parent, D)
 				end
 				-- 묶이는 쪽은 막대(가로 0) 쪽으로 모임
 				local x0 = xoff * (1 - g * smooth((zc - z) / math.max(zc - zNeck, 0.1)))
+				-- 입구 쪽으로 갈수록 벌어짐 (막힌 윗끝 0 → 입구 1)
+				if open > 0 then
+					t += MOUTH * open * smooth(s / 0.9) ^ 1.3
+				end
 				for j = 1, NA do
 					local a = (j - 1) / NA * 2 * math.pi
 					local m = 1 + amp * math.sin(8 * a + i * 0.35) -- 모인 곳의 비닐 주름
@@ -330,6 +340,7 @@ function Pack.run(ctx, dal, st)
 	end
 	ui:setWorldTip(nil)
 	Sfx.play("bagYank", 0.7, 1.1)
+	bag3.shape(0, 1) -- 입구를 벌린 채로 내려옴
 	bag3.part.Transparency = 0.68
 	-- 비닐은 화면 밖 위쪽에서 내려와 달고나 위에 떠 있음 (2026-11-20 "포장 비닐 화면 밖 상단에서부터 내려오기")
 	local startPos
@@ -399,6 +410,19 @@ function Pack.run(ctx, dal, st)
 	ui:setWorldTip(nil)
 	bagAt(m, 0)
 	placeDal(R1)
+	-- 달고나가 벌린 입구 사이로 다 들어가면 비닐이 납작하게 닫힘
+	do
+		local tt = 0
+		while tt < 0.3 do
+			local dt = ctx.frame()
+			if not dt then
+				return nil
+			end
+			tt += dt
+			bag3.shape(0, 1 - smooth(tt / 0.3))
+		end
+		bag3.shape(0, 0)
+	end
 	Sfx.play("pop", 0.35, 1.5)
 	ui:buzz(0.3, 0.05)
 
