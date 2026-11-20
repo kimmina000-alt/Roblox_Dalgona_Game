@@ -39,8 +39,8 @@ function Stick.place(ctx)
 	local half = plate.Size.X / 2
 	local m, place = build(S)
 	-- 철판 오른쪽 테이블 위에 세로(앞뒤)로 놓여 있음
-	local restPos = Vector3.new(plate.Position.X + half + 0.45, top + THICK / 2, plate.Position.Z + 0.5)
-	local restCF = CFrame.new(restPos) * CFrame.Angles(0, math.rad(90), 0)
+	local restPos = Vector3.new(plate.Position.X, top + THICK / 2, plate.Position.Z) + S:dir(half + 0.45, 0, 0.5)
+	local restCF = CFrame.new(restPos) * S.rot * CFrame.Angles(0, math.rad(90), 0)
 	local cf = restCF
 	place(cf)
 	st.stickModel = m

@@ -483,7 +483,7 @@ function Soda.run(ctx)
 			local bowl = S.Bowl.Position
 			local cam = workspace.CurrentCamera
 			if not stickTip then
-				stickTip = bowl + Vector3.new(0.9, 0.6, 0.6)
+				stickTip = bowl + S:dir(0.9, 0.6, 0.6)
 			end
 			-- (사용자 요청 2026-11-19) 젓가락 손잡이를 잡고 끌어 설탕 묻은 끝을 소다 통에 가져다 댄 뒤 클릭하면 콕 찍혀 소다가 묻음.
 			-- 끌기 = 젓가락 옮기기, 짧게 클릭 = 지금 끝이 있는 곳(소다 통 / 국자)에서 찍기·털기

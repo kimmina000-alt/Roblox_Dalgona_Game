@@ -176,13 +176,13 @@ function Stamp.run(ctx)
 				w = Vector3.new(w.X, top + 0.7, w.Z)
 				-- 기울기는 손가락 속도로만 (틀 위치로 재면 기울기 → 위치 → 속도가 서로 되먹여 벌벌 떨림, 2026-11-20 수정)
 				if lastPos and dt > 0 then
-					local vx = (f.X - lastPos.X) / dt
+					local vx = S.rot:VectorToObjectSpace(f - lastPos).X / dt -- 화면 좌우 (돌려 놓은 작업대도 같게)
 					fingerV += (vx - fingerV) * (1 - math.exp(-6 * dt))
 					local target = math.clamp(fingerV * 3, -18, 18)
 					yaw += (target - yaw) * (1 - math.exp(-6 * dt))
 				end
 				lastPos = f
-				cutter:PivotTo(CFrame.new(w) * CFrame.Angles(0, math.rad(yaw), 0))
+				cutter:PivotTo(CFrame.new(w) * CFrame.Angles(0, math.rad(yaw), 0) * cutRot)
 				showPreview(true)
 				local flat = Vector3.new(w.X - c.X, 0, w.Z - c.Z)
 				rec.dist = flat.Magnitude
@@ -192,7 +192,7 @@ function Stamp.run(ctx)
 					showPreview(false)
 					if rec.dist < dal:radius() then
 						rec.angle = yaw
-						placed = CFrame.new(w.X, top + HALF_WIRE - 0.02, w.Z) * CFrame.Angles(0, math.rad(yaw), 0)
+						placed = CFrame.new(w.X, top + HALF_WIRE - 0.02, w.Z) * CFrame.Angles(0, math.rad(yaw), 0) * cutRot
 						cutter:PivotTo(placed)
 						ctx.state.stampRoot = cutter.Root.CFrame -- 찍은 자리·각도 (뽑기 점선, 15번)
 						phase = "press"

@@ -17,6 +17,9 @@ function Station.new(m)
 	m = m or workspace:WaitForChild("DalgonaWorkstation")
 	local self = setmetatable({}, Station)
 	self.model = m
+	-- 작업대 방향 (2026-11-21: 가게마다 작업대를 180° 돌려 놓을 수 있음). 작업대 기준 오프셋은 S:dir로 세계 방향으로
+	local pv = m:GetPivot()
+	self.rot = pv - pv.Position
 	for _, name in ipairs(MOVABLE) do
 		self[name] = m:WaitForChild(name)
 	end
@@ -116,6 +119,11 @@ function Station.new(m)
 	end
 	self.fx = fx
 	return self
+end
+
+-- 작업대 기준 방향(x 오른쪽, z 플레이어 쪽) → 세계 방향
+function Station:dir(x, y, z)
+	return self.rot:VectorToWorldSpace(Vector3.new(x, y, z))
 end
 
 -- 국자 받침 높이 h (철망 위 거리) → 국자 피벗
@@ -256,7 +264,7 @@ function Station:ladleHandleWorld()
 		return (mesh.CFrame * CFrame.new(HAND_GRIP)).Position
 	end
 	local g = self.Ladle:FindFirstChild("Grip") or self.Ladle:FindFirstChild("Handle")
-	return g and g.Position or (self.Ladle:GetPivot().Position - Vector3.new(1.6, 0, 0))
+	return g and g.Position or (self.Ladle:GetPivot().Position - self:dir(1.6, 0, 0))
 end
 
 function Station:ladleGripLocal()
@@ -267,7 +275,7 @@ function Station:ladleGripLocal()
 		world = (mesh.CFrame * CFrame.new(HAND_GRIP)).Position
 	else
 		local g = self.Ladle:FindFirstChild("Grip") or self.Ladle:FindFirstChild("Handle")
-		world = g and g.Position or (pv.Position - Vector3.new(1.6, 0, 0))
+		world = g and g.Position or (pv.Position - self:dir(1.6, 0, 0))
 	end
 	local rot = self.rest.Ladle - self.rest.Ladle.Position
 	return rot:VectorToObjectSpace(world - pv.Position)
