@@ -782,6 +782,37 @@ function Ui:_buildResult()
 		Parent = pop,
 	})
 	corner(10).Parent = self.resGrade
+	-- 뽑기 배지 (15번): 왼쪽 위에 걸침 "완벽 뽑기!" / "뽑기 성공", 그 아래 "도감 등록!" (도감은 19번)
+	self.resPp = label({
+		Text = "",
+		TextSize = 20,
+		TextColor3 = Color3.new(1, 1, 1),
+		BackgroundTransparency = 0,
+		BackgroundColor3 = Color3.fromRGB(226, 92, 120),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 18, 0, 0),
+		Size = UDim2.fromOffset(136, 38),
+		Rotation = -7,
+		Visible = false,
+		ZIndex = 12,
+		Parent = pop,
+	})
+	corner(10).Parent = self.resPp
+	self.resDex = label({
+		Text = "도감 등록!",
+		TextSize = 16,
+		TextColor3 = INK,
+		BackgroundTransparency = 0,
+		BackgroundColor3 = GOLD,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 26, 0, 36),
+		Size = UDim2.fromOffset(104, 28),
+		Rotation = -7,
+		Visible = false,
+		ZIndex = 12,
+		Parent = pop,
+	})
+	corner(9).Parent = self.resDex
 	self.resLine = label({ Text = "", TextSize = 17, Font = FONT_REG, Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 0, 22), ZIndex = 11, Parent = pop })
 	self.resPrice = label({ Text = "", TextSize = 15, Font = FONT_REG, TextColor3 = Color3.fromRGB(120, 100, 70), Position = UDim2.fromOffset(0, 80), Size = UDim2.new(1, 0, 0, 20), ZIndex = 11, Parent = pop })
 	self.resStars = {}
@@ -1199,6 +1230,27 @@ function Ui:showResult(res, shape, handlers)
 	self.resGrade.BackgroundColor3 = GradeColor[res.grade] or INK
 	self.resLine.Text = string.format("%s 달고나 · 완성도 %d%%", shape.name, res.Q)
 	self.resPrice.Text = string.format("한 개 %d코인부터 · Perfect면 %d코인", math.floor(shape.price * 0.2 + 0.5), math.floor(shape.price * 1.7 + 0.5))
+	-- 뽑기 결과 (15번)
+	local pp = res.ppopgi
+	self.resPp.Visible = false
+	self.resDex.Visible = false
+	if pp then
+		local priceTxt = pp.price and string.format(" → %d코인", pp.price) or ""
+		if pp.broken then
+			self.resPrice.Text = "뽑다가 쪼개졌어요 · Poor 가격" .. priceTxt
+			self.resPp.Text = "쪼개짐"
+			self.resPp.BackgroundColor3 = Color3.fromRGB(150, 120, 110)
+			self.resPp.Visible = true
+		elseif pp.done then
+			self.resPrice.Text = string.format("뽑기 정확도 %d%% · 금 %d개 · 판매가 ×%.2f%s", math.floor((pp.acc or 0) * 100 + 0.5), pp.cracks or 0, pp.bonus or 1, priceTxt)
+			self.resPp.Text = pp.perfect and "완벽 뽑기!" or "뽑기 성공"
+			self.resPp.BackgroundColor3 = pp.perfect and Color3.fromRGB(226, 92, 120) or Color3.fromRGB(110, 170, 120)
+			self.resPp.Visible = true
+			self.resDex.Visible = pp.dexNew == true
+		else
+			self.resPrice.Text = string.format("뽑기 %d%%에서 그만둠 · 보너스 없음", math.floor((pp.coverage or 0) / 0.96 * 100))
+		end
+	end
 	self.resBreak.Text = string.format("온도 %d · 소다 %d · 누르기 %d · 모양 %d%s", res.T, res.M, res.P, res.S, res.verified and "  (서버 판정)" or "")
 	for _, c in ipairs(self.resRows:GetChildren()) do
 		if c:IsA("GuiObject") then

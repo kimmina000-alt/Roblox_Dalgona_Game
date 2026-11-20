@@ -10,6 +10,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
+local PpopgiRules = require(Shared:WaitForChild("PpopgiRules"))
 local WorkstationBuilder = require(script.Parent:WaitForChild("WorkstationBuilder"))
 
 local COAL_PER_MAKE = 0.1 -- 연탄 1장으로 10번 만듦
@@ -23,6 +24,8 @@ local STOVE_BAND = 0.08 -- GrowthConfig.StoveBandPerLevel 과 같은 값 (서버
 local PRESSER_BAND = 0.08
 
 local sessions = {} -- [player] = { id, t0, lastStart }
+local ppopgiOpen = {} -- [player] = { t, shape } 제출이 끝나고 뽑기를 할 수 있는 달고나 (15번, 2026-11-20)
+local PPOPGI_WINDOW = 150 -- 제출 뒤 이 안에 뽑기 결과를 보내야 함 (결과 연출 + 뽑기 최대 75초)
 
 local function num(v, lo, hi, default)
 	if type(v) ~= "number" or v ~= v then
@@ -215,15 +218,63 @@ function ProductionService.submit(player, sessionId, raw)
 			warn("[Production] onResult failed", reward)
 		end
 	end
+	-- 뽑기는 모양을 찍었고 타거나 망가지지 않았을 때만 (틀 자국을 따라 긁음)
+	local stamp = records.stamp
+	if not result.burnt and not result.misshaped and stamp and (stamp.skipped or 0) < 1 then
+		ppopgiOpen[player] = { t = now, shape = s.shape }
+		result.ppopgiOk = true
+	else
+		ppopgiOpen[player] = nil
+	end
 	print(string.format("[Production] %s %s Q=%d %s price=%d (T%d M%d P%d S%d)", player.Name, s.shape.id, result.Q, result.grade, result.price, result.T, result.M, result.P, result.S))
 	return result
+end
+
+-- 뽑기 결과 (15번): raw = { samples = { t, x, y, down, ... }, quit = bool }. 서버가 표본으로 다시 계산
+function ProductionService.submitPpopgi(player, raw)
+	local open = ppopgiOpen[player]
+	if not open then
+		return { ok = false, reason = "no ppopgi" }
+	end
+	ppopgiOpen[player] = nil -- 한 번만
+	local now = workspace:GetServerTimeNow()
+	local since = now - open.t
+	if since > PPOPGI_WINDOW or type(raw) ~= "table" then
+		return { ok = false, reason = "time" }
+	end
+	local path = PpopgiRules.path(open.shape.id)
+	if not path then
+		return { ok = false, reason = "no path" }
+	end
+	-- 표본 시각은 뽑기 시작부터 잰 초. 제출 뒤 지난 시간보다 길 수 없음
+	local res, why = PpopgiRules.evaluate(path, raw.samples, math.min(since + 1, PpopgiRules.MAX_TIME + 1))
+	if not res then
+		warn("[Production] ppopgi rejected", player.Name, why)
+		return { ok = false, reason = why }
+	end
+	res.ok = true
+	if ProductionService.hooks.onPpopgi then
+		local ok, out = pcall(ProductionService.hooks.onPpopgi, player, open.shape, res)
+		if ok and type(out) == "table" then
+			res.price = out.price
+			res.dexNew = out.dexNew
+		elseif not ok then
+			warn("[Production] onPpopgi failed", out)
+		end
+	end
+	print(string.format("[Production] %s ppopgi %s cov=%.2f cracks=%d acc=%.2f broken=%s bonus=%.2f price=%s t=%.1f", player.Name, open.shape.id, res.coverage, res.cracks, res.acc, tostring(res.broken), res.bonus, tostring(res.price), res.time))
+	return res
 end
 
 function ProductionService.init(remotes)
 	remotes.StartProduction.OnServerInvoke = ProductionService.start
 	remotes.SubmitProduction.OnServerInvoke = ProductionService.submit
+	if remotes.SubmitPpopgi then
+		remotes.SubmitPpopgi.OnServerInvoke = ProductionService.submitPpopgi
+	end
 	game:GetService("Players").PlayerRemoving:Connect(function(p)
 		sessions[p] = nil
+		ppopgiOpen[p] = nil
 	end)
 end
 

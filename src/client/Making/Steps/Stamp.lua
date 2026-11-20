@@ -194,6 +194,7 @@ function Stamp.run(ctx)
 						rec.angle = yaw
 						placed = CFrame.new(w.X, top + HALF_WIRE - 0.02, w.Z) * CFrame.Angles(0, math.rad(yaw), 0)
 						cutter:PivotTo(placed)
+						ctx.state.stampRoot = cutter.Root.CFrame -- 찍은 자리·각도 (뽑기 점선, 15번)
 						phase = "press"
 						ui:setSkip(false) -- 틀을 올렸으면 이제 찍기만 남음
 						S:presserSeeThrough(true)

@@ -18,7 +18,7 @@ if not remotes then
 	remotes.Name = "Remotes"
 	remotes.Parent = ReplicatedStorage
 end
-for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", "GetPlayerState", "PackDalgona", "GrowthAction" }) do
+for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", "GetPlayerState", "PackDalgona", "GrowthAction", "SubmitPpopgi" }) do
 	if not remotes:FindFirstChild(name) then
 		local rf = Instance.new("RemoteFunction")
 		rf.Name = name
@@ -61,8 +61,10 @@ ProductionService.hooks.mods = GrowthService.mods
 ProductionService.hooks.canStart = EconomyService.canMake
 ProductionService.hooks.onStart = EconomyService.onStart -- 나무젓가락 1쌍
 ProductionService.hooks.onResult = EconomyService.onMade
+ProductionService.hooks.onPpopgi = EconomyService.onPpopgi -- 뽑기 보너스·쪼개짐 (15번)
 
 ProductionService.init({
 	StartProduction = remotes.StartProduction,
 	SubmitProduction = remotes.SubmitProduction,
+	SubmitPpopgi = remotes.SubmitPpopgi,
 })
