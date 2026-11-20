@@ -130,11 +130,35 @@ function Stamp.run(ctx)
 	local fingerV = 0
 
 	ui:say(shapeName .. " 틀을 끌어 원판 가운데에 놓아요", "가운데에, 반듯하게")
+	-- 안 찍고 끝낼 수도 있음 (2026-11-20): 모양 점수 0점
+	local skip = ui.setSkip and ui:setSkip(true, "모양 안 찍고 끝내기")
 
 	while true do
 		local dt = ctx.frame()
 		if not dt then
 			return nil
+		end
+		if phase == "place" and skip and skip.clicked and not grabbing then
+			ui:setSkip(false)
+			showPreview(false)
+			for _, seg in ipairs(preview) do
+				seg:Destroy()
+			end
+			cutter:PivotTo(S.rest.Cutter)
+			rec.skipped = 1
+			rec.dist, rec.angle, rec.hold = 10, 0, 0
+			ctx.live("stamp", 0)
+			ui:say("모양을 안 찍었어요", "모양 점수는 0점이에요")
+			local t = 0
+			while t < 0.8 do
+				local dt2 = ctx.frame()
+				if not dt2 then
+					return nil
+				end
+				t += dt2
+			end
+			rec.t1 = ctx.now()
+			return rec
 		end
 		if phase == "place" then
 			if P.down and not grabbing and P.presses ~= seenPress then
@@ -170,6 +194,7 @@ function Stamp.run(ctx)
 						placed = CFrame.new(w.X, top + HALF_WIRE - 0.02, w.Z) * CFrame.Angles(0, math.rad(yaw), 0)
 						cutter:PivotTo(placed)
 						phase = "press"
+						ui:setSkip(false) -- 틀을 올렸으면 이제 찍기만 남음
 						S:presserSeeThrough(true)
 						Sfx.play("metalClink", 0.25, 1.6) -- 틀 내려놓는 "땡"
 						local pv = presser:GetPivot()

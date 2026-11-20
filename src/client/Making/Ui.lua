@@ -786,6 +786,9 @@ function Ui:show(on)
 		self.result.Visible = false
 		self.gauge.Visible = false
 		self.pgauge.Visible = false
+		if self.skipBtn then
+			self.skipBtn.Visible = false
+		end
 		self.meter.Visible = false
 	end
 end
@@ -1252,6 +1255,44 @@ function Ui:ask(title, sub, first, second)
 	function state.close()
 		self.askPop.Visible = false
 	end
+	return state
+end
+
+-- 모양 찍기를 건너뛰는 버튼 (2026-11-20 "모양틀 안 찍을 수도 있게, 깜빡하고 못 찍는 상황도 있음. 그럼 감점").
+-- 화면 오른쪽 아래. 보이게 하면 상태 { clicked } 를 돌려줌
+function Ui:setSkip(visible, text)
+	if not self.skipBtn then
+		self.skipBtn = new("TextButton", {
+			Name = "SkipStamp",
+			Text = "",
+			TextSize = 18,
+			Font = FONT,
+			TextColor3 = INK,
+			BackgroundColor3 = PAPER,
+			BackgroundTransparency = 0.05,
+			AnchorPoint = Vector2.new(1, 1),
+			Position = UDim2.new(1, -20, 1, -20),
+			Size = UDim2.fromOffset(0, 46),
+			AutomaticSize = Enum.AutomaticSize.X,
+			Visible = false,
+			ZIndex = 8,
+			Parent = self.root,
+		}, { corner(23), new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }), new("UIStroke", { Thickness = 2, Color = Color3.fromRGB(200, 190, 175), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }) })
+	end
+	if self.skipConn then
+		self.skipConn:Disconnect()
+		self.skipConn = nil
+	end
+	self.skipBtn.Visible = visible
+	if not visible then
+		return nil
+	end
+	self.skipBtn.Text = text or "건너뛰기"
+	local state = { clicked = false }
+	self.skipConn = self.skipBtn.Activated:Connect(function()
+		state.clicked = true
+		Sfx.play("pop", 0.5, 0.9)
+	end)
 	return state
 end
 
