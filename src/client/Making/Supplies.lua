@@ -1,7 +1,7 @@
 -- 재료가 없으면 작업대 통이 빈 통으로 보이게 (2026-11-21 사용자: "설탕 없으면 설탕통 빈통으로. 다른 재료들도")
 -- 서버(EconomyService.push)가 플레이어 속성 Ing_<재료 id>에 남은 양을 넣어 줌. 0이면 내 화면에서만 내용물을 숨김
 -- (LocalTransparencyModifier: 다른 플레이어 화면·서버 부품 값은 그대로).
--- 작업대: 스폰 앞 공용 DalgonaWorkstation + 가게 부지 안 내 작업대(속성 OwnerUserId, 17b에서 생김)
+-- 작업대: 가게 부지 안 내 작업대 (속성 OwnerUserId, 17b)
 
 local Players = game:GetService("Players")
 
@@ -33,21 +33,11 @@ local CONTENTS = {
 	},
 }
 
+local Workstations = require(script.Parent:WaitForChild("Workstations"))
+
 local function workstations()
-	local list = {}
-	local shared = workspace:FindFirstChild("DalgonaWorkstation")
-	if shared then
-		table.insert(list, shared)
-	end
-	local plots = workspace:FindFirstChild("ShopPlots")
-	if plots then
-		for _, d in ipairs(plots:GetDescendants()) do
-			if d.Name == "Workstation" and d:IsA("Model") and d:GetAttribute("OwnerUserId") == player.UserId then
-				table.insert(list, d)
-			end
-		end
-	end
-	return list
+	local mine = Workstations.mine()
+	return mine and { mine } or {}
 end
 
 -- 숨길 때 표시(SupplyHidden)를 남기고, 되돌릴 때는 내가 숨긴 것만 되돌림

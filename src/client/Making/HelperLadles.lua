@@ -5,6 +5,7 @@
 -- 꾸밈 움직임이라 각 플레이어 화면에서만 그림 (서버 부담 없음)
 
 local RunService = game:GetService("RunService")
+local Workstations = require(script.Parent:WaitForChild("Workstations"))
 
 local Helper = {}
 
@@ -81,14 +82,13 @@ function Helper.start()
 	end
 	started = true
 	RunService.Heartbeat:Connect(function()
-		local ws = workspace:FindFirstChild("DalgonaWorkstation")
-		if not ws then
-			return
-		end
+		-- 가게마다 작업대가 있음 (17b): 모든 작업대의 알바생 국자를 움직임 (다른 가게 것도 보임)
 		local now = os.clock()
-		for _, m in ipairs(ws:GetChildren()) do
-			if m.Name:sub(1, 11) == "HelperLadle" then
-				stepOne(m, now)
+		for _, ws in ipairs(Workstations.all()) do
+			for _, m in ipairs(ws:GetChildren()) do
+				if m.Name:sub(1, 11) == "HelperLadle" then
+					stepOne(m, now)
+				end
 			end
 		end
 	end)

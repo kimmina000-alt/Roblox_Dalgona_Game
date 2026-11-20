@@ -33,12 +33,13 @@ for _, step in ipairs(Config.Steps) do
 	STEP_MODULES[step.key] = require(StepsFolder:WaitForChild(name))
 end
 
-local station = Station.new()
-require(Making:WaitForChild("Toon")).apply(station.model) -- 도구 만화 외곽선
+local Workstations = require(Making:WaitForChild("Workstations"))
+local Toon = require(Making:WaitForChild("Toon"))
+-- 작업대 = 내 가게 작업대 (17b, 2026-11-21). 가게를 받으면 생기고, 다시 받으면 바뀜 → 아래 watchStation이 연결
+local station = nil
 require(Making:WaitForChild("HelperLadles")).start() -- 화로 위 알바생 국자 (LadleCount 2~4)
 require(Making:WaitForChild("Supplies")).start() -- 재료가 없으면 작업대 통이 빈 통으로 (2026-11-21)
 local ui = Ui.new(player, Config.Steps)
-CameraRig.init(station.model:GetPivot())
 
 local running = false
 local roundsPlayed = 0 -- 이번 접속에서 시작한 판 수 (처음 SUB_ROUNDS판은 설명 글씨를 늘 보여 줌)
@@ -106,9 +107,11 @@ local function finish()
 	CameraRig.release()
 	setControls(true)
 	setCharacterHidden(false)
-	station:reset()
-	station:removeHand()
-	station.Prompt.Enabled = true
+	if station then
+		station:reset()
+		station:removeHand()
+		station.Prompt.Enabled = true
+	end
 end
 
 local startMaking
@@ -406,6 +409,9 @@ function startMaking(restart)
 	if running and not restart then
 		return
 	end
+	if not station then
+		return -- 가게(작업대)를 아직 못 받음
+	end
 	if current then
 		current.aborted = true
 		current = nil
@@ -428,8 +434,50 @@ ui.onExit = function()
 	finish()
 end
 
-station.Prompt.Triggered:Connect(function()
-	task.spawn(startMaking, false)
+-- 내 가게 작업대 연결 (17b): 작업대가 생기거나 바뀌면 Station을 새로 만듦 (만드는 중에는 안 바꿈).
+-- 다른 가게 작업대의 E는 내 화면에서 끔. 가게를 아직 못 받았으면 한 번 안내
+local function bindStation(m)
+	station = Station.new(m)
+	Toon.apply(m) -- 도구 만화 외곽선
+	CameraRig.init(m:GetPivot(), m)
+	station.Prompt.Triggered:Connect(function()
+		task.spawn(startMaking, false)
+	end)
+end
+task.spawn(function()
+	local told = false
+	local since = os.clock()
+	while true do
+		local mine = Workstations.mine()
+		if not running then
+			if mine and Workstations.ready(mine) and (not station or station.model ~= mine) then
+				local ok, err = pcall(bindStation, mine)
+				if not ok then
+					warn("[Making] workstation bind failed:", err)
+					station = nil
+				end
+			elseif station and not station.model.Parent then
+				station = nil -- 가게를 비움
+			end
+		end
+		for _, ws in ipairs(Workstations.all()) do
+			if ws ~= mine then
+				local top = ws:FindFirstChild("TableTop")
+				local att = top and top:FindFirstChild("PromptAtt")
+				local prompt = att and att:FindFirstChild("MakePrompt")
+				if prompt and prompt.Enabled then
+					prompt.Enabled = false
+				end
+			end
+		end
+		if not mine and not told and os.clock() - since > 8 then
+			told = true
+			pcall(function()
+				game:GetService("StarterGui"):SetCore("SendNotification", { Title = "달고나 골목", Text = "가게를 받으면 내 작업대에서 만들 수 있어요", Duration = 6 })
+			end)
+		end
+		task.wait(1)
+	end
 end)
 
 -- 테스트용: 다른 스크립트(또는 Studio 명령)에서 시작할 수 있게

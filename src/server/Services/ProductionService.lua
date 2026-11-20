@@ -27,6 +27,14 @@ local sessions = {} -- [player] = { id, t0, lastStart }
 local ppopgiOpen = {} -- [player] = { t, shape } 제출이 끝나고 뽑기를 할 수 있는 달고나 (15번, 2026-11-20)
 local PPOPGI_WINDOW = 150 -- 제출 뒤 이 안에 뽑기 결과를 보내야 함 (결과 연출 + 뽑기 최대 75초)
 
+-- 이 플레이어가 쓰는 작업대 (17b: 내 가게 작업대, hooks.workstation = PlotService.workstation)
+local function workstationOf(player)
+	if ProductionService.hooks.workstation then
+		return ProductionService.hooks.workstation(player)
+	end
+	return workspace:FindFirstChild("DalgonaWorkstation")
+end
+
 local function num(v, lo, hi, default)
 	if type(v) ~= "number" or v ~= v then
 		return default
@@ -165,8 +173,12 @@ function ProductionService.start(player, shapeId)
 	if old and now - old.t0 < 1 then
 		return nil -- 1초에 한 번
 	end
+	-- 내 가게 작업대가 있어야 만듦 (공용 작업대는 없앰, U8)
+	local ws = workstationOf(player)
+	if not ws then
+		return nil, "가게를 받으면 내 작업대에서 만들 수 있어요"
+	end
 	-- 연탄이 다 탔으면 새 연탄으로 갈아 넣음
-	local ws = workspace:FindFirstChild("DalgonaWorkstation")
 	if ws and (ws:GetAttribute("CoalLeft") or 1) <= 0.001 then
 		WorkstationBuilder.setCoal(ws, 1)
 	end
@@ -205,8 +217,8 @@ function ProductionService.submit(player, sessionId, raw)
 	local result = Scoring.compute(records, s.shape)
 	result.ok = true
 	result.shapeId = s.shape.id
-	-- 쓸수록 연탄이 낮아지고 잿빛이 됨
-	local ws = workspace:FindFirstChild("DalgonaWorkstation")
+	-- 쓸수록 연탄이 낮아지고 잿빛이 됨 (작업대마다)
+	local ws = workstationOf(player)
 	if ws then
 		WorkstationBuilder.setCoal(ws, (ws:GetAttribute("CoalLeft") or 1) - COAL_PER_MAKE)
 	end
