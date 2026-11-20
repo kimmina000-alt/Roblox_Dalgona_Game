@@ -2,6 +2,7 @@
 -- 서버(최종 점수)와 클라이언트(미리 보기, QUALITY 링)가 같은 함수를 쓴다.
 
 local Config = require(script.Parent:WaitForChild("DalgonaConfig"))
+local Growth = require(script.Parent:WaitForChild("GrowthConfig")) -- 민짜 달고나 기본값 (D20)
 
 local Scoring = {}
 
@@ -158,6 +159,9 @@ function Scoring.compute(records, shape)
 	for k, v in pairs(s) do
 		s[k] = round(v)
 	end
+	-- 민짜 달고나 (D20): 틀을 안 찍었으면 고른 도안 대신 기본값
+	local plain = records.stamp ~= nil and (records.stamp.skipped or 0) >= 0.5
+	local basePrice = plain and Growth.PlainBasePrice or (shape or Config.Shape).price
 	return {
 		Q = q,
 		T = round(T),
@@ -172,7 +176,8 @@ function Scoring.compute(records, shape)
 		misshaped = misshaped,
 		cracked = (records.press ~= nil and records.press.cracked == true)
 			or (records.stamp ~= nil and records.stamp.hold > Config.Stamp.crackHold),
-		price = round((shape or Config.Shape).price * g.mult),
+		plain = plain,
+		price = round(basePrice * g.mult),
 	}
 end
 

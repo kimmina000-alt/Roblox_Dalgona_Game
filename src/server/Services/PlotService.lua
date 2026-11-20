@@ -154,6 +154,68 @@ local function buildPlot(index, parent)
 	label.Parent = gui
 	gui.Parent = board
 
+	-- 가게 건물 (D21): 작업대 뒤, 앞면 셔터. 노점일 때는 셔터를 내리고 "임대 문의" 종이
+	local B = P.building
+	local bm = Instance.new("Model")
+	bm.Name = "ShopBuilding"
+	bm.Parent = m
+	local wallColor = Color3.fromRGB(214, 178, 150)
+	local depth = B.back - B.front
+	local midZ = (B.front + B.back) / 2
+	local base = P.size.Y
+	part(bm, "WallL", Vector3.new(0.6, B.height, depth), cf * CFrame.new(-B.halfWidth, base + B.height / 2, midZ), wallColor, Enum.Material.Brick)
+	part(bm, "WallR", Vector3.new(0.6, B.height, depth), cf * CFrame.new(B.halfWidth, base + B.height / 2, midZ), wallColor, Enum.Material.Brick)
+	-- 뒷벽은 공장 문 자리를 비워 둠
+	local doorHalf = 3.7
+	local sideW = B.halfWidth - doorHalf
+	part(bm, "WallBack", Vector3.new(sideW, B.height, 0.6), cf * CFrame.new(-(doorHalf + sideW / 2), base + B.height / 2, B.back), wallColor, Enum.Material.Brick)
+	part(bm, "WallBack", Vector3.new(sideW, B.height, 0.6), cf * CFrame.new(doorHalf + sideW / 2, base + B.height / 2, B.back), wallColor, Enum.Material.Brick)
+	part(bm, "WallBack", Vector3.new(doorHalf * 2, B.height - 9.6, 0.6), cf * CFrame.new(0, base + 9.6 + (B.height - 9.6) / 2, B.back), wallColor, Enum.Material.Brick)
+	part(bm, "Roof", Vector3.new(B.halfWidth * 2 + 1.6, 0.6, depth + 2.4), cf * CFrame.new(0, base + B.height + 0.3, midZ - 0.6), Color3.fromRGB(150, 90, 80), Enum.Material.SmoothPlastic)
+	local header = part(bm, "Header", Vector3.new(B.halfWidth * 2, 1.4, 0.6), cf * CFrame.new(0, base + B.height - 0.7, B.front), Color3.fromRGB(120, 76, 50), Enum.Material.Wood)
+	local hgui = Instance.new("SurfaceGui")
+	hgui.Face = Enum.NormalId.Front
+	hgui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	hgui.PixelsPerStud = 30
+	local htext = Instance.new("TextLabel")
+	htext.Name = "Text"
+	htext.Size = UDim2.fromScale(1, 1)
+	htext.BackgroundTransparency = 1
+	htext.Font = Enum.Font.GothamBlack
+	htext.TextScaled = true
+	htext.TextColor3 = Color3.fromRGB(255, 240, 210)
+	htext.Text = "달고나"
+	htext.Parent = hgui
+	hgui.Parent = header
+	-- 셔터 (내림: 입구를 덮음 / 올림: 윗부분에 말려 있음)
+	local openH = B.height - 1.4
+	local shutter = part(bm, "Shutter", Vector3.new(B.halfWidth * 2 - 0.8, openH, 0.25), cf * CFrame.new(0, base + openH / 2, B.front - 0.1), Color3.fromRGB(190, 196, 204), Enum.Material.DiamondPlate)
+	shutter:SetAttribute("DownCF", shutter.CFrame)
+	shutter:SetAttribute("UpCF", cf * CFrame.new(0, base + openH - 0.6, B.front - 0.1))
+	-- "임대 문의" 종이
+	local paper = part(bm, "RentPaper", Vector3.new(3.2, 2.2, 0.05), cf * CFrame.new(2.5, base + 4.2, B.front - 0.3), Color3.fromRGB(252, 250, 240), Enum.Material.SmoothPlastic)
+	local pgui = Instance.new("SurfaceGui")
+	pgui.Face = Enum.NormalId.Front
+	pgui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	pgui.PixelsPerStud = 60
+	local ptext = Instance.new("TextLabel")
+	ptext.Name = "Text"
+	ptext.Size = UDim2.fromScale(1, 1)
+	ptext.BackgroundTransparency = 1
+	ptext.Font = Enum.Font.GothamBlack
+	ptext.TextScaled = true
+	ptext.TextColor3 = Color3.fromRGB(200, 40, 40)
+	ptext.Text = "임대 문의"
+	ptext.Parent = pgui
+	pgui.Parent = paper
+
+	-- 노점 파라솔 (작업대 위)
+	local PS = P.parasol
+	local pcf = cf * CFrame.new(PS.pos)
+	part(m, "ParasolPole", Vector3.new(0.3, PS.height, 0.3), pcf * CFrame.new(0, base + PS.height / 2, 0), Color3.fromRGB(240, 240, 240), Enum.Material.Metal)
+	local canopy = part(m, "ParasolCanopy", Vector3.new(0.5, PS.radius * 2, PS.radius * 2), pcf * CFrame.new(0, base + PS.height, -PS.radius * 0.55) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(255, 120, 120), Enum.Material.Fabric)
+	canopy.Shape = Enum.PartType.Cylinder
+
 	-- 들어오는 자리 (스폰을 부지로 옮길 때 씀)
 	part(m, "Entry", Vector3.new(4, 0.2, 4), cf * CFrame.new(0, P.size.Y + 0.1, -12), FLOOR, Enum.Material.SmoothPlastic, {
 		Transparency = 1,
@@ -254,6 +316,45 @@ local function clearWorkstation(i)
 	end
 end
 
+-- 가게 모습 (D21): state = "stall" | "rented" | "owned", closed = 월세 밀림
+function PlotService.setShopState(i, state, closed, ownerName)
+	local plot = plots[i]
+	if not plot then
+		return
+	end
+	local bm = plot.model:FindFirstChild("ShopBuilding")
+	if not bm then
+		return
+	end
+	local open = state == "owned" or (state == "rented" and not closed)
+	local shutter = bm:FindFirstChild("Shutter")
+	if shutter then
+		local target = shutter:GetAttribute(open and "UpCF" or "DownCF")
+		if target then
+			shutter.CFrame = target
+		end
+		shutter.Size = Vector3.new(shutter.Size.X, open and 1.2 or (P.building.height - 1.4), shutter.Size.Z)
+	end
+	local paper = bm:FindFirstChild("RentPaper")
+	if paper then
+		local text = state == "stall" and "임대 문의" or (closed and "월세 밀림" or nil)
+		paper.Transparency = text and 0 or 1
+		paper.SurfaceGui.Enabled = text ~= nil
+		if text then
+			paper.SurfaceGui.Text.Text = text
+		end
+	end
+	local header = bm:FindFirstChild("Header")
+	if header then
+		header.SurfaceGui.Text.Text = state == "owned" and "내 가게" or (state == "rented" and "달고나 가게" or "임대")
+	end
+	plot.model:SetAttribute("ShopState", state)
+	plot.model:SetAttribute("ShopClosed", closed == true)
+	if ownerName then
+		plot.signLabel.Text = ownerName .. (state == "stall" and "의 달고나 노점" or "의 달고나 가게")
+	end
+end
+
 local function setOwner(i, player)
 	local plot = plots[i]
 	plot.owner = player
@@ -302,6 +403,7 @@ function PlotService.release(player)
 	byPlayer[player] = nil
 	setOwner(i, nil)
 	clearWorkstation(i)
+	PlotService.setShopState(i, "stall", false, nil)
 	print(string.format("[Plot] %s released Plot%d", player.Name, i))
 end
 

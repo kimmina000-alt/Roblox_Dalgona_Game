@@ -163,7 +163,46 @@ local function cheapestHelperShape(d)
 	return ShapeCatalog.list[1].id
 end
 
+local function stallLockReason(d)
+	if d.shop.state == "stall" then
+		return string.format("가게를 임대해야 해요 (Lv%d, 보증금 %d)", G.Shop.rentLevel, G.Shop.deposit)
+	end
+	return "월세를 내야 가게가 열려요"
+end
+
 local function actionBuy(player, d, kind)
+	-- 노점이거나 월세가 밀려 문이 닫히면 국자·알바생·작업대 업그레이드는 안 됨 (D21)
+	if G.Shop.lockedWhenStall[kind] and not G.shopOpen(d) then
+		return false, stallLockReason(d)
+	end
+	if kind == "rent" then
+		if d.shop.state ~= "stall" then
+			return false, "이미 가게가 있어요"
+		end
+		if d.level < G.Shop.rentLevel then
+			return false, string.format("Lv%d부터 임대할 수 있어요", G.Shop.rentLevel)
+		end
+		if d.coins < G.Shop.deposit then
+			return false, string.format("보증금 %d코인이 필요해요", G.Shop.deposit)
+		end
+		d.coins -= G.Shop.deposit
+		d.shop = { state = "rented", rentTimer = 0, closed = false }
+		return true, string.format("가게를 임대했어요! 월세는 접속 %d분마다 %d코인", G.Shop.rentEvery // 60, G.Shop.rentAmount)
+	elseif kind == "buyShop" then
+		if d.shop.state ~= "rented" then
+			return false, d.shop.state == "owned" and "이미 내 가게예요" or "먼저 가게를 임대해요"
+		end
+		if d.level < G.Shop.buyLevel then
+			return false, string.format("Lv%d부터 살 수 있어요", G.Shop.buyLevel)
+		end
+		local price = G.Shop.buyPrice - G.Shop.deposit
+		if d.coins < price then
+			return false, string.format("%d코인이 필요해요 (보증금 빼고)", price)
+		end
+		d.coins -= price
+		d.shop = { state = "owned", rentTimer = 0, closed = false }
+		return true, "가게를 샀어요! 이제 월세가 없어요"
+	end
 	local up = G.Upgrades[kind]
 	if up then
 		if d.level < G.UpgradeUnlockLevel then
@@ -357,7 +396,9 @@ local function stepHelper(player, d, i, h, st, dt)
 	local need = G.recipe(shape.grade)
 	need.chopsticks = G.ChopsticksPerHelperRound
 	local why = nil
-	if #d.stock >= G.stockMax(d) then
+	if not G.shopOpen(d) then
+		why = "가게 문 닫힘" -- 월세 밀림 (D21)
+	elseif #d.stock >= G.stockMax(d) then
 		why = "보관함 가득"
 	elseif d.coins < wage then
 		why = "급여 부족"
@@ -467,7 +508,12 @@ local function growthSnapshot(player, d, snap)
 	for id, c in pairs(d.collection) do
 		collection[id] = { best = c.best, n = c.n, pp = c.pp }
 	end
+	local rentLeft = nil
+	if d.shop.state == "rented" and not d.shop.closed then
+		rentLeft = math.max(0, math.floor(G.Shop.rentEvery - (d.shop.rentTimer or 0)))
+	end
 	snap.growth = {
+		shop = { state = d.shop.state, closed = d.shop.closed == true, rentLeft = rentLeft },
 		upgrades = ups,
 		ladles = d.ladles,
 		helpers = helpers,
@@ -492,10 +538,15 @@ local function onHandMade(player, shape, result)
 	local newEntry, newShapes = nil, {}
 	local finished, ups = {}, {}
 	Data.update(player, function(d)
-		-- 도감 (손으로 만든 것만)
+		-- 도감 (손으로 만든 것만, 민짜 달고나는 안 셈 — D20)
 		local c = d.collection[shape.id]
 		local rank = G.GradeRank[result.grade] or 0
-		if not c then
+		if result.plain then
+			c = false
+		end
+		if c == false then
+			-- 민짜: 도감 건너뜀
+		elseif not c then
 			d.collection[shape.id] = { best = result.grade, n = 1 }
 			newEntry = "도감 등록: " .. shape.name .. " (" .. result.grade .. ")"
 		else
@@ -603,6 +654,11 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 			end
 		end
 		player:SetAttribute("UnlockedShapes", table.concat(d.unlockedShapes, ","))
+		-- 가게 건물 모습 (셔터·임대 문의·간판, D21)
+		local _, plotIndex = Plots.get(player)
+		if plotIndex and Plots.setShopState then
+			Plots.setShopState(plotIndex, d.shop.state, d.shop.closed, player.DisplayName)
+		end
 		-- 가게 작업대 화로 위 국자 수 = 산 국자 수 (Making/HelperLadles가 그림)
 		local ws = Plots.workstation and Plots.workstation(player)
 		if ws and ws:GetAttribute("LadleCount") ~= d.ladles then
@@ -616,11 +672,11 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 		clearHelpers(p)
 	end)
 
-	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP) (실서버에서는 안 만듦)
+	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP, 월세 타이머 초) (실서버에서는 안 만듦)
 	if game:GetService("RunService"):IsStudio() then
 		local dev = Instance.new("BindableFunction")
 		dev.Name = "DevGrant"
-		dev.OnInvoke = function(userId, coins, exp)
+		dev.OnInvoke = function(userId, coins, exp, rentTimer)
 			local p = Players:GetPlayerByUserId(userId)
 			if not p then
 				return "no player"
@@ -629,6 +685,9 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 			Data.update(p, function(d)
 				d.coins += coins or 0
 				ups = Economy.addExp(d, exp or 0)
+				if rentTimer then
+					d.shop.rentTimer = rentTimer
+				end
 			end)
 			Economy.announceLevels(p, ups)
 			local d = Data.get(p)
@@ -636,6 +695,51 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 		end
 		dev.Parent = game:GetService("ServerStorage")
 	end
+
+	-- 월세 (D21): 접속 중 rentEvery초마다 rentAmount. 못 내면 가게 문만 닫히고, 코인이 생기면 바로 내고 다시 열림 (빚 없음)
+	task.spawn(function()
+		while true do
+			local dt = task.wait(1)
+			for _, player in ipairs(Players:GetPlayers()) do
+				local d = Data.get(player)
+				local shop = d and d.shop
+				if shop and shop.state == "rented" then
+					local msg = nil
+					if shop.closed then
+						if d.coins >= G.Shop.rentAmount then
+							Data.update(player, function(dd)
+								dd.coins -= G.Shop.rentAmount
+								dd.shop.closed = false
+								dd.shop.rentTimer = 0
+							end)
+							msg = string.format("밀린 월세 %d코인을 냈어요. 가게 문이 다시 열렸어요", G.Shop.rentAmount)
+						end
+					else
+						shop.rentTimer = (shop.rentTimer or 0) + dt -- 저장은 자동 저장 때 같이 (매초 알리지 않음)
+						if shop.rentTimer >= G.Shop.rentEvery then
+							if d.coins >= G.Shop.rentAmount then
+								Data.update(player, function(dd)
+									dd.coins -= G.Shop.rentAmount
+									dd.shop.rentTimer -= G.Shop.rentEvery
+								end)
+								msg = string.format("월세 %d코인을 냈어요", G.Shop.rentAmount)
+							else
+								Data.update(player, function(dd)
+									dd.shop.closed = true
+									dd.shop.rentTimer = G.Shop.rentEvery
+								end)
+								msg = string.format("월세 %d코인이 모자라 가게 문이 닫혔어요. 앞 노점에서는 계속 팔 수 있어요", G.Shop.rentAmount)
+							end
+						end
+					end
+					if msg then
+						Economy.notify(player, msg)
+						print(string.format("[Rent] %s %s coins=%d", player.Name, msg, Data.get(player).coins))
+					end
+				end
+			end
+		end
+	end)
 
 	-- 알바생: 1초마다 진행
 	task.spawn(function()
