@@ -85,6 +85,7 @@ end
 -- 카운터(작업대 윗면) 위, 자기 국자 옆에 세우고 오른팔을 뻗어 젓가락을 잡게 함. 손에 든 작은 국자는 숨김
 -- (화로 위 알바생 국자가 진짜). 국자 k ↔ 알바생 k-1 (HelperLadle2 = 알바생 1). 모든 플레이어 화면에서 같게 그림
 local STAND_OFF = 1.25 -- 국자 가운데에서 미니미 몸통까지 (옆 + 뒤로)
+local STOOL_H = 1.0 -- 노점 배치에서 미니미가 올라선 나무 의자 높이
 local armRest = setmetatable({}, { __mode = "k" })
 local function hideHandLadle(mini)
 	local hl = mini:FindFirstChild("HandLadle", true)
@@ -133,12 +134,43 @@ local function poseMinime(ws, k, grip, center, resting)
 		return
 	end
 	hideHandLadle(mini)
-	-- 발 높이: 미니미 아래끝(발)이 카운터 윗면에 오게. 피벗 → 발까지 거리는 처음 한 번 잼
+	-- 발 높이: 화로가 땅 위에 있으면(노점 배치, 2026-11-21) 바닥, 아니면 카운터 윗면. 피벗 → 발까지 거리는 처음 한 번 잼
 	if not armRest[mini] then
 		local cf, size = mini:GetBoundingBox()
 		armRest[mini] = { footDrop = root.Position.Y - (cf.Position.Y - size.Y / 2) }
 	end
 	local footY = top.Position.Y + top.Size.Y / 2
+	if ws:GetAttribute("StreetLayout") then
+		local floorY = armRest[ws]
+		if not floorY then
+			floorY = math.huge
+			for _, p in ipairs(ws:GetChildren()) do
+				if p.Name == "TableLeg" and p:IsA("BasePart") then
+					floorY = math.min(floorY, p.Position.Y - p.Size.Y / 2)
+				end
+			end
+			armRest[ws] = floorY
+		end
+		if floorY < math.huge then
+			-- 화로(키 약 3.8)에 가려 안 보이므로 작은 나무 의자 위에 섬 (내 화면에서만 만드는 부품)
+			footY = floorY + STOOL_H
+			local stool = mini:FindFirstChild("MinimeStool")
+			if not stool then
+				stool = Instance.new("Part")
+				stool.Name = "MinimeStool"
+				stool.Anchored = true
+				stool.CanCollide = false
+				stool.CanQuery = false
+				stool.CanTouch = false
+				stool.Material = Enum.Material.Wood
+				stool.Color = Color3.fromRGB(150, 104, 64)
+				stool.Size = Vector3.new(1.3, STOOL_H, 1.1)
+				stool.Parent = mini
+			end
+			stool.Anchored = true
+			stool:SetAttribute("Stool", true)
+		end
+	end
 	-- 국자 옆(작업대 가운데 반대쪽 = 화로 바깥) + 뒤(-Z, 손님 반대쪽)에 서서 국자 쪽을 봄
 	local brazier = ws:FindFirstChild("Brazier")
 	local bc = brazier and brazier:GetPivot().Position or center
@@ -149,7 +181,18 @@ local function poseMinime(ws, k, grip, center, resting)
 	local lookAt = Vector3.new(center.X, pos.Y, center.Z)
 	local want = CFrame.lookAt(pos, lookAt)
 	if (root.Position - pos).Magnitude > 0.01 or root.CFrame.LookVector:Dot(want.LookVector) < 0.999 then
+		local stool = mini:FindFirstChild("MinimeStool")
+		if stool then
+			stool.Parent = nil -- 같이 옮겨지지 않게 잠깐 빼 둠
+		end
 		mini:PivotTo(want)
+		if stool then
+			stool.Parent = mini
+		end
+	end
+	local stool = mini:FindFirstChild("MinimeStool")
+	if stool then
+		stool.CFrame = CFrame.new(pos.X, footY - STOOL_H / 2, pos.Z) * (want - want.Position)
 	end
 	-- 쉬는 중: 팔을 내리고 서 있음 (2026-11-21 가게 문 닫힘·재료 부족 때)
 	if resting then
