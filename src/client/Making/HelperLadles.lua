@@ -17,7 +17,8 @@ local FOAM = Color3.fromRGB(214, 164, 108)
 local GRIP_ALONG = 0.9 -- 알바생 미니미가 젓가락을 잡는 자리: 끝에서 이만큼 위 (아래 poseMinime)
 local base = setmetatable({}, { __mode = "k" }) -- 내용물 처음 자리 (부품 → CFrame)
 
-local function stepOne(m, now)
+-- resting = 알바생이 쉬는 중 (가게 문 닫힘·재료 부족 등): 국자는 비고 젓가락은 기대 둠
+local function stepOne(m, now, resting)
 	local c = m:GetAttribute("Center")
 	local R = m:GetAttribute("BowlR") or 0.85
 	local stick, cont = m:FindFirstChild("Stick"), m:FindFirstChild("Contents")
@@ -32,7 +33,9 @@ local function stepOne(m, now)
 	local u = (now / CYCLE + (m:GetAttribute("Phase") or 0)) % 1
 	local color, thick, mat, hidden = SUGAR, th0, Enum.Material.Sand, false
 	local stir = 0 -- 젓는 빠르기 (rad/s)
-	if u < 0.08 then
+	if resting then
+		hidden = true
+	elseif u < 0.08 then
 		-- 설탕을 붓는 중: 흰 설탕이 쌓임
 		thick = th0 * (0.3 + 0.7 * u / 0.08)
 	elseif u < 0.5 then
@@ -101,9 +104,26 @@ local function hideHandLadle(mini)
 		end
 	end
 end
-local function poseMinime(ws, k, grip, center)
+-- 국자 k의 알바생 미니미 (없으면 nil)
+local function minimeFor(ws, k)
 	local plot = ws.Parent
-	local mini = plot and plot:FindFirstChild("Helper" .. (k - 1))
+	return plot and plot:FindFirstChild("Helper" .. (k - 1))
+end
+
+-- 쉬는 중인가: 서버가 머리 위 글에 "쉬는 중 (이유)"를 씀 (GrowthService.setHelperText)
+local function isResting(mini)
+	local head = mini and mini:FindFirstChild("Head")
+	local bb = head and head:FindFirstChild("Status")
+	if not bb then
+		return false
+	end
+	-- 글자 칸이 여럿 (번호 배지 Number + 상태 TextLabel): 상태 글을 봄
+	local label = bb:FindFirstChild("TextLabel")
+	return label ~= nil and label:IsA("TextLabel") and string.find(label.Text, "쉬는 중", 1, true) ~= nil
+end
+
+local function poseMinime(ws, k, grip, center, resting)
+	local mini = minimeFor(ws, k)
 	local top = ws:FindFirstChild("TableTop")
 	local root = mini and mini:FindFirstChild("HumanoidRootPart")
 	local torso = mini and mini:FindFirstChild("UpperTorso")
@@ -131,6 +151,11 @@ local function poseMinime(ws, k, grip, center)
 	if (root.Position - pos).Magnitude > 0.01 or root.CFrame.LookVector:Dot(want.LookVector) < 0.999 then
 		mini:PivotTo(want)
 	end
+	-- 쉬는 중: 팔을 내리고 서 있음 (2026-11-21 가게 문 닫힘·재료 부족 때)
+	if resting then
+		joint.Transform = CFrame.new()
+		return
+	end
 	-- 오른팔: 어깨에서 잡는 자리 쪽으로 곧게 뻗음 (팔꿈치는 펴 둠)
 	local jointCf = torso.CFrame * joint.C0
 	local v = jointCf:VectorToObjectSpace(grip - jointCf.Position)
@@ -155,10 +180,12 @@ function Helper.start()
 		for _, ws in ipairs(Workstations.all()) do
 			for _, m in ipairs(ws:GetChildren()) do
 				if m.Name:sub(1, 11) == "HelperLadle" then
-					local grip, center = stepOne(m, now)
 					local k = tonumber(m.Name:sub(12))
+					local mini = k and minimeFor(ws, k)
+					local resting = isResting(mini)
+					local grip, center = stepOne(m, now, resting)
 					if grip and k then
-						poseMinime(ws, k, grip, center)
+						poseMinime(ws, k, grip, center, resting)
 					end
 				end
 			end
