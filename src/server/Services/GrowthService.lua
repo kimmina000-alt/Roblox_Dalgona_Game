@@ -492,10 +492,15 @@ local function onHandMade(player, shape, result)
 	local newEntry, newShapes = nil, {}
 	local finished, ups = {}, {}
 	Data.update(player, function(d)
-		-- 도감 (손으로 만든 것만)
+		-- 도감 (손으로 만든 것만, 민짜 달고나는 안 셈 — D20)
 		local c = d.collection[shape.id]
 		local rank = G.GradeRank[result.grade] or 0
-		if not c then
+		if result.plain then
+			c = false
+		end
+		if c == false then
+			-- 민짜: 도감 건너뜀
+		elseif not c then
 			d.collection[shape.id] = { best = result.grade, n = 1 }
 			newEntry = "도감 등록: " .. shape.name .. " (" .. result.grade .. ")"
 		else

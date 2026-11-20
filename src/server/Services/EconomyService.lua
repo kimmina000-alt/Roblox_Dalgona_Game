@@ -273,7 +273,9 @@ end
 
 -- 제작 끝. 반환: 보상 정보 (결과 표에 붙음)
 function EconomyService.onMade(player, shape, result)
-	local need = G.recipe(shape.grade)
+	-- 민짜 달고나 (D20): 틀을 안 찍었으면 기본값 8, 설탕 Common 1회분
+	local plain = result.plain == true
+	local need = G.recipe(plain and G.PlainSugarGrade or shape.grade)
 	local reward = { exp = G.expFor(result.grade), levelUps = {}, coins = 0 }
 	Data.update(player, function(d)
 		for id, n in pairs(need) do
@@ -284,9 +286,10 @@ function EconomyService.onMade(player, shape, result)
 				s = shape.id,
 				g = result.grade,
 				q = result.Q,
-				b = shape.price,
+				b = plain and G.PlainBasePrice or shape.price,
 				m = result.mult or 1,
 				pk = false,
+				plain = plain or nil,
 			}
 			item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
 			table.insert(d.stock, item)

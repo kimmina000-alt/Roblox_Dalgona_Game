@@ -62,6 +62,11 @@ end
 
 -- 포장할 때 쓰는 재료 (손 제작만. 기계·공장은 안 씀 — 포장 원가 1에 포함)
 G.PackCost = { wrapper = 1, twistTie = 1 }
+
+-- 민짜 달고나 (D20, 2026-11-21): 틀을 안 찍고 끝낸 달고나. 고른 도안과 상관없이 기본값 8 × 품질 (포장하면 ×1.1),
+-- 설탕은 Common 1회분, 뽑기·도감 안 됨
+G.PlainBasePrice = 8
+G.PlainSugarGrade = "Common"
 G.PackWindowSeconds = 180 -- 다 만든 뒤 이 시간 안에 포장해야 함
 
 -- 판매가 (GDD 13장, 기획 확정 2026-11-20): round(도안 가격 × 품질 배율 × 뽑기 보너스 × 포장 1.1)
