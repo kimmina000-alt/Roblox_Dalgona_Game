@@ -187,7 +187,29 @@ function Picker.run(ctx, currentId)
 			Parent = card,
 		})
 		corner(tag, 8)
+		-- 도안 해금 (성장 Phase 4, 2026-11-20): 서버가 준 목록(속성 UnlockedShapes)에 없으면 잠금
+		local unlockedAttr = game:GetService("Players").LocalPlayer:GetAttribute("UnlockedShapes")
+		local locked = type(unlockedAttr) == "string" and not table.find(string.split(unlockedAttr, ","), entry.id)
+		if locked then
+			local G = require(Shared:WaitForChild("GrowthConfig"))
+			local need = G.UnlockLevel[entry.grade]
+			local cover = new("TextLabel", {
+				Text = need and ("🔒 Lv" .. need) or "🔒 도감",
+				Font = FONT,
+				TextSize = 18,
+				TextColor3 = Color3.new(1, 1, 1),
+				BackgroundColor3 = Color3.fromRGB(40, 30, 24),
+				BackgroundTransparency = 0.35,
+				Size = UDim2.fromScale(1, 1),
+				ZIndex = 34,
+				Parent = card,
+			})
+			corner(cover, 12)
+		end
 		card.Activated:Connect(function()
+			if locked then
+				return
+			end
 			Sfx.play("pop", 0.6, 1.1)
 			chosen = entry
 		end)

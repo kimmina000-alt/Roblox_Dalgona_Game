@@ -10,6 +10,7 @@ local PlayerDataService = require(Services:WaitForChild("PlayerDataService"))
 local PlotService = require(Services:WaitForChild("PlotService"))
 local EconomyService = require(Services:WaitForChild("EconomyService"))
 local SalesService = require(Services:WaitForChild("SalesService"))
+local GrowthService = require(Services:WaitForChild("GrowthService"))
 
 local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not remotes then
@@ -17,7 +18,7 @@ if not remotes then
 	remotes.Name = "Remotes"
 	remotes.Parent = ReplicatedStorage
 end
-for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", "GetPlayerState", "PackDalgona", "SubmitPpopgi" }) do
+for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", "GetPlayerState", "PackDalgona", "GrowthAction", "SubmitPpopgi" }) do
 	if not remotes:FindFirstChild(name) then
 		local rf = Instance.new("RemoteFunction")
 		rf.Name = name
@@ -50,11 +51,13 @@ FactoryBuilder.place(workspace, CFrame.new(0, 0, 30))
 -- Lv4 연속 생산 설비: 작업대 오른쪽 옆 시험 자리, 조작판이 스폰 쪽(+Z)을 보게 180° 돌림
 FactoryBuilder.placeLine(workspace, CFrame.new(28, 0, -14) * CFrame.Angles(0, math.pi, 0)) -- 테이블 오른쪽 포장 공간(+6) 만큼 더 오른쪽 (2026-11-20)
 
--- 저장 → 경제(HUD·상점) → 가게 부지 6칸 → 판매 → 제작 결과 연결
+-- 경제(HUD·상점) → 성장(데이터를 처음 불러올 때 듣기 위해 저장보다 먼저) → 저장 → 가게 부지 6칸 → 판매 → 제작 결과 연결
 EconomyService.init(PlayerDataService, remotes)
+GrowthService.init(PlayerDataService, EconomyService, PlotService, remotes) -- 해금·도감·장비·국자·알바생·일일 목표 (Phase 4)
 PlayerDataService.init()
 PlotService.init({ notify = EconomyService.notify })
 SalesService.init(PlayerDataService, EconomyService, PlotService) -- 진열대 + 손님 (Phase 3)
+ProductionService.hooks.mods = GrowthService.mods
 ProductionService.hooks.canStart = EconomyService.canMake
 ProductionService.hooks.onStart = EconomyService.onStart -- 나무젓가락 1쌍
 ProductionService.hooks.onResult = EconomyService.onMade
