@@ -5,6 +5,7 @@
 -- 꾸밈 움직임이라 각 플레이어 화면에서만 그림 (서버 부담 없음)
 
 local RunService = game:GetService("RunService")
+local Workstations = require(script.Parent:WaitForChild("Workstations"))
 
 local Helper = {}
 
@@ -13,6 +14,7 @@ local SUGAR = Color3.fromRGB(250, 250, 250)
 local AMBER = Color3.fromRGB(236, 168, 52)
 local FOAM = Color3.fromRGB(214, 164, 108)
 
+local GRIP_ALONG = 0.9 -- 알바생 미니미가 젓가락을 잡는 자리: 끝에서 이만큼 위 (아래 poseMinime)
 local base = setmetatable({}, { __mode = "k" }) -- 내용물 처음 자리 (부품 → CFrame)
 
 local function stepOne(m, now)
@@ -72,6 +74,73 @@ local function stepOne(m, now)
 	local lean = stir > 0 and Vector3.new(math.cos(a) * 0.35, 1, math.sin(a) * 0.35) or Vector3.new(math.cos(a) * 0.9, 0.6, math.sin(a) * 0.9)
 	local hand = tip + lean.Unit * stick.Size.X
 	stick.CFrame = CFrame.lookAt((tip + hand) / 2, hand) * CFrame.Angles(0, math.rad(90), 0)
+	-- 알바생(미니미)이 잡는 자리: 젓가락 끝에서 GRIP_ALONG만큼 위 (맨 위 끝은 키가 작아 손이 안 닿음)
+	return tip + lean.Unit * math.min(GRIP_ALONG, stick.Size.X), c
+end
+
+-- 알바생 미니미 (D19, 2026-11-21 사용자 "카운터 위"): 서버 Minime가 가게 바닥에 세운 미니미를 내 화면에서
+-- 카운터(작업대 윗면) 위, 자기 국자 옆에 세우고 오른팔을 뻗어 젓가락을 잡게 함. 손에 든 작은 국자는 숨김
+-- (화로 위 알바생 국자가 진짜). 국자 k ↔ 알바생 k-1 (HelperLadle2 = 알바생 1). 모든 플레이어 화면에서 같게 그림
+local STAND_OFF = 1.25 -- 국자 가운데에서 미니미 몸통까지 (옆 + 뒤로)
+local armRest = setmetatable({}, { __mode = "k" })
+local function hideHandLadle(mini)
+	local hl = mini:FindFirstChild("HandLadle", true)
+	if hl and not hl:GetAttribute("HiddenByHelper") then
+		hl:SetAttribute("HiddenByHelper", true)
+		local list = hl:IsA("BasePart") and { hl } or {}
+		for _, d in ipairs(hl:GetDescendants()) do
+			table.insert(list, d)
+		end
+		for _, d in ipairs(list) do
+			if d:IsA("BasePart") then
+				d.Transparency = 1 -- 광택(SurfaceAppearance) 메시는 LocalTransparencyModifier로 다 안 사라짐
+				d.CastShadow = false
+			elseif d:IsA("Decal") or d:IsA("Texture") then
+				d.Transparency = 1
+			end
+		end
+	end
+end
+local function poseMinime(ws, k, grip, center)
+	local plot = ws.Parent
+	local mini = plot and plot:FindFirstChild("Helper" .. (k - 1))
+	local top = ws:FindFirstChild("TableTop")
+	local root = mini and mini:FindFirstChild("HumanoidRootPart")
+	local torso = mini and mini:FindFirstChild("UpperTorso")
+	local arm = mini and mini:FindFirstChild("RightUpperArm")
+	local joint = arm and arm:FindFirstChild("RightShoulder")
+	if not (top and root and torso and joint) then
+		return
+	end
+	hideHandLadle(mini)
+	-- 발 높이: 미니미 아래끝(발)이 카운터 윗면에 오게. 피벗 → 발까지 거리는 처음 한 번 잼
+	if not armRest[mini] then
+		local cf, size = mini:GetBoundingBox()
+		armRest[mini] = { footDrop = root.Position.Y - (cf.Position.Y - size.Y / 2) }
+	end
+	local footY = top.Position.Y + top.Size.Y / 2
+	-- 국자 옆(작업대 가운데 반대쪽 = 화로 바깥) + 뒤(-Z, 손님 반대쪽)에 서서 국자 쪽을 봄
+	local brazier = ws:FindFirstChild("Brazier")
+	local bc = brazier and brazier:GetPivot().Position or center
+	local out = Vector3.new(center.X - bc.X, 0, center.Z - bc.Z)
+	out = out.Magnitude > 0.05 and out.Unit or Vector3.new(1, 0, 0)
+	local side = (out + Vector3.new(0, 0, -0.6)).Unit
+	local pos = Vector3.new(center.X, footY + armRest[mini].footDrop, center.Z) + side * STAND_OFF
+	local lookAt = Vector3.new(center.X, pos.Y, center.Z)
+	local want = CFrame.lookAt(pos, lookAt)
+	if (root.Position - pos).Magnitude > 0.01 or root.CFrame.LookVector:Dot(want.LookVector) < 0.999 then
+		mini:PivotTo(want)
+	end
+	-- 오른팔: 어깨에서 잡는 자리 쪽으로 곧게 뻗음 (팔꿈치는 펴 둠)
+	local jointCf = torso.CFrame * joint.C0
+	local v = jointCf:VectorToObjectSpace(grip - jointCf.Position)
+	if v.Magnitude > 1e-3 then
+		joint.Transform = CFrame.fromRotationBetweenVectors(Vector3.new(0, -1, 0), v.Unit)
+	end
+	local elbow = mini:FindFirstChild("RightElbow", true)
+	if elbow then
+		elbow.Transform = CFrame.new()
+	end
 end
 
 local started = false
@@ -81,14 +150,17 @@ function Helper.start()
 	end
 	started = true
 	RunService.Heartbeat:Connect(function()
-		local ws = workspace:FindFirstChild("DalgonaWorkstation")
-		if not ws then
-			return
-		end
+		-- 가게마다 작업대가 있음 (17b): 모든 작업대의 알바생 국자를 움직임 (다른 가게 것도 보임)
 		local now = os.clock()
-		for _, m in ipairs(ws:GetChildren()) do
-			if m.Name:sub(1, 11) == "HelperLadle" then
-				stepOne(m, now)
+		for _, ws in ipairs(Workstations.all()) do
+			for _, m in ipairs(ws:GetChildren()) do
+				if m.Name:sub(1, 11) == "HelperLadle" then
+					local grip, center = stepOne(m, now)
+					local k = tonumber(m.Name:sub(12))
+					if grip and k then
+						poseMinime(ws, k, grip, center)
+					end
+				end
 			end
 		end
 	end)

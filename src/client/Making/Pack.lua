@@ -240,7 +240,7 @@ end
 -- 포장하기. 돌려줌: 같이 띄울 부품 목록 (취소되면 nil). 포장 공간이 없으면 빈 목록
 function Pack.run(ctx, dal, st)
 	local S, P, ui = ctx.station, ctx.pointer, ctx.ui
-	local ws = workspace:FindFirstChild("DalgonaWorkstation")
+	local ws = S.model -- 지금 쓰는 작업대 (17b: 내 가게 작업대)
 	local area = ws and ws:FindFirstChild("PackArea")
 	local mat = area and area:FindFirstChild("Mat")
 	local bagBox = area and area:FindFirstChild("BagTop")

@@ -11,6 +11,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
+local GrowthConfig = require(Shared:WaitForChild("GrowthConfig"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 local Making = script.Parent:WaitForChild("Making")
@@ -32,11 +33,13 @@ for _, step in ipairs(Config.Steps) do
 	STEP_MODULES[step.key] = require(StepsFolder:WaitForChild(name))
 end
 
-local station = Station.new()
-require(Making:WaitForChild("Toon")).apply(station.model) -- 도구 만화 외곽선
+local Workstations = require(Making:WaitForChild("Workstations"))
+local Toon = require(Making:WaitForChild("Toon"))
+-- 작업대 = 내 가게 작업대 (17b, 2026-11-21). 가게를 받으면 생기고, 다시 받으면 바뀜 → 아래 watchStation이 연결
+local station = nil
 require(Making:WaitForChild("HelperLadles")).start() -- 화로 위 알바생 국자 (LadleCount 2~4)
+require(Making:WaitForChild("Supplies")).start() -- 재료가 없으면 작업대 통이 빈 통으로 (2026-11-21)
 local ui = Ui.new(player, Config.Steps)
-CameraRig.init(station.model:GetPivot())
 
 local running = false
 local roundsPlayed = 0 -- 이번 접속에서 시작한 판 수 (처음 SUB_ROUNDS판은 설명 글씨를 늘 보여 줌)
@@ -104,9 +107,11 @@ local function finish()
 	CameraRig.release()
 	setControls(true)
 	setCharacterHidden(false)
-	station:reset()
-	station:removeHand()
-	station.Prompt.Enabled = true
+	if station then
+		station:reset()
+		station:removeHand()
+		station.Prompt.Enabled = true
+	end
 end
 
 local startMaking
@@ -169,17 +174,34 @@ local function runSession()
 	station:setCutter(shape.id)
 	ctx.state.shape = shape
 
-	-- 나무젓가락이 없으면 꺼내기 전에 상점으로 안내 (재료, 2026-11-20)
-	if (player:GetAttribute("Chopsticks") or 1) < 1 then
-		ui:say("나무젓가락이 없어요", "재료 상점에서 사 와요 (10쌍 5코인)")
-		task.wait(2)
-		finish()
-		local hud = script.Parent:FindFirstChild("Hud")
-		local open = hud and hud:FindFirstChild("OpenShop")
-		if open then
-			open:Fire("chopsticks")
+	-- 재료가 모자라면 나무젓가락을 꺼내기 전에 상점으로 안내 (2026-11-20 젓가락, 2026-11-21 모든 재료:
+	-- "젓가락 쪼갰는데 다른 재료 없어서 못 만들면 젓가락 소진 안 되게" → 쪼개기 전에 확인)
+	do
+		local need = GrowthConfig.recipe(shape.grade)
+		need.chopsticks = GrowthConfig.ChopsticksPerRound or 1
+		local missing, first = {}, nil
+		for _, ing in ipairs(GrowthConfig.Ingredients) do
+			local n = need[ing.id] or 0
+			local have = player:GetAttribute("Ing_" .. ing.id)
+			if ing.id == "chopsticks" and have == nil then
+				have = player:GetAttribute("Chopsticks")
+			end
+			if n > 0 and have ~= nil and have < n then
+				table.insert(missing, string.format("%s %d", ing.name, n))
+				first = first or ing.id
+			end
 		end
-		return
+		if #missing > 0 then
+			ui:say("재료가 모자라요", table.concat(missing, ", ") .. " 필요 · 재료 상점에서 사 와요")
+			task.wait(2)
+			finish()
+			local hud = script.Parent:FindFirstChild("Hud")
+			local open = hud and hud:FindFirstChild("OpenShop")
+			if open then
+				open:Fire(first)
+			end
+			return
+		end
 	end
 	-- 0. 나무젓가락 꺼내기 (통을 누르면 한 짝이 뽑혀 테이블 위에 놓임)
 	CameraRig.go("pick") -- 테이블 왼쪽 끝 젓가락 쪽으로
@@ -286,7 +308,7 @@ local function runSession()
 		local canPpopgi = not result.misshaped and ctx.state.stampRoot ~= nil and not (stampRec and stampRec.packNow)
 			and (result.ppopgiOk or not result.verified)
 		if canPpopgi then
-			local pask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "뽑기에 도전할까요? 바늘로 점선을 긁어 모양을 떼어 내요 · 잘 뽑으면 판매가 최대 ×1.5", "뽑기 도전", "그만하고 넘어가기")
+			local pask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "뽑기에 도전할까요? 바늘로 점선을 긁어 모양을 떼어 내요 · 성공하면 달고나 하나 덤 (완벽하면 2개)", "뽑기 도전", "그만하고 넘어가기")
 			while not pask.choice do
 				if not ctx.frame() then
 					pask.close()
@@ -378,7 +400,7 @@ local function runSession()
 	local s = result.steps or {}
 	if result.ppopgi then
 		local pp = result.ppopgi
-		print(string.format("[Making] ppopgi cov=%.2f cracks=%d acc=%.2f broken=%s perfect=%s bonus=%.2f verified=%s", pp.coverage or 0, pp.cracks or 0, pp.acc or 0, tostring(pp.broken), tostring(pp.perfect), pp.bonus or 1, tostring(pp.verified)))
+		print(string.format("[Making] ppopgi cov=%.2f cracks=%d acc=%.2f broken=%s perfect=%s extra=%d verified=%s", pp.coverage or 0, pp.cracks or 0, pp.acc or 0, tostring(pp.broken), tostring(pp.perfect), pp.extraAdded or pp.extra or 0, tostring(pp.verified)))
 	end
 	print(string.format("[Making] result %s Q=%d %s price=%s stars=%d (verified=%s) sugar=%s melt=%s soda=%s pour=%s press=%s stamp=%s", shape.id, result.Q, result.grade, tostring(result.price), result.stars, tostring(result.verified), tostring(s.sugar), tostring(s.melt), tostring(s.soda), tostring(s.pour), tostring(s.press), tostring(s.stamp)))
 end
@@ -386,6 +408,9 @@ end
 function startMaking(restart)
 	if running and not restart then
 		return
+	end
+	if not station then
+		return -- 가게(작업대)를 아직 못 받음
 	end
 	if current then
 		current.aborted = true
@@ -409,8 +434,50 @@ ui.onExit = function()
 	finish()
 end
 
-station.Prompt.Triggered:Connect(function()
-	task.spawn(startMaking, false)
+-- 내 가게 작업대 연결 (17b): 작업대가 생기거나 바뀌면 Station을 새로 만듦 (만드는 중에는 안 바꿈).
+-- 다른 가게 작업대의 E는 내 화면에서 끔. 가게를 아직 못 받았으면 한 번 안내
+local function bindStation(m)
+	station = Station.new(m)
+	Toon.apply(m) -- 도구 만화 외곽선
+	CameraRig.init(m:GetPivot(), m)
+	station.Prompt.Triggered:Connect(function()
+		task.spawn(startMaking, false)
+	end)
+end
+task.spawn(function()
+	local told = false
+	local since = os.clock()
+	while true do
+		local mine = Workstations.mine()
+		if not running then
+			if mine and Workstations.ready(mine) and (not station or station.model ~= mine) then
+				local ok, err = pcall(bindStation, mine)
+				if not ok then
+					warn("[Making] workstation bind failed:", err)
+					station = nil
+				end
+			elseif station and not station.model.Parent then
+				station = nil -- 가게를 비움
+			end
+		end
+		for _, ws in ipairs(Workstations.all()) do
+			if ws ~= mine then
+				local top = ws:FindFirstChild("TableTop")
+				local att = top and top:FindFirstChild("PromptAtt")
+				local prompt = att and att:FindFirstChild("MakePrompt")
+				if prompt and prompt.Enabled then
+					prompt.Enabled = false
+				end
+			end
+		end
+		if not mine and not told and os.clock() - since > 8 then
+			told = true
+			pcall(function()
+				game:GetService("StarterGui"):SetCore("SendNotification", { Title = "달고나 골목", Text = "가게를 받으면 내 작업대에서 만들 수 있어요", Duration = 6 })
+			end)
+		end
+		task.wait(1)
+	end
 end)
 
 -- 테스트용: 다른 스크립트(또는 Studio 명령)에서 시작할 수 있게
