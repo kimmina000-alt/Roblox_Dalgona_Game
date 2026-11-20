@@ -666,7 +666,7 @@ function Pack.run(ctx, dal, st)
 	end
 	Sfx.play("pop", 0.5, 1.3)
 	ui:say("포장 완료!", "")
-	if not wait(0.4) then
+	if not wait(0.15) then
 		return nil
 	end
 	local out = { bag3.part, tie }

@@ -87,7 +87,7 @@ function Melt.run(ctx)
 		S.Ladle:PivotTo(S:ladleAt(st.h))
 		tip = nil
 		if stir.active then
-			local t, hnd = Stir.gripUp(S:contentsTopY()) -- 젓가락은 위로 서고 끝은 손가락 살짝 아래 (2026-11-20)
+			local t, hnd = Stir.grip(S:contentsTopY()) -- 2026-11-20 "젓가락 위로 안 올라가게": 다시 손가락 쪽(아래)으로 기운 젓가락, 끝은 손가락 위 1.0
 			tip = Stir.placeChopsticks(S, t, hnd)
 		elseif started then
 			Stir.placeChopsticks(S, S.Chopsticks.Stick1.Position + S.Chopsticks.Stick1.CFrame.LookVector * 1.3)
