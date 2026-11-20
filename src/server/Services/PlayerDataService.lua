@@ -3,7 +3,7 @@
 --  - 세션 잠금: 불러올 때 UpdateAsync로 이 서버(JobId)가 잠금을 잡는다. 다른 서버가 잡고 있으면
 --    잠깐 기다리고, 잠금이 오래됐으면(죽은 서버) 가져온다. 저장할 때 잠금이 남의 것이면 덮어쓰지 않는다.
 --  - 스키마 버전 + MIGRATIONS: 데이터 모양을 바꾸면 GrowthConfig.SchemaVersion을 올리고 옮기는 함수를 넣는다.
---  - 60초 자동 저장, 나갈 때 저장(잠금 풀기), BindToClose에서 모두 저장.
+--  - 60초 자동 저장 + 데이터가 바뀌면 15초 뒤 한 번 저장, 나갈 때 저장(잠금 풀기), BindToClose에서 모두 저장.
 --  - DataStore를 못 쓰면(Studio API 꺼짐 등) 기본 데이터로 놀 수 있지만 저장은 안 함 (canSave = false).
 
 local DataStoreService = game:GetService("DataStoreService")
@@ -239,6 +239,17 @@ function PlayerDataService.update(player, fn)
 		return false
 	end
 	changed:Fire(player, data)
+	-- 바뀐 뒤 changeSaveSeconds 안에 한 번 저장 (이미 예약돼 있으면 그대로; DataStore 쓰기 횟수 아낌)
+	local profile = profiles[player]
+	if profile and profile.canSave and not profile.saveQueued then
+		profile.saveQueued = true
+		task.delay(SAVE.changeSaveSeconds, function()
+			profile.saveQueued = false
+			if profiles[player] == profile and not profile.released then
+				PlayerDataService.save(player, false)
+			end
+		end)
+	end
 	return true
 end
 
