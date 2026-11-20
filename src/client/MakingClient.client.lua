@@ -178,9 +178,16 @@ local function runSession()
 	-- 국자 잡은 손은 안 붙임 (2026-11-20 사용자 요청 "국자 잡은 손 삭제")
 	ctx.state.chopstick = pick
 
-	local okStart, sessionId = pcall(function()
+	local okStart, sessionId, why = pcall(function()
 		return Remotes.StartProduction:InvokeServer(shape.id)
 	end)
+	if okStart and not sessionId and type(why) == "string" then
+		-- 재료 부족·보관함 가득 (저장·가게, 2026-11-20): 이유를 보여 주고 끝냄
+		ui:say(why, "")
+		task.wait(2.5)
+		finish()
+		return
+	end
 	if not okStart or not sessionId then
 		task.wait(1)
 		okStart, sessionId = pcall(function()

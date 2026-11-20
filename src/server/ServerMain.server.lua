@@ -1,4 +1,4 @@
--- 서버 진입점 (Phase 1: 제작 프로토타입, 저장 없음)
+-- 서버 진입점 (Phase 1 제작 프로토타입 + Phase 2 저장·가게 부지·재료 상점)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Services = script.Parent:WaitForChild("Services")
@@ -6,6 +6,9 @@ local WorkstationBuilder = require(Services:WaitForChild("WorkstationBuilder"))
 local ProductionService = require(Services:WaitForChild("ProductionService"))
 local FactoryBuilder = require(Services:WaitForChild("FactoryBuilder"))
 local StallDecor = require(Services:WaitForChild("StallDecor"))
+local PlayerDataService = require(Services:WaitForChild("PlayerDataService"))
+local PlotService = require(Services:WaitForChild("PlotService"))
+local EconomyService = require(Services:WaitForChild("EconomyService"))
 
 local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not remotes then
@@ -13,11 +16,18 @@ if not remotes then
 	remotes.Name = "Remotes"
 	remotes.Parent = ReplicatedStorage
 end
-for _, name in ipairs({ "StartProduction", "SubmitProduction" }) do
+for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", "GetPlayerState" }) do
 	if not remotes:FindFirstChild(name) then
 		local rf = Instance.new("RemoteFunction")
 		rf.Name = name
 		rf.Parent = remotes
+	end
+end
+for _, name in ipairs({ "PlayerState", "Notify" }) do
+	if not remotes:FindFirstChild(name) then
+		local re = Instance.new("RemoteEvent")
+		re.Name = name
+		re.Parent = remotes
 	end
 end
 
@@ -38,6 +48,13 @@ end
 FactoryBuilder.place(workspace, CFrame.new(0, 0, 30))
 -- Lv4 연속 생산 설비: 작업대 오른쪽 옆 시험 자리, 조작판이 스폰 쪽(+Z)을 보게 180° 돌림
 FactoryBuilder.placeLine(workspace, CFrame.new(28, 0, -14) * CFrame.Angles(0, math.pi, 0)) -- 테이블 오른쪽 포장 공간(+6) 만큼 더 오른쪽 (2026-11-20)
+
+-- 저장 → 경제(HUD·상점) → 가게 부지 6칸 → 제작 결과 연결
+EconomyService.init(PlayerDataService, remotes)
+PlayerDataService.init()
+PlotService.init({ notify = EconomyService.notify })
+ProductionService.hooks.canStart = EconomyService.canMake
+ProductionService.hooks.onResult = EconomyService.onMade
 
 ProductionService.init({
 	StartProduction = remotes.StartProduction,

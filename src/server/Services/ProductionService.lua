@@ -16,6 +16,9 @@ local COAL_PER_MAKE = 0.1 -- 연탄 1장으로 10번 만듦
 
 local ProductionService = {}
 
+-- 저장·가게(Phase 2) 연결: canStart(player, shape) -> ok, 이유 / onResult(player, shape, result) -> 보상
+ProductionService.hooks = {}
+
 local sessions = {} -- [player] = { id, t0, lastStart }
 
 local function num(v, lo, hi, default)
@@ -157,6 +160,12 @@ function ProductionService.start(player, shapeId)
 	end
 	-- 고른 도안 (모르는 id면 기본 도안). 가격은 서버 목록에서만 가져온다
 	local shape = ShapeCatalog.get(type(shapeId) == "string" and shapeId or "") or ShapeCatalog.get(ShapeCatalog.default)
+	if ProductionService.hooks.canStart then
+		local ok, why = ProductionService.hooks.canStart(player, shape)
+		if not ok then
+			return nil, why -- 재료 부족 등: 클라이언트가 이유를 보여 주고 끝냄
+		end
+	end
 	local s = { id = HttpService:GenerateGUID(false), t0 = now, shape = shape }
 	sessions[player] = s
 	return s.id, s.t0
@@ -184,6 +193,14 @@ function ProductionService.submit(player, sessionId, raw)
 	local ws = workspace:FindFirstChild("DalgonaWorkstation")
 	if ws then
 		WorkstationBuilder.setCoal(ws, (ws:GetAttribute("CoalLeft") or 1) - COAL_PER_MAKE)
+	end
+	if ProductionService.hooks.onResult then
+		local ok, reward = pcall(ProductionService.hooks.onResult, player, s.shape, result)
+		if ok then
+			result.reward = reward
+		else
+			warn("[Production] onResult failed", reward)
+		end
 	end
 	print(string.format("[Production] %s %s Q=%d %s price=%d (T%d M%d P%d S%d)", player.Name, s.shape.id, result.Q, result.grade, result.price, result.T, result.M, result.P, result.S))
 	return result
