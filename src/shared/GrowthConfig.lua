@@ -8,6 +8,7 @@ local G = {}
 G.Save = {
 	storeName = "DalgonaPlayer_v1", -- DataStore 이름 (바꾸면 모든 저장이 새로 시작됨)
 	autosaveSeconds = 60,
+	changeSaveSeconds = 15, -- 코인·재료·재고가 바뀌면 이만큼 뒤 한 번 더 저장 (서버가 갑자기 꺼져도 잃는 양을 줄임)
 	retries = 4, -- 저장/불러오기 실패 시 다시 시도 횟수
 	retryDelay = 2, -- 첫 재시도 대기(초), 매번 2배
 	lockStaleSeconds = 180, -- 다른 서버의 잠금이 이 시간보다 오래되면 죽은 서버로 보고 가져옴
