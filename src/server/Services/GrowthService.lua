@@ -15,6 +15,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local G = require(Shared:WaitForChild("GrowthConfig"))
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
+local Minime = require(script.Parent:WaitForChild("Minime"))
 
 local GrowthService = {}
 
@@ -263,6 +264,7 @@ end
 
 ---------------------------------------------------------------- 알바생 생산
 
+-- 미니미를 못 만들 때 쓰는 부품 인형
 local function helperModel(player, plot, i)
 	local m = Instance.new("Model")
 	m.Name = "Helper" .. i
@@ -400,8 +402,24 @@ local function syncHelpers(player, d)
 		if not states[i] then
 			states[i] = { t = 0, status = "work" }
 		end
-		if plot and (not states[i].model or not states[i].model.Parent) then
-			states[i].model = helperModel(player, plot, i)
+		local st = states[i]
+		if plot and not st.building and (not st.model or not st.model.Parent) then
+			-- 주인 아바타 미니미 (D19). 만드는 데 시간이 걸려서 따로 돌리고, 실패하면 부품 인형
+			st.building = true
+			local h = d.partTimers[i]
+			task.spawn(function()
+				local spot = G.Plots.handStation.pos
+				local foot = plot.cframe * CFrame.new(spot.X - 8 + (i - 1) * 5, G.Plots.size.Y, spot.Z - 2.5)
+				local m = Minime.build(player, plot.model, foot, i, h and h.skill or 0)
+				if not player.Parent or helperState[player] ~= states then
+					if m then
+						m:Destroy()
+					end
+					return
+				end
+				st.model = m or helperModel(player, plot, i)
+				st.building = false
+			end)
 		end
 	end
 end
