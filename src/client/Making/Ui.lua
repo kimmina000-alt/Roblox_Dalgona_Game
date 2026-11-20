@@ -372,6 +372,60 @@ function Ui:_buildMeter()
 	self.meterBand = new("Frame", { BackgroundColor3 = Color3.fromRGB(80, 190, 90), BorderSizePixel = 0, Parent = track })
 	self.meterFill = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), BackgroundColor3 = INK, BackgroundTransparency = 0.25, BorderSizePixel = 0, Parent = track }, { corner(6) })
 	self.meterLabel = label({ Text = "", TextSize = 12, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 16), Parent = m })
+	self.meterTrack = track
+	-- 온도일 때는 온도계 모양 (2026-11-20 "온도 팝업 온도계 모양으로"): 유리관 + 아래 빨간 구 + 눈금, 초록 = 알맞은 온도
+	local thermo = new("Frame", { Name = "Thermo", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false, Parent = m })
+	local tube = new("Frame", {
+		Name = "Tube",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 28),
+		Size = UDim2.new(0, 14, 1, -74),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		ZIndex = 2,
+		Parent = thermo,
+	}, { corner(7), new("UIStroke", { Thickness = 2, Color = Color3.fromRGB(150, 138, 126), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }) })
+	self.thermoBand = new("Frame", { BackgroundColor3 = Color3.fromRGB(110, 205, 120), BackgroundTransparency = 0.25, BorderSizePixel = 0, ZIndex = 3, Parent = tube })
+	self.thermoFill = new("Frame", {
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, 0, 1, 2),
+		Size = UDim2.new(1, -4, 0, 0),
+		BackgroundColor3 = Color3.new(1, 1, 1),
+		BorderSizePixel = 0,
+		ZIndex = 4,
+		Parent = tube,
+	}, {
+		corner(5),
+		new("UIGradient", { Rotation = 90, Color = ColorSequence.new(Color3.fromRGB(255, 120, 70), Color3.fromRGB(220, 40, 40)) }),
+	})
+	-- 알맞은 온도 칸 옆 표시 (관 왼쪽 초록 괄호)
+	self.thermoBracket = new("Frame", { AnchorPoint = Vector2.new(1, 0), BackgroundColor3 = Color3.fromRGB(60, 170, 75), BorderSizePixel = 0, ZIndex = 3, Parent = thermo }, { corner(2) })
+	-- 눈금 (관 오른쪽)
+	local ticks = new("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 0, 0, 30), Size = UDim2.new(1, 0, 1, -78), Parent = thermo })
+	for i = 0, 5 do
+		new("Frame", {
+			AnchorPoint = Vector2.new(0, 0.5),
+			Position = UDim2.new(0.5, 9, i / 5, 0),
+			Size = UDim2.fromOffset(i % 5 == 0 and 7 or 4, 2),
+			BackgroundColor3 = Color3.fromRGB(150, 138, 126),
+			BorderSizePixel = 0,
+			ZIndex = 3,
+			Parent = ticks,
+		})
+	end
+	-- 아래 빨간 구 (관과 이어짐)
+	new("Frame", {
+		Name = "Bulb",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 1, -34),
+		Size = UDim2.fromOffset(26, 26),
+		BackgroundColor3 = Color3.fromRGB(225, 50, 45),
+		BorderSizePixel = 0,
+		ZIndex = 5,
+		Parent = thermo,
+	}, { new("UICorner", { CornerRadius = UDim.new(0.5, 0) }), new("UIStroke", { Thickness = 2, Color = Color3.fromRGB(150, 138, 126) }) })
+	self.thermo = thermo
+	self.thermoTube = tube
 	-- 국자 높이 ↔ 온도 연결 (2026-11-20 사용자 요청 "국자 올리면 온도 바 내려가는 거 한눈에"):
 	-- 온도 막대 오른쪽 옆 화살표. 국자를 올리는 동안 파란 ▼(온도 내려감), 내리는 동안 빨간 ▲.
 	-- 국자 들기 안내(왼쪽 아래 ▲)가 떠 있으면 그 화살표와 같은 박자로 ▼가 내려감
@@ -1068,6 +1122,23 @@ function Ui:setMeter(visible, value01, lo01, hi01, text, title)
 	self.meter.Visible = visible
 	if not visible then
 		return
+	end
+	-- 온도는 온도계 모양, 다른 것(거품 양 등)은 예전 막대
+	local isTemp = title == "온도"
+	if self.thermo then
+		self.thermo.Visible = isTemp
+		self.meterTrack.Visible = not isTemp
+		if isTemp then
+			local v = math.clamp(value01, 0, 1)
+			self.thermoFill.Size = UDim2.new(1, -4, v, 2)
+			self.thermoBand.Position = UDim2.fromScale(0, 1 - hi01)
+			self.thermoBand.Size = UDim2.fromScale(1, hi01 - lo01)
+			-- 관 밖 왼쪽 초록 괄호: 관과 같은 높이 칸
+			local tube = self.thermoTube
+			local th = tube.AbsoluteSize.Y / math.max(self.scale.Scale, 0.01)
+			self.thermoBracket.Position = UDim2.new(0.5, -10, 0, 28 + th * (1 - hi01))
+			self.thermoBracket.Size = UDim2.fromOffset(3, math.max(th * (hi01 - lo01), 2))
+		end
 	end
 	self.meterFill.Size = UDim2.fromScale(1, math.clamp(value01, 0, 1))
 	self.meterBand.Position = UDim2.fromScale(0, 1 - hi01)

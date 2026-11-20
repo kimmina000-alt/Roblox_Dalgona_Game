@@ -260,11 +260,16 @@ local function runSession()
 	-- 결과를 보고 포장할지 고름 (2026-11-20) → 포장하면 테이블 오른쪽 포장 공간에서 비닐·빵끈 →
 	-- 다 만든 달고나(포장했으면 포장째)를 화면 정중앙에 크게 → 완성 창
 	if dal and not result.burnt then
-		local ask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "포장할까요? 비닐에 넣고 빵끈으로 묶어요", "포장하기", "그냥 두기")
-		while not ask.choice do
-			if not ctx.frame() then
-				ask.close()
-				return
+		-- 모양 단계에서 "포장하기"를 눌렀으면 (모양 안 찍음, 2026-11-20) 묻지 않고 바로 포장
+		local stampRec = ctx.records.stamp
+		local ask = { choice = 1 }
+		if not (stampRec and stampRec.packNow) then
+			ask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "포장할까요? 비닐에 넣고 빵끈으로 묶어요", "포장하기", "그냥 두기")
+			while not ask.choice do
+				if not ctx.frame() then
+					ask.close()
+					return
+				end
 			end
 		end
 		local extras = nil
