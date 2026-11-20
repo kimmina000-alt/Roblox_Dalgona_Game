@@ -61,7 +61,7 @@ local gui = new("ScreenGui", {
 local panel = new("Frame", {
 	Name = "Status",
 	Position = UDim2.new(0, 12, 0, 12),
-	Size = UDim2.fromOffset(250 * S, 132 * S),
+	Size = UDim2.fromOffset(290 * S, 132 * S),
 	BackgroundColor3 = CREAM,
 	BackgroundTransparency = 0.05,
 	Parent = gui,
@@ -71,9 +71,9 @@ local coinText = label({ Name = "Coins", Position = UDim2.fromOffset(40 * S, 8 *
 -- 코인 아이콘 (🪙 이모지는 Roblox 글꼴에 없어 네모로 나옴)
 local coinIcon = new("Frame", { Name = "CoinIcon", Position = UDim2.fromOffset(12 * S, 11 * S), Size = UDim2.fromOffset(22 * S, 22 * S), BackgroundColor3 = Color3.fromRGB(255, 200, 60), Parent = panel }, { corner(11 * S), stroke(Color3.fromRGB(200, 140, 30), 2) })
 label({ Text = "C", Size = UDim2.fromScale(1, 1), TextSize = 13 * S, Font = Enum.Font.GothamBlack, TextColor3 = Color3.fromRGB(170, 110, 20), TextXAlignment = Enum.TextXAlignment.Center, Parent = coinIcon })
-local plotText = label({ Name = "Plot", Position = UDim2.fromOffset(150 * S, 10 * S), Size = UDim2.fromOffset(90 * S, 24 * S), TextSize = 14 * S, TextXAlignment = Enum.TextXAlignment.Right, Text = "", TextColor3 = Color3.fromRGB(150, 110, 80), Parent = panel })
+local plotText = label({ Name = "Plot", Position = UDim2.fromOffset(170 * S, 10 * S), Size = UDim2.fromOffset(110 * S, 24 * S), TextSize = 14 * S, TextXAlignment = Enum.TextXAlignment.Right, Text = "", TextColor3 = Color3.fromRGB(150, 110, 80), Parent = panel })
 local levelText = label({ Name = "Level", Position = UDim2.fromOffset(12 * S, 40 * S), Size = UDim2.fromOffset(60 * S, 20 * S), TextSize = 17 * S, Font = Enum.Font.GothamBlack, Text = "Lv1", Parent = panel })
-local expBack = new("Frame", { Name = "ExpBar", Position = UDim2.fromOffset(70 * S, 44 * S), Size = UDim2.fromOffset(168 * S, 14 * S), BackgroundColor3 = Color3.fromRGB(240, 222, 196), Parent = panel }, { corner(7) })
+local expBack = new("Frame", { Name = "ExpBar", Position = UDim2.fromOffset(70 * S, 44 * S), Size = UDim2.fromOffset(208 * S, 14 * S), BackgroundColor3 = Color3.fromRGB(240, 222, 196), Parent = panel }, { corner(7) })
 local expFill = new("Frame", { Name = "Fill", Size = UDim2.fromScale(0, 1), BackgroundColor3 = PINK, Parent = expBack }, { corner(7) })
 local expText = label({ Name = "ExpText", Size = UDim2.fromScale(1, 1), TextSize = 11 * S, TextXAlignment = Enum.TextXAlignment.Center, Text = "0 / 50", ZIndex = 2, Parent = expBack })
 
@@ -81,9 +81,9 @@ local ingText = {}
 for i, ing in ipairs(G.Ingredients) do
 	ingText[ing.id] = label({
 		Name = ing.id,
-		Position = UDim2.fromOffset((12 + (i - 1) * 78) * S, 68 * S),
-		Size = UDim2.fromOffset(76 * S, 24 * S),
-		TextSize = 17 * S,
+		Position = UDim2.fromOffset((12 + (i - 1) * 54) * S, 68 * S),
+		Size = UDim2.fromOffset(54 * S, 24 * S),
+		TextSize = 15 * S,
 		Text = ing.icon .. " 0",
 		Parent = panel,
 	})
@@ -93,7 +93,7 @@ local saveWarn = label({ Name = "SaveWarn", Position = UDim2.fromOffset(12 * S, 
 
 local shopBtn = new("TextButton", {
 	Name = "ShopButton",
-	Position = UDim2.fromOffset(160 * S, 96 * S),
+	Position = UDim2.fromOffset(200 * S, 96 * S),
 	Size = UDim2.fromOffset(80 * S, 28 * S),
 	BackgroundColor3 = CARAMEL,
 	Text = "🛒 상점",
@@ -187,6 +187,21 @@ shopBtn.Activated:Connect(function()
 	shop.Visible = not shop.Visible
 	shopMsg.Text = ""
 end)
+-- 다른 스크립트(제작 화면)가 상점을 열 수 있게: OpenShop:Fire(재료 id)
+local openShop = Instance.new("BindableEvent")
+openShop.Name = "OpenShop"
+openShop.Parent = script
+openShop.Event:Connect(function(id)
+	shop.Visible = true
+	local ing = nil
+	for _, x in ipairs(G.Ingredients) do
+		if x.id == id then
+			ing = x
+		end
+	end
+	shopMsg.TextColor3 = Color3.fromRGB(200, 70, 60)
+	shopMsg.Text = ing and (ing.name .. "이(가) 없어요. 사 가세요!") or ""
+end)
 closeBtn.Activated:Connect(function()
 	shop.Visible = false
 end)
@@ -260,7 +275,7 @@ local function apply(s)
 	stockText.Text = string.format("🍪 달고나 %d/%d", s.stock or 0, s.stockMax or G.StockMax)
 	plotText.Text = s.plot and string.format("🏠 %d번 가게", s.plot) or ""
 	saveWarn.Visible = s.saving == false
-	panel.Size = UDim2.fromOffset(250 * S, (s.saving == false and 154 or 132) * S)
+	panel.Size = UDim2.fromOffset(290 * S, (s.saving == false and 154 or 132) * S)
 	refreshButtons()
 end
 
