@@ -171,6 +171,7 @@ function Press.run(ctx)
 				if h < cfg.crack and not rec.cracked then
 					rec.cracked = true
 					dal:crack(6, 0.5)
+					Sfx.play("pressSticky", 0.8, 0.7) -- 누르고 있는 그 순간 "쩍" (2026-11-20)
 					ui:hint("너무 얇아서 가장자리가 갈라졌어요")
 					ui:buzz(0.8, 0.15)
 				end

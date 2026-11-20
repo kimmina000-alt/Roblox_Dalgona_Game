@@ -136,7 +136,7 @@ function Melt.run(ctx)
 		Heat.smoke(S, st.burn > 0.03, st.burn)
 
 		ui:setGauge(true, speed, cfg.slow, cfg.fast)
-		ui:setMeter(true, (st.temp - 20) / 220, (cfg.tempLow - 20) / 220, (cfg.tempHigh - 20) / 220, string.format("%d°", math.floor(st.temp + 0.5)))
+		ui:setMeter(true, (st.temp - 20) / 220, (cfg.tempLow - 20) / 220, (cfg.tempHigh - 20) / 220, string.format("%d°", math.floor(st.temp + 0.5)), "온도")
 		rec.green = tTotal > 0 and tGreen / tTotal or 0
 		rec.tempOk = tOkAll > 0 and tOkCount / tOkAll or 1
 		rec.burn = st.burn

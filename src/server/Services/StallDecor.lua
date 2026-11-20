@@ -516,7 +516,7 @@ end
 -- 포장 공간 (2026-11-20 "모양 찍은 다음에 테이블 더 길게 해서 오른쪽에 비닐이랑 포장끈 통에 담아 놓고 포장하는 공간"):
 -- 테이블을 오른쪽으로 PACK_W만큼 늘리고, 거기에 크라프트지 포장 매트 + 네모 투명 비닐 통 + 금색 빵끈 통.
 -- 클라이언트 Making/Pack이 PackArea의 Mat · BagTop · TieCup을 찾아 씀
-local PACK_W = 5
+local PACK_W = 6 -- 2026-11-20: 5 → 6 (비닐을 달고나 오른쪽에 꺼내 놓을 자리)
 local function packArea(ws, top)
 	if ws:FindFirstChild("PackArea") then
 		return
@@ -542,7 +542,7 @@ local function packArea(ws, top)
 	local y = top.Position.Y + top.Size.Y / 2
 	local cx, cz = oldRight + PACK_W / 2, top.Position.Z
 	-- 포장 매트 (크라프트지)
-	deco(f, "Mat", Vector3.new(3.4, 0.02, 3.4), CFrame.new(cx - 0.2, y + 0.01, cz + 0.9), Color3.fromRGB(214, 182, 136), Enum.Material.Fabric)
+	deco(f, "Mat", Vector3.new(3.4, 0.02, 3.4), CFrame.new(cx - 1.3, y + 0.01, cz + 0.9), Color3.fromRGB(214, 182, 136), Enum.Material.Fabric)
 	-- 네모 투명 비닐 통 (투명 아크릴 상자 + 차곡차곡 쌓인 비닐)
 	local bx, bz = cx - 1.2, cz - 2.0
 	local BW, BL, BH = 1.9, 1.5, 0.45

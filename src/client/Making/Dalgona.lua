@@ -674,7 +674,7 @@ end
 
 -- 가장자리 갈라짐 (진한 선)
 function Dalgona:crack(count, inward)
-	Sfx.play("crack", 0.7)
+	Sfx.play("crack", 1.0) -- 2026-11-20: 더 크게 (누르는 중에 쩍 소리가 잘 들리게)
 	if self.batter then
 		self:crackLines(math.max(3, math.floor((count or 5) * 0.8)))
 		return

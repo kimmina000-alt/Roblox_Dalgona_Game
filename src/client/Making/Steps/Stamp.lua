@@ -124,6 +124,7 @@ function Stamp.run(ctx)
 	local placed = nil -- 놓은 자리 CFrame (틀 Root)
 	local contact, holdT = false, 0
 	local holding = false
+	local crackedLive = false -- 누르고 있는 동안 이미 금이 갔는지 (2026-11-20: 누르는 중에 "쩍")
 	local grab = nil -- 누름판 손으로 들기 (PresserGrab)
 	local groove = nil
 	local fingerV = 0
@@ -213,6 +214,14 @@ function Stamp.run(ctx)
 				else
 					holdT += dt
 					groove:setDepth(depthFor(holdT, cfg))
+					-- 너무 오래 누르면 누르고 있는 그 순간 쩍 갈라짐 (떼고 나서가 아니라)
+					if holdT > cfg.crackHold and not crackedLive then
+						crackedLive = true
+						dal:crack(4, 0.7)
+						Sfx.play("pressSticky", 0.8, 0.7)
+						ui:hint("너무 세게 눌러서 금이 갔어요")
+						ui:buzz(0.9, 0.2)
+					end
 					local depth = math.min(holdT / 1.0, 1) * 0.2
 					cutter:PivotTo(placed - Vector3.new(0, depth, 0))
 					grab.bottom = contactY - depth
@@ -248,9 +257,11 @@ function Stamp.run(ctx)
 		ui:hint("반죽이 길쭉해서 틀이 제대로 안 찍혀요")
 		ui:buzz(0.8, 0.15)
 	elseif rec.hold > cfg.crackHold then
-		dal:crack(4, 0.7)
-		ui:hint("너무 세게 눌러서 금이 갔어요")
-		ui:buzz(0.8, 0.15)
+		if not crackedLive then
+			dal:crack(4, 0.7)
+			ui:hint("너무 세게 눌러서 금이 갔어요")
+			ui:buzz(0.8, 0.15)
+		end
 	elseif rec.hold < cfg.holdMin then
 		ui:hint("자국이 흐려요 (조금만 더 눌러요)")
 	else

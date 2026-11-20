@@ -211,6 +211,7 @@ function Station:reset()
 	end
 	self.Flame.Rate = 30
 	self:presserSeeThrough(false)
+	self:hidePresser(false)
 	local chosen = self.Chopsticks:FindFirstChild("Chosen")
 	if chosen then
 		chosen:Destroy()
@@ -425,6 +426,22 @@ function Station:removeHand()
 end
 
 -- 누름판은 누를 때도 금속 그대로 보인다 (사용자 요청: 반투명 안 함). 부르는 쪽은 그대로 둠
+-- 누름판 통째로 숨기기 (2026-11-20 "반죽 부을 때 철판 옆에 뜨는 거 삭제"). 광택 메시(SurfaceAppearance)는
+-- LocalTransparencyModifier로 다 안 숨겨져서 Transparency·그림자·외곽선을 직접 끔. false면 원래대로
+function Station:hidePresser(on)
+	for p, t in pairs(self.presserParts) do
+		p.Transparency = on and 1 or t
+		if p:GetAttribute("OrigShadow") == nil then
+			p:SetAttribute("OrigShadow", p.CastShadow)
+		end
+		p.CastShadow = not on and p:GetAttribute("OrigShadow") or false
+	end
+	local outline = self.Presser:FindFirstChild("ToonOutline")
+	if outline then
+		outline.Enabled = not on
+	end
+end
+
 function Station:presserSeeThrough(on)
 	for p, t in pairs(self.presserParts) do
 		p.Transparency = t

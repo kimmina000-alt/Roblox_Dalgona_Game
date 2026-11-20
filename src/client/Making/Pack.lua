@@ -1,7 +1,7 @@
 -- 포장 (2026-11-20 사용자 요청): 모양 찍기까지 끝나고 결과를 본 뒤 플레이어가 포장할지 고르면,
 -- 테이블 오른쪽 포장 공간(StallDecor.packArea: 포장 매트 + 네모 비닐 통 + 빵끈 통)에서 직접 포장.
 --   ① 달고나가 철판에서 포장 매트로 옮겨짐 (막대가 앞쪽을 향하게 놓임)
---   ② 비닐 통에서 네모난 투명 비닐을 끌어 달고나 위에 놓으면 쏙 씌워짐 (통을 톡 누르기만 해도 됨)
+--   ② 비닐 통을 누르면 비닐이 달고나 오른쪽에 놓이고, 왼쪽으로 끌어 달고나를 넣음 (달고나는 막대가 왼쪽으로 돌려 놓임)
 --   ③ 빵끈 통을 눌러 금색 끈을 집고, 쓱 끌기 두 번: 한 번에 비닐 아랫부분이 반쯤 오므라들고, 두 번째에 꽉 묶임
 --      (참고 사진: 네모난 비닐 윗부분은 그대로, 막대 쪽 아랫부분이 모여 금색 끈으로 감기고 끈 끝이 양옆으로 뻗음)
 -- 실패·점수 없음. 손을 안 대고 있으면 IDLE_T초 뒤 알아서 마저 함. 다 되면 비닐·끈 부품 목록을 돌려줌 (Showcase가 같이 띄움)
@@ -34,7 +34,6 @@ local function buildBag(parent, R, zNeck)
 		local em = AssetService:CreateEditableMesh()
 		local zTop = R * 1.18
 		local zEnd = zNeck - 0.45
-		local zBody = -R * 0.9 -- 여기서부터 목 쪽으로 모임 (달고나 아래 끝 바로 밑)
 		local yc = 0.1
 		local verts = {}
 		for i = 1, NS do
@@ -64,6 +63,16 @@ local function buildBag(parent, R, zNeck)
 		local self = {}
 		function self.shape(g)
 			local W0 = R * 1.2
+			-- 묶었을 때 폭 (2026-11-20 "달고나 모양에 맞춰서 비닐 아래 좁아지게, 너무 사각임"):
+			-- 위쪽 절반은 네모 그대로, 가운데 아래로는 둥근 달고나 가장자리를 따라 좁아지다가 막대 쪽 끈에서 꽉 모임
+			local function tiedW(z)
+				local q = math.clamp(z / R, -1, 1)
+				local round = R * 1.07 * math.sqrt(math.max(0, 1 - q * q))
+				local neckU = smooth((z - zNeck) / (-R * 0.55 - zNeck))
+				round = math.max(round, 0.07 + R * 0.3 * neckU)
+				local k = smooth((R * 0.3 - z) / (R * 0.3))
+				return W0 + (round - W0) * k
+			end
 			for i = 1, NS do
 				local s = (i - 1) / (NS - 1)
 				local z, w, t, amp
@@ -74,14 +83,10 @@ local function buildBag(parent, R, zNeck)
 					local capLen = R * 0.16
 					local f = d < capLen and math.sqrt(math.max(0, 1 - (1 - d / capLen) ^ 2)) or 1
 					local W, T = W0 * (1 - 0.14 * (1 - f)), 0.23 * math.sqrt(f)
-					if z < zBody then
-						local u = smooth((zBody - z) / (zBody - zNeck))
-						w = W + (0.07 - W) * u * g
-						t = T + (0.05 - T) * u * g
-						amp = g * 0.22 * u
-					else
-						w, t, amp = W, T, 0
-					end
+					local u = smooth((-R * 0.6 - z) / (-R * 0.6 - zNeck)) -- 끈 가까이 (주름·얇아짐)
+					w = W + (math.min(tiedW(z), W) - W) * g
+					t = T + (0.05 - T) * u * g
+					amp = g * 0.22 * u
 				else
 					-- 끈 아래 끝자락: 묶으면 짧게 퍼진 주름, 안 묶었으면 네모 그대로
 					local v = (s - 0.8) / 0.2
@@ -157,12 +162,15 @@ function Pack.run(ctx, dal, st)
 		end
 		return true
 	end
-	local fwd = ws:GetPivot():VectorToWorldSpace(Vector3.new(0, 0, 1)) -- 테이블 앞(플레이어 쪽, 화면 아래)
+	-- 2026-11-20: 달고나를 옆으로 돌려 막대가 왼쪽(화면 왼쪽)을 향하게. 비닐은 오른쪽에서 끌어와 씌움
+	local pivot = ws:GetPivot()
+	local fwd = pivot:VectorToWorldSpace(Vector3.new(-1, 0, 0)) -- 막대 방향 = 테이블 왼쪽
 	fwd = Vector3.new(fwd.X, 0, fwd.Z).Unit
+	local right = -fwd -- 비닐이 나오는 쪽
 	local m = mat.Position + Vector3.new(0, mat.Size.Y / 2, 0)
 
-	-- ① 카메라를 포장 공간으로, 달고나를 매트로 (살짝 들어 올려 옮김. 막대가 앞쪽(화면 아래)을 향하게)
-	CameraRig.goPoint(m + Vector3.new(0, 0, -0.9), 11.5, 0.3)
+	-- ① 카메라를 포장 공간으로, 달고나를 매트로 (살짝 들어 올려 옮기며 옆으로 돌림)
+	CameraRig.goPoint(m + right * 1.2 + pivot:VectorToWorldSpace(Vector3.new(0, 0, -0.5)), 12, 0.3)
 	local parts = Showcase.collect(S, dal, st)
 	local c = dal.center
 	local dir = (st.stick and st.stick.dir) or fwd
@@ -218,80 +226,101 @@ function Pack.run(ctx, dal, st)
 		bag3.part.CFrame = (rot + pos + Vector3.new(0, lift or 0, 0)) * CFrame.new(bag3.center)
 	end
 
-	-- ② 비닐 씌우기: 비닐 통에서 끌어 달고나 위에 놓기 (통을 톡 누르기만 해도 날아가 씌워짐)
-	ui:say("비닐에 넣어요", "비닐 통에서 비닐을 끌어 달고나 위에 놓아요")
-	local seen = P.presses
-	local grab = nil -- { start = 화면 위치, moved = bool }
-	local idle = 0
-	local placed = false
-	local function flyBag(from)
-		-- from(세계) → 달고나 위로 날아와 내려앉음
+	-- ② 비닐 넣기 (2026-11-20): 비닐 통을 누르면 비닐 한 장이 달고나 오른쪽에 펼쳐져 놓이고,
+	--    그 비닐을 왼쪽으로 끌어 달고나에 씌움 (열린 쪽이 달고나를 향함). 손을 안 대면 IDLE_T초 뒤 알아서
+	local OUT = Rb * 2.6 -- 꺼낸 비닐이 놓이는 자리 (달고나 가운데에서 오른쪽으로)
+	local slide = OUT -- 지금 비닐 자리 (오른쪽으로 떨어진 거리, 0 = 다 씌움)
+	local function flyTo(from, toSlide, lift0, dur)
 		local tt = 0
-		bag3.part.Transparency = 0.68
-		while tt < 0.35 do
+		while tt < dur do
 			local dt = ctx.frame()
 			if not dt then
 				return false
 			end
 			tt += dt
-			local k = smooth(tt / 0.35)
-			bagAt(from:Lerp(m, k), (1 - k) * 0.5 + math.sin(math.pi * k) * 0.3)
+			local k = smooth(tt / dur)
+			local to = m + right * toSlide
+			bagAt(from:Lerp(to, k), (lift0 or 0) * (1 - k) + math.sin(math.pi * k) * 0.25)
 		end
-		bagAt(m, 0)
-		Sfx.play("pop", 0.35, 1.5)
-		ui:buzz(0.3, 0.05)
+		slide = toSlide
+		bagAt(m + right * toSlide, 0)
 		return true
 	end
-	while not placed do
+	ui:say("비닐에 넣어요", "비닐 통을 눌러 비닐을 꺼내요")
+	local seen = P.presses
+	local idle = 0
+	local out = false
+	while not out do
 		local dt = ctx.frame()
 		if not dt then
+			ui:setWorldTip(nil)
 			return nil
 		end
 		local boxS = screenOf(bagBox.Position)
-		ui:setWorldTip(not grab and "비닐" or nil, boxS - Vector2.new(0, 46))
-		if P.down and P.presses ~= seen and not grab then
+		ui:setWorldTip("비닐", boxS - Vector2.new(0, 46))
+		idle += dt
+		if (P.down and P.presses ~= seen) or idle > IDLE_T then
 			seen = P.presses
-			if (P.pos - boxS).Magnitude < GRAB_PX then
-				grab = { start = P.pos, moved = false }
-				bag3.part.Transparency = 0.68
-				Sfx.play("pop", 0.3, 1.3)
+			if idle > IDLE_T or (P.pos - boxS).Magnitude < GRAB_PX then
+				out = true
 			else
 				ui:hint("뒤쪽 비닐 통을 눌러요")
 			end
 		end
+	end
+	ui:setWorldTip(nil)
+	Sfx.play("pop", 0.3, 1.3)
+	bag3.part.Transparency = 0.68
+	if not flyTo(bagBox.Position, OUT, 0.4, 0.4) then
+		return nil
+	end
+	ui:say("비닐에 넣어요", "비닐을 왼쪽으로 끌어 달고나를 넣어요")
+	seen = P.presses
+	idle = 0
+	local grab = nil -- 누른 순간의 (손가락 자리 - 비닐 자리) 거리
+	while slide > 0.001 do
+		local dt = ctx.frame()
+		if not dt then
+			ui:setWorldTip(nil)
+			return nil
+		end
+		local bagS = screenOf(m + right * (slide + Rb * 0.3))
+		ui:setWorldTip(not grab and "← 끌어요" or nil, bagS - Vector2.new(0, 50))
+		if P.down and P.presses ~= seen and not grab then
+			seen = P.presses
+			local at = P.toPlane(m.Y)
+			grab = (at - m):Dot(right) - slide
+		end
 		if grab then
 			idle = 0
-			if (P.pos - grab.start).Magnitude > 20 then
-				grab.moved = true
-			end
-			local at = P.toPlane(m.Y + 0.5)
-			bagAt(Vector3.new(at.X, m.Y, at.Z), 0.5)
+			local at = P.toPlane(m.Y)
+			local want = math.clamp((at - m):Dot(right) - grab, 0, OUT)
+			slide += (want - slide) * (1 - math.exp(-dt / 0.05))
+			bagAt(m + right * slide, 0.06 * math.min(slide / 0.3, 1))
 			if not P.down then
-				local fromPos = Vector3.new(at.X, m.Y, at.Z)
-				local near = Vector3.new(at.X - m.X, 0, at.Z - m.Z).Magnitude < Rb * 1.8
-				if near or not grab.moved then
-					-- 달고나 위에 놓았거나, 톡 누르기만 함 → 씌워짐
-					if not flyBag(grab.moved and fromPos or bagBox.Position) then
+				grab = nil
+				if slide < OUT * 0.35 then
+					-- 거의 다 씌웠으면 쏙 들어감
+					if not flyTo(m + right * slide, 0, 0, 0.15) then
 						return nil
 					end
-					placed = true
-				else
-					ui:hint("달고나 위에 놓아요")
-					bag3.part.Transparency = 1
+					slide = 0
 				end
-				grab = nil
 			end
 		else
 			idle += dt
 			if idle > IDLE_T then
-				if not flyBag(bagBox.Position) then
+				if not flyTo(m + right * slide, 0, 0, 0.5) then
 					return nil
 				end
-				placed = true
+				slide = 0
 			end
 		end
 	end
 	ui:setWorldTip(nil)
+	bagAt(m, 0)
+	Sfx.play("pop", 0.35, 1.5)
+	ui:buzz(0.3, 0.05)
 
 	-- ③ 빵끈: 끈 통을 눌러 집기 → 쓱 끌기 두 번
 	local tieZ = neckZ

@@ -19,9 +19,10 @@ local Pour = {}
 local UserInputService = game:GetService("UserInputService")
 -- 터치 화면에서는 반죽이 손가락 바로 아래가 아니라 조금 위(화면 높이의 이 비율만큼)에 떨어짐
 -- (2026-11-20 "반죽 부을 때 손가락에 가려져서 잘 안 보여")
-local FINGER_UP = 0.1
+-- 2026-11-20 다시 "손가락으로 누르는 곳에 떨어지게": 위로 띄우던 것(0.1)을 없앰 → 손가락 바로 아래
+local FINGER_UP = 0
 local function aimScreenPos(P)
-	if UserInputService:GetLastInputType() == Enum.UserInputType.Touch then
+	if FINGER_UP > 0 and UserInputService:GetLastInputType() == Enum.UserInputType.Touch then
 		return P.pos - Vector2.new(0, workspace.CurrentCamera.ViewportSize.Y * FINGER_UP)
 	end
 	return P.pos
@@ -389,6 +390,8 @@ function Pour.run(ctx)
 	local gripLocal = S:ladleGripLocal()
 	local hideK = 1 -- 국자 숨김 정도 (2026-11-20: 붓기 내내 국자는 안 보이고 떨어지는 반죽만)
 	setLadleHidden(ladle, 1)
+	-- 붓는 동안 철판 옆 누름판은 안 보이게 (누르기 단계에서 다시 나옴)
+	S:hidePresser(true)
 	-- 반죽이 떨어질 자리 표시 (손가락 아래 철판 위 옅은 그림자)
 	local aimMark = S:fxPart(S.fx, { Name = "PourAim", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(60, 36, 20), Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(0.01, 0.34, 0.34) })
 
@@ -474,7 +477,7 @@ function Pour.run(ctx)
 		ladle:PivotTo(start:Lerp(hover, 1 - (1 - math.min(tc / 0.4, 1)) ^ 3))
 	end
 	home = hover
-	ui:say("철판 위를 누르고 있으면 반죽이 한 방울씩 떨어져요", UserInputService:GetLastInputType() == Enum.UserInputType.Touch and "손가락 조금 위 동그라미에 떨어져요 · 한 곳에 모아 동그랗게" or "한 곳에 모아 떨어뜨리면 동그랗게 · 설탕 원 안에")
+	ui:say("철판 위를 누르고 있으면 반죽이 한 방울씩 떨어져요", "한 곳에 모아 떨어뜨리면 동그랗게 · 설탕 원 안에")
 
 	while true do
 		local dt = ctx.frame()
@@ -716,6 +719,7 @@ function Pour.run(ctx)
 	end
 	S:setContents({ Transparency = 1 })
 	setLadleHidden(ladle, 0)
+	S:hidePresser(false)
 	if st.dalgona then
 		st.dalgona.simple = false
 		st.dalgona:setThickness(st.dalgona.h)

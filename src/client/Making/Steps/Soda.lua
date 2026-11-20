@@ -27,6 +27,7 @@ local LAYERS_MAX = 8 -- 한 번 들고 갈 때 최대 겹 수
 local LOAD_MAX = DIP_LAYER * LAYERS_MAX
 local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit
 local STICK_LEAN = Vector3.new(0.45, 0.6, 0.66).Unit -- 소다 넣을 때 젓가락 기울기 (눕혀서 끝에 묻은 소다가 위에서 보이게)
+local STIR_LIFT = 1.35 -- 소다 젓기: 국자를 이 높이까지 들어 올림 (불 위 철망에서, 녹일 때 알맞은 높이보다 훨씬 위)
 local TAP_PX = 110 -- 소다 통·국자 화면 위치에서 이만큼 안을 누르면 그 도구
 -- 영상 5·6번: 부푼 반죽은 밝은 땅콩버터 베이지, 젓가락이 지나간 자리에 결이 남음
 local FOAM = Color3.fromRGB(206, 152, 96)
@@ -437,6 +438,10 @@ function Soda.run(ctx)
 
 		-- 국자는 아직 불 위: 오래 끌면 탐 (너무 늦게 넣음). 높이는 왼쪽 막대로
 		local danger = Heat.control(st, P, ui, S)
+		-- 소다 넣고 저을 때는 국자를 불에서 높이 들어 올림 (2026-11-20 "소다 저을 때는 국자 더 높이"). 왼쪽을 잡고 있으면 손가락대로
+		if puffed and not P.side.down and st.h < STIR_LIFT then
+			st.h += (STIR_LIFT - st.h) * (1 - math.exp(-dt / 0.35))
+		end
 		S.Ladle:PivotTo(S:ladleAt(st.h))
 		Heat.flame(S, st.h)
 		Heat.step(st, dt)
@@ -684,7 +689,7 @@ function Soda.run(ctx)
 			end
 			ui:say("나무젓가락 끝에 소다를 묻혀 국자에 톡!", sub)
 			tubTip(dips == 0 and load < LOAD_MAX - 1e-3)
-			ui:setMeter(true, math.min(1, (rec.amount + load) / METER_MAX), cfg.idealMin / METER_MAX, cfg.idealMax / METER_MAX, "소다")
+			ui:setMeter(true, math.min(1, (rec.amount + load) / METER_MAX), cfg.idealMin / METER_MAX, cfg.idealMax / METER_MAX, string.format("%d번", math.floor((rec.amount + load) / DIP_LAYER + 0.5)), "소다")
 		else
 			if tipPowder then
 				tipPowder:Destroy()
@@ -762,7 +767,7 @@ function Soda.run(ctx)
 			end
 			Sfx.stir(puffed and "stirCream" or "stirLiquid", speed, stir.active)
 			ui:setGauge(true, speed, mcfg.slow, cfg.fastMin, "STIR FAST! · 빠르게")
-			ui:setMeter(true, rec.puff, 0.95, 1, "거품")
+			ui:setMeter(true, rec.puff, 0.95, 1, string.format("%d%%", math.floor(rec.puff * 100)), "거품")
 			rec.fastFrac = tStir > 0 and tFast / tStir or 0
 			ui:say("빠르게 저어요!", string.format("부풀기 %d%% · 크림처럼 될 때까지", math.floor(rec.puff * 100)))
 			-- 터졌으면 흘러내리는 걸 다 보여 준 뒤에 넘어감

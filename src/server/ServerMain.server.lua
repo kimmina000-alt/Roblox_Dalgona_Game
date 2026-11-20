@@ -37,7 +37,7 @@ end
 -- Lv5 달고나 공장: 스폰 뒤쪽(+Z)에 앞(제어대)이 스폰을 보게 놓는다. 자동 생산 연결은 다음 단계.
 FactoryBuilder.place(workspace, CFrame.new(0, 0, 30))
 -- Lv4 연속 생산 설비: 작업대 오른쪽 옆 시험 자리, 조작판이 스폰 쪽(+Z)을 보게 180° 돌림
-FactoryBuilder.placeLine(workspace, CFrame.new(27, 0, -14) * CFrame.Angles(0, math.pi, 0)) -- 테이블 오른쪽 포장 공간(+5) 만큼 더 오른쪽 (2026-11-20)
+FactoryBuilder.placeLine(workspace, CFrame.new(28, 0, -14) * CFrame.Angles(0, math.pi, 0)) -- 테이블 오른쪽 포장 공간(+6) 만큼 더 오른쪽 (2026-11-20)
 
 ProductionService.init({
 	StartProduction = remotes.StartProduction,

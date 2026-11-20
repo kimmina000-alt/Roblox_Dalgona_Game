@@ -104,6 +104,9 @@ function Ui.new(player, steps)
 		self.meter.Position = UDim2.fromOffset(20, qy)
 		self.heightBox.Position = UDim2.fromOffset(76, qy)
 		self.vgauge.Position = UDim2.fromOffset(76, qy) -- 젓기 속도: 거품·온도 창 오른쪽 옆, 같은 길이
+		-- 누르기 두께 가로 게이지는 화면 위쪽 (2026-11-20: 아래쪽은 누르는 손가락에 가려짐)
+		self.gauge.AnchorPoint = Vector2.new(0.5, 0)
+		self.gauge.Position = UDim2.new(0.5, 0, 0, qy)
 		root.Size = UDim2.fromOffset(v.X / s, v.Y / s)
 	end
 	rescale()
@@ -302,7 +305,9 @@ function Ui:_buildMeter()
 		Visible = false,
 		Parent = self.root,
 	}, { corner(12) })
-	local track = new("Frame", { Position = UDim2.fromOffset(13, 12), Size = UDim2.new(1, -26, 1, -40), BackgroundColor3 = Color3.fromRGB(220, 214, 205), BorderSizePixel = 0, Parent = m }, { corner(6) })
+	-- 위에 이름 (2026-11-20 "속도 옆에 온도 표시": 속도 막대처럼 맨 위에 무엇인지 적음)
+	self.meterTitle = label({ Text = "", TextSize = 13, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(1, 0, 0, 16), Parent = m })
+	local track = new("Frame", { Position = UDim2.fromOffset(13, 26), Size = UDim2.new(1, -26, 1, -54), BackgroundColor3 = Color3.fromRGB(220, 214, 205), BorderSizePixel = 0, Parent = m }, { corner(6) })
 	self.meterBand = new("Frame", { BackgroundColor3 = Color3.fromRGB(80, 190, 90), BorderSizePixel = 0, Parent = track })
 	self.meterFill = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), BackgroundColor3 = INK, BackgroundTransparency = 0.25, BorderSizePixel = 0, Parent = track }, { corner(6) })
 	self.meterLabel = label({ Text = "", TextSize = 12, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 16), Parent = m })
@@ -821,7 +826,8 @@ function Ui:setThick(visible, h, h0, lo, hi, color)
 	self.thickText.Text = string.format("%.1fmm", h / h0 * 10)
 end
 
-function Ui:setMeter(visible, value01, lo01, hi01, text)
+-- title = 막대 위 이름 (온도·소다·거품), text = 아래 값 (151° 등)
+function Ui:setMeter(visible, value01, lo01, hi01, text, title)
 	self.meter.Visible = visible
 	if not visible then
 		return
@@ -830,6 +836,7 @@ function Ui:setMeter(visible, value01, lo01, hi01, text)
 	self.meterBand.Position = UDim2.fromScale(0, 1 - hi01)
 	self.meterBand.Size = UDim2.fromScale(1, hi01 - lo01)
 	self.meterLabel.Text = text or ""
+	self.meterTitle.Text = title or ""
 end
 
 function Ui:toast(text, seconds)
