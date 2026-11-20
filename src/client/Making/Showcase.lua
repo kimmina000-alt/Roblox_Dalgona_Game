@@ -78,10 +78,27 @@ function Showcase.run(ctx, dal, st, extras)
 	-- 기준 틀: 가운데 = 달고나 가운데(놓인 면), 앞(-Z) = 막대 방향, 위(+Y) = 윗면
 	local R0 = CFrame.lookAt(c, c + dir)
 	local rel = {}
+	-- 화면에 맞출 크기: 놓인 면(기준 틀 X·Z) 위 실제 상자 (막대까지, 포장했으면 비닐까지).
+	-- 2026-11-20 플레이 테스트: 예전엔 2R+4로 잘라서 포장째면 위가 화면 밖으로 잘림.
+	-- 3D 반죽 부품은 메시 여백이 커서 크기 대신 반지름으로 셈
+	local batterPart = dal.batter and dal.batter.part
+	local x0, x1, z0, z1 = -R - 0.7, R + 0.7, -R - 0.7, R + 0.7
 	for i, p in ipairs(parts) do
 		rel[i] = R0:ToObjectSpace(p.CFrame)
 		p.Anchored = true
+		if p ~= batterPart then
+			local h = p.Size / 2
+			for _, s in ipairs({ Vector3.new(1, 1, 1), Vector3.new(1, 1, -1), Vector3.new(1, -1, 1), Vector3.new(-1, 1, 1) }) do
+				for _, sg in ipairs({ 1, -1 }) do
+					local q = rel[i] * (h * s * sg)
+					x0, x1 = math.min(x0, q.X), math.max(x1, q.X)
+					z0, z1 = math.min(z0, q.Z), math.max(z1, q.Z)
+				end
+			end
+		end
 	end
+	-- 가운데가 달고나 가운데라서 양쪽으로 같은 폭이 필요 (치우친 쪽 기준)
+	local reachMax = 2 * math.max(-x0, x1, -z0, z1)
 
 	local camera = workspace.CurrentCamera
 	-- side 0 = 화면 정중앙, 1 = 완성 창 옆 (가로 화면: 왼쪽 가운데, 세로 화면(폰): 위쪽 가운데)
@@ -95,7 +112,7 @@ function Showcase.run(ctx, dal, st, extras)
 			sx = 0.5 + (0.32 - 0.5) * side
 		end
 		local ray = camera:ViewportPointToRay(vp.X * sx, vp.Y * sy)
-		local extent = 2 * R + 1.4 -- 막대까지
+		local extent = reachMax -- 막대·비닐까지 다 들어오게
 		-- 화면의 좁은 쪽에 맞춤 (세로 화면에서 옆으로 넘치지 않게)
 		local tanV = math.tan(math.rad(camera.FieldOfView) / 2)
 		local tanMin = math.min(tanV, tanV * vp.X / vp.Y)

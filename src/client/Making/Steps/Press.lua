@@ -86,7 +86,8 @@ function Press.run(ctx)
 			return nil
 		end
 		-- 안내가 보일 때(처음 판들 · 막혔을 때 · 한 번 빗나갔을 때) 누름판을 화살표로 가리킴 (2026-11-20)
-		local ap = cam:WorldToScreenPoint(grab:worldBottom() + Vector3.new(0, discHalf * 2 + 0.3, 0))
+		-- 화살표 끝은 누름판 가운데 (위로 너무 올라가면 이름표가 단계 줄에 닿음)
+		local ap = cam:WorldToScreenPoint(grab:worldBottom() + Vector3.new(0, discHalf, 0))
 		ui:setArrow((ui:subShown() or missed) and Vector2.new(ap.X, ap.Y) or nil, "누름판")
 		if P.down and P.presses ~= seen then
 			seen = P.presses

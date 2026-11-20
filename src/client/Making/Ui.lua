@@ -247,7 +247,10 @@ function Ui:_buildBottom()
 		TextColor3 = Color3.fromRGB(70, 66, 62),
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -70),
-		Size = UDim2.fromOffset(700, 26),
+		-- 가운데 칸(온도·속도 막대 사이)에만: 넘치면 두 줄로 (2026-11-20 플레이 테스트: 막대 밑으로 지나감)
+		Size = UDim2.new(0.48, 0, 0, 46),
+		TextWrapped = true,
+		TextYAlignment = Enum.TextYAlignment.Top,
 		TextStrokeColor3 = Color3.new(1, 1, 1),
 		TextStrokeTransparency = 0.3,
 		Parent = self.root,
@@ -588,7 +591,8 @@ function Ui:setHeight(visible, h01, danger, active, band, anchor)
 	local msg = self.heightMsg
 	if anchor then
 		local sc = self.scale.Scale
-		msg.Position = UDim2.fromOffset(anchor.X / sc, anchor.Y / sc - 70)
+		-- 국자 아래에 (위쪽은 안내 문구와 겹침, 2026-11-20 플레이 테스트)
+		msg.Position = UDim2.fromOffset(anchor.X / sc, anchor.Y / sc + 110)
 	else
 		msg.Position = UDim2.new(0.5, 0, 0.3, 0)
 	end

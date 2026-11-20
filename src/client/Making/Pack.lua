@@ -120,7 +120,7 @@ local function buildBag(parent, R, zNeck)
 		mp.CastShadow = false
 		mp.Material = Enum.Material.SmoothPlastic
 		mp.Color = BAG
-		mp.Reflectance = 0.3
+		mp.Reflectance = 0.04 -- 0.3이면 하늘이 비쳐 달고나가 보라색으로 보임 (2026-11-20 플레이 테스트)
 		mp.Transparency = 1
 		mp.Parent = parent
 		mp.Destroying:Connect(function()

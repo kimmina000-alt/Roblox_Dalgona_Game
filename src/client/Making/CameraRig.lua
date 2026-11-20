@@ -29,6 +29,9 @@ local POSES = {
 	result = { Vector2.new(6.7, 0.2), 12.2 }, -- 달고나는 왼쪽 (오른쪽은 결과 창)
 }
 local STEP_POSE = {}
+-- 2026-11-20 플레이 테스트: 안내 문구가 위 단계 줄 바로 아래로 올라가면서 화면 위쪽 도구를 가림 →
+-- 모든 항공샷을 높이의 이 비율만큼 테이블 안쪽(-Z)을 보게 해 장면을 화면 아래로 내림 (아래는 비어 있음)
+local SHIFT = 0.09
 
 local FOV = 40 -- 망원: 가까이 당겨 보이면서 원근 왜곡이 적음
 local EASE = 0.25
@@ -57,6 +60,7 @@ function CameraRig.poseFor(key)
 		c += Vector2.new(1.9, 0)
 	end
 	local h = y - TABLE_TOP
+	c -= Vector2.new(0, h * SHIFT)
 	local look = origin:PointToWorldSpace(Vector3.new(c.X, TABLE_TOP, c.Y))
 	local pos = origin:PointToWorldSpace(Vector3.new(c.X, y, c.Y + h * tilt))
 	-- 화면 위쪽 = 테이블 안쪽(-Z)
@@ -79,6 +83,7 @@ local function trackPose(p)
 		y = TABLE_TOP + (y - TABLE_TOP) * 1.6
 	end
 	local h = y - TABLE_TOP
+	p += origin:VectorToWorldSpace(Vector3.new(0, 0, -h * SHIFT))
 	local camY = origin:PointToWorldSpace(Vector3.new(0, y, 0)).Y
 	local pos = Vector3.new(p.X, camY, p.Z) + origin:VectorToWorldSpace(Vector3.new(0, 0, h * (pose[3] or TILT)))
 	return CFrame.lookAt(pos, p, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))
@@ -152,6 +157,7 @@ function CameraRig.goPoint(focus, height, tilt, ease)
 	if vp.X / math.max(vp.Y, 1) < 1.2 then
 		h *= 1.6
 	end
+	focus += origin:VectorToWorldSpace(Vector3.new(0, 0, -h * SHIFT))
 	local pos = focus + Vector3.new(0, h, 0) + origin:VectorToWorldSpace(Vector3.new(0, 0, h * (tilt or TILT)))
 	from = cam.CFrame
 	to = CFrame.lookAt(pos, focus, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))

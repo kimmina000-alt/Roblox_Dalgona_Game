@@ -545,7 +545,7 @@ local function packArea(ws, top)
 	deco(f, "Mat", Vector3.new(3.4, 0.02, 3.4), CFrame.new(cx - 1.3, y + 0.01, cz + 0.9), Color3.fromRGB(214, 182, 136), Enum.Material.Fabric)
 	-- 네모 투명 비닐 통 (투명 아크릴 상자 + 차곡차곡 쌓인 비닐)
 	-- 2026-11-20 "비닐이랑 빵끈 지금 위에 있는데 오른쪽으로": 매트 오른쪽 (비닐 통은 오른쪽 뒤, 빵끈 통은 오른쪽 앞)
-	local bx, bz = cx + 1.9, cz - 2.3
+	local bx, bz = cx + 1.9, cz - 1.5 -- (2026-11-20 플레이 테스트: -2.3은 화면 맨 위 안내 문구에 가려짐)
 	local BW, BL, BH = 1.9, 1.5, 0.45
 	local ACRYL = { Transparency = 0.7, Reflectance = 0.2 }
 	deco(f, "BagBox", Vector3.new(BW, 0.04, BL), CFrame.new(bx, y + 0.02, bz), Color3.fromRGB(235, 245, 255), Enum.Material.Glass, ACRYL)
