@@ -168,7 +168,7 @@ end
 
 -- 바닥 높이(Y)로 저장된 속성: 작업대를 올리면 같이 올려야 함 (WorkstationBuilder·StallDecor가 씀)
 local Y_ATTRS = { "GrillTopY", "BottomY", "TopY" }
--- 틀: 서버 시작 때 꾸며진 공용 작업대(DalgonaWorkstation)를 복제해 둠.
+-- 틀: 꾸며진 작업대(ServerStorage.Assets.WorkstationTemplate, 없으면 공용 DalgonaWorkstation)를 서버 시작 때 복제해 둠.
 -- WorkstationBuilder.build는 실행 중에 국자 광택 텍스처(SurfaceAppearance)를 못 써서 실패하므로 복제해 씀.
 local template = nil
 
@@ -323,7 +323,9 @@ end
 
 function PlotService.init(opts)
 	notify = opts and opts.notify
-	local shared = workspace:FindFirstChild("DalgonaWorkstation")
+	-- 틀: ServerStorage.Assets.WorkstationTemplate(공용 작업대를 없앤 뒤, U8) → 없으면 스폰 앞 공용 작업대
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	local shared = (assets and assets:FindFirstChild("WorkstationTemplate")) or workspace:FindFirstChild("DalgonaWorkstation")
 	if shared and P.buildWorkstation then
 		template = shared:Clone()
 		for _, c in ipairs(template:GetChildren()) do
