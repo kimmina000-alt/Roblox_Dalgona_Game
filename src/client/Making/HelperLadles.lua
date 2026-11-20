@@ -152,9 +152,10 @@ local function placeMini(mini, cf)
 end
 
 -- 진열하러 가기 (D26, 2026-11-21): 알바생이 만든 달고나를 진열대 빈 칸에 놓을 때 서버가 미니미에
--- DeliverSlot(칸 번호)·DeliverAt(서버 시각)을 남김 → DELIVER_T초 동안 의자에서 내려 그 칸까지 들고 걸어가
+-- DeliverSlot(칸 번호)·DeliverAt(서버 시각)을 남김 → 의자에서 내려 그 칸까지 들고 걸어가(거리만큼 시간)
 -- 놓고 돌아옴 (칸에는 서버가 이미 달고나를 보여 줌). 내 화면에서만 그리는 움직임
-local DELIVER_T = 3.2
+local WALK_SPEED = 8 -- 걷는 빠르기 (stud/초). 진열대가 줄 반대쪽 끝이라 멀면 오래 걸림
+local PLACE_T = 0.8 -- 칸 앞에서 놓는 시간
 local function smooth(t)
 	t = math.clamp(t, 0, 1)
 	return t * t * (3 - 2 * t)
@@ -166,35 +167,40 @@ local function deliverPose(ws, mini, torso, joint, home, footDrop)
 	end
 	local age = workspace:GetServerTimeNow() - at
 	local disc = mini:FindFirstChild("CarryDisc")
-	if age < 0 or age >= DELIVER_T then
-		if disc then
-			disc.Transparency = 1
-		end
-		return false
-	end
 	local plot = ws.Parent
 	local shelf = plot and plot:FindFirstChild("DisplayShelf")
 	local slot = shelf and shelf:FindFirstChild("Slot" .. k)
 	local floorY = floorOf(ws)
-	if not (slot and slot:IsA("BasePart") and floorY) then
+	if age < 0 or age > 30 or not (slot and slot:IsA("BasePart") and floorY) then
+		if disc then
+			disc.Transparency = 1
+		end
 		return false
 	end
 	local sp = slot.Position
 	local homeG = Vector3.new(home.X, floorY + footDrop, home.Z)
 	local toHome = Vector3.new(homeG.X - sp.X, 0, homeG.Z - sp.Z)
 	local stand = Vector3.new(sp.X, floorY + footDrop, sp.Z) + (toHome.Magnitude > 0.1 and toHome.Unit or Vector3.zAxis) * 1.3
+	local walkT = math.clamp((stand - homeG).Magnitude / WALK_SPEED, 0.8, 4)
+	local backAt = walkT + PLACE_T
+	if age >= backAt + walkT then
+		if disc then
+			disc.Transparency = 1
+		end
+		return false
+	end
 	local p, face, reach
-	if age < 1.2 then
-		p = homeG:Lerp(stand, smooth(age / 1.2))
+	if age < walkT then
+		p = homeG:Lerp(stand, smooth(age / walkT))
 		face = stand
 		-- 걸음: 살짝 통통 튀며
 		p += Vector3.new(0, math.abs(math.sin(age * 12)) * 0.12, 0)
-	elseif age < 2.0 then
+	elseif age < backAt then
 		p = stand
 		face = Vector3.new(sp.X, stand.Y, sp.Z)
 		reach = true
 	else
-		p = stand:Lerp(homeG, smooth((age - 2.0) / 1.2))
+		p = stand:Lerp(homeG, smooth((age - backAt) / walkT))
 		face = homeG
 		p += Vector3.new(0, math.abs(math.sin(age * 12)) * 0.12, 0)
 	end
@@ -203,7 +209,7 @@ local function deliverPose(ws, mini, torso, joint, home, footDrop)
 	placeMini(mini, cf)
 	-- 팔: 들고 갈 때는 앞으로, 칸 앞에서는 칸으로 뻗음, 돌아올 때는 내림
 	local jointCf = torso.CFrame * joint.C0
-	if age < 2.0 then
+	if age < backAt then
 		local target = reach and (sp + Vector3.new(0, 0.2, 0)) or (cf * CFrame.new(0.3, -0.4, -1.2)).Position
 		local v = jointCf:VectorToObjectSpace(target - jointCf.Position)
 		if v.Magnitude > 1e-3 then
@@ -227,7 +233,7 @@ local function deliverPose(ws, mini, torso, joint, home, footDrop)
 		disc.CanTouch = false
 		disc.Parent = mini
 	end
-	if hand and age < 1.7 then
+	if hand and age < walkT + PLACE_T * 0.6 then
 		disc.Transparency = 0
 		disc.CFrame = CFrame.new(hand.Position + Vector3.new(0, 0.1, 0)) * CFrame.Angles(0, 0, math.rad(90))
 	else
