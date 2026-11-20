@@ -389,6 +389,8 @@ function Ui:_buildMeter()
 		ZIndex = 6,
 		Parent = m,
 	})
+	-- 국자 높이를 바꾸는 동안 온도 창 테두리가 잠깐 빛남 (2026-11-20 "온도 팝업에 테두리 넣어서 잠시 강조")
+	self.meterStroke = new("UIStroke", { Name = "TrendStroke", Thickness = 4, Transparency = 1, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = m })
 	self.meter = m
 end
 
@@ -1018,6 +1020,22 @@ function Ui:setTempTrend(dir)
 	local coach = self.coach and self.coach.Visible
 	-- 온도 막대일 때만 (소다 단계 막대는 거품 양이라 국자 높이와 상관없음)
 	local isTemp = self.meter.Visible and self.meterTitle.Text == "온도"
+	-- 테두리 강조: 끄는 동안 진하게, 손을 떼면 0.4초에 걸쳐 사라짐
+	local st = self.meterStroke
+	if st then
+		local fdt = math.min(now - (self.strokeT or now), 0.1)
+		self.strokeT = now
+		local k = self.strokeK or 0
+		if isTemp and live then
+			k = 1
+			st.Color = self.trendDir < 0 and TREND_BLUE or TREND_RED
+		else
+			k = math.max(0, k - fdt / 0.4)
+		end
+		self.strokeK = k
+		st.Transparency = 1 - k
+		st.Thickness = 3 + 2 * k
+	end
 	local mode = (not isTemp) and "off" or (live and "live" or (coach and "coach" or "off"))
 	if mode ~= "coach" and self.trendTween then
 		self.trendTween:Cancel()
