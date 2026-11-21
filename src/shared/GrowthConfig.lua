@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 4 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기
+G.SchemaVersion = 5 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -32,6 +32,7 @@ G.DefaultData = {
 	ladles = 1, -- 국자 수 1~4 (SHOP_GROWTH_PLAN 2장)
 	partTimers = {}, -- 알바생 { { shape = 만들 도안 id, skill = 숙련(자리만) } } 국자 2번째부터 1명씩
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
+	machine = { shapes = {}, t = 0 }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, t = 이번 판 진행 초
 	factory = { unlocked = false }, -- 가게 뒤 공장 (D11, Phase 5)
 	-- 가게 (D21): state = "stall"(야외 노점) | "rented"(월세) | "owned"(매입). rentTimer = 지난 월세 뒤 접속한 초, closed = 월세 못 내 문 닫힘
 	shop = { state = "stall", rentTimer = 0, closed = false },
@@ -234,7 +235,21 @@ G.Shop = {
 	stallSlots = 5, -- 노점(또는 문 닫힘) 쟁반 진열 칸
 	autoShelveHelpers = true, -- 알바생이 만든 것은 빈 칸에 저절로 진열 (가게 직원이라). 손으로 만든 것은 들고 가서 놓음
 	-- 노점·문 닫힘에서 막히는 것: 국자 확장, 알바생 고용, 작업대 업그레이드 (화로·누르개는 됨)
-	lockedWhenStall = { ladle = true, hire = true, table = true },
+	lockedWhenStall = { ladle = true, hire = true, table = true, machine = true },
+}
+
+---------------------------------------------------------------- 기계 2~4단계 (20번, SHOP_GROWTH_PLAN 1·3~5장, D9·D10)
+-- 가게 뒤 기계 1자리에서 단계대로 교체. 한 판 = batch개 / seconds초 (시간당 4 → 6 → 10개/분)
+G.Machines = {
+	[2] = { id = "steel", name = "철제 판매기", level = 10, price = 15000, batch = 2, seconds = 30 },
+	[3] = { id = "pink", name = "분홍 자판기", level = 15, price = 45000, batch = 5, seconds = 50 },
+	[4] = { id = "line", name = "연속 생산 설비", level = 20, price = 120000, batch = 10, seconds = 60 },
+}
+G.Machine = {
+	qMin = 50, -- 품질 Normal~Excellent (Perfect는 손으로만)
+	qMax = 94,
+	maxGrade = "Legendary", -- 자동 생산은 Legendary까지 (D13)
+	-- 재료는 원가대로 (G.recipe), 젓가락·빵끈 안 씀 (G.ChopsticksPerMachineRound, D16), EXP는 G.ExpMachine
 }
 
 -- 가게 문이 열려 있나 (임대 중이고 월세 밀리지 않음, 또는 매입)
