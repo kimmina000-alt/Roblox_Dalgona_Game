@@ -29,20 +29,29 @@ function Cup.run(ctx)
 	local seen = P.presses
 	local cam = workspace.CurrentCamera
 	local center = cup:GetPivot().Position
+	-- 처음 몇 판(안내 글씨가 보일 때)·한 번 빗나갔을 때 통을 화살표로 가리킴 (누름판 안내처럼, 2026-11-21 사용자)
+	local cupCf, cupSize = cup:GetBoundingBox()
+	local cupTop = cupCf.Position + Vector3.new(0, cupSize.Y / 2, 0)
+	local missed = false
 	while true do
 		local dt = ctx.frame()
 		if not dt then
+			ui:setArrow(nil)
 			return nil
 		end
+		local ap = cam:WorldToScreenPoint(cupTop)
+		ui:setArrow((ui:subShown() or missed) and Vector2.new(ap.X, ap.Y) or nil, "나무젓가락")
 		if P.down and P.presses ~= seen then
 			seen = P.presses
 			local sp = cam:WorldToScreenPoint(center + Vector3.new(0, 1, 0))
 			if (Vector2.new(sp.X, sp.Y) - P.pos).Magnitude < 200 then
 				break
 			end
+			missed = true
 			ui:hint("나무젓가락 통을 눌러요")
 		end
 	end
+	ui:setArrow(nil)
 	-- 누른 자리에서 가장 가까운 젓가락 (화면 기준, 윗끝)
 	local best, bestD = sticks[1], math.huge
 	for _, s in ipairs(sticks) do

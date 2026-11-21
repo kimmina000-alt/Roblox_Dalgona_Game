@@ -863,13 +863,13 @@ local V3 = {
 	notch = { x0 = -2.9, x1 = 2.7, z0 = -0.4 }, -- 화로가 들어가는 홈 (앞으로 트임)
 	plate = Vector2.new(0, -2.8),
 	-- 2026-11-21 사용자 수정: 누름판·모양 틀 자리 바꿈, 비닐·빵끈은 더 아래(앞)로, 틀 접시는 비닐·빵끈 있던 자리로
-	cutter = Vector2.new(6.5, -3.0),
-	presser = Vector2.new(4.4, -2.9),
+	cutter = Vector2.new(4.4, -0.5), -- 2026-11-21 사용자: 모양 틀은 누름판 아래(앞)로
+	presser = Vector2.new(4.4, -3.4),
 	bagBox = Vector2.new(-6.8, -1.1),
 	tieCup = Vector2.new(-4.6, -1.1),
 	tray = Vector2.new(-5.1, -3.4), -- 2026-11-21 사용자: 설탕 뿌린 철판 쪽으로 살짝
 	mat = Vector2.new(-5.4, 2.4),
-	soda = Vector2.new(4.2, 1.1),
+	soda = Vector2.new(4.2, 1.7),
 	sugarW = Vector2.new(4.3, 3.6),
 	sugarB = Vector2.new(6.5, 3.6),
 	brazier = Vector2.new(-0.1, 2.3),
@@ -973,6 +973,17 @@ function Builder.counterLayout(ws)
 			if o and not seen[o] then
 				seen[o] = true
 				o:PivotTo(o:GetPivot() + mv.d)
+			end
+		end
+	end
+	-- 모양 틀 접시는 90° 돌려 놓음 (길쭉한 쪽이 좌우로 → 앞의 비닐·빵끈 통과 안 겹침, 2026-11-21 사용자)
+	local trayPart = decor and decor:FindFirstChild("Tray")
+	if trayPart then
+		local c = trayPart.Position
+		local turn = CFrame.new(c) * CFrame.Angles(0, math.rad(90), 0) * CFrame.new(-c)
+		for _, o in ipairs(decor:GetChildren()) do
+			if o.Name:sub(1, 4) == "Tray" then
+				o:PivotTo(turn * o:GetPivot())
 			end
 		end
 	end

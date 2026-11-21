@@ -159,6 +159,72 @@ local function spillGrain(S, at, color)
 	end
 end
 
+-- 처음 하는 사람 안내 (2026-11-21 사용자: "설탕 숟가락 드래그해서 국자에 붓는 그림 반투명하게"):
+-- 반투명한 숟가락이 그릇 → 국자 위로 옮겨 가 기울어져 붓는 모습을 되풀이. 직접 숟가락을 잡으면 사라짐
+local DEMO_T = 2.6
+local function makeDemo(S, spoon, geo, restCF, ladle, carryY)
+	if not geo then
+		return nil
+	end
+	local ghost = spoon:Clone()
+	ghost.Name = "SugarDemoSpoon"
+	local parts = {}
+	for _, d in ipairs(ghost:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.CastShadow = false
+			if d.Transparency < 1 then
+				table.insert(parts, d)
+			end
+		elseif d:IsA("ParticleEmitter") or d:IsA("Highlight") or d:IsA("Script") or d:IsA("LocalScript") then
+			d:Destroy()
+		end
+	end
+	local restRot = restCF - restCF.Position
+	local hr = restRot:VectorToWorldSpace(geo.handleLocal)
+	local head0 = restCF:PointToWorldSpace(geo.scoopLocal)
+	local head1 = Vector3.new(ladle.X, carryY, ladle.Z)
+	local t = 0
+	local shown = false
+	local demo = {}
+	function demo.update(dt, on)
+		if not on then
+			if shown then
+				ghost.Parent = nil
+				shown = false
+			end
+			t = 0
+			return
+		end
+		if not shown then
+			ghost.Parent = S.fx
+			shown = true
+		end
+		t = (t + dt) % DEMO_T
+		local function sm(a)
+			a = math.clamp(a, 0, 1)
+			return a * a * (3 - 2 * a)
+		end
+		local move = sm((t - 0.3) / 1.0)
+		local tilt = math.rad(70) * sm((t - 1.45) / 0.5)
+		local head = head0:Lerp(head1, move) + Vector3.new(0, math.sin(math.pi * move) * 0.6, 0)
+		local rot = CFrame.fromAxisAngle(hr, tilt) * restRot
+		ghost:PivotTo(rot + (head - rot:VectorToWorldSpace(geo.scoopLocal)))
+		-- 나타났다가(처음 0.3초) 다 붓고 사라짐(마지막 0.4초)
+		local fade = math.max(1 - t / 0.3, (t - (DEMO_T - 0.4)) / 0.4, 0)
+		for _, p in ipairs(parts) do
+			p.Transparency = 0.55 + 0.45 * math.clamp(fade, 0, 1)
+		end
+	end
+	function demo.destroy()
+		ghost:Destroy()
+	end
+	return demo
+end
+
 function Sugar.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
 	local cfg = Config.Sugar
@@ -169,9 +235,10 @@ function Sugar.run(ctx)
 	local rest = restWhite
 	local restRot = restWhite - restWhite.Position
 	local spoonGeo = measureSpoon(spoon)
-	local emitter = S:pourEmitter(spoon, WHITE)
 	local carryY = S.Bowl.Position.Y + S.bowlHalf + 0.9
 	local ladle = S.Bowl.Position
+	local demo = makeDemo(S, spoon, spoonGeo, restWhite, ladle, carryY) -- 붓는 모습 안내 (파티클 붙이기 전에 복제)
+	local emitter = S:pourEmitter(spoon, WHITE)
 
 	local phase = "white"
 	local onSpoon = cfg.scoopWhite
@@ -188,6 +255,9 @@ function Sugar.run(ctx)
 		local dt = ctx.frame()
 		if not dt then
 			emitter.Enabled = false
+			if demo then
+				demo.destroy()
+			end
 			return nil
 		end
 		if P.down and not grabbing and P.presses ~= seenPress then
@@ -199,6 +269,10 @@ function Sugar.run(ctx)
 		end
 		if not grabbing then
 			lastFinger, fingerSpeed, dwell = nil, 0, 0
+		end
+		if demo then
+			-- 안내 글씨가 보이는 처음 판들, 아직 한 번도 안 부었을 때만
+			demo.update(dt, not grabbing and ui:subShown() and rec.white + rec.brown < 0.05)
 		end
 
 		local pouring = false
@@ -307,6 +381,9 @@ function Sugar.run(ctx)
 	end
 
 	emitter.Enabled = false
+	if demo then
+		demo.destroy()
+	end
 	Sfx.stop("sugarPour")
 	ui:buzz(0.4, 0.08)
 	ui:say("좋아요! 이제 녹여요", "")

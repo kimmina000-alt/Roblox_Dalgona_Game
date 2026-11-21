@@ -80,7 +80,7 @@ local function counterCenter(key)
 		end
 	elseif key == "pour" or key == "press" then
 		if plate then
-			return plate + Vector2.new(0.7, -0.5)
+			return plate + Vector2.new(0.7, 0.9) -- 2026-11-21 사용자: 시선을 내려 테이블이 화면 위쪽으로 (누름판 아래 모양 틀까지 보이게)
 		end
 	elseif key == "stamp" then
 		local cu = localXZ(ws:FindFirstChild("Cutter"))

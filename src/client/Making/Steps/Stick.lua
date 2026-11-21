@@ -37,10 +37,31 @@ function Stick.place(ctx)
 	local plate = S.Plate
 	local top = S.plateTop
 	local half = plate.Size.X / 2
+	-- 철판 오른쪽 테이블 위에 세로(앞뒤)로 놓여 있음. 그 자리에 누름판 같은 물건이 있으면 (가게 작업대: 누름판 밑에 깔려
+	-- 안 보였음, 2026-11-21) 철판 앞 → 왼쪽 순서로 빈 자리를 찾음
+	local spots = { { half + 0.45, 0.5, 90 }, { 0.3, half + 0.45, 0 }, { -half - 0.45, 0.5, 90 } }
+	local olp = OverlapParams.new()
+	olp.FilterType = Enum.RaycastFilterType.Include
+	olp.FilterDescendantsInstances = { S.model }
+	local restPos, restCF
+	for _, sp in ipairs(spots) do
+		local pos = Vector3.new(plate.Position.X, top + THICK / 2, plate.Position.Z) + S:dir(sp[1], 0, sp[2])
+		local cf = CFrame.new(pos) * S.rot * CFrame.Angles(0, math.rad(sp[3]), 0)
+		local blocked = false
+		for _, p in ipairs(workspace:GetPartBoundsInBox(cf * CFrame.new(0, 0.3, 0), Vector3.new(LEN, 0.5, WIDTH * 2), olp)) do
+			if p ~= plate and p.Transparency < 1 and p.LocalTransparencyModifier < 1 and p.Name:sub(1, 8) ~= "TableTop" then
+				blocked = true
+				break
+			end
+		end
+		if not restPos or not blocked then
+			restPos, restCF = pos, cf
+		end
+		if not blocked then
+			break
+		end
+	end
 	local m, place = build(S)
-	-- 철판 오른쪽 테이블 위에 세로(앞뒤)로 놓여 있음
-	local restPos = Vector3.new(plate.Position.X, top + THICK / 2, plate.Position.Z) + S:dir(half + 0.45, 0, 0.5)
-	local restCF = CFrame.new(restPos) * S.rot * CFrame.Angles(0, math.rad(90), 0)
 	local cf = restCF
 	place(cf)
 	st.stickModel = m
