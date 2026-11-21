@@ -61,6 +61,11 @@ PlayerDataService.MIGRATIONS = {
 		local old = type(data.factory) == "table" and data.factory or {}
 		data.factory = { unlocked = old.unlocked == true, on = false, shape = "", qty = 20, mode = "normal", lines = {}, ups = {} }
 	end,
+	[7] = function(data)
+		-- v6 → v7 (오프라인 생산 D29, 2026-11-22): 업데이트 전 시간은 정산하지 않도록 지금 시각으로 시작
+		data.lastSeen = os.time()
+		data.offline = { settledAt = 0, from = 0, seconds = 0 }
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))
@@ -193,6 +198,10 @@ local function saveRecord(player, profile, release)
 		return false
 	end
 	local key = keyFor(player)
+	-- 마지막 접속 시각 (D29): 오프라인 정산이 끝난 뒤부터만 갱신 (정산 전에 덮어쓰면 자리 비운 시간을 잃음)
+	if profile.seenOK then
+		profile.data.lastSeen = os.time()
+	end
 	local payload = deepCopy(profile.data)
 	local delay = SAVE.retryDelay
 	for _ = 1, SAVE.retries + 1 do
@@ -222,6 +231,14 @@ local function saveRecord(player, profile, release)
 		delay *= 2
 	end
 	return false
+end
+
+-- 오프라인 정산이 끝났음 (이제 저장할 때 lastSeen을 갱신해도 됨)
+function PlayerDataService.allowSeen(player)
+	local profile = profiles[player]
+	if profile then
+		profile.seenOK = true
+	end
 end
 
 function PlayerDataService.save(player, release)
