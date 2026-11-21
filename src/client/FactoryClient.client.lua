@@ -487,7 +487,9 @@ function render()
 	-- 예상
 	local pv = f.preview
 	if pv then
-		previewL.Text = string.format("예상 한 판: %d초\n설탕 %s · 소다 %s · 포장지 %s · %s 코인", pv.seconds or 0, tostring(pv.sugar or 0), tostring(pv.soda or 0), tostring(pv.wrapper or 0), tostring(pv.coins or 0))
+		-- 포장지는 자동 포장 시스템이 있을 때만 씀 (2026-11-22 사용자 확정: 없으면 preview.wrapper = nil)
+		local wrap = pv.wrapper and string.format(" · 포장지 %s", tostring(pv.wrapper)) or ""
+		previewL.Text = string.format("예상 한 판: %d초\n설탕 %s · 소다 %s%s · %s 코인", pv.seconds or 0, tostring(pv.sugar or 0), tostring(pv.soda or 0), wrap, tostring(pv.coins or 0))
 	else
 		previewL.Text = ""
 	end
