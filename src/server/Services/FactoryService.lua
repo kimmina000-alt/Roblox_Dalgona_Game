@@ -82,6 +82,11 @@ local function jobCost(d, shape, qty)
 	for id, k in pairs(F.perItem) do
 		need[id] = (need[id] or 0) + k * qty
 	end
+	if (d.factory.ups.autopack or 0) > 0 then
+		for id, k in pairs(F.packPerItem) do
+			need[id] = (need[id] or 0) + k * qty
+		end
+	end
 	local coins = F.operatingCoins * qty + F.powerPerUpgrade * upgradeSteps(d)
 	return need, coins
 end
@@ -429,7 +434,7 @@ local function startJob(player, k)
 		end
 		dd.coins -= coins
 		dd.stats.factorySpent = (dd.stats.factorySpent or 0) + coins
-		f.lines[k] = { s = shape.id, n = f.qty, m = f.mode, t = 0, sec = G.factorySeconds(f.qty, f.mode, f.ups) }
+		f.lines[k] = { s = shape.id, n = f.qty, m = f.mode, t = 0, sec = G.factorySeconds(f.qty, f.mode, f.ups), pk = (f.ups.autopack or 0) > 0 }
 	end)
 	return why
 end
@@ -445,7 +450,7 @@ local function finishJob(player, k, job)
 		end
 		-- 재료를 이미 냈으니 다 넣음 (시작할 때 자리를 봤지만 그 사이 알바생·기계가 채웠으면 잠깐 넘칠 수 있음)
 		local n = job.n
-		local packed = (f.ups.autopack or 0) > 0
+		local packed = job.pk == true -- 판을 시작할 때 포장지를 냈을 때만 (자동 포장)
 		for _ = 1, n do
 			local q, grade, mult = rollQuality(dd, job.m)
 			local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = packed, a = true, f = true }
