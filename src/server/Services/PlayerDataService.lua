@@ -56,6 +56,11 @@ PlayerDataService.MIGRATIONS = {
 		local stage = math.floor(tonumber(data.machineStage) or 1)
 		data.machineStage = math.clamp(stage, 1, 4)
 	end,
+	[6] = function(data)
+		-- v5 → v6 (5단계 공장, 2026-11-21): 제어대 설정·라인·업그레이드. 해금 여부만 남김
+		local old = type(data.factory) == "table" and data.factory or {}
+		data.factory = { unlocked = old.unlocked == true, on = false, shape = "", qty = 20, mode = "normal", lines = {}, ups = {} }
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

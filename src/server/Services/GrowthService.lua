@@ -17,6 +17,7 @@ local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Minime = require(script.Parent:WaitForChild("Minime"))
 local Machine = require(script.Parent:WaitForChild("MachineService")) -- 기계 2~4단계 (20번)
+local Factory = require(script.Parent:WaitForChild("FactoryService")) -- 5단계 공장
 
 local GrowthService = {}
 
@@ -222,6 +223,8 @@ local function actionBuy(player, d, kind)
 		return true, string.format("%s Lv%d!", up.name, cur + 2)
 	elseif kind == "machine" then
 		return Machine.buy(d)
+	elseif kind == "factory" then
+		return Factory.buy(d)
 	elseif kind == "ladle" then
 		local nextN = d.ladles + 1
 		local spec = G.Ladles[nextN]
@@ -293,6 +296,12 @@ function GrowthService.action(player, what, a, b)
 			ok, msg = actionSetShape(dd, math.floor(a), b)
 		elseif what == "machineShape" and type(a) == "string" then
 			ok, msg = Machine.setShape(dd, a)
+		elseif what == "factorySet" and type(a) == "table" then
+			ok, msg = Factory.set(dd, a)
+		elseif what == "factoryRun" then
+			ok, msg = Factory.run(dd, a == true)
+		elseif what == "factoryUp" and type(a) == "string" then
+			ok, msg = Factory.upgrade(dd, a)
 		end
 		if not ok then
 			return false
@@ -305,6 +314,9 @@ function GrowthService.action(player, what, a, b)
 	end
 	if ok and (what == "machineShape" or a == "machine") then
 		Machine.changed(player)
+	end
+	if ok and (a == "factory" or string.sub(what, 1, 7) == "factory") then
+		Factory.changed(player)
 	end
 	return { ok = ok, reason = not ok and msg or nil, msg = ok and msg or nil }
 end
@@ -536,6 +548,7 @@ local function growthSnapshot(player, d, snap)
 		unlocked = table.clone(d.unlockedShapes),
 		nextUnlock = nextUnlockLevel(d.level),
 		machine = Machine.snapshot(player, d),
+		factory = Factory.snapshot(player, d),
 	}
 end
 
@@ -647,6 +660,7 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 	end)
 	remotes.GrowthAction.OnServerInvoke = GrowthService.action
 	Machine.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
+	Factory.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
 
 	-- 처음 불러올 때: 레벨에 맞게 해금, 오늘 목표, 해금 목록을 속성으로 (제작 화면 도안 고르기가 봄)
 	local ready = {}

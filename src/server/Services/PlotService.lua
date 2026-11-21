@@ -93,7 +93,12 @@ local function buildPlot(index, parent)
 	for _, side in ipairs({ -1, 1 }) do
 		part(m, "Fence", Vector3.new(0.4, 1.6, P.size.Z), cf * CFrame.new(side * (half - 0.2), P.size.Y + 0.8, 0), DARK_WOOD, Enum.Material.Wood)
 	end
-	part(m, "Fence", Vector3.new(P.size.X, 1.6, 0.4), cf * CFrame.new(0, P.size.Y + 0.8, half - 0.2), DARK_WOOD, Enum.Material.Wood)
+	-- 뒤 울타리: 가운데 공장 뒷문 앞은 비움 (D11 2026-11-22: 공장은 가게 뒤에 붙고 뒷문으로 걸어 들어감)
+	local gap = P.factoryDoor.gap
+	local backW = (P.size.X - gap) / 2
+	for _, side in ipairs({ -1, 1 }) do
+		part(m, "Fence", Vector3.new(backW, 1.6, 0.4), cf * CFrame.new(side * (gap / 2 + backW / 2), P.size.Y + 0.8, half - 0.2), DARK_WOOD, Enum.Material.Wood)
+	end
 
 	-- 손 작업대 자리 (D10)
 	local hs = spot(m, "HandStationSpot", cf * CFrame.new(P.handStation.pos), P.handStation.size, Color3.fromRGB(255, 214, 150), "손 작업대 자리")
@@ -116,14 +121,23 @@ local function buildPlot(index, parent)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "FactoryPrompt"
 	prompt.ActionText = "공장 들어가기"
-	prompt.ObjectText = "공장 (준비 중)"
+	prompt.ObjectText = "달고나 공장"
 	prompt.KeyboardKeyCode = Enum.KeyCode.F
 	prompt.MaxActivationDistance = 10
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = panel
 	prompt.Triggered:Connect(function(player)
-		if notify then
-			notify(player, "공장은 나중에 열려요 (Lv5 공장 단계)")
+		-- 내 가게 문만 (D11: 남의 공장에는 못 들어감). 들어가기는 FactoryService가 PlotService.onFactoryDoor로 연결
+		if m:GetAttribute("OwnerUserId") ~= player.UserId then
+			if notify then
+				notify(player, "다른 사람의 공장이에요")
+			end
+			return
+		end
+		if PlotService.onFactoryDoor then
+			PlotService.onFactoryDoor(player)
+		elseif notify then
+			notify(player, "공장은 나중에 열려요")
 		end
 	end)
 

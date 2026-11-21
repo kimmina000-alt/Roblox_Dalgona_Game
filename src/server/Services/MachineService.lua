@@ -90,6 +90,9 @@ local function stopReason(d, shape, m)
 	if not G.shopOpen(d) then
 		return "가게 문 닫힘"
 	end
+	if not G.Factory.machineKeepsRunning and d.factory and d.factory.unlocked then
+		return "공장으로 바뀜" -- 각 단계는 이전 설비를 대체 (설정으로 고를 수 있게)
+	end
 	if not shape then
 		return "도안 없음"
 	end

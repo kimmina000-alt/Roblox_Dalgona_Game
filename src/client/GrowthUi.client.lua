@@ -271,6 +271,22 @@ local function render()
 			end)
 		end
 	end
+	-- 5단계 공장: 해금만 여기서 (제어대 화면은 공장 안에서)
+	local fc = gr.factory
+	if fc then
+		order += 1
+		if fc.unlocked then
+			local status = fc.on and (fc.status == "work" and "생산 중" or ("멈춤: " .. tostring(fc.status))) or "꺼짐"
+			row(page, order, "🏭 달고나 공장", string.format("%s · 가게 뒤 문으로 들어가 제어대에서 설정", status))
+		else
+			local needStage = (mc and mc.stage or 1) >= G.Factory.needStage
+			row(page, order, "🏭 달고나 공장", string.format("Lv%d · 연속 생산 설비 필요 · 한 판 20~40개", G.Factory.level),
+				(not shopOpen and lockText) or (not needStage and "기계 4단계 필요") or (state.level < G.Factory.level and ("Lv" .. G.Factory.level .. "부터")) or (G.Factory.price .. " 코인"),
+				shopOpen and needStage and state.level >= G.Factory.level and state.coins >= G.Factory.price, function()
+					act("buy", "factory")
+				end)
+		end
+	end
 
 	-- 목표
 	page = pages.goals

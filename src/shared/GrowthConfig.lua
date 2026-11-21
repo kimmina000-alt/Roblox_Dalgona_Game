@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 5 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계
+G.SchemaVersion = 6 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -33,7 +33,9 @@ G.DefaultData = {
 	partTimers = {}, -- 알바생 { { shape = 만들 도안 id, skill = 숙련(자리만) } } 국자 2번째부터 1명씩
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
 	machine = { shapes = {}, t = 0 }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, t = 이번 판 진행 초
-	factory = { unlocked = false }, -- 가게 뒤 공장 (D11, Phase 5)
+	-- 가게 뒤 공장 (D11, 5단계): on = 생산 켬, shape·qty·mode = 제어대 설정, lines = 라인별 진행 중인 판 { s, n, m, t, sec } 또는 false,
+	-- ups = 제어대 업그레이드 단계 [key] = 0..
+	factory = { unlocked = false, on = false, shape = "", qty = 20, mode = "normal", lines = {}, ups = {} },
 	-- 가게 (D21): state = "stall"(야외 노점) | "rented"(월세) | "owned"(매입). rentTimer = 지난 월세 뒤 접속한 초, closed = 월세 못 내 문 닫힘
 	shop = { state = "stall", rentTimer = 0, closed = false },
 	stats = { made = 0, sold = 0, coinsEarned = 0, helperMade = 0, wagesPaid = 0 },
@@ -152,7 +154,13 @@ G.TableStockPerLevel = 10
 -- data.upgrades는 0부터 (0 = Lv1). 장비 Lv = 값 + 1
 function G.stockMax(data)
 	local t = data and data.upgrades and data.upgrades.table or 0
-	return G.StockMax + t * G.TableStockPerLevel
+	local n = G.StockMax + t * G.TableStockPerLevel
+	-- 공장 대형 완제품 창고: 보관량 2배
+	local f = data and data.factory
+	if f and f.ups and (f.ups.warehouse or 0) > 0 then
+		n *= G.Factory.warehouseMult
+	end
+	return n
 end
 
 ---------------------------------------------------------------- 국자·알바생 (SHOP_GROWTH_PLAN 2장, D10)
@@ -210,7 +218,7 @@ G.Plots = {
 	buildWorkstation = true, -- 부지를 배정하면 손 작업대를 만듦 (2026-11-21)
 	minimeBehind = 1.8, -- 미니미 알바생: 작업대 뒤쪽(테이블 끝에서) 거리
 	minimeGap = 2.2, -- 미니미끼리 간격 (화로 가운데 기준)
-	factoryDoor = { pos = Vector3.new(0, 0, 17.5) }, -- 가게 뒤 공장 문 (D11, 지금은 자리만)
+	factoryDoor = { pos = Vector3.new(0, 0, 17.5), gap = 7.4 }, -- 가게 뒤 공장 문 (D11). gap = 뒤 울타리에서 비우는 폭 (뒷벽 문 폭과 같음)
 	sign = { pos = Vector3.new(0, 0, -17.5), height = 9 },
 	-- 가게 건물 (D21): 작업대 뒤. 앞면(셔터)이 골목 쪽. 부지 로컬 z = front ~ back
 	building = { front = 8.5, back = 17.6, halfWidth = 16.8, height = 10.5 }, -- 높이는 공장 문(9.7)보다 높게
@@ -245,6 +253,59 @@ G.Machines = {
 	[3] = { id = "pink", name = "분홍 자판기", level = 15, price = 45000, batch = 5, seconds = 50 },
 	[4] = { id = "line", name = "연속 생산 설비", level = 20, price = 120000, batch = 10, seconds = 60 },
 }
+-- 5단계 공장 (SHOP_GROWTH_PLAN 6~8장, D8·D11·D13·D26, 2026-11-21). 가게 뒤 문 → 플레이어별 공장 공간
+G.Factory = {
+	level = 25,
+	price = 300000,
+	needStage = 4, -- 연속 생산 설비가 있어야 함
+	machineKeepsRunning = true, -- 공장을 사도 가게 기계는 계속 돎 (사용자 확정 2026-11-21, 판매량은 손님 수요가 막음)
+	baseQty = 20, -- 한 판 기본 수량 (대량 생산 모듈로 30 → 40)
+	baseSeconds = 100, -- 20개 한 판
+	secondsPerExtra = 3, -- 20개 넘는 1개마다 +3초 (40개 = 160초, 6장 예시)
+	modes = {
+		normal = { name = "일반", time = 1.0, qMin = 50, qMax = 84 }, -- Normal~Good
+		precise = { name = "정밀", time = 1.5, qMin = 70, qMax = 94 }, -- Good~Excellent
+		fast = { name = "고속", time = 0.7, qMin = 30, qMax = 84 }, -- Poor~Good
+	},
+	modeOrder = { "normal", "precise", "fast" },
+	maxGrade = "Legendary", -- D13
+	-- 1개 원가 6 (7장): 설탕(도안 등급만큼, 1회분 3) + 소다 1 + 포장지 1 + 운영비 1코인. 판을 시작할 때 한 번에 뺌
+	perItem = { soda = 1, wrapper = 1 }, -- 설탕은 G.recipe(등급)
+	operatingCoins = 1, -- 제한 4: 공장 유지비 (1개당)
+	powerPerUpgrade = 2, -- 제한 5: 제어대 업그레이드 1단계마다 판당 전력비 +2코인
+	warehouseMult = 2, -- 대형 완제품 창고: 보관량 2배
+	conveyorTime = 0.85, -- 고속 컨베이어: 시간 -15%
+	precisionQ = 6, -- 정밀 품질 제어기: 품질 범위 +6 (Excellent 확률↑, 최대 94)
+	-- 제어대 업그레이드 (6장 표). costs = 단계별 값
+	upgrades = {
+		{ key = "bulk", name = "대량 생산 모듈", desc = "생산량 20 → 30 → 40개", costs = { 50000, 80000 } },
+		{ key = "parallel", name = "병렬 생산 라인", desc = "동시 작업 2개", costs = { 100000 } },
+		{ key = "conveyor", name = "고속 컨베이어 시스템", desc = "생산 시간 15% 감소", costs = { 120000 } },
+		{ key = "precision", name = "정밀 품질 제어기", desc = "Excellent 확률 증가", costs = { 150000 } },
+		{ key = "autopack", name = "자동 포장 시스템", desc = "포장해서 나옴 (판매가 ×1.1)", costs = { 100000 } },
+		{ key = "warehouse", name = "대형 완제품 창고", desc = "보관함 2배", costs = { 80000 } },
+	},
+	-- 공장 부지 (D11, 2026-11-22 바뀜): 가게 건물 뒤에 바로 붙은 울타리 부지 (폭 28 × 깊이 44), 뒷문으로 걸어 들어감.
+	-- 부지·공장 3D는 제작 세션이 만듦 (Plot<i>.FactoryLot.Ground = 영역). 없을 때는 아래 값(부지 기준 로컬)으로 판정
+	lot = { pos = Vector3.new(0, 0, 40), size = Vector3.new(28, 0, 44), guardHeight = 40 },
+}
+
+-- 공장 한 판: 시간(초)
+function G.factorySeconds(qty, mode, ups)
+	local F = G.Factory
+	local s = F.baseSeconds + math.max(0, qty - F.baseQty) * F.secondsPerExtra
+	s *= (F.modes[mode] or F.modes.normal).time
+	if ups and (ups.conveyor or 0) > 0 then
+		s *= F.conveyorTime
+	end
+	return math.floor(s + 0.5)
+end
+
+-- 공장 최대 수량 (대량 생산 모듈 단계)
+function G.factoryMaxQty(ups)
+	return G.Factory.baseQty + 10 * math.min((ups and ups.bulk) or 0, 2)
+end
+
 G.Machine = {
 	qMin = 50, -- 품질 Normal~Excellent (Perfect는 손으로만)
 	qMax = 94,
