@@ -936,6 +936,8 @@ local function tidyCounter(ws, decor, pack, tableY)
 	local cutter = ws:FindFirstChild("Cutter")
 	if cutter then
 		local pv = cutter:GetPivot()
+		local wsRot = ws:GetPivot() - ws:GetPivot().Position
+		cutter:SetAttribute("StraightRot", wsRot:Inverse() * (pv - pv.Position)) -- 똑바로 놓인 자세 (작업대 기준)
 		cutter:PivotTo(CFrame.new(pv.Position) * CFrame.Angles(0, math.rad(V3.cutterYaw), 0) * (pv - pv.Position))
 		cutter:SetAttribute("RestYaw", V3.cutterYaw)
 	end
@@ -985,6 +987,22 @@ local function tidyCounter(ws, decor, pack, tableY)
 			topY = math.max(topY, c.Position.Y + 0.02)
 		end
 		stickCup:SetAttribute("StackUp", topY - stickCup.Position.Y) -- 통 바닥 판 기준 높이 (작업대를 옮겨도 맞게)
+	end
+end
+
+-- Studio에 저장해 둔 새 배치 작업대(사용자가 편집 모드에서 물건 자리를 직접 옮김, 2026-11-21)를 쓸 때:
+-- 모양 틀을 돌려 놓았으면 그만큼을 RestYaw로 다시 계산 (찍을 때 Stamp가 똑바로 되돌림)
+function Builder.syncCounter(ws)
+	ws:SetAttribute("CounterLayout", true)
+	local cutter = ws:FindFirstChild("Cutter")
+	local straight = cutter and cutter:GetAttribute("StraightRot")
+	if typeof(straight) == "CFrame" then
+		local wsRot = ws:GetPivot() - ws:GetPivot().Position
+		local pv = cutter:GetPivot()
+		-- 지금 자세 = (세로축 θ 회전) × 똑바른 자세 → θ = 지금 × 똑바른 자세⁻¹ 의 세로축 각도
+		local q = (pv - pv.Position) * (wsRot * straight):Inverse()
+		local _, yaw = q:ToEulerAnglesYXZ()
+		cutter:SetAttribute("RestYaw", math.deg(yaw))
 	end
 end
 

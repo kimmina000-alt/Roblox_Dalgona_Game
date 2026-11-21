@@ -69,10 +69,16 @@ end
 
 -- 새 작업대 배치 미리 보기 (2026-11-21 사용자 그림 "작업대 별도 공간에 사진처럼 구현해"):
 -- 스폰 옆 빈 곳(-50, 0, 10)에 틀 복제를 ㄷ자 카운터 배치로 놓아 둠. E로 여기서도 만들 수 있음 (재료·연탄은 내 가게 것)
+-- 2026-11-21 사용자 "테이블 위 물건 자리를 직접 고치게 화면에 보이게": Studio 편집 모드 Workspace에 저장해 둔
+-- WorkstationPreviewV3가 있으면 그것을 그대로 씀 (옮겨 놓은 자리 유지). 없을 때만 틀로 새로 만듦
+local savedPreview = workspace:FindFirstChild("WorkstationPreviewV3")
+if savedPreview then
+	WorkstationBuilder.syncCounter(savedPreview)
+end
 do
 	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
 	local tpl = assets and assets:FindFirstChild("WorkstationTemplate")
-	if tpl then
+	if tpl and not savedPreview then
 		local ok, err = pcall(function()
 			local prev = tpl:Clone()
 			prev.Name = "WorkstationPreviewV3"
