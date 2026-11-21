@@ -302,8 +302,10 @@ end
 
 -- 진열대에서 n개 팔기 (앞쪽 = 먼저 만든 것부터). 한 번에 꺼내고 지우므로 같은 달고나가 두 번 팔리지 않음.
 -- 반환: 판 개수, 받은 코인
+-- 반환: 판 개수, 코인, 판 달고나 목록 (손님이 들고 가는 모양용)
 function EconomyService.sell(player, n)
 	local sold, coins = 0, 0
+	local items = {}
 	Data.update(player, function(d)
 		-- 진열대에 놓인 것만, 먼저 만든 것부터 (2026-11-21 진열대에 직접 놓기)
 		local list = EconomyService.shelved(d)
@@ -320,6 +322,7 @@ function EconomyService.sell(player, n)
 			local p = math.max(0, math.floor(tonumber(item.p) or 0))
 			coins += p
 			sold += 1
+			table.insert(items, item)
 		end
 		d.coins += coins
 		d.stats.sold = (d.stats.sold or 0) + sold
@@ -328,7 +331,7 @@ function EconomyService.sell(player, n)
 	if sold > 0 then
 		fire("sold", player, sold, coins)
 	end
-	return sold, coins
+	return sold, coins, items
 end
 
 -- 방금 만든 달고나 포장: 포장지 1 + 빵끈 1을 쓰고 판매가 ×1.1. 반환 { ok, reason, price }
