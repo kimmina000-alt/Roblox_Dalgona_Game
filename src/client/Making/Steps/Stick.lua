@@ -33,6 +33,13 @@ end
 -- 막대가 쉬는 자리: 철판 오른쪽 테이블 위에 세로(앞뒤)로. 그 자리에 누름판 같은 물건이 있으면 (가게 작업대: 누름판 밑에 깔려
 -- 안 보였음, 2026-11-21) 철판 앞 → 왼쪽 순서로 빈 자리를 찾음
 local function restOf(S)
+	-- 새 배치: 달고나 막대 네모 통(속성 StackUp)이 있으면 그 통 맨 위에 길게 놓인 막대를 꺼냄 (2026-11-21 사용자)
+	local decor = S.model:FindFirstChild("Stage1Decor")
+	local box = decor and decor:FindFirstChild("StickCup")
+	if box and box:GetAttribute("StackUp") then
+		local pos = box.Position + Vector3.new(0, box:GetAttribute("StackUp") + THICK / 2, 0)
+		return CFrame.new(pos) * S.rot * CFrame.Angles(0, math.rad(90), 0)
+	end
 	local plate = S.Plate
 	local top = S.plateTop
 	local half = plate.Size.X / 2

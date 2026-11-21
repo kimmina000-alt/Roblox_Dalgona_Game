@@ -865,19 +865,20 @@ local V3 = {
 	-- 2026-11-21 사용자 수정: 누름판·모양 틀 자리 바꿈, 비닐·빵끈은 더 아래(앞)로, 틀 접시는 비닐·빵끈 있던 자리로
 	cutter = Vector2.new(4.4, -0.5), -- 2026-11-21 사용자: 모양 틀은 누름판 아래(앞)로
 	presser = Vector2.new(4.4, -3.4),
-	bagBox = Vector2.new(-6.8, -1.1),
-	tieCup = Vector2.new(-4.6, -1.1),
+	-- 포장 공간(비닐 통·빵끈 통·매트)은 앞쪽으로 0.7 옮겨 모양 틀 접시와 사이를 띄움 (2026-11-21 사용자)
+	bagBox = Vector2.new(-6.9, -0.4),
+	tieCup = Vector2.new(-4.7, -0.4),
 	tray = Vector2.new(-5.1, -3.5), -- 2026-11-21 사용자: 설탕 뿌린 철판 쪽으로 살짝
 	trayYaw = 15, -- 접시는 가로로 놓고 살짝 사선 (2026-11-21 사용자: "살짝 사선으로, 자연스럽게")
-	cutterYaw = -12, -- 모양 틀도 살짝 사선 (찍을 때는 Stamp가 속성 RestYaw만큼 되돌려 똑바로 찍음)
-	mat = Vector2.new(-5.4, 2.4),
+	cutterYaw = 40, -- 모양 틀도 사선 (2026-11-21 사용자: 반대 방향 40°). 찍을 때는 Stamp가 속성 RestYaw만큼 되돌려 똑바로 찍음
+	mat = Vector2.new(-5.5, 3.1),
 	soda = Vector2.new(4.2, 1.7),
 	sugarW = Vector2.new(4.3, 3.6),
 	sugarB = Vector2.new(6.5, 3.6),
 	brazier = Vector2.new(-0.1, 2.3),
-	cup = Vector2.new(6.6, 1.0), -- 나무젓가락 통: 바닥 → 오른쪽 테이블 위, 예전 막대 통 자리 (2026-11-21 사용자)
+	cup = Vector2.new(-1.9, 4.9), -- 나무젓가락 통: 화로 홈 앞 왼쪽 바닥 (2026-11-21 사용자 그림). 통을 높여 젓가락이 더 가려지게
 	chopRest = Vector2.new(-2.75, -1.6), -- 쓴 젓가락 내려놓는 자리: 포장 매트에서 떨어진 철판 왼쪽 (매트 위 달고나와 겹쳐 보였음)
-	stickBox = Vector2.new(3.25, 3.0), -- 달고나 막대: 캔 대신 네모 통에 눕혀서 (2026-11-21 사용자)
+	stickBox = Vector2.new(2.65, -2.25), -- 달고나 막대: 네모 통에 눕혀서, 철판 오른쪽·누름판 왼쪽 (2026-11-21 사용자 그림). 꺼낼 막대도 이 통 위에
 }
 Builder.V3 = V3
 local function bboxOf(o)
@@ -938,11 +939,23 @@ local function tidyCounter(ws, decor, pack, tableY)
 		cutter:PivotTo(CFrame.new(pv.Position) * CFrame.Angles(0, math.rad(V3.cutterYaw), 0) * (pv - pv.Position))
 		cutter:SetAttribute("RestYaw", V3.cutterYaw)
 	end
-	-- 나무젓가락 통: 바닥에서 테이블 위로
+	-- 나무젓가락 통: 통만 높여서 꽂힌 젓가락이 그만큼 더 가려지게 (젓가락은 그대로)
 	local cup = ws:FindFirstChild("ChopstickCup")
 	if cup then
-		local cf, size = cup:GetBoundingBox()
-		cup:PivotTo(cup:GetPivot() + Vector3.new(0, tableY - (cf.Position.Y - size.Y / 2), 0))
+		local RAISE = 0.9 -- 통 아래쪽은 땅에 묻혀 있어서 넉넉히
+		local body = cup:FindFirstChild("Cup")
+		if body then
+			body.Size += Vector3.new(RAISE, 0, 0) -- 원기둥을 눕혀 세운 것이라 높이 = X
+			body.Position += Vector3.new(0, RAISE / 2, 0)
+		end
+		local rim = cup:FindFirstChild("Rim")
+		if rim then
+			rim.Position += Vector3.new(0, RAISE, 0)
+			local label = cup:FindFirstChild("Label")
+			if label then
+				label.Position = Vector3.new(label.Position.X, rim.Position.Y - 0.45, label.Position.Z) -- 빨간 띠는 보이는 쪽 가운데
+			end
+		end
 	end
 	local rng = Random.new(5)
 	-- 빵끈 통 → 네모 통 (Pack은 TieCup 자리를, Supplies는 CupTie를 씀: 이름 그대로)
@@ -966,6 +979,12 @@ local function tidyCounter(ws, decor, pack, tableY)
 			end
 		end
 		flatBox(stickCup, decor:FindFirstChild("StickCupRim"), sticks, "StickBoxWall", 0.85, 1.75, tableY, rng)
+		-- 클라이언트 Stick이 꺼낼 막대를 이 통 맨 위에 올려 둠 (쌓인 막대 윗면 높이)
+		local topY = tableY + 0.06
+		for _, c in ipairs(sticks) do
+			topY = math.max(topY, c.Position.Y + 0.02)
+		end
+		stickCup:SetAttribute("StackUp", topY - stickCup.Position.Y) -- 통 바닥 판 기준 높이 (작업대를 옮겨도 맞게)
 	end
 end
 
