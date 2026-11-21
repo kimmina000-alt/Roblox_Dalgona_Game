@@ -394,47 +394,77 @@ end
 ---------------------------------------------------------------- 생산 (1초마다)
 
 -- 빈 라인에 새 판: 못 하면 이유
+-- 빈 라인 k에 새 판 (데이터만 바꿈). 반환: 못 하면 이유, 하면 nil과 쓴 재료·코인
+local function beginJob(dd, k)
+	local f = dd.factory
+	local shape = shapeOf(dd)
+	if not G.shopOpen(dd) then
+		return "가게 문 닫힘"
+	end
+	if not shape then
+		return "도안 없음"
+	end
+	-- 이미 돌고 있는 판과 이번 판이 다 보관함에 들어갈 자리가 있어야 시작
+	local pending = 0
+	for _, job in pairs(f.lines) do
+		if job then
+			pending += job.n
+		end
+	end
+	if #dd.stock + pending + f.qty > G.stockMax(dd) then
+		return "보관함 가득"
+	end
+	local need, coins = jobCost(dd, shape, f.qty)
+	for _, ing in ipairs(G.Ingredients) do
+		if (need[ing.id] or 0) > (dd.ingredients[ing.id] or 0) then
+			return "재료 부족: " .. ing.name
+		end
+	end
+	if dd.coins < coins then
+		return "코인 부족"
+	end
+	for id, n in pairs(need) do
+		dd.ingredients[id] -= n
+	end
+	dd.coins -= coins
+	dd.stats.factorySpent = (dd.stats.factorySpent or 0) + coins
+	f.lines[k] = { s = shape.id, n = f.qty, m = f.mode, t = 0, sec = G.factorySeconds(f.qty, f.mode, f.ups), pk = (f.ups.autopack or 0) > 0 }
+	return nil, need, coins
+end
+
+-- 끝난 판 꺼내기 (데이터만 바꿈). 반환: 만든 수, 진열 칸 목록, 레벨업 목록
+local function endJob(dd, k, job)
+	local f = dd.factory
+	f.lines[k] = false
+	local shape = ShapeCatalog.get(job.s)
+	if not shape then
+		return 0, {}, {}
+	end
+	-- 재료를 이미 냈으니 다 넣음 (시작할 때 자리를 봤지만 그 사이 알바생·기계가 채웠으면 잠깐 넘칠 수 있음)
+	local n = job.n
+	local packed = job.pk == true -- 판을 시작할 때 포장지를 냈을 때만 (자동 포장)
+	local slots = {}
+	for _ = 1, n do
+		local q, grade, mult = rollQuality(dd, job.m)
+		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = packed, a = true, f = true }
+		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, packed)
+		local sl = Economy.stockProduced(dd, item, "factory")
+		if sl then
+			table.insert(slots, sl)
+		end
+	end
+	dd.stats.factoryMade = (dd.stats.factoryMade or 0) + n
+	local ups = Economy.addExp(dd, G.ExpMachine * n)
+	return n, slots, ups
+end
+
 local function startJob(player, k)
 	local why = nil
 	Data.update(player, function(dd)
-		local f = dd.factory
-		local shape = shapeOf(dd)
-		if not G.shopOpen(dd) then
-			why = "가게 문 닫힘"
+		why = beginJob(dd, k)
+		if why then
 			return false
 		end
-		if not shape then
-			why = "도안 없음"
-			return false
-		end
-		-- 이미 돌고 있는 판과 이번 판이 다 보관함에 들어갈 자리가 있어야 시작
-		local pending = 0
-		for _, job in pairs(f.lines) do
-			if job then
-				pending += job.n
-			end
-		end
-		if #dd.stock + pending + f.qty > G.stockMax(dd) then
-			why = "보관함 가득"
-			return false
-		end
-		local need, coins = jobCost(dd, shape, f.qty)
-		for _, ing in ipairs(G.Ingredients) do
-			if (need[ing.id] or 0) > (dd.ingredients[ing.id] or 0) then
-				why = "재료 부족: " .. ing.name
-				return false
-			end
-		end
-		if dd.coins < coins then
-			why = "코인 부족"
-			return false
-		end
-		for id, n in pairs(need) do
-			dd.ingredients[id] -= n
-		end
-		dd.coins -= coins
-		dd.stats.factorySpent = (dd.stats.factorySpent or 0) + coins
-		f.lines[k] = { s = shape.id, n = f.qty, m = f.mode, t = 0, sec = G.factorySeconds(f.qty, f.mode, f.ups), pk = (f.ups.autopack or 0) > 0 }
 	end)
 	return why
 end
@@ -442,30 +472,10 @@ end
 local function finishJob(player, k, job)
 	local made, slots, ups, newShapes = 0, {}, {}, {}
 	Data.update(player, function(dd)
-		local f = dd.factory
-		f.lines[k] = false
-		local shape = ShapeCatalog.get(job.s)
-		if not shape then
-			return
-		end
-		-- 재료를 이미 냈으니 다 넣음 (시작할 때 자리를 봤지만 그 사이 알바생·기계가 채웠으면 잠깐 넘칠 수 있음)
-		local n = job.n
-		local packed = job.pk == true -- 판을 시작할 때 포장지를 냈을 때만 (자동 포장)
-		for _ = 1, n do
-			local q, grade, mult = rollQuality(dd, job.m)
-			local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = packed, a = true, f = true }
-			item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, packed)
-			local sl = Economy.stockProduced(dd, item, "factory")
-			if sl then
-				table.insert(slots, sl)
-			end
-		end
-		dd.stats.factoryMade = (dd.stats.factoryMade or 0) + n
-		ups = Economy.addExp(dd, G.ExpMachine * n)
+		made, slots, ups = endJob(dd, k, job)
 		if #ups > 0 and hooks.refreshUnlocks then
 			newShapes = hooks.refreshUnlocks(dd)
 		end
-		made = n
 	end)
 	Economy.announceLevels(player, ups)
 	if #newShapes > 0 then
@@ -481,6 +491,51 @@ local function finishJob(player, k, job)
 		sp:SetAttribute("MadeAt", workspace:GetServerTimeNow())
 	end
 	print(string.format("[Factory] %s line%d made %d %s (%s) shelf=%s", player.Name, k, made, job.s, job.m, table.concat(slots, ",")))
+end
+
+-- 오프라인 정산 (D29): dt초 진행. 반환 = 아직 돌 수 있는가 (가게 문 규칙·한 판 자리 규칙 그대로)
+function FactoryService.offlineTick(dd, dt, rep)
+	local f = dd.factory
+	if not f or not f.unlocked then
+		return false
+	end
+	if not G.shopOpen(dd) then
+		rep.stops["공장"] = rep.stops["공장"] or "가게 문 닫힘" -- 처음 멈춘 이유
+		return false
+	end
+	local active = false
+	for k = 1, 2 do
+		local job = f.lines[k]
+		if job then
+			active = true
+			job.t += dt
+			if job.t >= job.sec then
+				local n, _, ups = endJob(dd, k, job)
+				rep.made.factory += n
+				rep.exp += G.ExpMachine * n
+				for _, u in ipairs(ups) do
+					table.insert(rep.ups, u)
+				end
+			end
+		end
+	end
+	if f.on then
+		for k = 1, lineCount(dd) do
+			if not f.lines[k] then
+				local why, need, coins = beginJob(dd, k)
+				if why then
+					rep.stops["공장"] = rep.stops["공장"] or why
+				else
+					active = true
+					for id, n in pairs(need) do
+						rep.used[id] = (rep.used[id] or 0) + n
+					end
+					rep.factoryCoins += coins
+				end
+			end
+		end
+	end
+	return active
 end
 
 local function step(player, dt)

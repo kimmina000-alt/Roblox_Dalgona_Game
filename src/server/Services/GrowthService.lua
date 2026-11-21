@@ -18,6 +18,7 @@ local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Minime = require(script.Parent:WaitForChild("Minime"))
 local Machine = require(script.Parent:WaitForChild("MachineService")) -- 기계 2~4단계 (20번)
 local Factory = require(script.Parent:WaitForChild("FactoryService")) -- 5단계 공장
+local Offline = require(script.Parent:WaitForChild("OfflineService")) -- 오프라인 생산 정산 (D29)
 
 local GrowthService = {}
 
@@ -473,6 +474,48 @@ local function stepHelper(player, d, i, h, st, dt)
 	print(string.format("[Helper] %s #%d made %s (-%d wage) shelf=%s", player.Name, i, shape.id, wage, tostring(deliverSlot)))
 end
 
+-- 오프라인 정산 (D29): 알바생 i가 dt초 일함 (데이터만 바꿈, 온라인 stepHelper와 같은 규칙). 반환 = 아직 일할 수 있는가
+local function offlineHelper(dd, i, st, dt, rep)
+	local h = dd.partTimers[i]
+	if not h then
+		return false
+	end
+	local shape = ShapeCatalog.get(h.shape) or ShapeCatalog.get(cheapestHelperShape(dd))
+	local seconds = G.Helper.skillSeconds[h.skill or 0] or G.Helper.seconds
+	local wage = math.floor(seconds / 30 * G.Helper.wagePer30s + 0.5)
+	local why = nil
+	if not G.shopOpen(dd) then
+		why = "가게 문 닫힘"
+	elseif #dd.stock >= G.stockMax(dd) then
+		why = "보관함 가득"
+	elseif dd.coins < wage then
+		why = "급여 부족"
+	end
+	if why then
+		rep.stops["알바생 " .. i] = rep.stops["알바생 " .. i] or why -- 처음 멈춘 이유
+		return false
+	end
+	st.t += dt
+	if st.t < seconds then
+		return true
+	end
+	st.t = 0
+	dd.coins -= wage
+	dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + wage
+	dd.stats.helperMade = (dd.stats.helperMade or 0) + 1
+	local q, grade, mult = rollHelperQuality()
+	local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
+	item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
+	Economy.stockProduced(dd, item, "helper")
+	for _, u in ipairs(Economy.addExp(dd, G.ExpHelper)) do
+		table.insert(rep.ups, u)
+	end
+	rep.made.helper += 1
+	rep.wages += wage
+	rep.exp += G.ExpHelper
+	return true
+end
+
 local function syncHelpers(player, d)
 	local plot = Plots.get(player)
 	local states = helperState[player]
@@ -661,6 +704,7 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 	remotes.GrowthAction.OnServerInvoke = GrowthService.action
 	Machine.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
 	Factory.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
+	Offline.init(Data, Economy, { helper = offlineHelper, machine = Machine.offlineTick, factory = Factory.offlineTick, refreshUnlocks = refreshUnlocks })
 
 	-- 처음 불러올 때: 레벨에 맞게 해금, 오늘 목표, 해금 목록을 속성으로 (제작 화면 도안 고르기가 봄)
 	local ready = {}
@@ -682,6 +726,8 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 			if changed then
 				Data.update(player, function() end)
 			end
+			-- 자리 비운 동안 알바생·기계·공장이 만든 것 정산 (D29). 처음 불러올 때 한 번만
+			Offline.settle(player)
 		end
 		player:SetAttribute("UnlockedShapes", table.concat(d.unlockedShapes, ","))
 		-- 가게 건물 모습 (셔터·임대 문의·간판, D21)

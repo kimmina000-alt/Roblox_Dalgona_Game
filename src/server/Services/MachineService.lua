@@ -240,40 +240,51 @@ end
 
 ---------------------------------------------------------------- 생산 (1초마다)
 
+-- 한 판 만들기 (데이터만 바꿈, Data.update 안이나 오프라인 정산에서 부름). 반환: 만든 수, 진열 칸 목록, 레벨업 목록, 쓴 재료
+local function produce(dd, shape, m)
+	local room = G.stockMax(dd) - #dd.stock
+	local n = math.min(m.batch, room)
+	if n <= 0 then
+		return 0, {}, {}, {}
+	end
+	-- 재료: 판을 시작할 때 한 판치가 있는지 봤지만, 그 사이 손으로 썼을 수 있어 만들 수 있는 만큼만
+	local per = G.recipe(shape.grade)
+	for id, k in pairs(per) do
+		n = math.min(n, math.floor((dd.ingredients[id] or 0) / k))
+	end
+	if n <= 0 then
+		return 0, {}, {}, {}
+	end
+	local used = {}
+	for id, k in pairs(per) do
+		dd.ingredients[id] -= k * n
+		used[id] = k * n
+	end
+	local slots = {}
+	for _ = 1, n do
+		local q, grade, mult = rollQuality()
+		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
+		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
+		local sl = Economy.stockProduced(dd, item, "machine")
+		if sl then
+			table.insert(slots, sl)
+		end
+	end
+	dd.stats.machineMade = (dd.stats.machineMade or 0) + n
+	local ups = Economy.addExp(dd, G.ExpMachine * n)
+	return n, slots, ups, used
+end
+
 local function finishBatch(player, shape, m)
 	local made, slots, ups, newShapes = 0, {}, {}, {}
 	Data.update(player, function(dd)
-		local room = G.stockMax(dd) - #dd.stock
-		local n = math.min(m.batch, room)
-		if n <= 0 then
+		made, slots, ups = produce(dd, shape, m)
+		if made <= 0 then
 			return false
 		end
-		-- 재료: 판을 시작할 때 한 판치가 있는지 봤지만, 그 사이 손으로 썼을 수 있어 만들 수 있는 만큼만
-		local per = G.recipe(shape.grade)
-		for id, k in pairs(per) do
-			n = math.min(n, math.floor((dd.ingredients[id] or 0) / k))
-		end
-		if n <= 0 then
-			return false
-		end
-		for id, k in pairs(per) do
-			dd.ingredients[id] -= k * n
-		end
-		for _ = 1, n do
-			local q, grade, mult = rollQuality()
-			local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
-			item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
-			local sl = Economy.stockProduced(dd, item, "machine")
-			if sl then
-				table.insert(slots, sl)
-			end
-		end
-		dd.stats.machineMade = (dd.stats.machineMade or 0) + n
-		ups = Economy.addExp(dd, G.ExpMachine * n)
 		if #ups > 0 and hooks.refreshUnlocks then
 			newShapes = hooks.refreshUnlocks(dd)
 		end
-		made = n
 	end)
 	if made <= 0 then
 		return 0
@@ -291,6 +302,34 @@ local function finishBatch(player, shape, m)
 	end
 	print(string.format("[Machine] %s %s made %d %s shelf=%s", player.Name, m.id, made, shape.id, table.concat(slots, ",")))
 	return made
+end
+
+-- 오프라인 정산 (D29): dt초 진행. 반환 = 아직 돌 수 있는가. rep에 만든 수·재료·멈춘 이유·레벨업을 모음
+function MachineService.offlineTick(dd, dt, rep)
+	local m = spec(dd)
+	if not m then
+		return false
+	end
+	local shape = currentShape(dd)
+	local why = stopReason(dd, shape, m)
+	if why then
+		rep.stops["기계"] = rep.stops["기계"] or why -- 처음 멈춘 이유
+		return false
+	end
+	dd.machine.t = (dd.machine.t or 0) + dt
+	if dd.machine.t >= m.seconds then
+		dd.machine.t = 0
+		local n, _, ups, used = produce(dd, shape, m)
+		rep.made.machine += n
+		rep.exp += G.ExpMachine * n
+		for id, k in pairs(used) do
+			rep.used[id] = (rep.used[id] or 0) + k
+		end
+		for _, u in ipairs(ups) do
+			table.insert(rep.ups, u)
+		end
+	end
+	return true
 end
 
 local function step(player, dt)
