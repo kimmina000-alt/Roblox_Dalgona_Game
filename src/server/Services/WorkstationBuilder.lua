@@ -778,7 +778,7 @@ end
 -- 노점 배치 (2026-11-21 사용자: "연탄화로는 땅 위에 테이블 옆에", "테이블 길이를 줄여", "나무젓가락 소다통 옆으로")
 --   ① 화로(+국자)를 같은 자리에서 바닥까지 내림 → 철망이 테이블 윗면과 비슷한 높이
 --   ② 테이블 왼쪽(화로가 있던 부분)을 잘라 냄: 새 왼쪽 끝 = 화로 오른쪽 끝 + 0.3. 다리·식탁보도 맞춤
---   ③ 젓가락 통을 소다 통 오른쪽으로, 젓던 젓가락 내려놓는 자리는 테이블 왼쪽 끝(화로 옆)
+--   ③ 젓가락 통은 바닥 화로 앞 왼쪽, 젓던 젓가락 내려놓는 자리는 테이블 왼쪽 끝(화로 옆)
 -- 꾸미기(StallDecor.dress) 뒤 틀(WorkstationTemplate)에 한 번 함 (속성 StreetLayout)
 local function isFlatX(p)
 	local r = p.CFrame.RightVector
@@ -836,14 +836,13 @@ function Builder.streetLayout(ws)
 			end
 		end
 	end
-	-- ③ 젓가락 통 → 소다 통 오른쪽
-	local soda = ws:FindFirstChild("SodaTub")
+	-- ③ 젓가락 통 → 바닥, 화로 앞 왼쪽 (2026-11-21 사용자 그림 "나무젓가락 위치 이동 바닥에 둬". 처음엔 소다 통 옆이었음)
 	local cup = ws:FindFirstChild("ChopstickCup")
-	if soda and cup then
-		local sp = soda:GetPivot().Position
-		local cp = cup:GetPivot().Position
-		local delta = Vector3.new(sp.X + 1.3 - cp.X, 0, sp.Z - cp.Z)
-		cup:PivotTo(cup:GetPivot() + delta)
+	if cup then
+		local ccf, csz = cup:GetBoundingBox()
+		local tx = bcf.Position.X - bsize.X * 0.3
+		local tz = bcf.Position.Z + bsize.Z / 2 + 0.6
+		cup:PivotTo(cup:GetPivot() + Vector3.new(tx - ccf.Position.X, floorY - (ccf.Position.Y - csz.Y / 2), tz - ccf.Position.Z))
 	end
 	-- 젓던 젓가락을 내려놓는 자리(Chopsticks)는 화로 옆 = 잘린 테이블 왼쪽 끝 (철판 위에 놓이지 않게)
 	local chop = ws:FindFirstChild("Chopsticks")
@@ -852,6 +851,309 @@ function Builder.streetLayout(ws)
 		chop:PivotTo(chop:GetPivot() + Vector3.new(newLeft + 0.7 - cp.X, 0, 0))
 	end
 	ws:SetAttribute("StreetLayout", true)
+end
+
+-- 새 작업대 배치 (2026-11-21 사용자 그림, 미리 보기): 위에서 본 ㄷ자 카운터. 플레이어는 앞(+Z)에 서서 만듦
+--   뒷줄: 왼쪽 비닐 통·빵끈 통 / 가운데 반죽 붓고 누르는 철판 / 오른쪽 모양 틀·누름판
+--   앞줄: 왼쪽 포장대 / 가운데 앞이 트인 홈에 연탄 화로(바닥) / 오른쪽 소다·설탕 그릇 둘
+--   나무젓가락 통은 화로 홈 앞 왼쪽 모서리 바닥
+-- 값은 테이블 가운데 기준 (x 오른쪽, z 앞 = 플레이어 쪽), 단위 stud
+local V3 = {
+	W = 16, D = 10.2, -- 카운터 폭·깊이
+	notch = { x0 = -2.9, x1 = 2.7, z0 = -0.4 }, -- 화로가 들어가는 홈 (앞으로 트임)
+	plate = Vector2.new(0, -2.8),
+	-- 2026-11-21 사용자 수정: 누름판·모양 틀 자리 바꿈, 비닐·빵끈은 더 아래(앞)로, 틀 접시는 비닐·빵끈 있던 자리로
+	cutter = Vector2.new(4.4, -0.5), -- 2026-11-21 사용자: 모양 틀은 누름판 아래(앞)로
+	presser = Vector2.new(4.4, -3.4),
+	-- 포장 공간(비닐 통·빵끈 통·매트)은 앞쪽으로 0.7 옮겨 모양 틀 접시와 사이를 띄움 (2026-11-21 사용자)
+	bagBox = Vector2.new(-6.9, -0.4),
+	tieCup = Vector2.new(-4.7, -0.4),
+	tray = Vector2.new(-5.1, -3.5), -- 2026-11-21 사용자: 설탕 뿌린 철판 쪽으로 살짝
+	trayYaw = 15, -- 접시는 가로로 놓고 살짝 사선 (2026-11-21 사용자: "살짝 사선으로, 자연스럽게")
+	cutterYaw = 40, -- 모양 틀도 사선 (2026-11-21 사용자: 반대 방향 40°). 찍을 때는 Stamp가 속성 RestYaw만큼 되돌려 똑바로 찍음
+	mat = Vector2.new(-5.5, 3.1),
+	soda = Vector2.new(4.2, 1.7),
+	sugarW = Vector2.new(4.3, 3.6),
+	sugarB = Vector2.new(6.5, 3.6),
+	brazier = Vector2.new(-0.1, 2.3),
+	cup = Vector2.new(-1.9, 4.9), -- 나무젓가락 통: 화로 홈 앞 왼쪽 바닥 (2026-11-21 사용자 그림). 통을 높여 젓가락이 더 가려지게
+	chopRest = Vector2.new(-2.75, -1.6), -- 쓴 젓가락 내려놓는 자리: 포장 매트에서 떨어진 철판 왼쪽 (매트 위 달고나와 겹쳐 보였음)
+	stickBox = Vector2.new(2.65, -2.25), -- 달고나 막대: 네모 통에 눕혀서, 철판 오른쪽·누름판 왼쪽 (2026-11-21 사용자 그림). 꺼낼 막대도 이 통 위에
+}
+Builder.V3 = V3
+local function bboxOf(o)
+	if o:IsA("Model") then
+		local cf, size = o:GetBoundingBox()
+		return cf.Position, size
+	end
+	return o.Position, o.Size
+end
+-- 새 배치 마무리 (2026-11-21 사용자): 모양 틀 살짝 사선, 나무젓가락 통은 테이블 위로,
+-- 빵끈·달고나 막대는 캔 대신 네모 통에 눕혀서 수납
+local function flatBox(floor, rim, items, wallName, w, l, tableY, rng)
+	local c = floor.Position
+	local cf = CFrame.new(c.X, tableY + 0.03, c.Z)
+	floor.Shape = Enum.PartType.Block
+	floor.Size = Vector3.new(w, 0.06, l)
+	floor.CFrame = cf
+	if rim then
+		rim:Destroy()
+	end
+	local H, T = 0.26, 0.05
+	for _, e in ipairs({ { 0, -(l - T) / 2, w, T }, { 0, (l - T) / 2, w, T }, { -(w - T) / 2, 0, T, l }, { (w - T) / 2, 0, T, l } }) do
+		local wall = floor:Clone()
+		wall:ClearAllChildren()
+		wall.Name = wallName
+		wall.Size = Vector3.new(e[3], H, e[4])
+		wall.CFrame = cf * CFrame.new(e[1], H / 2 - 0.03, e[2])
+		wall.Parent = floor.Parent
+	end
+	-- 눕히기: 길이 축(Y)은 통의 긴 쪽(Z)으로, 가장 얇은 축은 위로. 폭 방향으로 나란히, 넘치면 한 겹 더
+	local n = #items
+	local s1 = n > 0 and items[1].Size or Vector3.one
+	local perRow = math.max(1, math.min(n, math.floor((w - 0.16) / (math.max(math.min(s1.X, s1.Z) == s1.X and s1.Z or s1.X, 0.05) + 0.015))))
+	for i, p in ipairs(items) do
+		local s = p.Size
+		local thinX = s.X <= s.Z
+		local thin = thinX and s.X or s.Z
+		local across = thinX and s.Z or s.X
+		local row, layer = (i - 1) % perRow, math.floor((i - 1) / perRow)
+		local step = (w - 0.16 - across) / math.max(perRow - 1, 1)
+		local x = -(w - 0.16 - across) / 2 + row * step + rng:NextNumber(-0.02, 0.02)
+		local y = 0.06 + thin / 2 + layer * thin * 1.1 + 0.002
+		local z = rng:NextNumber(-0.06, 0.06)
+		local at = cf * CFrame.new(x, y, z) * CFrame.Angles(0, rng:NextNumber(-0.06, 0.06), 0)
+		if thinX then
+			p.CFrame = CFrame.fromMatrix(at.Position, Vector3.yAxis, at.LookVector * -1)
+		else
+			p.CFrame = CFrame.fromMatrix(at.Position, at.RightVector, at.LookVector * -1)
+		end
+	end
+end
+
+local function tidyCounter(ws, decor, pack, tableY)
+	-- 모양 틀: 제자리에서 살짝 돌림. 찍을 때 똑바로 되돌리게 각도를 남김
+	local cutter = ws:FindFirstChild("Cutter")
+	if cutter then
+		local pv = cutter:GetPivot()
+		local wsRot = ws:GetPivot() - ws:GetPivot().Position
+		cutter:SetAttribute("StraightRot", wsRot:Inverse() * (pv - pv.Position)) -- 똑바로 놓인 자세 (작업대 기준)
+		cutter:PivotTo(CFrame.new(pv.Position) * CFrame.Angles(0, math.rad(V3.cutterYaw), 0) * (pv - pv.Position))
+		cutter:SetAttribute("RestYaw", V3.cutterYaw)
+	end
+	-- 나무젓가락 통: 통만 높여서 꽂힌 젓가락이 그만큼 더 가려지게 (젓가락은 그대로)
+	local cup = ws:FindFirstChild("ChopstickCup")
+	if cup then
+		local RAISE = 0.9 -- 통 아래쪽은 땅에 묻혀 있어서 넉넉히
+		local body = cup:FindFirstChild("Cup")
+		if body then
+			body.Size += Vector3.new(RAISE, 0, 0) -- 원기둥을 눕혀 세운 것이라 높이 = X
+			body.Position += Vector3.new(0, RAISE / 2, 0)
+		end
+		local rim = cup:FindFirstChild("Rim")
+		if rim then
+			rim.Position += Vector3.new(0, RAISE, 0)
+			local label = cup:FindFirstChild("Label")
+			if label then
+				label.Position = Vector3.new(label.Position.X, rim.Position.Y - 0.45, label.Position.Z) -- 빨간 띠는 보이는 쪽 가운데
+			end
+		end
+	end
+	local rng = Random.new(5)
+	-- 빵끈 통 → 네모 통 (Pack은 TieCup 자리를, Supplies는 CupTie를 씀: 이름 그대로)
+	local tieCup = pack and pack:FindFirstChild("TieCup")
+	if tieCup then
+		local ties = {}
+		for _, c in ipairs(pack:GetChildren()) do
+			if c.Name == "CupTie" then
+				table.insert(ties, c)
+			end
+		end
+		flatBox(tieCup, pack:FindFirstChild("TieCupRim"), ties, "TieBoxWall", 1.25, 1.05, tableY, rng)
+	end
+	-- 달고나 막대 캔 → 네모 통
+	local stickCup = decor and decor:FindFirstChild("StickCup")
+	if stickCup then
+		local sticks = {}
+		for _, c in ipairs(decor:GetChildren()) do
+			if c.Name == "CupPopsicle" then
+				table.insert(sticks, c)
+			end
+		end
+		flatBox(stickCup, decor:FindFirstChild("StickCupRim"), sticks, "StickBoxWall", 0.85, 1.75, tableY, rng)
+		-- 클라이언트 Stick이 꺼낼 막대를 이 통 맨 위에 올려 둠 (쌓인 막대 윗면 높이)
+		local topY = tableY + 0.06
+		for _, c in ipairs(sticks) do
+			topY = math.max(topY, c.Position.Y + 0.02)
+		end
+		stickCup:SetAttribute("StackUp", topY - stickCup.Position.Y) -- 통 바닥 판 기준 높이 (작업대를 옮겨도 맞게)
+	end
+end
+
+-- Studio에 저장해 둔 새 배치 작업대(사용자가 편집 모드에서 물건 자리를 직접 옮김, 2026-11-21)를 쓸 때:
+-- 모양 틀을 돌려 놓았으면 그만큼을 RestYaw로 다시 계산 (찍을 때 Stamp가 똑바로 되돌림)
+function Builder.syncCounter(ws)
+	ws:SetAttribute("CounterLayout", true)
+	local cutter = ws:FindFirstChild("Cutter")
+	local straight = cutter and cutter:GetAttribute("StraightRot")
+	if typeof(straight) == "CFrame" then
+		local wsRot = ws:GetPivot() - ws:GetPivot().Position
+		local pv = cutter:GetPivot()
+		-- 지금 자세 = (세로축 θ 회전) × 똑바른 자세 → θ = 지금 × 똑바른 자세⁻¹ 의 세로축 각도
+		local q = (pv - pv.Position) * (wsRot * straight):Inverse()
+		local _, yaw = q:ToEulerAnglesYXZ()
+		cutter:SetAttribute("RestYaw", math.deg(yaw))
+	end
+end
+
+function Builder.counterLayout(ws)
+	local top = ws:FindFirstChild("TableTop")
+	if not top then
+		return
+	end
+	local center = Vector3.new(top.Position.X, top.Position.Y, top.Position.Z)
+	local thick = top.Size.Y
+	local function at(v)
+		return Vector3.new(center.X + v.X, 0, center.Z + v.Y)
+	end
+	-- 옮길 무리: 기준 물건 → 같이 움직일 것들 (옮기기 전에 거리를 다 재 두고 한 번에 옮김)
+	local moves = {}
+	local function plan(anchor, target, extras)
+		if not anchor then
+			return nil
+		end
+		local p = bboxOf(anchor)
+		local t = at(target)
+		local d = Vector3.new(t.X - p.X, 0, t.Z - p.Z)
+		table.insert(moves, { list = { anchor, table.unpack(extras or {}) }, d = d })
+		return d
+	end
+	local pack = ws:FindFirstChild("PackArea")
+	local function packGroup(names)
+		local list = {}
+		for _, c in ipairs(pack and pack:GetChildren() or {}) do
+			if table.find(names, c.Name) then
+				table.insert(list, c)
+			end
+		end
+		return list
+	end
+	local plateD = plan(ws:FindFirstChild("IronPlate"), V3.plate, { ws:FindFirstChild("SugarRing"), ws:FindFirstChild("SugarRingInner") })
+	local cutterD = plan(ws:FindFirstChild("Cutter"), V3.cutter)
+	plan(ws:FindFirstChild("Presser"), V3.presser)
+	plan(ws:FindFirstChild("SugarBowlWhite"), V3.sugarW, { ws:FindFirstChild("WoodSpoon") })
+	plan(ws:FindFirstChild("SugarBowlBrown"), V3.sugarB)
+	plan(ws:FindFirstChild("SodaTub"), V3.soda, { ws:FindFirstChild("SodaSpoon") })
+	local brazierD = plan(ws:FindFirstChild("Brazier"), V3.brazier, { ws:FindFirstChild("Ladle") })
+	plan(ws:FindFirstChild("ChopstickCup"), V3.cup)
+	plan(ws:FindFirstChild("Chopsticks"), V3.chopRest)
+	if pack then
+		local mat = pack:FindFirstChild("Mat")
+		plan(mat, V3.mat)
+		local box = packGroup({ "BagBox", "BagBoxWall", "BagSheet", "BagTop" })
+		plan(pack:FindFirstChild("BagBox"), V3.bagBox, box)
+		local tie = packGroup({ "TieCup", "TieCupRim", "CupTie" })
+		plan(pack:FindFirstChild("TieCup"), V3.tieCup, tie)
+	end
+	-- 1단계 꾸미기: 진열용 계단(Show*)은 뺌, 은박지는 화로와, 틀 쟁반은 틀과, 나머지는 철판과 같이
+	local decor = ws:FindFirstChild("Stage1Decor")
+	if decor then
+		-- 모양 틀 담긴 접시(Tray·TrayRim·TrayCutter)는 V3.tray 자리로 통째로
+		local trayList = {}
+		for _, c in ipairs(decor:GetChildren()) do
+			if c.Name:sub(1, 4) == "Tray" then
+				table.insert(trayList, c)
+			end
+		end
+		plan(decor:FindFirstChild("Tray"), V3.tray, trayList)
+		local stickList = {}
+		for _, c in ipairs(decor:GetChildren()) do
+			if c.Name:sub(1, 8) == "StickCup" or c.Name == "CupPopsicle" then
+				table.insert(stickList, c)
+			end
+		end
+		plan(decor:FindFirstChild("StickCup"), V3.stickBox, stickList)
+		for _, c in ipairs(decor:GetChildren()) do
+			if c.Name:sub(1, 4) == "Show" then
+				-- 진열 계단은 뺌
+				c:Destroy()
+			elseif c.Name:sub(1, 8) == "StickCup" or c.Name == "CupPopsicle" then
+				-- 막대 통은 위에서 V3.stickBox 자리로 통째로 옮김
+			elseif c.Name == "Foil" and brazierD then
+				table.insert(moves, { list = { c }, d = brazierD })
+			elseif c.Name:sub(1, 4) == "Tray" then
+				-- 위에서 접시와 같이 옮김
+			elseif plateD then
+				table.insert(moves, { list = { c }, d = plateD })
+			end
+		end
+	end
+	local seen = {}
+	for _, mv in ipairs(moves) do
+		for _, o in ipairs(mv.list) do
+			if o and not seen[o] then
+				seen[o] = true
+				o:PivotTo(o:GetPivot() + mv.d)
+			end
+		end
+	end
+	-- 모양 틀 접시는 90° 돌려 놓음 (길쭉한 쪽이 좌우로 → 앞의 비닐·빵끈 통과 안 겹침, 2026-11-21 사용자) + 살짝 사선
+	local trayPart = decor and decor:FindFirstChild("Tray")
+	if trayPart then
+		local c = trayPart.Position
+		local turn = CFrame.new(c) * CFrame.Angles(0, math.rad(90 + V3.trayYaw), 0) * CFrame.new(-c)
+		for _, o in ipairs(decor:GetChildren()) do
+			if o.Name:sub(1, 4) == "Tray" then
+				o:PivotTo(turn * o:GetPivot())
+			end
+		end
+	end
+	tidyCounter(ws, decor, pack, center.Y + thick / 2)
+	-- 카운터: 뒷줄 판 + 앞 왼쪽·오른쪽 판 (가운데 앞은 화로 홈). 식탁보(Stains)·예전 다리는 다시 만듦
+	local stains = ws:FindFirstChild("Stains")
+	if stains then
+		stains:Destroy()
+	end
+	local legTpl
+	for _, c in ipairs(ws:GetChildren()) do
+		if c.Name == "TableLeg" and c:IsA("BasePart") then
+			legTpl = legTpl or c:Clone()
+			c:Destroy()
+		end
+	end
+	local n = V3.notch
+	local W, D = V3.W, V3.D
+	local function slab(name, x0, x1, z0, z1)
+		local p
+		if name == "TableTop" then
+			p = top
+		else
+			p = top:Clone()
+			p:ClearAllChildren()
+			p.Name = name
+			p.Parent = ws
+		end
+		p.Size = Vector3.new(x1 - x0, thick, z1 - z0)
+		p.CFrame = CFrame.new(center.X + (x0 + x1) / 2, center.Y, center.Z + (z0 + z1) / 2)
+		return p
+	end
+	-- 안내(E)는 뒷줄 판 앞 가장자리에 붙어 있으므로 자리를 다시 맞춤
+	local att = top:FindFirstChild("PromptAtt")
+	slab("TableTop", -W / 2, W / 2, -D / 2, n.z0)
+	slab("TableTopLeft", -W / 2, n.x0, n.z0, D / 2)
+	slab("TableTopRight", n.x1, W / 2, n.z0, D / 2)
+	if att then
+		att.Position = Vector3.new(0, thick / 2, top.Size.Z / 2)
+	end
+	if legTpl then
+		local inset = 0.3
+		for _, pt in ipairs({ { -W / 2 + inset, -D / 2 + inset }, { W / 2 - inset, -D / 2 + inset }, { -W / 2 + inset, D / 2 - inset }, { W / 2 - inset, D / 2 - inset }, { n.x0 - inset, D / 2 - inset }, { n.x1 + inset, D / 2 - inset } }) do
+			local leg = legTpl:Clone()
+			leg.CFrame = CFrame.new(center.X + pt[1], legTpl.Position.Y, center.Z + pt[2])
+			leg.Parent = ws
+		end
+	end
+	ws:SetAttribute("CounterLayout", true)
 end
 
 return Builder

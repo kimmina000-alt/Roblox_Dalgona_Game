@@ -53,6 +53,8 @@ end
 Heat.IDLE_BURN = 8
 Heat.IDLE_BURN_T = 6
 
+local UserInputService = game:GetService("UserInputService")
+local KEY_RATE = 0.85 -- PC W/S: 초당 국자 높이 범위의 이 비율만큼 (끝에서 끝까지 약 1.2초)
 local coached = false -- 이번 접속에서 국자 높이를 한 번이라도 끌어 봤나 (처음 하는 사람 안내)
 
 function Heat.control(st, P, ui, S)
@@ -84,6 +86,19 @@ function Heat.control(st, P, ui, S)
 		-- 2026-11-20 플레이 테스트: 안내 줄(왼쪽 아래 큰 화살표 길, 화면 높이의 약 27%)을 한 번 끝까지 끌면
 		-- 알맞은 높이 칸 가운데쯤 (약 160°)에 들어가게. 0.45는 끝까지 끌어도 타고, 0.25는 너무 올라가 식음
 		st.h = math.clamp(st.h - d.Y / (vh * 0.34) * (cfg.hMax - cfg.hMin), cfg.hMin, cfg.hMax)
+	end
+	-- PC: W(↑)/S(↓) 키로 국자 높이 (2026-11-21 사용자 "피씨모드에서 국자 드는 거 w, s 키로")
+	local now = os.clock()
+	local kdt = math.clamp(now - (st.keyT or now), 0, 0.1)
+	st.keyT = now
+	local kUp = UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up)
+	local kDown = UserInputService:IsKeyDown(Enum.KeyCode.S) or UserInputService:IsKeyDown(Enum.KeyCode.Down)
+	if kUp ~= kDown and not UserInputService:GetFocusedTextBox() then
+		coached = true
+		st.h = math.clamp(st.h + (kUp and 1 or -1) * KEY_RATE * kdt * (cfg.hMax - cfg.hMin), cfg.hMin, cfg.hMax)
+		if ui.setTempTrend then
+			ui:setTempTrend(kUp and -1 or 1)
+		end
 	end
 	local danger = Heat.sourceTemp(st.h) > cfg.burnTemp or st.temp > cfg.burnTemp - 3
 	-- 알맞은 높이 칸: 불 온도가 tempLow ~ tempHigh가 되는 높이 (sourceTemp = 235 - 95 × h01)

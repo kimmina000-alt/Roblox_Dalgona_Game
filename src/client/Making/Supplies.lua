@@ -43,7 +43,7 @@ end
 -- 숨길 때 표시(SupplyHidden)를 남기고, 되돌릴 때는 내가 숨긴 것만 되돌림
 -- (Station·ChopstickCup도 같은 값을 씀: 꺼낸 젓가락 등을 다시 보이게 하면 안 됨)
 local function setHidden(container, partName, hidden)
-	for _, p in ipairs(container:GetChildren()) do
+	for _, p in ipairs(container:GetDescendants()) do -- 통이 묶음(모델) 안에 있어도 찾음
 		if p.Name == partName and p:IsA("BasePart") then
 			if hidden then
 				if p.LocalTransparencyModifier < 1 then

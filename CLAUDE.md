@@ -35,6 +35,8 @@
 - glb는 Roblox로 가져오면 앞뒤(Z)가 뒤집힌다. 다른 메시를 바꿀 때도 방향을 화면으로 먼저 확인한다.
 - glb의 금속도·거칠기 값(Principled BSDF 숫자)은 Roblox로 넘어오지 않는다. 그래서 `LadleMesh` 안에 SurfaceAppearance `CopperShine`을 직접 넣었다: 금속도 텍스처 `rbxassetid://75555295293901`(0.95), 거칠기 텍스처 `rbxassetid://116334782975968`(0.25), 색 (214,132,72). `rbxasset://` 내장 텍스처는 게임 안에서 막혀서 쓸 수 없다.
 
+- 가게 작업대 틀 = 편집 모드 `Workspace.WorkstationLayout` (ㄷ자 카운터, (-50,0,10), 2026-11-21 교체). 사용자가 물건 자리를 직접 옮긴다 (막대 통 `Stage1Decor.StickBox`, 비닐 통 `PackArea.BagBin`, 빵끈 통 `PackArea.TieBox`는 묶음). 게임 시작 때 서버가 Workspace에서 빼서 `ServerStorage.Assets.WorkstationTemplate`으로 쓰고(`syncCounter`), 꾸미기(dress·streetLayout)는 다시 안 한다. 예전 노점 틀 백업: `ServerStorage.Backup.WorkstationTemplate_Old`. `counterLayout`·`StallDecor` 값을 바꿔도 저장된 틀에는 안 들어가므로, 다시 만들려면 사용자에게 먼저 묻는다 (옮긴 자리가 사라짐).
+
 ## Studio 동기화
 - Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).
 - 이 PC에는 Rojo가 없고, Studio Assistant의 HTTP 허용 목록 때문에 로컬 서버에서 받아 오는 방식도 막혀 있다.

@@ -30,19 +30,97 @@ local function build(S)
 	return m, place
 end
 
+-- 막대가 쉬는 자리: 철판 오른쪽 테이블 위에 세로(앞뒤)로. 그 자리에 누름판 같은 물건이 있으면 (가게 작업대: 누름판 밑에 깔려
+-- 안 보였음, 2026-11-21) 철판 앞 → 왼쪽 순서로 빈 자리를 찾음
+local function restOf(S)
+	-- 새 배치: 달고나 막대 네모 통(속성 StackUp)이 있으면 그 통 맨 위에 길게 놓인 막대를 꺼냄 (2026-11-21 사용자)
+	local decor = S.model:FindFirstChild("Stage1Decor")
+	local box = decor and decor:FindFirstChild("StickCup", true) -- 묶음(모델) 안에 있을 수 있음
+	if box and box:GetAttribute("StackUp") then
+		local pos = box.Position + Vector3.new(0, box:GetAttribute("StackUp") + THICK / 2, 0)
+		return CFrame.new(pos) * S.rot * CFrame.Angles(0, math.rad(90), 0)
+	end
+	local plate = S.Plate
+	local top = S.plateTop
+	local half = plate.Size.X / 2
+	local spots = { { half + 0.45, 0.5, 90 }, { 0.3, half + 0.45, 0 }, { -half - 0.45, 0.5, 90 } }
+	local olp = OverlapParams.new()
+	olp.FilterType = Enum.RaycastFilterType.Include
+	olp.FilterDescendantsInstances = { S.model }
+	local restCF
+	for _, sp in ipairs(spots) do
+		local pos = Vector3.new(plate.Position.X, top + THICK / 2, plate.Position.Z) + S:dir(sp[1], 0, sp[2])
+		local cf = CFrame.new(pos) * S.rot * CFrame.Angles(0, math.rad(sp[3]), 0)
+		local blocked = false
+		for _, p in ipairs(workspace:GetPartBoundsInBox(cf * CFrame.new(0, 0.3, 0), Vector3.new(LEN, 0.5, WIDTH * 2), olp)) do
+			if p ~= plate and p.Transparency < 1 and p.LocalTransparencyModifier < 1 and p.Name:sub(1, 8) ~= "TableTop" then
+				blocked = true
+				break
+			end
+		end
+		restCF = restCF or cf
+		if not blocked then
+			return cf
+		end
+	end
+	return restCF
+end
+
+-- 철판 위 설탕 꾸밈(결정·가루)이 막대를 뚫고 나와 구멍 난 것처럼 보임 (2026-11-21) → 막대가 놓인 줄 위의 것만 내 화면에서 숨김
+local hiddenSugar = {}
+local function restoreSugar()
+	for _, p in ipairs(hiddenSugar) do
+		if p.Parent then
+			p.LocalTransparencyModifier = 0
+		end
+	end
+	table.clear(hiddenSugar)
+end
+local function hideSugarUnder(S, c, dir)
+	local decor = S.model:FindFirstChild("Stage1Decor")
+	if not decor then
+		return
+	end
+	local olp = OverlapParams.new()
+	olp.FilterType = Enum.RaycastFilterType.Include
+	olp.FilterDescendantsInstances = { decor }
+	local L = 3.2 -- 반죽 가운데부터 막대 바깥 끝까지 넉넉히
+	local box = CFrame.lookAt(c, c + dir) * CFrame.new(0, 0, -L / 2)
+	for _, p in ipairs(workspace:GetPartBoundsInBox(box, Vector3.new(WIDTH + 0.14, 0.6, L), olp)) do
+		if p.Name:sub(1, 5) == "Sugar" and p.LocalTransparencyModifier < 1 then
+			p.LocalTransparencyModifier = 1
+			table.insert(hiddenSugar, p)
+		end
+	end
+end
+
+-- 막대를 미리 쉬는 자리에 꺼내 둠 (새 배치: 반죽 붓는 화면부터 보이게, 2026-11-21 사용자). 이어서 Stick.place가 이 막대를 씀
+function Stick.show(ctx)
+	local S, st = ctx.station, ctx.state
+	if st.stickPre then
+		return
+	end
+	restoreSugar()
+	local m, place = build(S)
+	place(restOf(S))
+	st.stickPre = { m, place }
+end
+
 -- 막대 놓기. 성공하면 st.stick = { dir, inner } 에 기록 (누르기·찍기 동안 Stick.follow로 반죽 높이에 맞춰 묻힘)
 function Stick.place(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
 	local dal = st.dalgona
-	local plate = S.Plate
-	local top = S.plateTop
-	local half = plate.Size.X / 2
-	local m, place = build(S)
-	-- 철판 오른쪽 테이블 위에 세로(앞뒤)로 놓여 있음
-	local restPos = Vector3.new(plate.Position.X, top + THICK / 2, plate.Position.Z) + S:dir(half + 0.45, 0, 0.5)
-	local restCF = CFrame.new(restPos) * S.rot * CFrame.Angles(0, math.rad(90), 0)
-	local cf = restCF
-	place(cf)
+	local restCF = restOf(S)
+	local m, place
+	if st.stickPre and st.stickPre[1].Parent then
+		m, place = st.stickPre[1], st.stickPre[2]
+	else
+		restoreSugar()
+		m, place = build(S)
+		place(restCF)
+	end
+	st.stickPre = nil
+	local cf = m.PrimaryPart.CFrame
 	st.stickModel = m
 	st.stickPlace = place
 	ui:say("아이스크림 막대를 반죽에 꽂아요", "막대를 끌어 반죽 가장자리에 얹어요 · 눌러만 줘도 꽂혀요")
@@ -96,6 +174,7 @@ function Stick.place(ctx)
 				if dir then
 					st.stick = { dir = dir }
 					Stick.follow(st)
+					hideSugarUnder(S, Vector3.new(c.X, S.plateTop, c.Z), dir)
 					-- 꽂은 뒤로는 막대도 다른 도구처럼 만화 외곽선 (2026-11-20)
 					if st.stickModel then
 						Toon.outline(st.stickModel)

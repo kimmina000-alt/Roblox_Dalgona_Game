@@ -393,8 +393,8 @@ local function stepHelper(player, d, i, h, st, dt)
 	local seconds = G.Helper.skillSeconds[h.skill or 0] or G.Helper.seconds
 	local wage = math.floor(seconds / 30 * G.Helper.wagePer30s + 0.5)
 	-- 쉬는 이유 확인
-	local need = G.recipe(shape.grade)
-	need.chopsticks = G.ChopsticksPerHelperRound
+	-- 알바생은 재료(설탕·소다·젓가락 등)를 안 씀 (2026-11-21 사용자: "알바생은 재료 안 쓰게 해"). 급여만 냄
+	local need = {}
 	local why = nil
 	if not G.shopOpen(d) then
 		why = "가게 문 닫힘" -- 월세 밀림 (D21)
@@ -422,7 +422,7 @@ local function stepHelper(player, d, i, h, st, dt)
 		return
 	end
 	st.t = 0
-	-- 1개 완성: 재료·젓가락·급여를 쓰고 보관함에 (자동 생산 표시 a = true, 포장 안 함)
+	-- 1개 완성: 급여를 쓰고 보관함에 (재료는 안 씀) (자동 생산 표시 a = true, 포장 안 함)
 	local ups, newShapes = {}, {}
 	local deliverSlot = nil
 	Data.update(player, function(dd)

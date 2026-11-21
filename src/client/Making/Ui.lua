@@ -496,7 +496,8 @@ function Ui:_buildHeight()
 	new("Frame", { Name = "Track", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.new(0, 70, 1, -8), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.35, ZIndex = 6, Parent = coach }, { corner(35) })
 	self.coachFinger = label({ Text = "▲", TextSize = 96, TextColor3 = Color3.fromRGB(255, 120, 160), TextStrokeColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0, AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.88, 0), Size = UDim2.fromOffset(110, 100), ZIndex = 7, Parent = coach })
 	local bubble = label({
-		Text = "이 줄을 위로 끌면 국자가 올라가고\n온도가 내려가요 ▼",
+		-- PC는 W/S 키로도 (2026-11-21)
+		Text = self.touch and "이 줄을 위로 끌면 국자가 올라가고\n온도가 내려가요 ▼" or "이 줄을 위로 끌거나 W 키 → 국자가 올라가고\n온도가 내려가요 ▼ (S 키는 내림)",
 		TextSize = 21,
 		TextColor3 = Color3.new(1, 1, 1),
 		BackgroundTransparency = 0.05,

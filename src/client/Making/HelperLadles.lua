@@ -25,10 +25,13 @@ local function stepOne(m, now, resting)
 	if not (c and stick and cont) then
 		return
 	end
+	-- 처음 자리는 국자 메시 기준으로 기억 (만드는 동안 내 화면에서 작업대를 돌려 놓아도 따라감, 2026-11-21)
+	local ref = m:FindFirstChild("Mesh") or cont
 	if not base[cont] then
-		base[cont] = cont.CFrame
+		base[cont] = { cf = ref.CFrame:ToObjectSpace(cont.CFrame), c = ref.CFrame:PointToObjectSpace(c) }
 	end
-	local cf0 = base[cont]
+	local cf0 = ref.CFrame * base[cont].cf
+	c = ref.CFrame:PointToWorldSpace(base[cont].c)
 	local th0 = cont:GetAttribute("BaseThick") or cont.Size.X
 	local u = (now / CYCLE + (m:GetAttribute("Phase") or 0)) % 1
 	local color, thick, mat, hidden = SUGAR, th0, Enum.Material.Sand, false
