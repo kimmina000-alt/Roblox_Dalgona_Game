@@ -269,8 +269,10 @@ G.Factory = {
 	},
 	modeOrder = { "normal", "precise", "fast" },
 	maxGrade = "Legendary", -- D13
-	-- 1개 원가 6 (7장): 설탕(도안 등급만큼, 1회분 3) + 소다 1 + 포장지 1 + 운영비 1코인. 판을 시작할 때 한 번에 뺌
-	perItem = { soda = 1, wrapper = 1 }, -- 설탕은 G.recipe(등급)
+	-- 1개 원가: 설탕(도안 등급만큼, 1회분 3) + 소다 1 + 운영비 1코인. 판을 시작할 때 한 번에 뺌
+	-- 포장지는 "자동 포장 시스템"이 있을 때만 1개씩 쓰고 판매가 ×1.1 (사용자 확정 2026-11-22, 손 포장 D18과 같은 규칙)
+	perItem = { soda = 1 }, -- 설탕은 G.recipe(등급)
+	packPerItem = { wrapper = 1 }, -- 자동 포장일 때만
 	operatingCoins = 1, -- 제한 4: 공장 유지비 (1개당)
 	powerPerUpgrade = 2, -- 제한 5: 제어대 업그레이드 1단계마다 판당 전력비 +2코인
 	warehouseMult = 2, -- 대형 완제품 창고: 보관량 2배
