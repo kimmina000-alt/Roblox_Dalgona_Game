@@ -95,6 +95,7 @@ function OfflineService.settle(player, forceFrom)
 	local payload = {
 		away = now - from,
 		seconds = rep.seconds,
+		worked = rep.worked, -- 모두 멈출 때까지 돈 시간 (보관함이 차는 데 걸린 시간)
 		maxHours = O.maxHours,
 		made = rep.made,
 		total = total,

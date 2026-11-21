@@ -81,12 +81,21 @@ local function show(r)
 		table.insert(lines, "EXP +" .. r.exp)
 	end
 	local stops = {}
+	local full = false
 	for who, why in pairs(r.stops) do
 		table.insert(stops, who .. " - " .. why)
+		if why == "보관함 가득" then
+			full = true
+		end
 	end
 	table.sort(stops)
+	-- 판매가 없어서 대개 보관함이 먼저 참 (D29): 눈에 띄게 따로 알림
+	local fullText = nil
+	if full then
+		fullText = string.format("📦 %s 만에 보관함이 가득 차서 멈췄어요!\n진열대에 놓고 팔아서 자리를 비워 주세요", timeText(r.worked or r.seconds))
+	end
 
-	local height = (110 + #lines * 24 + (#stops > 0 and (26 + #stops * 22) or 0) + 56) * S
+	local height = (110 + #lines * 24 + (fullText and 60 or 0) + (#stops > 0 and (26 + #stops * 22) or 0) + 56) * S
 	local frame = Instance.new("Frame")
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
 	frame.Position = UDim2.fromScale(0.5, 0.5)
@@ -120,6 +129,29 @@ local function show(r)
 	for _, l in ipairs(lines) do
 		text(l, y, 15 * S, SOFT)
 		y += 24 * S
+	end
+	if fullText then
+		y += 6 * S
+		local box = Instance.new("Frame")
+		box.Position = UDim2.fromOffset(12 * S, y - 4 * S)
+		box.Size = UDim2.new(1, -24 * S, 0, 52 * S)
+		box.BackgroundColor3 = Color3.fromRGB(255, 226, 200)
+		box.Parent = frame
+		local bc = Instance.new("UICorner")
+		bc.CornerRadius = UDim.new(0, 10)
+		bc.Parent = box
+		local l = Instance.new("TextLabel")
+		l.BackgroundTransparency = 1
+		l.Position = UDim2.fromOffset(8 * S, 2 * S)
+		l.Size = UDim2.new(1, -16 * S, 1, -4 * S)
+		l.Font = Enum.Font.GothamBlack
+		l.TextSize = 14 * S
+		l.TextColor3 = RED
+		l.TextWrapped = true
+		l.TextXAlignment = Enum.TextXAlignment.Left
+		l.Text = fullText
+		l.Parent = box
+		y += 60 * S
 	end
 	if #stops > 0 then
 		y += 4 * S
