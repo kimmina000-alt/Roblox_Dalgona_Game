@@ -51,6 +51,50 @@ end
 local trackPose -- 아래에서 정의 (젓가락 화면이 녹이기 화면을 그대로 옆으로 옮긴 것이라서 씀)
 local PICK_X = -9.7 -- 젓가락 화면 가운데 x (작업대 기준)
 
+-- 새 배치(ㄷ자 카운터, 작업대 속성 CounterLayout, 2026-11-21)에서는 물건 자리가 달라서 화면 가운데를 실제 물건 자리로 셈.
+-- 높이·기울기는 원래 값 그대로, 가운데만 (원래 배치에서 각 화면이 보던 물건과의 관계를 따라)
+local function localXZ(inst)
+	if not inst then
+		return nil
+	end
+	local pos = inst:IsA("Model") and inst:GetBoundingBox().Position or inst.Position
+	local v = origin:PointToObjectSpace(pos)
+	return Vector2.new(v.X, v.Z)
+end
+local function counterCenter(key)
+	local ws = CameraRig.model
+	if not (ws and ws:GetAttribute("CounterLayout")) then
+		return nil
+	end
+	local plate = localXZ(ws:FindFirstChild("IronPlate"))
+	local brazier = localXZ(ws:FindFirstChild("Brazier"))
+	if key == "sugar" then
+		local w, b = localXZ(ws:FindFirstChild("SugarBowlWhite")), localXZ(ws:FindFirstChild("SugarBowlBrown"))
+		if brazier and w and b then
+			return brazier:Lerp((w + b) / 2, 0.25) -- 국자(화로) 쪽, 설탕 그릇도 보이게
+		end
+	elseif key == "soda" then
+		local sd = localXZ(ws:FindFirstChild("SodaTub"))
+		if brazier and sd then
+			return brazier:Lerp(sd, 0.3)
+		end
+	elseif key == "pour" or key == "press" then
+		if plate then
+			return plate + Vector2.new(0.7, -0.5)
+		end
+	elseif key == "stamp" then
+		local cu = localXZ(ws:FindFirstChild("Cutter"))
+		if plate and cu then
+			return plate:Lerp(cu, 0.35)
+		end
+	elseif key == "result" then
+		if plate then
+			return plate + Vector2.new(1.6, 0.2)
+		end
+	end
+	return nil
+end
+
 function CameraRig.poseFor(key)
 	if key == "pick" then
 		-- 2026-11-20 "나무젓가락 화면이랑 연탄 화로 화면 위치가 다름": 녹이기 카메라(국자를 따라가는 화면)를
@@ -69,6 +113,7 @@ function CameraRig.poseFor(key)
 	end
 	local p = POSES[STEP_POSE[key] or key] or POSES.sugar
 	local c, y = p[1], p[2]
+	c = counterCenter(STEP_POSE[key] or key) or c
 	local tilt = p[3] or TILT
 	-- 세로 화면은 옆이 좁으니 더 높이 올라감
 	local vp = workspace.CurrentCamera.ViewportSize

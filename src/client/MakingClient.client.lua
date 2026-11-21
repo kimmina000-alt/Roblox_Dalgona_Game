@@ -118,7 +118,8 @@ local function setUnturned(on)
 	if not station then
 		return
 	end
-	if on and not unturned then
+	-- 가게 작업대(주인 속성이 있는 것)만 돌려 놓음. 새 배치 미리 보기 작업대는 안 돌림
+	if on and not unturned and station.model:GetAttribute("OwnerUserId") ~= nil then
 		local plots = GrowthConfig.Plots
 		local a = math.rad((plots and plots.workstationTurn) or 0)
 		if a == 0 then
@@ -502,6 +503,33 @@ local function bindStation(m)
 		task.spawn(startMaking, false)
 	end)
 end
+-- 새 배치 미리 보기 작업대(WorkstationPreviewV3, 2026-11-21)에서도 만들 수 있게: 그 E를 누르면 잠깐 그 작업대로 연결.
+-- 다 만들면 아래 감시가 다시 내 가게 작업대로 연결함 (만드는 중에는 안 바꿈)
+local previewHooked = setmetatable({}, { __mode = "k" })
+local function hookPreview()
+	local prev = workspace:FindFirstChild("WorkstationPreviewV3")
+	local top = prev and prev:FindFirstChild("TableTop")
+	local att = top and top:FindFirstChild("PromptAtt")
+	local prompt = att and att:FindFirstChild("MakePrompt")
+	if prompt and not previewHooked[prompt] and Workstations.ready(prev) then
+		previewHooked[prompt] = true
+		prompt.Triggered:Connect(function()
+			if running then
+				return
+			end
+			local ok, err = pcall(function()
+				station = Station.new(prev)
+				Toon.apply(prev)
+				CameraRig.init(prev:GetPivot(), prev)
+			end)
+			if ok then
+				task.spawn(startMaking, false)
+			else
+				warn("[Making] preview bind failed:", err)
+			end
+		end)
+	end
+end
 task.spawn(function()
 	local told = false
 	local since = os.clock()
@@ -528,6 +556,7 @@ task.spawn(function()
 				end
 			end
 		end
+		hookPreview()
 		if not mine and not told and os.clock() - since > 8 then
 			told = true
 			pcall(function()

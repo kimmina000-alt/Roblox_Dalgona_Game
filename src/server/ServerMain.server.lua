@@ -68,7 +68,7 @@ do
 end
 
 -- 새 작업대 배치 미리 보기 (2026-11-21 사용자 그림 "작업대 별도 공간에 사진처럼 구현해"):
--- 스폰 옆 빈 곳(-50, 0, 10)에 틀 복제를 ㄷ자 카운터 배치로 놓아 둠. 보기만 하는 것 (만들기 E는 꺼 둠)
+-- 스폰 옆 빈 곳(-50, 0, 10)에 틀 복제를 ㄷ자 카운터 배치로 놓아 둠. E로 여기서도 만들 수 있음 (재료·연탄은 내 가게 것)
 do
 	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
 	local tpl = assets and assets:FindFirstChild("WorkstationTemplate")
@@ -85,11 +85,6 @@ do
 			local top = prev:FindFirstChild("TableTop")
 			local target = Vector3.new(-50, 0, 10)
 			prev:PivotTo(prev:GetPivot() + Vector3.new(target.X - top.Position.X, 0, target.Z - top.Position.Z))
-			for _, d in ipairs(prev:GetDescendants()) do
-				if d:IsA("ProximityPrompt") then
-					d.Enabled = false
-				end
-			end
 			local bb = Instance.new("BillboardGui")
 			bb.Name = "PreviewLabel"
 			bb.Size = UDim2.fromOffset(260, 50)

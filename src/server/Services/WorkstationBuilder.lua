@@ -862,16 +862,18 @@ local V3 = {
 	W = 16, D = 10.2, -- 카운터 폭·깊이
 	notch = { x0 = -2.9, x1 = 2.7, z0 = -0.4 }, -- 화로가 들어가는 홈 (앞으로 트임)
 	plate = Vector2.new(0, -2.8),
-	cutter = Vector2.new(4.4, -2.9),
-	presser = Vector2.new(6.5, -3.0),
-	bagBox = Vector2.new(-6.8, -2.9),
-	tieCup = Vector2.new(-4.6, -2.9),
+	-- 2026-11-21 사용자 수정: 누름판·모양 틀 자리 바꿈, 비닐·빵끈은 더 아래(앞)로, 틀 접시는 비닐·빵끈 있던 자리로
+	cutter = Vector2.new(6.5, -3.0),
+	presser = Vector2.new(4.4, -2.9),
+	bagBox = Vector2.new(-6.8, -1.1),
+	tieCup = Vector2.new(-4.6, -1.1),
+	tray = Vector2.new(-5.7, -3.4),
 	mat = Vector2.new(-5.4, 2.4),
 	soda = Vector2.new(4.2, 1.1),
 	sugarW = Vector2.new(4.3, 3.6),
 	sugarB = Vector2.new(6.5, 3.6),
 	brazier = Vector2.new(-0.1, 2.3),
-	cup = Vector2.new(-2.6, 5.2),
+	cup = Vector2.new(-2.15, 4.7), -- 화로에 붙여 (사용자: "동북 방향으로 화로에 조금 더 붙일 것")
 	chopRest = Vector2.new(-3.6, 1.0),
 }
 Builder.V3 = V3
@@ -934,13 +936,22 @@ function Builder.counterLayout(ws)
 	-- 1단계 꾸미기: 진열용 계단(Show*)은 뺌, 은박지는 화로와, 틀 쟁반은 틀과, 나머지는 철판과 같이
 	local decor = ws:FindFirstChild("Stage1Decor")
 	if decor then
+		-- 모양 틀 담긴 접시(Tray·TrayRim·TrayCutter)는 V3.tray 자리로 통째로
+		local trayList = {}
 		for _, c in ipairs(decor:GetChildren()) do
-			if c.Name:sub(1, 4) == "Show" then
+			if c.Name:sub(1, 4) == "Tray" then
+				table.insert(trayList, c)
+			end
+		end
+		plan(decor:FindFirstChild("Tray"), V3.tray, trayList)
+		for _, c in ipairs(decor:GetChildren()) do
+			if c.Name:sub(1, 4) == "Show" or c.Name:sub(1, 8) == "StickCup" or c.Name == "CupPopsicle" then
+				-- 진열 계단·테이블 위 막대 통은 뺌 (사용자: "테이블 위에 있는 건 삭제")
 				c:Destroy()
 			elseif c.Name == "Foil" and brazierD then
 				table.insert(moves, { list = { c }, d = brazierD })
-			elseif c.Name:sub(1, 4) == "Tray" and cutterD then
-				table.insert(moves, { list = { c }, d = cutterD })
+			elseif c.Name:sub(1, 4) == "Tray" then
+				-- 위에서 접시와 같이 옮김
 			elseif plateD then
 				table.insert(moves, { list = { c }, d = plateD })
 			end
