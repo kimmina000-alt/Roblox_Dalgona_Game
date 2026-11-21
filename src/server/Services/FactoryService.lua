@@ -402,14 +402,14 @@ local function startJob(player, k)
 			why = "도안 없음"
 			return false
 		end
-		-- 이미 돌고 있는 판까지 합쳐 보관함에 들어갈 자리
+		-- 이미 돌고 있는 판과 이번 판이 다 보관함에 들어갈 자리가 있어야 시작
 		local pending = 0
 		for _, job in pairs(f.lines) do
 			if job then
 				pending += job.n
 			end
 		end
-		if #dd.stock + pending >= G.stockMax(dd) then
+		if #dd.stock + pending + f.qty > G.stockMax(dd) then
 			why = "보관함 가득"
 			return false
 		end
@@ -443,8 +443,8 @@ local function finishJob(player, k, job)
 		if not shape then
 			return
 		end
-		local room = math.max(0, G.stockMax(dd) - #dd.stock)
-		local n = math.min(job.n, room) -- 넘치는 것은 버려짐 (시작할 때 자리를 봤으니 드묾)
+		-- 재료를 이미 냈으니 다 넣음 (시작할 때 자리를 봤지만 그 사이 알바생·기계가 채웠으면 잠깐 넘칠 수 있음)
+		local n = job.n
 		local packed = (f.ups.autopack or 0) > 0
 		for _ = 1, n do
 			local q, grade, mult = rollQuality(dd, job.m)
