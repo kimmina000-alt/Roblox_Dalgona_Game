@@ -11,6 +11,7 @@ local PlotService = require(Services:WaitForChild("PlotService"))
 local EconomyService = require(Services:WaitForChild("EconomyService"))
 local SalesService = require(Services:WaitForChild("SalesService"))
 local GrowthService = require(Services:WaitForChild("GrowthService"))
+local MachineDisplay = require(Services:WaitForChild("MachineDisplay"))
 
 local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 if not remotes then
@@ -94,8 +95,7 @@ end
 
 -- Lv5 달고나 공장: 스폰 뒤쪽(+Z)에 앞(제어대)이 스폰을 보게 놓는다. 자동 생산 연결은 다음 단계.
 FactoryBuilder.place(workspace, CFrame.new(0, 0, 30))
--- Lv4 연속 생산 설비: 작업대 오른쪽 옆 시험 자리, 조작판이 스폰 쪽(+Z)을 보게 180° 돌림
-FactoryBuilder.placeLine(workspace, CFrame.new(28, 0, -14) * CFrame.Angles(0, math.pi, 0)) -- 테이블 오른쪽 포장 공간(+6) 만큼 더 오른쪽 (2026-11-20)
+-- Lv4 연속 생산 설비는 시험 자리(28,0,-14)에서 빼고 가게 기계 자리로 (20번, 2026-11-21: MachineDisplay)
 
 -- 경제(HUD·상점) → 성장(데이터를 처음 불러올 때 듣기 위해 저장보다 먼저) → 저장 → 가게 부지 6칸 → 판매 → 제작 결과 연결
 EconomyService.init(PlayerDataService, remotes)
@@ -103,6 +103,7 @@ GrowthService.init(PlayerDataService, EconomyService, PlotService, remotes) -- �
 PlayerDataService.init()
 PlotService.init({ notify = EconomyService.notify })
 SalesService.init(PlayerDataService, EconomyService, PlotService) -- 진열대 + 손님 (Phase 3)
+MachineDisplay.init() -- 가게 기계 자리 모습 (2~4단계 기계, MachineSlot 속성 Stage를 따라 바꿈, 20번)
 ProductionService.hooks.mods = GrowthService.mods
 ProductionService.hooks.canStart = EconomyService.canMake
 ProductionService.hooks.onStart = EconomyService.onStart -- 나무젓가락 1쌍
