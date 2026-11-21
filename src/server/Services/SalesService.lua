@@ -5,6 +5,8 @@
 --  - 중복 판매 방지: 손님이 나타날 때 살 개수를 "예약"하고(예약 합 ≤ 진열 개수), 진열대에 닿으면
 --    EconomyService.sell이 한 번에 꺼내고 지운다. 그 사이 yield가 없어서 같은 달고나가 두 번 팔리지 않는다.
 -- 손님은 Humanoid 없이 부품으로 만든 작은 인형(서버가 위치를 옮김) — 폰 부담을 줄이려고.
+-- 2026-11-21 사용자: 진열대에는 내가 만든 완성품 모양 그대로 (Shared.DalgonaLook, 없으면 원판),
+--   손님은 산 달고나를 손에 들고 입에 가져다 대며 먹으면서 걸어감.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -55,6 +57,70 @@ local function part(parent, name, size, cf, color, material, props)
 	end
 	p.Parent = parent
 	return p
+end
+
+---------------------------------------------------------------- 완성품 모양 (Shared.DalgonaLook)
+-- DalgonaLook.build(item, size) → Model. 피벗 = 원판 가운데, 넓은 면 = 로컬 +Y, 막대 = 로컬 +Z, size = 지름
+-- 모듈이 없거나 실패하면 원판(+ 등급 테두리)으로 대신함
+
+local lookMod = nil -- nil 아직 안 찾음, false 없음
+
+local function dalgonaLook()
+	if lookMod == nil then
+		local m = ReplicatedStorage.Shared:FindFirstChild("DalgonaLook")
+		local ok, mod = false, nil
+		if m then
+			ok, mod = pcall(require, m)
+		end
+		lookMod = (ok and type(mod) == "table" and mod.build) and mod or false
+	end
+	return lookMod or nil
+end
+
+local function settle(model)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+			d.CanQuery = false
+			d.CanTouch = false
+			d.Massless = true
+		elseif d:IsA("LuaSourceContainer") then
+			d:Destroy()
+		end
+	end
+	return model
+end
+
+local function buildLook(item, size)
+	local L = dalgonaLook()
+	if L then
+		local ok, model = pcall(L.build, item, size)
+		if ok and typeof(model) == "Instance" and model:IsA("Model") then
+			if not model.PrimaryPart then
+				model.PrimaryPart = model:FindFirstChildWhichIsA("BasePart", true)
+			end
+			model.Name = "DalgonaLook"
+			return settle(model)
+		end
+		warn("[Sales] DalgonaLook.build failed", model)
+	end
+	-- 대신: 원판 + 등급 테두리 + 막대
+	local m = Instance.new("Model")
+	m.Name = "DalgonaLook"
+	local burnt = item and item.g == "Burnt"
+	local disc = part(m, "Disc", Vector3.new(size * 0.12, size, size), CFrame.Angles(0, 0, math.rad(90)), burnt and Color3.fromRGB(60, 40, 28) or DALGONA, nil, { Shape = Enum.PartType.Cylinder })
+	part(m, "Rim", Vector3.new(size * 0.08, size * 1.08, size * 1.08), CFrame.Angles(0, 0, math.rad(90)), GRADE_RIM[item and item.g] or GRADE_RIM.Normal, nil, { Shape = Enum.PartType.Cylinder })
+	if not (item and item.plain) then
+		part(m, "Stick", Vector3.new(size * 0.07, size * 0.07, size * 0.75), CFrame.new(0, 0, size * 0.75), Color3.fromRGB(235, 215, 170))
+	end
+	m.PrimaryPart = disc
+	disc.PivotOffset = disc.CFrame:Inverse() -- 피벗 = 원판 가운데, 돌리지 않은 방향 (넓은 면 +Y)
+	return settle(m)
+end
+
+local function lookKey(item)
+	return table.concat({ tostring(item.id), tostring(item.s), tostring(item.g), tostring(item.pk), tostring(item.plain), tostring(item.br) }, "|")
 end
 
 ---------------------------------------------------------------- 진열대
@@ -165,9 +231,28 @@ local function refreshShelf(index)
 			s.disc.Color = (item.g == "Burnt") and Color3.fromRGB(60, 40, 28) or DALGONA
 			local shape = ShapeCatalog.get(item.s)
 			s.disc:SetAttribute("Shape", shape and shape.name or item.s)
+			-- 완성품 모양으로 진열: 원판·테두리는 숨기고(칸 안내 자리로만 씀) 모양 모델을 눕혀 둠
+			local key = lookKey(item)
+			if s.lookKey ~= key then
+				if s.look then
+					s.look:Destroy()
+				end
+				local look = buildLook(item, SALES.lookSize)
+				-- 넓은 면이 골목 쪽으로 조금 기울고, 막대는 뒤로
+				look:PivotTo(slotCFrame(shop, i) * CFrame.new(0, 0.12, 0) * CFrame.Angles(math.rad(-SALES.lookTilt), 0, 0))
+				look.Name = "Look" .. i
+				look.Parent = shop.shelf
+				s.look, s.lookKey = look, key
+			end
+			s.disc.Transparency = 1
+			s.rim.Transparency = 1
 		else
 			s.disc.Transparency = 1
 			s.rim.Transparency = 1
+			if s.look then
+				s.look:Destroy()
+				s.look, s.lookKey = nil, nil
+			end
 		end
 	end
 	shop.label.Text = string.format(slots < SALES.shelfSlots and "쟁반 %d/%d" or "진열대 %d/%d", n, slots) -- 노점은 쟁반 5칸 (D21)
@@ -248,6 +333,8 @@ local function buildCustomer(cf)
 	at("LegL", Vector3.new(0.45, 1.1, 0.5), CFrame.new(-0.28, 0.55, 0), Color3.fromRGB(70, 80, 110))
 	at("LegR", Vector3.new(0.45, 1.1, 0.5), CFrame.new(0.28, 0.55, 0), Color3.fromRGB(70, 80, 110))
 	at("Body", Vector3.new(1.3, 1.3, 0.8), CFrame.new(0, 1.75, 0), shirt)
+	at("ArmL", Vector3.new(0.36, 1.1, 0.4), CFrame.new(-0.84, 1.8, 0), shirt)
+	at("ArmR", Vector3.new(0.36, 1.1, 0.4), CFrame.new(0.84, 1.8, 0), shirt)
 	local head = at("Head", Vector3.new(1.3, 1.3, 1.3), CFrame.new(0, 3.05, 0), skin, Enum.PartType.Ball)
 	at("Hair", Vector3.new(1.36, 0.6, 1.36), CFrame.new(0, 3.5, 0.08), Color3.fromRGB(60, 40, 30), Enum.PartType.Ball)
 	at("EyeL", Vector3.new(0.14, 0.2, 0.06), CFrame.new(-0.24, 3.12, -0.63), Color3.fromRGB(30, 25, 25))
@@ -332,6 +419,82 @@ local function stepWalkers(dt)
 	end
 end
 
+---------------------------------------------------------------- 산 달고나 먹으며 가기
+-- 손님 모델에 달고나 모양을 넣고, 매 프레임(걷기 다음) 오른팔·달고나를 몸 기준으로 다시 놓음.
+-- 한 입 주기: 들고 있다 → 입으로 올림 → 입 앞에서 한 입(조금 작아짐) → 내림. SALES.eat 값
+
+local eaters = {} -- [model] = { look, arm, t, bites, scale }
+
+local function startEating(model, item)
+	local arm = model:FindFirstChild("ArmR")
+	if not arm or not model.PrimaryPart then
+		return
+	end
+	local look = buildLook(item, SALES.eat.size)
+	look.Parent = model
+	eaters[model] = { look = look, arm = arm, t = 0, bites = 0, scale = 1 }
+end
+
+local function stepEaters(dt)
+	local E = SALES.eat
+	for model, e in pairs(eaters) do
+		if not model.Parent or not e.look.Parent then
+			eaters[model] = nil
+			continue
+		end
+		local before = e.t % E.cycle
+		e.t += dt
+		local ph = e.t % E.cycle
+		-- 0 = 손에 듦, 1 = 입 앞. 올림 → 머묾 → 내림 → 쉼
+		local up = E.cycle * 0.25
+		local stay = E.cycle * 0.2
+		local down = E.cycle * 0.2
+		local k
+		if ph < up then
+			k = ph / up
+		elseif ph < up + stay then
+			k = 1
+		elseif ph < up + stay + down then
+			k = 1 - (ph - up - stay) / down
+		else
+			k = 0
+		end
+		k = k * k * (3 - 2 * k)
+		-- 입 앞에 머무는 가운데쯤 한 입
+		local biteAt = up + stay * 0.5
+		if before < biteAt and ph >= biteAt then
+			e.bites += 1
+			if e.bites >= E.bites then
+				e.look:Destroy()
+				eaters[model] = nil
+				model.ArmR.CFrame = model.PrimaryPart.CFrame * CFrame.new(0.84, 1.8, 0)
+				say(model, E.lastLine, 1.2)
+				continue
+			end
+			e.scale *= E.biteScale
+			pcall(function()
+				e.look:ScaleTo(e.scale)
+			end)
+			say(model, E.lines[math.random(#E.lines)], 0.8)
+		end
+		local root = model.PrimaryPart.CFrame
+		local hold, mouth = E.hold, E.mouth
+		local p = hold:Lerp(mouth, k)
+		-- 원판을 세워 넓은 면이 손님 얼굴 쪽, 막대는 아래 (로컬 +Z → 아래)
+		local discCF = root * CFrame.new(p) * CFrame.Angles(math.rad(90), 0, 0)
+		e.look:PivotTo(discCF)
+		-- 오른팔: 어깨에서 막대 쪽(원판 조금 아래)을 향함
+		local shoulder = (root * CFrame.new(0.84, 2.35, 0)).Position
+		local hand = discCF.Position - root.UpVector * (E.size * 0.75) -- 막대 쥔 곳
+		local dir = hand - shoulder
+		if dir.Magnitude > 0.05 then
+			local len = e.arm.Size.Y
+			local mid = shoulder + dir.Unit * (len / 2)
+			e.arm.CFrame = CFrame.lookAt(mid, mid + dir) * CFrame.Angles(math.rad(-90), 0, 0)
+		end
+	end
+end
+
 local function demand(player)
 	local data = Data.get(player)
 	return G.salesDemandFor(data) -- 노점·문 닫힘이면 국자 1개 수요 (D21)
@@ -388,12 +551,13 @@ local function spawnCustomer(index)
 		shop.reserved = math.max(0, shop.reserved - c.reserved)
 		local reservedN = c.reserved
 		c.reserved = 0
-		local sold, coins = 0, 0
+		local sold, coins, items = 0, 0, nil
 		if shop.owner == owner and owner.Parent then
-			sold, coins = Economy.sell(owner, reservedN)
+			sold, coins, items = Economy.sell(owner, reservedN)
 		end
 		if sold > 0 then
 			say(model, string.format("%d개 살게요! +%d", sold, coins), 2)
+			startEating(model, items and items[1] or nil)
 			Economy.notify(owner, string.format("손님이 달고나 %d개를 샀어요 (+%d 코인)", sold, coins))
 			print(string.format("[Sales] %s Plot%d sold %d (+%d)", owner.Name, index, sold, coins))
 		else
@@ -465,7 +629,10 @@ function SalesService.init(dataService, economyService, plotService)
 		end
 	end)
 
-	RunService.Heartbeat:Connect(stepWalkers)
+	RunService.Heartbeat:Connect(function(dt)
+		stepWalkers(dt)
+		stepEaters(dt) -- 걷기로 몸을 옮긴 다음 팔·달고나를 다시 놓음
+	end)
 
 	-- 손님 보내기
 	task.spawn(function()

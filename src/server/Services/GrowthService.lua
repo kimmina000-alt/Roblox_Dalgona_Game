@@ -678,11 +678,11 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 		clearHelpers(p)
 	end)
 
-	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP, 월세 타이머 초) (실서버에서는 안 만듦)
+	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP, 월세 타이머 초, 달고나 목록) (실서버에서는 안 만듦)
 	if game:GetService("RunService"):IsStudio() then
 		local dev = Instance.new("BindableFunction")
 		dev.Name = "DevGrant"
-		dev.OnInvoke = function(userId, coins, exp, rentTimer)
+		dev.OnInvoke = function(userId, coins, exp, rentTimer, items)
 			local p = Players:GetPlayerByUserId(userId)
 			if not p then
 				return "no player"
@@ -693,6 +693,9 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 				ups = Economy.addExp(d, exp or 0)
 				if rentTimer then
 					d.shop.rentTimer = rentTimer
+				end
+				for _, item in ipairs(items or {}) do -- 시험용 달고나 (빈 진열 칸 → 없으면 보관함)
+					Economy.stockProduced(d, item, "dev")
 				end
 			end)
 			Economy.announceLevels(p, ups)
