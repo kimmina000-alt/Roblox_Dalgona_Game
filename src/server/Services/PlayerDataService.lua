@@ -50,6 +50,12 @@ PlayerDataService.MIGRATIONS = {
 		end
 		data.nextItemId = n
 	end,
+	[5] = function(data)
+		-- v4 → v5 (기계 2~4단계, 2026-11-21): 기계별 도안·진행 초. 설비 단계는 1~4로 (공장 5는 따로)
+		data.machine = { shapes = {}, t = 0 }
+		local stage = math.floor(tonumber(data.machineStage) or 1)
+		data.machineStage = math.clamp(stage, 1, 4)
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

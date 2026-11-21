@@ -247,6 +247,30 @@ local function render()
 			act("helperShape", i, nextShape.id)
 		end)
 	end
+	-- 기계 2~4단계 (20번): 가게 뒤 기계 1자리, 단계대로 교체
+	local mc = gr.machine
+	if mc then
+		local nx = mc.next
+		order += 1
+		local title = mc.name and string.format("⚙️ %s", mc.name) or "⚙️ 기계 자리 (비어 있음)"
+		local sub = nx and string.format("다음: %s · Lv%d · %d초에 %d개", nx.name, nx.level, G.Machines[nx.stage].seconds, G.Machines[nx.stage].batch) or "공장은 따로 (Lv25)"
+		local canBuy = nx ~= nil and shopOpen and state.level >= nx.level and state.coins >= nx.price
+		row(page, order, title, sub,
+			not nx and "최고 단계" or (not shopOpen and lockText) or (state.level < nx.level and ("Lv" .. nx.level .. "부터")) or (nx.price .. " 코인"),
+			canBuy, function()
+				act("buy", "machine")
+			end)
+		if mc.name then
+			local e = mc.shape and ShapeCatalog.get(mc.shape)
+			local status = mc.running and string.format("만드는 중 %d/%d초 · %d개씩", mc.t or 0, mc.seconds, mc.batch) or ("멈춤: " .. tostring(mc.status))
+			local shapes = mc.shapes or {}
+			order += 1
+			row(page, order, string.format("  기계 도안 · %s", e and e.name or "-"), status, "도안 바꾸기", #shapes > 1, function()
+				local idx = table.find(shapes, mc.shape) or 0
+				act("machineShape", shapes[idx % #shapes + 1])
+			end)
+		end
+	end
 
 	-- 목표
 	page = pages.goals
