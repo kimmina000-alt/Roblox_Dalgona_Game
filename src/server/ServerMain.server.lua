@@ -67,6 +67,52 @@ do
 	end
 end
 
+-- 새 작업대 배치 미리 보기 (2026-11-21 사용자 그림 "작업대 별도 공간에 사진처럼 구현해"):
+-- 스폰 옆 빈 곳(-50, 0, 10)에 틀 복제를 ㄷ자 카운터 배치로 놓아 둠. 보기만 하는 것 (만들기 E는 꺼 둠)
+do
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	local tpl = assets and assets:FindFirstChild("WorkstationTemplate")
+	if tpl then
+		local ok, err = pcall(function()
+			local prev = tpl:Clone()
+			prev.Name = "WorkstationPreviewV3"
+			for _, c in ipairs(prev:GetChildren()) do
+				if c.Name:sub(1, 11) == "HelperLadle" then
+					c:Destroy()
+				end
+			end
+			WorkstationBuilder.counterLayout(prev)
+			local top = prev:FindFirstChild("TableTop")
+			local target = Vector3.new(-50, 0, 10)
+			prev:PivotTo(prev:GetPivot() + Vector3.new(target.X - top.Position.X, 0, target.Z - top.Position.Z))
+			for _, d in ipairs(prev:GetDescendants()) do
+				if d:IsA("ProximityPrompt") then
+					d.Enabled = false
+				end
+			end
+			local bb = Instance.new("BillboardGui")
+			bb.Name = "PreviewLabel"
+			bb.Size = UDim2.fromOffset(260, 50)
+			bb.StudsOffset = Vector3.new(0, 7, 0)
+			bb.AlwaysOnTop = true
+			bb.MaxDistance = 120
+			local t = Instance.new("TextLabel")
+			t.Size = UDim2.fromScale(1, 1)
+			t.BackgroundColor3 = Color3.fromRGB(255, 252, 245)
+			t.TextColor3 = Color3.fromRGB(92, 58, 36)
+			t.Font = Enum.Font.GothamBold
+			t.TextScaled = true
+			t.Text = "새 작업대 배치 (미리 보기)"
+			t.Parent = bb
+			bb.Parent = top
+			prev.Parent = workspace
+		end)
+		if not ok then
+			warn("[Server] 작업대 미리 보기를 못 만들었어요:", err)
+		end
+	end
+end
+
 -- Lv5 달고나 공장: 스폰 뒤쪽(+Z)에 앞(제어대)이 스폰을 보게 놓는다. 자동 생산 연결은 다음 단계.
 FactoryBuilder.place(workspace, CFrame.new(0, 0, 30))
 -- Lv4 연속 생산 설비: 작업대 오른쪽 옆 시험 자리, 조작판이 스폰 쪽(+Z)을 보게 180° 돌림

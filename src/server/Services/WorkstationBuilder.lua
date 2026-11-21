@@ -853,4 +853,153 @@ function Builder.streetLayout(ws)
 	ws:SetAttribute("StreetLayout", true)
 end
 
+-- 새 작업대 배치 (2026-11-21 사용자 그림, 미리 보기): 위에서 본 ㄷ자 카운터. 플레이어는 앞(+Z)에 서서 만듦
+--   뒷줄: 왼쪽 비닐 통·빵끈 통 / 가운데 반죽 붓고 누르는 철판 / 오른쪽 모양 틀·누름판
+--   앞줄: 왼쪽 포장대 / 가운데 앞이 트인 홈에 연탄 화로(바닥) / 오른쪽 소다·설탕 그릇 둘
+--   나무젓가락 통은 화로 홈 앞 왼쪽 모서리 바닥
+-- 값은 테이블 가운데 기준 (x 오른쪽, z 앞 = 플레이어 쪽), 단위 stud
+local V3 = {
+	W = 16, D = 10.2, -- 카운터 폭·깊이
+	notch = { x0 = -2.9, x1 = 2.7, z0 = -0.4 }, -- 화로가 들어가는 홈 (앞으로 트임)
+	plate = Vector2.new(0, -2.8),
+	cutter = Vector2.new(4.4, -2.9),
+	presser = Vector2.new(6.5, -3.0),
+	bagBox = Vector2.new(-6.8, -2.9),
+	tieCup = Vector2.new(-4.6, -2.9),
+	mat = Vector2.new(-5.4, 2.4),
+	soda = Vector2.new(4.2, 1.1),
+	sugarW = Vector2.new(4.3, 3.6),
+	sugarB = Vector2.new(6.5, 3.6),
+	brazier = Vector2.new(-0.1, 2.3),
+	cup = Vector2.new(-2.6, 5.2),
+	chopRest = Vector2.new(-3.6, 1.0),
+}
+Builder.V3 = V3
+local function bboxOf(o)
+	if o:IsA("Model") then
+		local cf, size = o:GetBoundingBox()
+		return cf.Position, size
+	end
+	return o.Position, o.Size
+end
+function Builder.counterLayout(ws)
+	local top = ws:FindFirstChild("TableTop")
+	if not top then
+		return
+	end
+	local center = Vector3.new(top.Position.X, top.Position.Y, top.Position.Z)
+	local thick = top.Size.Y
+	local function at(v)
+		return Vector3.new(center.X + v.X, 0, center.Z + v.Y)
+	end
+	-- 옮길 무리: 기준 물건 → 같이 움직일 것들 (옮기기 전에 거리를 다 재 두고 한 번에 옮김)
+	local moves = {}
+	local function plan(anchor, target, extras)
+		if not anchor then
+			return nil
+		end
+		local p = bboxOf(anchor)
+		local t = at(target)
+		local d = Vector3.new(t.X - p.X, 0, t.Z - p.Z)
+		table.insert(moves, { list = { anchor, table.unpack(extras or {}) }, d = d })
+		return d
+	end
+	local pack = ws:FindFirstChild("PackArea")
+	local function packGroup(names)
+		local list = {}
+		for _, c in ipairs(pack and pack:GetChildren() or {}) do
+			if table.find(names, c.Name) then
+				table.insert(list, c)
+			end
+		end
+		return list
+	end
+	local plateD = plan(ws:FindFirstChild("IronPlate"), V3.plate, { ws:FindFirstChild("SugarRing"), ws:FindFirstChild("SugarRingInner") })
+	local cutterD = plan(ws:FindFirstChild("Cutter"), V3.cutter)
+	plan(ws:FindFirstChild("Presser"), V3.presser)
+	plan(ws:FindFirstChild("SugarBowlWhite"), V3.sugarW, { ws:FindFirstChild("WoodSpoon") })
+	plan(ws:FindFirstChild("SugarBowlBrown"), V3.sugarB)
+	plan(ws:FindFirstChild("SodaTub"), V3.soda, { ws:FindFirstChild("SodaSpoon") })
+	local brazierD = plan(ws:FindFirstChild("Brazier"), V3.brazier, { ws:FindFirstChild("Ladle") })
+	plan(ws:FindFirstChild("ChopstickCup"), V3.cup)
+	plan(ws:FindFirstChild("Chopsticks"), V3.chopRest)
+	if pack then
+		local mat = pack:FindFirstChild("Mat")
+		plan(mat, V3.mat)
+		local box = packGroup({ "BagBox", "BagBoxWall", "BagSheet", "BagTop" })
+		plan(pack:FindFirstChild("BagBox"), V3.bagBox, box)
+		local tie = packGroup({ "TieCup", "TieCupRim", "CupTie" })
+		plan(pack:FindFirstChild("TieCup"), V3.tieCup, tie)
+	end
+	-- 1단계 꾸미기: 진열용 계단(Show*)은 뺌, 은박지는 화로와, 틀 쟁반은 틀과, 나머지는 철판과 같이
+	local decor = ws:FindFirstChild("Stage1Decor")
+	if decor then
+		for _, c in ipairs(decor:GetChildren()) do
+			if c.Name:sub(1, 4) == "Show" then
+				c:Destroy()
+			elseif c.Name == "Foil" and brazierD then
+				table.insert(moves, { list = { c }, d = brazierD })
+			elseif c.Name:sub(1, 4) == "Tray" and cutterD then
+				table.insert(moves, { list = { c }, d = cutterD })
+			elseif plateD then
+				table.insert(moves, { list = { c }, d = plateD })
+			end
+		end
+	end
+	local seen = {}
+	for _, mv in ipairs(moves) do
+		for _, o in ipairs(mv.list) do
+			if o and not seen[o] then
+				seen[o] = true
+				o:PivotTo(o:GetPivot() + mv.d)
+			end
+		end
+	end
+	-- 카운터: 뒷줄 판 + 앞 왼쪽·오른쪽 판 (가운데 앞은 화로 홈). 식탁보(Stains)·예전 다리는 다시 만듦
+	local stains = ws:FindFirstChild("Stains")
+	if stains then
+		stains:Destroy()
+	end
+	local legTpl
+	for _, c in ipairs(ws:GetChildren()) do
+		if c.Name == "TableLeg" and c:IsA("BasePart") then
+			legTpl = legTpl or c:Clone()
+			c:Destroy()
+		end
+	end
+	local n = V3.notch
+	local W, D = V3.W, V3.D
+	local function slab(name, x0, x1, z0, z1)
+		local p
+		if name == "TableTop" then
+			p = top
+		else
+			p = top:Clone()
+			p:ClearAllChildren()
+			p.Name = name
+			p.Parent = ws
+		end
+		p.Size = Vector3.new(x1 - x0, thick, z1 - z0)
+		p.CFrame = CFrame.new(center.X + (x0 + x1) / 2, center.Y, center.Z + (z0 + z1) / 2)
+		return p
+	end
+	-- 안내(E)는 뒷줄 판 앞 가장자리에 붙어 있으므로 자리를 다시 맞춤
+	local att = top:FindFirstChild("PromptAtt")
+	slab("TableTop", -W / 2, W / 2, -D / 2, n.z0)
+	slab("TableTopLeft", -W / 2, n.x0, n.z0, D / 2)
+	slab("TableTopRight", n.x1, W / 2, n.z0, D / 2)
+	if att then
+		att.Position = Vector3.new(0, thick / 2, top.Size.Z / 2)
+	end
+	if legTpl then
+		local inset = 0.3
+		for _, pt in ipairs({ { -W / 2 + inset, -D / 2 + inset }, { W / 2 - inset, -D / 2 + inset }, { -W / 2 + inset, D / 2 - inset }, { W / 2 - inset, D / 2 - inset }, { n.x0 - inset, D / 2 - inset }, { n.x1 + inset, D / 2 - inset } }) do
+			local leg = legTpl:Clone()
+			leg.CFrame = CFrame.new(center.X + pt[1], legTpl.Position.Y, center.Z + pt[2])
+			leg.Parent = ws
+		end
+	end
+	ws:SetAttribute("CounterLayout", true)
+end
+
 return Builder
