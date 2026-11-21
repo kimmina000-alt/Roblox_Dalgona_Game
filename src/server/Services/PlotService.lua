@@ -116,14 +116,23 @@ local function buildPlot(index, parent)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "FactoryPrompt"
 	prompt.ActionText = "공장 들어가기"
-	prompt.ObjectText = "공장 (준비 중)"
+	prompt.ObjectText = "달고나 공장"
 	prompt.KeyboardKeyCode = Enum.KeyCode.F
 	prompt.MaxActivationDistance = 10
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = panel
 	prompt.Triggered:Connect(function(player)
-		if notify then
-			notify(player, "공장은 나중에 열려요 (Lv5 공장 단계)")
+		-- 내 가게 문만 (D11: 남의 공장에는 못 들어감). 들어가기는 FactoryService가 PlotService.onFactoryDoor로 연결
+		if m:GetAttribute("OwnerUserId") ~= player.UserId then
+			if notify then
+				notify(player, "다른 사람의 공장이에요")
+			end
+			return
+		end
+		if PlotService.onFactoryDoor then
+			PlotService.onFactoryDoor(player)
+		elseif notify then
+			notify(player, "공장은 나중에 열려요")
 		end
 	end)
 
