@@ -500,7 +500,7 @@ function FactoryService.offlineTick(dd, dt, rep)
 		return false
 	end
 	if not G.shopOpen(dd) then
-		rep.stops["공장"] = "가게 문 닫힘"
+		rep.stops["공장"] = rep.stops["공장"] or "가게 문 닫힘" -- 처음 멈춘 이유
 		return false
 	end
 	local active = false
@@ -524,7 +524,7 @@ function FactoryService.offlineTick(dd, dt, rep)
 			if not f.lines[k] then
 				local why, need, coins = beginJob(dd, k)
 				if why then
-					rep.stops["공장"] = why
+					rep.stops["공장"] = rep.stops["공장"] or why
 				else
 					active = true
 					for id, n in pairs(need) do

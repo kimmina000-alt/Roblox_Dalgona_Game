@@ -492,7 +492,7 @@ local function offlineHelper(dd, i, st, dt, rep)
 		why = "급여 부족"
 	end
 	if why then
-		rep.stops["알바생 " .. i] = why
+		rep.stops["알바생 " .. i] = rep.stops["알바생 " .. i] or why -- 처음 멈춘 이유
 		return false
 	end
 	st.t += dt

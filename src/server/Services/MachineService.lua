@@ -313,7 +313,7 @@ function MachineService.offlineTick(dd, dt, rep)
 	local shape = currentShape(dd)
 	local why = stopReason(dd, shape, m)
 	if why then
-		rep.stops["기계"] = why
+		rep.stops["기계"] = rep.stops["기계"] or why -- 처음 멈춘 이유
 		return false
 	end
 	dd.machine.t = (dd.machine.t or 0) + dt
