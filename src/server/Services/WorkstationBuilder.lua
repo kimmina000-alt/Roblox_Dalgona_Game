@@ -867,7 +867,7 @@ local V3 = {
 	presser = Vector2.new(4.4, -2.9),
 	bagBox = Vector2.new(-6.8, -1.1),
 	tieCup = Vector2.new(-4.6, -1.1),
-	tray = Vector2.new(-5.7, -3.4),
+	tray = Vector2.new(-5.1, -3.4), -- 2026-11-21 사용자: 설탕 뿌린 철판 쪽으로 살짝
 	mat = Vector2.new(-5.4, 2.4),
 	soda = Vector2.new(4.2, 1.1),
 	sugarW = Vector2.new(4.3, 3.6),
@@ -875,6 +875,7 @@ local V3 = {
 	brazier = Vector2.new(-0.1, 2.3),
 	cup = Vector2.new(-2.15, 4.7), -- 화로에 붙여 (사용자: "동북 방향으로 화로에 조금 더 붙일 것")
 	chopRest = Vector2.new(-3.6, 1.0),
+	stickCup = Vector2.new(6.6, 1.0), -- 달고나 막대 통 (2026-11-21 사용자: "달고나 막대기도 테이블 위에")
 }
 Builder.V3 = V3
 local function bboxOf(o)
@@ -944,10 +945,19 @@ function Builder.counterLayout(ws)
 			end
 		end
 		plan(decor:FindFirstChild("Tray"), V3.tray, trayList)
+		local stickList = {}
 		for _, c in ipairs(decor:GetChildren()) do
-			if c.Name:sub(1, 4) == "Show" or c.Name:sub(1, 8) == "StickCup" or c.Name == "CupPopsicle" then
-				-- 진열 계단·테이블 위 막대 통은 뺌 (사용자: "테이블 위에 있는 건 삭제")
+			if c.Name:sub(1, 8) == "StickCup" or c.Name == "CupPopsicle" then
+				table.insert(stickList, c)
+			end
+		end
+		plan(decor:FindFirstChild("StickCup"), V3.stickCup, stickList)
+		for _, c in ipairs(decor:GetChildren()) do
+			if c.Name:sub(1, 4) == "Show" then
+				-- 진열 계단은 뺌
 				c:Destroy()
+			elseif c.Name:sub(1, 8) == "StickCup" or c.Name == "CupPopsicle" then
+				-- 막대 통은 위에서 V3.stickCup 자리로 통째로 옮김
 			elseif c.Name == "Foil" and brazierD then
 				table.insert(moves, { list = { c }, d = brazierD })
 			elseif c.Name:sub(1, 4) == "Tray" then

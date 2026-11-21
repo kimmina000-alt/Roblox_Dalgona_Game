@@ -262,7 +262,10 @@ function Pack.run(ctx, dal, st)
 	-- 2026-11-20 (폰 사진): 달고나는 처음부터 정방향 (ㅇ 위, ㅣ 막대 아래 = 화면 아래·플레이어 쪽)으로 매트에 놓고,
 	-- 비닐은 위(화면 위쪽)에서 내려와 씌움. 사선으로 틀지 않음
 	local pivot = ws:GetPivot()
-	local down = pivot:VectorToWorldSpace(Vector3.new(0, 0, 1)) -- 막대 방향 = 화면 아래
+	-- 새 배치(ㄷ자 카운터)는 비닐·빵끈 통이 매트 뒤쪽이라, 화면을 돌려 그 통들이 화면 오른쪽에 오게 함
+	-- (2026-11-21 사용자: "포장할 때 화면 자체를 회전해서 비닐이랑 빵끈이 화면 오른쪽"): 화면 아래 = 작업대 +X
+	local counter = ws:GetAttribute("CounterLayout") == true
+	local down = pivot:VectorToWorldSpace(counter and Vector3.new(1, 0, 0) or Vector3.new(0, 0, 1)) -- 막대 방향 = 화면 아래
 	down = Vector3.new(down.X, 0, down.Z).Unit
 	local up = -down -- 비닐이 내려오는 쪽
 	local m = mat.Position + Vector3.new(0, mat.Size.Y / 2, 0)
@@ -322,7 +325,7 @@ function Pack.run(ctx, dal, st)
 	local highZ = zTop + OUT
 	local span = highZ - lowZ
 	local camH = math.clamp(span / (2 * math.tan(math.rad(20)) * 0.74), 11, 20)
-	CameraRig.goPoint(m + up * ((highZ + lowZ) / 2), camH, 0.3)
+	CameraRig.goPoint(m + up * ((highZ + lowZ) / 2), camH, 0.3, nil, up)
 
 	local t = 0
 	while t < MOVE_T do
@@ -572,7 +575,7 @@ function Pack.run(ctx, dal, st)
 			if idle > IDLE_T or (P.pos - cupS).Magnitude < GRAB_PX then
 				picked = true
 			else
-				ui:hint("오른쪽 뒤 빵끈 통을 눌러요")
+				ui:hint(counter and "오른쪽 빵끈 통을 눌러요" or "오른쪽 뒤 빵끈 통을 눌러요")
 			end
 		end
 	end

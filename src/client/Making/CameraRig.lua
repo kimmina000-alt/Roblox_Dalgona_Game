@@ -217,7 +217,8 @@ end
 
 -- 테이블 위 아무 곳(세계 좌표 focus)을 항공샷으로 보러 부드럽게 옮겨 감 (2026-11-20 포장 공간)
 -- height = 테이블 윗면 위 카메라 높이, tilt = 플레이어 쪽으로 기울인 정도
-function CameraRig.goPoint(focus, height, tilt, ease)
+-- upDir(세계 방향, 생략 가능) = 화면 위쪽이 될 방향. 생략하면 작업대 뒤쪽(-Z) (포장 화면 돌리기, 2026-11-21)
+function CameraRig.goPoint(focus, height, tilt, ease, upDir)
 	tracker = nil
 	current = "point"
 	local cam = workspace.CurrentCamera
@@ -226,10 +227,11 @@ function CameraRig.goPoint(focus, height, tilt, ease)
 	if vp.X / math.max(vp.Y, 1) < 1.2 then
 		h *= 1.6
 	end
-	focus += origin:VectorToWorldSpace(Vector3.new(0, 0, -h * SHIFT))
-	local pos = focus + Vector3.new(0, h, 0) + origin:VectorToWorldSpace(Vector3.new(0, 0, h * (tilt or TILT)))
+	local back = upDir and Vector3.new(upDir.X, 0, upDir.Z).Unit or origin:VectorToWorldSpace(Vector3.new(0, 0, -1))
+	focus += back * (h * SHIFT)
+	local pos = focus + Vector3.new(0, h, 0) - back * (h * (tilt or TILT))
 	from = cam.CFrame
-	to = CFrame.lookAt(pos, focus, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))
+	to = CFrame.lookAt(pos, focus, back)
 	t0 = os.clock()
 	frontEase = ease or 0.7
 	if not bound then
