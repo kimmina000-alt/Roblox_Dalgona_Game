@@ -778,7 +778,7 @@ end
 -- 노점 배치 (2026-11-21 사용자: "연탄화로는 땅 위에 테이블 옆에", "테이블 길이를 줄여", "나무젓가락 소다통 옆으로")
 --   ① 화로(+국자)를 같은 자리에서 바닥까지 내림 → 철망이 테이블 윗면과 비슷한 높이
 --   ② 테이블 왼쪽(화로가 있던 부분)을 잘라 냄: 새 왼쪽 끝 = 화로 오른쪽 끝 + 0.3. 다리·식탁보도 맞춤
---   ③ 젓가락 통을 소다 통 오른쪽으로, 젓던 젓가락 내려놓는 자리는 테이블 왼쪽 끝(화로 옆)
+--   ③ 젓가락 통은 바닥 화로 앞 왼쪽, 젓던 젓가락 내려놓는 자리는 테이블 왼쪽 끝(화로 옆)
 -- 꾸미기(StallDecor.dress) 뒤 틀(WorkstationTemplate)에 한 번 함 (속성 StreetLayout)
 local function isFlatX(p)
 	local r = p.CFrame.RightVector
@@ -836,14 +836,13 @@ function Builder.streetLayout(ws)
 			end
 		end
 	end
-	-- ③ 젓가락 통 → 소다 통 오른쪽
-	local soda = ws:FindFirstChild("SodaTub")
+	-- ③ 젓가락 통 → 바닥, 화로 앞 왼쪽 (2026-11-21 사용자 그림 "나무젓가락 위치 이동 바닥에 둬". 처음엔 소다 통 옆이었음)
 	local cup = ws:FindFirstChild("ChopstickCup")
-	if soda and cup then
-		local sp = soda:GetPivot().Position
-		local cp = cup:GetPivot().Position
-		local delta = Vector3.new(sp.X + 1.3 - cp.X, 0, sp.Z - cp.Z)
-		cup:PivotTo(cup:GetPivot() + delta)
+	if cup then
+		local ccf, csz = cup:GetBoundingBox()
+		local tx = bcf.Position.X - bsize.X * 0.3
+		local tz = bcf.Position.Z + bsize.Z / 2 + 0.6
+		cup:PivotTo(cup:GetPivot() + Vector3.new(tx - ccf.Position.X, floorY - (ccf.Position.Y - csz.Y / 2), tz - ccf.Position.Z))
 	end
 	-- 젓던 젓가락을 내려놓는 자리(Chopsticks)는 화로 옆 = 잘린 테이블 왼쪽 끝 (철판 위에 놓이지 않게)
 	local chop = ws:FindFirstChild("Chopsticks")

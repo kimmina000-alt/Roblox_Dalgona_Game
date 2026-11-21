@@ -59,10 +59,13 @@ function CameraRig.poseFor(key)
 		local bowl = ws and ws:FindFirstChild("Ladle") and ws.Ladle:FindFirstChild("Bowl")
 		local by = bowl and origin:PointToObjectSpace(bowl.Position).Y or 8.1
 		local bz = bowl and origin:PointToObjectSpace(bowl.Position).Z or 0
-		-- 젓가락 통이 옮겨졌으면(2026-11-21 소다 통 옆) 그 통 위로
+		-- 젓가락 통이 옮겨졌으면(2026-11-21 바닥 화로 앞) 그 통 위로
 		local cup = ws and ws:FindFirstChild("ChopstickCup")
-		local px = cup and origin:PointToObjectSpace(cup:GetPivot().Position).X or PICK_X
-		return trackPose(origin:PointToWorldSpace(Vector3.new(px, by, bz + 0.3)), "melt")
+		if cup then
+			local cc = origin:PointToObjectSpace(cup:GetBoundingBox().Position)
+			return trackPose(origin:PointToWorldSpace(Vector3.new(cc.X, cc.Y, cc.Z + 0.3)), "melt")
+		end
+		return trackPose(origin:PointToWorldSpace(Vector3.new(PICK_X, by, bz + 0.3)), "melt")
 	end
 	local p = POSES[STEP_POSE[key] or key] or POSES.sugar
 	local c, y = p[1], p[2]
