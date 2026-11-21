@@ -91,7 +91,9 @@ local function show(r)
 	table.sort(stops)
 	-- 판매가 없어서 대개 보관함이 먼저 참 (D29): 눈에 띄게 따로 알림
 	local fullText = nil
-	if full then
+	if full and (r.worked or 0) < 60 then
+		fullText = "📦 보관함이 이미 가득 차 있어서 못 만들었어요!\n진열대에 놓고 팔아서 자리를 비워 주세요"
+	elseif full then
 		fullText = string.format("📦 %s 만에 보관함이 가득 차서 멈췄어요!\n진열대에 놓고 팔아서 자리를 비워 주세요", timeText(r.worked or r.seconds))
 	end
 
