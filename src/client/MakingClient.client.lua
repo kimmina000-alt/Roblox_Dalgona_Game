@@ -95,8 +95,24 @@ local function setCharacterHidden(hidden)
 	end
 end
 
+-- 노점 파라솔 (D21)이 위에서 내려다보는 제작 화면을 가림 → 만드는 동안 내 화면에서만 숨김 (2026-11-21)
+local function setParasolHidden(hidden)
+	local plot = station and station.model.Parent
+	if not plot then
+		return
+	end
+	for _, name in ipairs({ "ParasolPole", "ParasolCanopy" }) do
+		for _, p in ipairs(plot:GetDescendants()) do
+			if p.Name == name and p:IsA("BasePart") then
+				p.LocalTransparencyModifier = hidden and 1 or 0
+			end
+		end
+	end
+end
+
 local function finish()
 	running = false
+	setParasolHidden(false)
 	if current then
 		current.aborted = true
 		current = nil
@@ -111,6 +127,13 @@ local function finish()
 		station:reset()
 		station:removeHand()
 		station.Prompt.Enabled = true
+	end
+	-- 손으로 만든 달고나는 직접 진열 (2026-11-21): 들고 있으면 진열대로 안내 (서버 속성 Carrying = 들고 있는 달고나 번호)
+	local carrying = player:GetAttribute("Carrying")
+	if type(carrying) == "number" and carrying ~= 0 then
+		pcall(function()
+			game:GetService("StarterGui"):SetCore("SendNotification", { Title = "달고나 진열", Text = "진열대 빈 칸에서 R을 눌러 놓아요", Duration = 6 })
+		end)
 	end
 end
 
@@ -421,6 +444,7 @@ function startMaking(restart)
 	end
 	running = true
 	station.Prompt.Enabled = false
+	setParasolHidden(true)
 	setControls(false)
 	setCharacterHidden(true)
 	local ok, err = pcall(runSession)

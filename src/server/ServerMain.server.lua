@@ -58,6 +58,7 @@ do
 			WorkstationBuilder.buildCutter(tpl) -- 예전 별 전용 틀 → 도안을 바꿔 끼우는 틀
 		end
 		StallDecor.dress(tpl) -- 식탁보·러그·색감·포장 공간 (2026-11-19~20)
+		WorkstationBuilder.streetLayout(tpl) -- 노점 배치: 화로는 테이블 옆 땅 위, 테이블 짧게, 젓가락은 소다 통 옆 (2026-11-21)
 		if tpl:GetAttribute("CoalLeft") == nil then
 			WorkstationBuilder.setCoal(tpl, 1)
 		end

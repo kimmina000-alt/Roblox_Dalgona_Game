@@ -647,13 +647,16 @@ function Builder.setLadleCount(ws, n)
 		return
 	end
 	-- 플레이어 국자의 메시·내용물 자리 (손잡이 방향 기준 틀)를 그대로 옮겨 씀
-	local hd0 = (CFrame.Angles(0, math.rad(HANDLE_YAW), 0)).RightVector
+	-- 작업대를 돌려 놓았으면(가게 작업대 180°, 2026-11-21) 자리·손잡이 방향도 같이 돎
+	local wpv = ws:GetPivot()
+	local wr = wpv - wpv.Position
+	local hd0 = wr:VectorToWorldSpace((CFrame.Angles(0, math.rad(HANDLE_YAW), 0)).RightVector)
 	local c0 = bowl.Position
 	local frame0 = CFrame.lookAt(c0, c0 - hd0)
 	local meshRel = frame0:ToObjectSpace(mesh.CFrame)
 	local contentsRel = CFrame.new(c0):ToObjectSpace(contents.CFrame)
 	for k = 2, n do
-		local off = HELPER_SLOTS[k - 1]
+		local off = wr:VectorToWorldSpace(HELPER_SLOTS[k - 1])
 		local c = c0 + off
 		-- 알바생 국자는 철망 위에 내려놓음 (플레이어 국자는 들고 있는 높이)
 		local brazier = ws:FindFirstChild("Brazier")
@@ -730,6 +733,125 @@ function Builder.build(parent)
 	ws.WorldPivot = CFrame.new(ORIGIN)
 	ws.Parent = parent or workspace
 	return ws
+end
+
+-- 화로를 테이블 속으로 내림 (2026-11-21 사용자: "연탄 화로 높이가 높으니까 테이블 아래로 내리자").
+-- 화로·국자·알바생 국자를 같이 내리고, 높이로 저장된 속성(GrillTopY, 연탄 BottomY)도 맞춤. 여러 번 불러도 한 번만 내려감
+-- (속성 BrazierDrop = 지금 내려간 양). 클라이언트 CameraRig도 BrazierDrop만큼 녹이기 화면을 내림
+Builder.BRAZIER_DROP = 2.4 -- 철망이 테이블 윗면 위 약 1.4에 오게 (원래 약 3.8)
+function Builder.lowerBrazier(ws, drop)
+	drop = drop or Builder.BRAZIER_DROP
+	local d = drop - (ws:GetAttribute("BrazierDrop") or 0)
+	if math.abs(d) < 1e-3 then
+		return
+	end
+	local down = Vector3.new(0, -d, 0)
+	for _, c in ipairs(ws:GetChildren()) do
+		if c.Name == "Brazier" or c.Name == "Ladle" or c.Name:sub(1, 11) == "HelperLadle" then
+			c:PivotTo(c:GetPivot() + down)
+		end
+	end
+	local b = ws:FindFirstChild("Brazier")
+	if b then
+		local g = b:GetAttribute("GrillTopY")
+		if type(g) == "number" then
+			b:SetAttribute("GrillTopY", g - d)
+		end
+		for _, p in ipairs(b:GetDescendants()) do
+			local by = p:GetAttribute("BottomY")
+			if type(by) == "number" then
+				p:SetAttribute("BottomY", by - d)
+			end
+		end
+	end
+	for _, c in ipairs(ws:GetChildren()) do
+		if c.Name:sub(1, 11) == "HelperLadle" then
+			local ctr = c:GetAttribute("Center")
+			if typeof(ctr) == "Vector3" then
+				c:SetAttribute("Center", ctr + down)
+			end
+		end
+	end
+	ws:SetAttribute("BrazierDrop", drop)
+end
+
+-- 노점 배치 (2026-11-21 사용자: "연탄화로는 땅 위에 테이블 옆에", "테이블 길이를 줄여", "나무젓가락 소다통 옆으로")
+--   ① 화로(+국자)를 같은 자리에서 바닥까지 내림 → 철망이 테이블 윗면과 비슷한 높이
+--   ② 테이블 왼쪽(화로가 있던 부분)을 잘라 냄: 새 왼쪽 끝 = 화로 오른쪽 끝 + 0.3. 다리·식탁보도 맞춤
+--   ③ 젓가락 통을 소다 통 오른쪽으로, 젓던 젓가락 내려놓는 자리는 테이블 왼쪽 끝(화로 옆)
+-- 꾸미기(StallDecor.dress) 뒤 틀(WorkstationTemplate)에 한 번 함 (속성 StreetLayout)
+local function isFlatX(p)
+	local r = p.CFrame.RightVector
+	return math.abs(r.X) > 0.999
+end
+function Builder.streetLayout(ws)
+	if ws:GetAttribute("StreetLayout") then
+		return
+	end
+	local top = ws:FindFirstChild("TableTop")
+	local b = ws:FindFirstChild("Brazier")
+	if not (top and b) then
+		return
+	end
+	-- ① 바닥 = 테이블 다리 아래끝
+	local floorY = math.huge
+	for _, p in ipairs(ws:GetChildren()) do
+		if p.Name == "TableLeg" and p:IsA("BasePart") then
+			floorY = math.min(floorY, p.Position.Y - p.Size.Y / 2)
+		end
+	end
+	if floorY == math.huge then
+		floorY = top.Position.Y - top.Size.Y / 2 - 2.9
+	end
+	local bcf, bsize = b:GetBoundingBox()
+	local bottom = bcf.Position.Y - bsize.Y / 2
+	Builder.lowerBrazier(ws, (ws:GetAttribute("BrazierDrop") or 0) + (bottom - floorY) - 0.02)
+	-- 화로 밑에 깔려 있던 것(은박지 등)도 바닥으로
+	local surface = top.Position.Y + top.Size.Y / 2
+	local reach = math.max(bsize.X, bsize.Z) / 2 + 0.6
+	for _, p in ipairs(ws:GetDescendants()) do
+		if p:IsA("BasePart") and not p:IsDescendantOf(b) and p.Name ~= "TableTop" and p.Name ~= "TableLeg" then
+			local flat = Vector3.new(p.Position.X - bcf.Position.X, 0, p.Position.Z - bcf.Position.Z)
+			if flat.Magnitude < reach and math.abs(p.Position.Y - surface) < 0.3 and p.Size.Y < 0.2 then
+				p.Position -= Vector3.new(0, surface - floorY - 0.01, 0)
+			end
+		end
+	end
+	-- ② 테이블 자르기
+	local tableLeft = top.Position.X - top.Size.X / 2
+	local newLeft = bcf.Position.X + bsize.X / 2 + 0.3
+	local cut = newLeft - tableLeft
+	local topY = top.Position.Y
+	if cut > 0.5 and cut < top.Size.X - 4 then
+		for _, p in ipairs(ws:GetDescendants()) do
+			if p:IsA("BasePart") and not p:IsDescendantOf(b) and isFlatX(p) then
+				local left = p.Position.X - p.Size.X / 2
+				if p.Name == "TableLeg" and p.Position.X < newLeft + 1 then
+					p.Position += Vector3.new(cut, 0, 0)
+				elseif math.abs(left - tableLeft) < 0.8 and p.Size.X > cut + 1 and math.abs(p.Position.Y - topY) < 1.2 then
+					-- 테이블 길이만큼 깔린 것 (윗면·식탁보·가장자리): 왼쪽을 잘라 냄
+					p.Size -= Vector3.new(cut, 0, 0)
+					p.Position += Vector3.new(cut / 2, 0, 0)
+				end
+			end
+		end
+	end
+	-- ③ 젓가락 통 → 소다 통 오른쪽
+	local soda = ws:FindFirstChild("SodaTub")
+	local cup = ws:FindFirstChild("ChopstickCup")
+	if soda and cup then
+		local sp = soda:GetPivot().Position
+		local cp = cup:GetPivot().Position
+		local delta = Vector3.new(sp.X + 1.3 - cp.X, 0, sp.Z - cp.Z)
+		cup:PivotTo(cup:GetPivot() + delta)
+	end
+	-- 젓던 젓가락을 내려놓는 자리(Chopsticks)는 화로 옆 = 잘린 테이블 왼쪽 끝 (철판 위에 놓이지 않게)
+	local chop = ws:FindFirstChild("Chopsticks")
+	if chop then
+		local cp = chop:GetPivot().Position
+		chop:PivotTo(chop:GetPivot() + Vector3.new(newLeft + 0.7 - cp.X, 0, 0))
+	end
+	ws:SetAttribute("StreetLayout", true)
 end
 
 return Builder

@@ -259,7 +259,7 @@ local function reshape(ctx, rec, blob, eRing)
 	-- 오른쪽 바깥으로 두면 화면 밖으로 나가고 모양 틀과 겹쳐서 손잡이를 잡기 어려움 (플레이 테스트 2026-11-19)
 	local plate = S.Plate.Position
 	local half = S.Plate.Size.X / 2
-	local restTip = Vector3.new(plate.X + half * 0.75, S.plateTop + 0.05, plate.Z - half * 0.35)
+	local restTip = Vector3.new(plate.X, S.plateTop + 0.05, plate.Z) + S:dir(half * 0.75, 0, -half * 0.35)
 	local restDir = Vector3.new(0.12, 0.1, 1).Unit
 	local function restStick()
 		Stir.placeChopsticksAt(S, restTip, restTip + restDir * 2.75)
@@ -485,7 +485,7 @@ function Pour.run(ctx)
 	end
 
 	-- 카메라가 철판 쪽으로 옮겨 가 있으니, 국자를 먼저 철판 왼쪽 위로 들고 옴 (0.4초)
-	local hover = CFrame.new(plate.X - half - 0.15, carryY, plate.Z + 0.9) * rot
+	local hover = CFrame.new(Vector3.new(plate.X, carryY, plate.Z) + S:dir(-half - 0.15, 0, 0.9)) * rot
 	local start = ladle:GetPivot()
 	local tc = 0
 	while tc < 0.4 do
@@ -566,13 +566,13 @@ function Pour.run(ctx)
 				-- 기울이는 만큼 그릇이 손 쪽으로 1.6 넘게 밀려 철판 밖에 부어짐 → 플레이 테스트에서 확인)
 				if dropMode then
 					-- 방울 붓기: 잡은 국자가 손가락을 따라 움직이고, 철판 위에서는 살짝 기울어 그릇 안이 보임
-					ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, -tilt * 0.45) * rot)
+					ladle:PivotTo(CFrame.new(w) * S.rot * CFrame.Angles(0, 0, -tilt * 0.45) * S.rot:Inverse() * rot)
 				else
-					ladle:PivotTo(CFrame.new(w) * CFrame.Angles(0, 0, -tilt) * rot)
+					ladle:PivotTo(CFrame.new(w) * S.rot * CFrame.Angles(0, 0, -tilt) * S.rot:Inverse() * rot)
 				end
 				-- 국자 가장자리(손잡이 반대쪽 +X)와 흘러나가는 방향
-				local out = Vector3.new(1, 0, 0)
-				local lip = (CFrame.new(w) * CFrame.Angles(0, 0, -tilt)):PointToWorldSpace(Vector3.new(S.bowlRadius - 0.04, S.bowlHalf, 0))
+				local out = S:dir(1, 0, 0) -- 작업대 기준 오른쪽 (돌려 놓은 작업대도 같은 쪽)
+				local lip = (CFrame.new(w) * S.rot * CFrame.Angles(0, 0, -tilt)):PointToWorldSpace(Vector3.new(S.bowlRadius - 0.04, S.bowlHalf, 0))
 				if dropMode and tilt > POUR_TILT and poured < total then
 					-- 한 방울씩: 많이 기울일수록 자주. 국자를 움직이며 떨어뜨리면 그 길대로 모양이 됨 (하트를 그리면 하트)
 					local rate = (tilt - POUR_TILT) / (MAX_TILT - POUR_TILT)
