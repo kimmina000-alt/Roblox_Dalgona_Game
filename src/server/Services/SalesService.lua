@@ -238,8 +238,10 @@ local function refreshShelf(index)
 					s.look:Destroy()
 				end
 				local look = buildLook(item, SALES.lookSize)
-				-- 넓은 면이 골목 쪽으로 조금 기울고, 막대는 뒤로
-				look:PivotTo(slotCFrame(shop, i) * CFrame.new(0, 0.12, 0) * CFrame.Angles(math.rad(-SALES.lookTilt), 0, 0))
+				-- 세워서 진열 (사용자 2026-11-21): 막대를 진열대 윗면에 꽂고 넓은 면은 골목(-Z) 쪽, 막대는 아래.
+				-- 뒷줄은 막대를 더 길게 보여 앞줄 위로 보이게
+				local stick = SALES.lookStick[(i - 1) // 5 + 1] or SALES.lookStick[1]
+				look:PivotTo(slotCFrame(shop, i) * CFrame.new(0, SALES.lookSize * 0.5 + stick, 0) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(90), 0, 0))
 				look.Name = "Look" .. i
 				look.Parent = shop.shelf
 				s.look, s.lookKey = look, key
