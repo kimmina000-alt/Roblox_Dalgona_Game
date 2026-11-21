@@ -239,7 +239,16 @@ end)
 -- ── 도안 고르기 · 다음 기계 사기 화면 ──
 local state = nil
 local gui = new("ScreenGui", { Name = "MachineUi", ResetOnSpawn = false, DisplayOrder = 7, Enabled = false, Parent = player:WaitForChild("PlayerGui") })
-new("UIScale", { Scale = S, Parent = gui })
+local uiScale = new("UIScale", { Scale = S, Parent = gui })
+-- 작은 화면에서는 창이 화면 안에 들어오게 줄임
+local function fit()
+	local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+	uiScale.Scale = math.min(S, (vp.Y - 80) / 420, (vp.X - 24) / 560)
+end
+fit()
+if workspace.CurrentCamera then
+	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+end
 local win = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromOffset(560, 420), BackgroundColor3 = CREAM, Parent = gui })
 corner(win, 16)
 new("UIStroke", { Color = CARAMEL, Thickness = 3, Parent = win })
@@ -248,14 +257,14 @@ local closeBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 0), Position =
 corner(closeBtn, 17)
 local statusL = new("TextLabel", { Position = UDim2.fromOffset(18, 44), Size = UDim2.new(1, -36, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SOFT, Text = "", Parent = win })
 local gridTitle = new("TextLabel", { Position = UDim2.fromOffset(18, 70), Size = UDim2.new(1, -36, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = BROWN, Text = "기계가 만들 도안", Parent = win })
-local grid = new("ScrollingFrame", { Position = UDim2.fromOffset(14, 94), Size = UDim2.new(1, -28, 1, -186), BackgroundTransparency = 1, ScrollBarThickness = 6, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = win })
+local grid = new("ScrollingFrame", { Position = UDim2.fromOffset(14, 94), Size = UDim2.new(1, -28, 1, -206), BackgroundTransparency = 1, ScrollBarThickness = 6, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = win })
 new("UIGridLayout", { CellSize = UDim2.fromOffset(100, 118), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid })
 local nextRow = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -14), Size = UDim2.new(1, -28, 0, 70), BackgroundColor3 = Color3.fromRGB(250, 236, 214), Parent = win })
 corner(nextRow, 12)
 local nextL = new("TextLabel", { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(1, -150, 1, -12), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 15, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = BROWN, Text = "", Parent = nextRow })
 local buyBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(126, 44), BackgroundColor3 = GREEN, Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = Color3.new(1, 1, 1), Text = "사기", Parent = nextRow })
 corner(buyBtn, 12)
-local msgL = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -88), Size = UDim2.new(1, -36, 0, 18), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = RED, Text = "", Parent = win })
+local msgL = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -87), Size = UDim2.new(1, -36, 0, 18), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = RED, Text = "", Parent = win })
 
 local function preview(parent, entry)
 	local vpf = new("ViewportFrame", { BackgroundColor3 = Color3.fromRGB(226, 172, 96), Ambient = Color3.fromRGB(190, 190, 195), LightColor = Color3.new(1, 1, 1), LightDirection = Vector3.new(-0.4, -1, -0.6), Size = UDim2.new(1, -10, 1, -36), Position = UDim2.fromOffset(5, 5), Parent = parent })
@@ -279,6 +288,7 @@ local function preview(parent, entry)
 	vpf.CurrentCamera = cam
 end
 
+local render -- 아래에서 정의
 local busy = false
 local function act(what, a)
 	if busy then
@@ -290,6 +300,18 @@ local function act(what, a)
 		return Remotes.GrowthAction:InvokeServer(what, a)
 	end)
 	busy = false
+	-- 바뀐 상태를 바로 다시 받아 그림 (갱신 신호를 기다리지 않음)
+	task.spawn(function()
+		local ok2, st = pcall(function()
+			return Remotes.GetPlayerState:InvokeServer()
+		end)
+		if ok2 and st then
+			state = st
+			if gui.Enabled then
+				render()
+			end
+		end
+	end)
 	if not ok then
 		msgL.Text = "서버 응답이 없어요"
 	elseif type(res) == "table" and not res.ok then
@@ -304,7 +326,7 @@ local function act(what, a)
 end
 
 local cards = {}
-local function render()
+function render()
 	local mc = state and state.growth and state.growth.machine
 	for _, c in ipairs(cards) do
 		c:Destroy()

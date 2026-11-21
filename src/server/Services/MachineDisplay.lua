@@ -44,7 +44,7 @@ local DALGONA = Color3.fromRGB(222, 156, 76)
 -- 작은 달고나 하나 (창 속 진열·배출구용): 납작한 원기둥 + 별 자국 대신 진한 점
 local function miniDalgona(parent, name, cf, d)
 	local p = cyl(parent, name, 0.06, d, cf, DALGONA)
-	part(parent, name .. "Mark", Vector3.new(d * 0.28, 0.01, d * 0.28), cf * CFrame.new(0, 0.035, 0) * CFrame.Angles(0, math.rad(45), 0), Color3.fromRGB(150, 90, 40))
+	part(parent, name .. "Mark", Vector3.new(d * 0.28, 0.01, d * 0.28), cf * CFrame.new(0, -0.035, 0) * CFrame.Angles(0, math.rad(45), 0), Color3.fromRGB(150, 90, 40))
 	return p
 end
 
@@ -59,12 +59,13 @@ local function buildSteel(m, base)
 	-- 앞 = -Z
 	local front = base * CFrame.new(0, 0, -D / 2)
 	part(m, "WindowFrame", Vector3.new(W - 0.6, 2.7, 0.1), front * CFrame.new(-0.3, 3.2, -0.04), dark, { Material = Enum.Material.Metal })
-	part(m, "Window", Vector3.new(W - 0.85, 2.45, 0.06), front * CFrame.new(-0.3, 3.2, -0.1), Color3.fromRGB(210, 235, 245), { Material = Enum.Material.Glass, Transparency = 0.55 })
+	part(m, "Window", Vector3.new(W - 0.85, 2.45, 0.06), front * CFrame.new(-0.3, 3.2, -0.26), Color3.fromRGB(210, 235, 245), { Material = Enum.Material.Glass, Transparency = 0.78 })
 	for row = 0, 2 do
 		local y = 2.3 + row * 0.8
-		part(m, "Shelf", Vector3.new(W - 0.9, 0.06, 0.8), front * CFrame.new(-0.3, y - 0.25, 0.45), dark)
+		-- 창과 몸통 사이 얕은 칸에 달고나를 세워 둠 (몸통 안쪽에 넣으면 안 보임)
+		part(m, "Shelf", Vector3.new(W - 0.9, 0.06, 0.2), front * CFrame.new(-0.3, y - 0.27, -0.12), dark)
 		for col = -1, 1 do
-			local p = miniDalgona(m, "WindowDalgona", front * CFrame.new(-0.3 + col * 0.75, y, 0.45) * CFrame.Angles(math.rad(80), 0, 0), 0.55)
+			local p = miniDalgona(m, "WindowDalgona", front * CFrame.new(-0.3 + col * 0.75, y, -0.15) * CFrame.Angles(math.rad(80), 0, 0), 0.55)
 			p:SetAttribute("Anim", "window")
 		end
 	end
@@ -96,16 +97,16 @@ local function buildPink(m, base)
 	part(m, "Body", Vector3.new(W, H, D), base * CFrame.new(0, H / 2, 0), pink)
 	-- 둥근 모서리 느낌: 옆 기둥
 	for _, s in ipairs({ -1, 1 }) do
-		cyl(m, "Corner", H, 0.7, base * CFrame.new(s * W / 2, H / 2, -D / 2 + 0.35) * CFrame.Angles(0, 0, math.rad(90)), pink)
+		cyl(m, "Corner", H, 0.7, base * CFrame.new(s * W / 2, H / 2, -D / 2 + 0.35), pink)
 	end
 	local front = base * CFrame.new(0, 0, -D / 2)
 	part(m, "WindowFrame", Vector3.new(W - 1.2, 3.2, 0.1), front * CFrame.new(-0.4, 3.4, -0.04), cream)
-	part(m, "Window", Vector3.new(W - 1.45, 2.95, 0.06), front * CFrame.new(-0.4, 3.4, -0.1), Color3.fromRGB(225, 240, 255), { Material = Enum.Material.Glass, Transparency = 0.5 })
+	part(m, "Window", Vector3.new(W - 1.45, 2.95, 0.06), front * CFrame.new(-0.4, 3.4, -0.26), Color3.fromRGB(225, 240, 255), { Material = Enum.Material.Glass, Transparency = 0.78 })
 	for row = 0, 2 do
 		local y = 2.35 + row * 0.95
-		part(m, "Shelf", Vector3.new(W - 1.5, 0.06, 0.8), front * CFrame.new(-0.4, y - 0.3, 0.45), Color3.fromRGB(255, 214, 228))
+		part(m, "Shelf", Vector3.new(W - 1.5, 0.06, 0.2), front * CFrame.new(-0.4, y - 0.3, -0.12), Color3.fromRGB(255, 214, 228))
 		for col = 0, 3 do
-			local p = miniDalgona(m, "WindowDalgona", front * CFrame.new(-0.4 - 1.05 + col * 0.7, y, 0.45) * CFrame.Angles(math.rad(80), 0, 0), 0.55)
+			local p = miniDalgona(m, "WindowDalgona", front * CFrame.new(-0.4 - 1.05 + col * 0.7, y, -0.15) * CFrame.Angles(math.rad(80), 0, 0), 0.55)
 			p:SetAttribute("Anim", "window")
 		end
 	end
