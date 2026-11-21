@@ -258,7 +258,7 @@ G.Factory = {
 	level = 25,
 	price = 300000,
 	needStage = 4, -- 연속 생산 설비가 있어야 함
-	machineKeepsRunning = true, -- 공장을 사도 가게 기계는 계속 돎 (PM 답 기다리는 중, 2026-11-21)
+	machineKeepsRunning = true, -- 공장을 사도 가게 기계는 계속 돎 (사용자 확정 2026-11-21, 판매량은 손님 수요가 막음)
 	baseQty = 20, -- 한 판 기본 수량 (대량 생산 모듈로 30 → 40)
 	baseSeconds = 100, -- 20개 한 판
 	secondsPerExtra = 3, -- 20개 넘는 1개마다 +3초 (40개 = 160초, 6장 예시)
