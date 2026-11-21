@@ -1,7 +1,7 @@
 -- 완성된 달고나 겉모습 (2026-11-21 사용자: "진열대에 내가 만든 완성품 모양으로 진열", "손님은 그 완성품 들고 먹으면서 감")
 -- 보관함 아이템(stock item) 하나로 작은 달고나 모델을 만든다. 서버·클라이언트 둘 다 씀 (Part만, 메시·EditableMesh 없음)
 --   item.s = 도안 id, item.g = 등급, item.pk = 포장, item.plain = 민짜(모양 안 찍음), item.br = 쪼개짐(지금은 안 팔림)
--- DalgonaLook.build(item, opts) → Model (PrimaryPart = "Disc", 피벗 = 원판 가운데)
+-- DalgonaLook.build(item, opts 또는 지름) → Model (PrimaryPart = "Disc", 피벗 = 원판 가운데)
 --   opts.diameter (기본 1.0), opts.upright = true면 세워서(원판 면이 +Z, 막대는 아래), 아니면 눕혀서(면이 위 +Y, 막대는 +Z)
 --   opts.stick (기본 true) 막대, opts.anchored (기본 true)
 -- 모양 선은 CutterShapes 바깥선을 간추려 짧은 선분 몇 개로 (진열대 10칸 × 여러 가게라 부품 수를 아낌)
@@ -93,6 +93,9 @@ local function part(parent, name, size, cf, color, props)
 end
 
 function DalgonaLook.build(item, opts)
+	if type(opts) == "number" then
+		opts = { diameter = opts } -- build(item, 지름) 으로도 부름 (진열대 칸 약 1.2, 손님 손 약 1.0)
+	end
 	opts = opts or {}
 	local D = opts.diameter or 1.0
 	local R = D / 2
