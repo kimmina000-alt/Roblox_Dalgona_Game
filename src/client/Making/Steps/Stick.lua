@@ -35,7 +35,7 @@ end
 local function restOf(S)
 	-- 새 배치: 달고나 막대 네모 통(속성 StackUp)이 있으면 그 통 맨 위에 길게 놓인 막대를 꺼냄 (2026-11-21 사용자)
 	local decor = S.model:FindFirstChild("Stage1Decor")
-	local box = decor and decor:FindFirstChild("StickCup")
+	local box = decor and decor:FindFirstChild("StickCup", true) -- 묶음(모델) 안에 있을 수 있음
 	if box and box:GetAttribute("StackUp") then
 		local pos = box.Position + Vector3.new(0, box:GetAttribute("StackUp") + THICK / 2, 0)
 		return CFrame.new(pos) * S.rot * CFrame.Angles(0, math.rad(90), 0)

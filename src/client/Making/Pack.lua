@@ -243,8 +243,9 @@ function Pack.run(ctx, dal, st)
 	local ws = S.model -- 지금 쓰는 작업대 (17b: 내 가게 작업대)
 	local area = ws and ws:FindFirstChild("PackArea")
 	local mat = area and area:FindFirstChild("Mat")
-	local bagBox = area and area:FindFirstChild("BagTop")
-	local cup = area and area:FindFirstChild("TieCup")
+	-- 통과 내용물은 묶음(모델) 안에 있을 수 있음 (새 배치: 사용자가 한 번에 옮기게 묶음, 2026-11-21) → 안쪽까지 찾음
+	local bagBox = area and area:FindFirstChild("BagTop", true)
+	local cup = area and area:FindFirstChild("TieCup", true)
 	if not (mat and bagBox and cup) then
 		return {}
 	end
