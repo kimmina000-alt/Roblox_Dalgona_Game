@@ -410,8 +410,13 @@ function Pour.run(ctx)
 	-- 안의 시럽·거품만 하얀 원처럼 남았음 → 국자는 철판 왼쪽에 반죽을 담은 채 보이게 두고, 방울은 위에서 떨어짐
 	local hideK = 0
 	setLadleHidden(ladle, 0)
-	-- 붓는 동안 철판 옆 누름판은 안 보이게 (누르기 단계에서 다시 나옴)
-	S:hidePresser(true)
+	-- 붓는 동안 철판 옆 누름판은 안 보이게 (누르기 단계에서 다시 나옴).
+	-- 새 배치(ㄷ자 카운터)는 누름판이 판(오른쪽 반투명 판) 위쪽에 따로 있어서 그대로 두고, 막대도 미리 철판 오른쪽에 꺼내 둠 (2026-11-21 사용자)
+	if S.model:GetAttribute("CounterLayout") == true then
+		require(script.Parent:WaitForChild("Stick")).show(ctx)
+	else
+		S:hidePresser(true)
+	end
 	-- 반죽이 떨어질 자리 표시 (손가락 아래 철판 위 옅은 그림자)
 	local aimMark = S:fxPart(S.fx, { Name = "PourAim", Shape = Enum.PartType.Cylinder, Color = Color3.fromRGB(60, 36, 20), Material = Enum.Material.SmoothPlastic, Transparency = 1, Size = Vector3.new(0.01, 0.34, 0.34) })
 

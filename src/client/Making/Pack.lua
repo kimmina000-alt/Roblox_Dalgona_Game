@@ -300,7 +300,8 @@ function Pack.run(ctx, dal, st)
 			stickLen = math.max(stickLen, -q.Z + math.max(p.Size.X, p.Size.Y, p.Size.Z) / 2 - (-z0))
 		end
 	end
-	R1 = R1 + up * math.clamp(stickLen * 0.35, 0, 1.0)
+	-- 새 배치: 달고나+막대 전체가 매트 가운데 오게 (2026-11-21 "포장대에 올리면 어긋남": 막대가 매트 밖으로 나갔음)
+	R1 = R1 + up * (counter and math.clamp(stickLen * 0.5, 0, 1.6) or math.clamp(stickLen * 0.35, 0, 1.0))
 	m = R1.Position
 	local rel = {}
 	for i, p in ipairs(parts) do

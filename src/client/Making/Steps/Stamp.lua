@@ -85,7 +85,8 @@ function Stamp.run(ctx)
 	end
 
 	-- 틀 손잡이 끝 자리 (틀 기준점 기준, 제자리 회전 기준): 손잡이는 플레이어 쪽(+Z)으로 가장 튀어나온 곳
-	local cutRot = S.rest.Cutter - S.rest.Cutter.Position
+	-- 쉬는 자리에서 살짝 사선으로 놓인 틀(속성 RestYaw, 새 배치 2026-11-21)은 찍을 때 똑바로
+	local cutRot = CFrame.Angles(0, -math.rad(cutter:GetAttribute("RestYaw") or 0), 0) * (S.rest.Cutter - S.rest.Cutter.Position)
 	local handleLocal = Vector3.new(0, 0, 0.8)
 	do
 		local bcf, bsz = cutter:GetBoundingBox()
