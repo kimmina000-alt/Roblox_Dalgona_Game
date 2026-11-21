@@ -632,4 +632,6 @@ function Decor.dress(ws)
 	Decor.watchOwners(ws)
 end
 
+Decor.grade = grade -- 색감 보정만 (ㄷ자 틀은 꾸미기를 다시 안 하므로 서버가 따로 부름, 2026-11-21)
+
 return Decor

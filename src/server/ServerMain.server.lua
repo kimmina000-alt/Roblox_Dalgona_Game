@@ -34,8 +34,10 @@ for _, name in ipairs({ "PlayerState", "Notify" }) do
 end
 
 -- 손 작업대 틀 (17b·U8, 2026-11-21): 스폰 앞 공용 작업대는 없애고, 가게 부지마다 작업대를 둠 (PlotService).
--- 틀 = ServerStorage.Assets.WorkstationTemplate (Studio에 저장된 꾸며진 작업대). 예전 장소처럼 공용 작업대가
--- workspace에 남아 있으면 틀 자리로 옮김. 꾸미기(StallDecor.dress)는 틀에 한 번 해 두고 PlotService가 복제함
+-- 2026-11-21 사용자 "기존 작업대 백업해 놓고 ㄷ자 작업대로 교체": 틀 = Studio 편집 모드 Workspace의 WorkstationLayout
+-- (ㄷ자 카운터, 사용자가 물건 자리를 직접 옮겨 둠). 게임이 시작되면 Workspace에서 빼서 틀 자리로 옮기므로 게임 안에는 안 보임.
+-- 예전 노점 틀은 ServerStorage.Backup.WorkstationTemplate_Old 에 백업만 해 둠 (안 씀).
+-- WorkstationLayout이 없을 때만 예전처럼 ServerStorage.Assets.WorkstationTemplate을 꾸며서 씀
 do
 	local ServerStorage = game:GetService("ServerStorage")
 	local assets = ServerStorage:FindFirstChild("Assets")
@@ -44,72 +46,48 @@ do
 		assets.Name = "Assets"
 		assets.Parent = ServerStorage
 	end
-	local tpl = assets:FindFirstChild("WorkstationTemplate")
+	local layout = workspace:FindFirstChild("WorkstationLayout") or workspace:FindFirstChild("WorkstationPreviewV3")
 	local shared = workspace:FindFirstChild("DalgonaWorkstation")
-	if not tpl and shared then
-		shared.Name = "WorkstationTemplate"
-		shared.Parent = assets
-		tpl = shared
-	elseif shared then
-		shared:Destroy()
-	end
-	if tpl then
-		if not tpl:FindFirstChild("Cutter") then
-			WorkstationBuilder.buildCutter(tpl) -- 예전 별 전용 틀 → 도안을 바꿔 끼우는 틀
+	if layout then
+		if shared then
+			shared:Destroy()
 		end
-		StallDecor.dress(tpl) -- 식탁보·러그·색감·포장 공간 (2026-11-19~20)
-		WorkstationBuilder.streetLayout(tpl) -- 노점 배치: 화로는 테이블 옆 땅 위, 테이블 짧게, 젓가락은 소다 통 옆 (2026-11-21)
-		if tpl:GetAttribute("CoalLeft") == nil then
-			WorkstationBuilder.setCoal(tpl, 1)
+		local old = assets:FindFirstChild("WorkstationTemplate")
+		if old then
+			old:Destroy() -- 이번 게임에서만 (편집 모드 원본은 그대로)
+		end
+		for _, d in ipairs(layout:GetDescendants()) do
+			if d:IsA("BillboardGui") and d.Name == "PreviewLabel" then
+				d:Destroy()
+			end
+		end
+		WorkstationBuilder.syncCounter(layout) -- 모양 틀 기울기(RestYaw) 다시 읽기
+		layout.Name = "WorkstationTemplate"
+		layout.Parent = assets
+		StallDecor.grade() -- 색감 보정 (예전에는 꾸미기 dress가 넣었음)
+		if layout:GetAttribute("CoalLeft") == nil then
+			WorkstationBuilder.setCoal(layout, 1)
 		end
 	else
-		warn("[Server] ServerStorage.Assets.WorkstationTemplate 이 없어요 — 가게 작업대를 만들 수 없음")
-	end
-end
-
--- 새 작업대 배치 미리 보기 (2026-11-21 사용자 그림 "작업대 별도 공간에 사진처럼 구현해"):
--- 스폰 옆 빈 곳(-50, 0, 10)에 틀 복제를 ㄷ자 카운터 배치로 놓아 둠. E로 여기서도 만들 수 있음 (재료·연탄은 내 가게 것)
--- 2026-11-21 사용자 "테이블 위 물건 자리를 직접 고치게 화면에 보이게": Studio 편집 모드 Workspace에 저장해 둔
--- WorkstationPreviewV3가 있으면 그것을 그대로 씀 (옮겨 놓은 자리 유지). 없을 때만 틀로 새로 만듦
-local savedPreview = workspace:FindFirstChild("WorkstationPreviewV3")
-if savedPreview then
-	WorkstationBuilder.syncCounter(savedPreview)
-end
-do
-	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
-	local tpl = assets and assets:FindFirstChild("WorkstationTemplate")
-	if tpl and not savedPreview then
-		local ok, err = pcall(function()
-			local prev = tpl:Clone()
-			prev.Name = "WorkstationPreviewV3"
-			for _, c in ipairs(prev:GetChildren()) do
-				if c.Name:sub(1, 11) == "HelperLadle" then
-					c:Destroy()
-				end
+		local tpl = assets:FindFirstChild("WorkstationTemplate")
+		if not tpl and shared then
+			shared.Name = "WorkstationTemplate"
+			shared.Parent = assets
+			tpl = shared
+		elseif shared then
+			shared:Destroy()
+		end
+		if tpl then
+			if not tpl:FindFirstChild("Cutter") then
+				WorkstationBuilder.buildCutter(tpl) -- 예전 별 전용 틀 → 도안을 바꿔 끼우는 틀
 			end
-			WorkstationBuilder.counterLayout(prev)
-			local top = prev:FindFirstChild("TableTop")
-			local target = Vector3.new(-50, 0, 10)
-			prev:PivotTo(prev:GetPivot() + Vector3.new(target.X - top.Position.X, 0, target.Z - top.Position.Z))
-			local bb = Instance.new("BillboardGui")
-			bb.Name = "PreviewLabel"
-			bb.Size = UDim2.fromOffset(260, 50)
-			bb.StudsOffset = Vector3.new(0, 7, 0)
-			bb.AlwaysOnTop = true
-			bb.MaxDistance = 120
-			local t = Instance.new("TextLabel")
-			t.Size = UDim2.fromScale(1, 1)
-			t.BackgroundColor3 = Color3.fromRGB(255, 252, 245)
-			t.TextColor3 = Color3.fromRGB(92, 58, 36)
-			t.Font = Enum.Font.GothamBold
-			t.TextScaled = true
-			t.Text = "새 작업대 배치 (미리 보기)"
-			t.Parent = bb
-			bb.Parent = top
-			prev.Parent = workspace
-		end)
-		if not ok then
-			warn("[Server] 작업대 미리 보기를 못 만들었어요:", err)
+			StallDecor.dress(tpl) -- 식탁보·러그·색감·포장 공간 (2026-11-19~20)
+			WorkstationBuilder.streetLayout(tpl) -- 노점 배치: 화로는 테이블 옆 땅 위, 테이블 짧게, 젓가락은 소다 통 옆 (2026-11-21)
+			if tpl:GetAttribute("CoalLeft") == nil then
+				WorkstationBuilder.setCoal(tpl, 1)
+			end
+		else
+			warn("[Server] 작업대 틀(Workspace.WorkstationLayout / ServerStorage.Assets.WorkstationTemplate)이 없어요 — 가게 작업대를 만들 수 없음")
 		end
 	end
 end
