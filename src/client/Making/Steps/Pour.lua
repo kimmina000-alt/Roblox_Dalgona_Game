@@ -501,7 +501,22 @@ function Pour.run(ctx)
 	-- 국자 아래로 한 방울씩 떨어짐 (방울이 이어지는 모양·누른 모양은 그대로). 잡고 있는 동안 국자는 숨김 (손가락 아래 그림자 = 떨어질 자리)
 	local grabOff = Vector3.zero -- 손가락 → 떨어질 자리 (국자를 숨기므로 0: 손가락 바로 아래)
 	local GRAB_PX = 150 -- 국자(그릇·손잡이) 화면 위치에서 이만큼 안을 누르면 잡음
-	ui:say("국자를 꾹 눌러 철판 위로 끌어요", "철판 위에서 누르고 있으면 한 방울씩 떨어져요 · 끌면 따라 떨어져요")
+	-- 2026-11-21 사용자 "반죽 부을 때 옆에 반투명한 검은 네모 다시 복구": 화면 오른쪽 판(철판과 같은 비율)도 다시 씀.
+	-- 판을 누르고 있으면 판 위 자리와 같은 철판 자리로 떨어지고(손가락이 철판을 안 가림), 국자를 잡고 끄는 것도 그대로
+	local aimPt = S.ringCenter -- 판으로 붓는 자리
+	local padMode = false -- 지금 판으로 붓는 중
+	local function padToWorld(u, v)
+		local lim = half - 0.35
+		local lx = math.clamp((u - 0.5) * 2 * half, -lim, lim)
+		local lz = math.clamp((v - 0.5) * 2 * half, -lim, lim)
+		return Vector3.new(plate.X, S.plateTop, plate.Z) + S:dir(lx, 0, lz)
+	end
+	local function worldToPad(wp)
+		local o = S.rot:VectorToObjectSpace(Vector3.new(wp.X - plate.X, 0, wp.Z - plate.Z))
+		return 0.5 + o.X / (2 * half), 0.5 + o.Z / (2 * half)
+	end
+	local ringFrac = (S.Ring and S.Ring.Size.Y or 2.9) / (2 * half)
+	ui:say("국자를 끌거나 오른쪽 판을 꾹 눌러요", "누르고 있는 동안 한 방울씩 떨어져요 · 끌면 따라 떨어져요")
 
 	while true do
 		local dt = ctx.frame()
@@ -512,11 +527,15 @@ function Pour.run(ctx)
 		end
 		stepDrops(dt)
 		if not dropped then
-			ui:setPad(false)
+			local pu, pv = worldToPad(aimPt)
+			ui:setPad(dropMode, pu, pv, grabbing and padMode, ringFrac)
 			if P.down and not grabbing and P.presses ~= seenPress then
 				seenPress = P.presses
 				local near = not dropMode
-				if dropMode then
+				padMode = dropMode and ui:padAt(P.pos) ~= nil
+				if padMode then
+					near = true
+				elseif dropMode then
 					local bowlS = P.toScreen(S.Bowl.Position)
 					local gripS = P.toScreen(ladle:GetPivot():PointToWorldSpace(gripLocal))
 					near = (P.pos - bowlS).Magnitude < GRAB_PX or (P.pos - gripS).Magnitude < GRAB_PX
@@ -532,7 +551,7 @@ function Pour.run(ctx)
 					end
 					Sfx.play("pop", 0.5, 1.1)
 				else
-					ui:hint("국자를 눌러서 철판 위로 끌어요")
+					ui:hint("국자를 눌러 끌거나 오른쪽 판을 눌러요")
 				end
 			end
 			if grabbing and not P.down then
@@ -548,12 +567,26 @@ function Pour.run(ctx)
 				-- 방울 붓기: 국자는 숨기고 손가락 바로 아래로 반죽이 떨어짐 (2026-11-20)
 				local fingerLand = P.toPlane(S.plateTop, aimScreenPos(P))
 				if dropMode then
-					-- 국자를 잡은 채로 끎: 국자 그릇 바로 아래 철판에 떨어짐 (철판 밖이면 안 떨어짐)
-					local g = P.toPlane(carryY) + grabOff
-					w = Vector3.new(g.X, carryY, g.Z)
 					local lim = half - 0.35
-					over = math.abs(w.X - plate.X) < half and math.abs(w.Z - plate.Z) < half
-					fingerLand = Vector3.new(math.clamp(w.X, plate.X - lim, plate.X + lim), S.plateTop, math.clamp(w.Z, plate.Z - lim, plate.Z + lim))
+					if padMode then
+						-- 판을 누르고 있음: 판 위 자리 = 철판 자리 (판 밖으로 끌면 끝에 붙음)
+						local u, v = ui:padAt(P.pos, true)
+						if u then
+							aimPt = padToWorld(u, v)
+						end
+						fingerLand = aimPt
+						w = Vector3.new(aimPt.X, carryY, aimPt.Z)
+						over = true
+					else
+						-- 국자를 잡은 채로 끎: 국자 그릇 바로 아래 철판에 떨어짐 (철판 밖이면 안 떨어짐)
+						local g = P.toPlane(carryY) + grabOff
+						w = Vector3.new(g.X, carryY, g.Z)
+						over = math.abs(w.X - plate.X) < half and math.abs(w.Z - plate.Z) < half
+						fingerLand = Vector3.new(math.clamp(w.X, plate.X - lim, plate.X + lim), S.plateTop, math.clamp(w.Z, plate.Z - lim, plate.Z + lim))
+						if over then
+							aimPt = fingerLand -- 판 위 점도 같은 자리로
+						end
+					end
 					aimMark.Transparency = over and 0.55 or 1
 					aimMark.CFrame = CFrame.new(fingerLand.X, S.plateTop + 0.006, fingerLand.Z) * CFrame.Angles(0, 0, math.rad(90))
 				end

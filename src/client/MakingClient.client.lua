@@ -110,6 +110,38 @@ local function setParasolHidden(hidden)
 	end
 end
 
+-- 작업대는 겉으로만 돌려 놓음 (2026-11-21 사용자 "작업대 눈에 보이는 것만 180도 돌리고 작업할 때 화면은 기존 그대로"):
+-- 서버는 GrowthConfig.Plots.workstationTurn(도)만큼 돌려 놓고, 만드는 동안만 내 화면에서 작업대를 가운데 기준으로
+-- 되돌려 예전 그대로의 제작 화면을 씀. 끝나면 다시 돌림 (다른 플레이어 화면은 그대로 돌린 모습)
+local unturned = nil -- { model, c = 돌린 가운데, a = 각도 }
+local function setUnturned(on)
+	if not station then
+		return
+	end
+	if on and not unturned then
+		local plots = GrowthConfig.Plots
+		local a = math.rad((plots and plots.workstationTurn) or 0)
+		if a == 0 then
+			return
+		end
+		local m = station.model
+		local cf = m:GetBoundingBox()
+		local c = CFrame.new(cf.Position)
+		m:PivotTo(c * CFrame.Angles(0, -a, 0) * c:Inverse() * m:GetPivot())
+		unturned = { model = m, c = c, a = a }
+		station = Station.new(m) -- 제자리(rest)를 돌리기 전 자세로 다시 잼
+		CameraRig.init(m:GetPivot(), m)
+	elseif not on and unturned then
+		local u = unturned
+		unturned = nil
+		if u.model.Parent then
+			u.model:PivotTo(u.c * CFrame.Angles(0, u.a, 0) * u.c:Inverse() * u.model:GetPivot())
+			station = Station.new(u.model)
+			CameraRig.init(u.model:GetPivot(), u.model)
+		end
+	end
+end
+
 local function finish()
 	running = false
 	setParasolHidden(false)
@@ -126,6 +158,7 @@ local function finish()
 	if station then
 		station:reset()
 		station:removeHand()
+		setUnturned(false) -- 제자리로 되돌린 뒤 다시 겉모습대로 돌림
 		station.Prompt.Enabled = true
 	end
 	-- 손으로 만든 달고나는 직접 진열 (2026-11-21): 들고 있으면 진열대로 안내 (서버 속성 Carrying = 들고 있는 달고나 번호)
@@ -444,6 +477,7 @@ function startMaking(restart)
 	end
 	running = true
 	station.Prompt.Enabled = false
+	setUnturned(true)
 	setParasolHidden(true)
 	setControls(false)
 	setCharacterHidden(true)
