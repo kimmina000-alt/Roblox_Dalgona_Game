@@ -60,7 +60,7 @@ local function part(parent, name, size, cf, color, material, props)
 end
 
 ---------------------------------------------------------------- 완성품 모양 (Shared.DalgonaLook)
--- DalgonaLook.build(item, size) → Model. 피벗 = 원판 가운데, 넓은 면 = 로컬 +Y, 막대 = 로컬 +Z, size = 지름
+-- DalgonaLook.build(item, { diameter }) → Model (PrimaryPart Disc). 피벗 = 원판 가운데, 넓은 면 = 로컬 +Y, 막대 = 로컬 +Z (눕힘 기본)
 -- 모듈이 없거나 실패하면 원판(+ 등급 테두리)으로 대신함
 
 local lookMod = nil -- nil 아직 안 찾음, false 없음
@@ -95,7 +95,7 @@ end
 local function buildLook(item, size)
 	local L = dalgonaLook()
 	if L then
-		local ok, model = pcall(L.build, item, size)
+		local ok, model = pcall(L.build, item, { diameter = size })
 		if ok and typeof(model) == "Instance" and model:IsA("Model") then
 			if not model.PrimaryPart then
 				model.PrimaryPart = model:FindFirstChildWhichIsA("BasePart", true)
