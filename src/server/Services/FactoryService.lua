@@ -153,7 +153,13 @@ local function teleport(player, cf)
 	local char = player.Character
 	local root = char and char:FindFirstChild("HumanoidRootPart")
 	if root then
-		char:PivotTo(cf)
+		-- 맵 밖 먼 곳이라 스트리밍으로 바닥이 아직 없을 수 있음: 먼저 그 주변을 받게 함
+		pcall(function()
+			player:RequestStreamAroundAsync(cf.Position, 5)
+		end)
+		if char.Parent then
+			char:PivotTo(cf)
+		end
 	end
 end
 
