@@ -2,7 +2,7 @@
 -- 서버 연결 규칙 (저장·부지 세션 FactoryService와 정함):
 --   workspace.Factories.Factory<i> 속성: OwnerUserId, Unlocked, On, Shape, Qty, Mode, Lines, Status("work"|"off"|멈춘 이유),
 --     Line<k>Start(서버 시각, 쉬면 0)·Line<k>Seconds·Line<k>Count·Line<k>Shape, MadeAt·MadeCount·MadeSlots
---   건물 Factory<i>.Building (서버 FactoryDisplay): 부품 속성 Anim, 제어대 안내 "ControlPrompt"
+--   건물 ShopPlots.Plot<i>.FactoryLot.Building (서버 FactoryDisplay, 2026-11-22 D11: 가게 건물 뒤에 붙음): 부품 속성 Anim, 제어대 안내 "ControlPrompt"
 --   화면 상태: growth.factory = { unlocked, on, shape, qty, maxQty, mode, lines, status, jobs, ups, upgrades, shapes, preview }
 --   조작: GrowthAction("factorySet", { shape, qty, mode }) · ("factoryRun", bool) · ("factoryUp", key) → { ok, reason, msg }
 
@@ -57,8 +57,17 @@ end
 local factories = {} -- [Factory<i>] = rec
 
 -- force: 공장은 맵 밖 먼 곳이라 부품이 스트리밍으로 나중에 들어옴 → 들어올 때마다 다시 훑음
+-- 공장 3D는 가게 뒤 공장 부지 안 (Factory<i> → Plot<i>.FactoryLot)
+local function lotOf(fac)
+	local i = tonumber(fac.Name:match("%d+"))
+	local plots = workspace:FindFirstChild("ShopPlots")
+	local plot = plots and i and plots:FindFirstChild("Plot" .. i)
+	return plot and plot:FindFirstChild("FactoryLot"), plot
+end
+
 local function setup(fac, force)
-	local b = fac:FindFirstChild("Building")
+	local lot = lotOf(fac)
+	local b = lot and lot:FindFirstChild("Building")
 	local old = factories[fac]
 	if not b or (old and old.building == b and not force) then
 		return
@@ -557,9 +566,9 @@ local function hook(fac)
 		end
 	end
 	scan(false)
-	-- 건물·부품이 스트리밍으로 들어오면 잠깐 모았다가 다시 훑음
-	fac.DescendantAdded:Connect(function(d)
-		if pending or not (d:IsA("BasePart") or d:IsA("ProximityPrompt") or d.Name == "Building") then
+	-- 공장 3D가 생기거나(해금) 부품이 스트리밍으로 들어오면 잠깐 모았다가 다시 훑음. 부지는 가게 안 (Plot<i>.FactoryLot)
+	local function onAdded(d)
+		if pending or not (d:IsA("BasePart") or d:IsA("ProximityPrompt") or d.Name == "Building" or d.Name == "FactoryLot") then
 			return
 		end
 		pending = true
@@ -567,7 +576,11 @@ local function hook(fac)
 			pending = false
 			scan(true)
 		end)
-	end)
+	end
+	local _, plot = lotOf(fac)
+	if plot then
+		plot.DescendantAdded:Connect(onAdded)
+	end
 end
 
 task.spawn(function()
