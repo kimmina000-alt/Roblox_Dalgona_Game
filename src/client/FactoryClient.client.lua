@@ -56,19 +56,29 @@ end
 -- ── 공장 건물마다 기록 ──
 local factories = {} -- [Factory<i>] = rec
 
-local function setup(fac)
+-- force: 공장은 맵 밖 먼 곳이라 부품이 스트리밍으로 나중에 들어옴 → 들어올 때마다 다시 훑음
+local function setup(fac, force)
 	local b = fac:FindFirstChild("Building")
-	if not b or (factories[fac] and factories[fac].building == b) then
+	local old = factories[fac]
+	if not b or (old and old.building == b and not force) then
 		return
 	end
-	local rec = { fac = fac, building = b, parts = {}, lastMade = fac:GetAttribute("MadeAt") }
+	if old and old.board then
+		old.board:Destroy()
+	end
+	local rec = { fac = fac, building = b, parts = {}, lastMade = old and old.lastMade or fac:GetAttribute("MadeAt") }
 	for _, d in ipairs(b:GetDescendants()) do
 		if d:IsA("BasePart") then
 			local a = d:GetAttribute("Anim")
 			if a then
 				local s = d.Size
 				local axis = (s.X <= s.Y and s.X <= s.Z) and Vector3.xAxis or ((s.Y <= s.Z) and Vector3.yAxis or Vector3.zAxis)
-				table.insert(rec.parts, { p = d, a = a, cf = d.CFrame, color = d.Color, axis = axis, phase = (#rec.parts) * 0.7 })
+				-- 처음 자리·색은 부품에 기억 (다시 훑을 때 움직이는 중인 자리를 기준으로 잡지 않게)
+				if d:GetAttribute("AnimBase") == nil then
+					d:SetAttribute("AnimBase", d.CFrame)
+					d:SetAttribute("AnimColor", d.Color)
+				end
+				table.insert(rec.parts, { p = d, a = a, cf = d:GetAttribute("AnimBase"), color = d:GetAttribute("AnimColor"), axis = axis, phase = (#rec.parts) * 0.7 })
 			end
 		end
 		if d:IsA("ProximityPrompt") and d.Name == "ControlPrompt" then
@@ -79,6 +89,7 @@ local function setup(fac)
 	local console = rec.prompt and rec.prompt.Parent
 	if console then
 		local bb = new("BillboardGui", { Name = "FactoryStatus", Size = UDim2.fromOffset(230, 78), StudsOffset = Vector3.new(0, 4.2, 0), MaxDistance = 90, LightInfluence = 0, Parent = console })
+		rec.board = bb
 		local box = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(40, 44, 60), BackgroundTransparency = 0.1, Parent = bb })
 		corner(box, 10)
 		rec.head = new("TextLabel", { Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = MINT, TextXAlignment = Enum.TextXAlignment.Left, Text = "FACTORY", Parent = box })
@@ -529,24 +540,33 @@ local function open()
 	task.spawn(refresh)
 end
 
+local hookedPrompts = setmetatable({}, { __mode = "k" })
 local function hook(fac)
-	local function scan()
-		setup(fac)
+	local pending = false
+	local function scan(force)
+		setup(fac, force)
 		local rec = factories[fac]
-		if rec and rec.prompt and not rec.hooked then
-			rec.hooked = true
-			rec.prompt.Triggered:Connect(function()
+		local pr = rec and rec.prompt
+		if pr and not hookedPrompts[pr] then
+			hookedPrompts[pr] = true
+			pr.Triggered:Connect(function()
 				if fac:GetAttribute("OwnerUserId") == player.UserId then
 					open()
 				end
 			end)
 		end
 	end
-	scan()
-	fac.ChildAdded:Connect(function(c)
-		if c.Name == "Building" then
-			task.defer(scan)
+	scan(false)
+	-- 건물·부품이 스트리밍으로 들어오면 잠깐 모았다가 다시 훑음
+	fac.DescendantAdded:Connect(function(d)
+		if pending or not (d:IsA("BasePart") or d:IsA("ProximityPrompt") or d.Name == "Building") then
+			return
 		end
+		pending = true
+		task.delay(0.5, function()
+			pending = false
+			scan(true)
+		end)
 	end)
 end
 

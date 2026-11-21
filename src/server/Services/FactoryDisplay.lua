@@ -65,8 +65,8 @@ local function placeBuilding(fac)
 	if console then
 		local att = Instance.new("Attachment")
 		att.Name = "ControlAtt"
+		att.Parent = console -- 부모를 먼저 정해야 WorldPosition이 맞게 들어감
 		att.WorldPosition = console.Position + Vector3.new(0, 1.2, 0)
-		att.Parent = console
 		local pr = Instance.new("ProximityPrompt")
 		pr.Name = "ControlPrompt"
 		pr.ObjectText = "공장 제어대"

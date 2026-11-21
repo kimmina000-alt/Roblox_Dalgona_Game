@@ -50,12 +50,17 @@ end
 local machines = {} -- [Machine 모델] = rec
 local DIST = 140 -- 이 거리 밖 기계는 움직이지 않음 (아낌)
 
-local function setupMachine(plot, m)
+-- force: 부품이 스트리밍으로 나중에 들어오면 다시 훑음 (멀리 있던 가게 기계)
+local function setupMachine(plot, m, force)
 	local slot = plot:FindFirstChild("MachineSlot")
-	if not slot or machines[m] then
+	local old = machines[m]
+	if not slot or (old and not force) then
 		return
 	end
-	local rec = { plot = plot, slot = slot, model = m, parts = {}, lastMade = slot:GetAttribute("MadeAt") }
+	if old and old.board then
+		old.board:Destroy()
+	end
+	local rec = { plot = plot, slot = slot, model = m, parts = {}, lastMade = old and old.lastMade or slot:GetAttribute("MadeAt") }
 	for _, d in ipairs(m:GetDescendants()) do
 		if d:IsA("BasePart") then
 			local a = d:GetAttribute("Anim")
@@ -63,7 +68,12 @@ local function setupMachine(plot, m)
 				-- 도는 축 = 가장 얇은 축 (톱니·바람개비·팬)
 				local s = d.Size
 				local axis = (s.X <= s.Y and s.X <= s.Z) and Vector3.xAxis or ((s.Y <= s.Z) and Vector3.yAxis or Vector3.zAxis)
-				table.insert(rec.parts, { p = d, a = a, cf = d.CFrame, color = d.Color, mat = d.Material, axis = axis })
+				-- 처음 자리·색은 부품에 기억 (다시 훑을 때 움직이는 중인 자리를 기준으로 잡지 않게)
+				if d:GetAttribute("AnimBase") == nil then
+					d:SetAttribute("AnimBase", d.CFrame)
+					d:SetAttribute("AnimColor", d.Color)
+				end
+				table.insert(rec.parts, { p = d, a = a, cf = d:GetAttribute("AnimBase"), color = d:GetAttribute("AnimColor"), mat = d.Material, axis = axis })
 			end
 		end
 	end
@@ -71,6 +81,7 @@ local function setupMachine(plot, m)
 	local anchor = m.PrimaryPart or m:FindFirstChild("PromptAnchor")
 	if anchor then
 		local bb = new("BillboardGui", { Name = "MachineStatus", Size = UDim2.fromOffset(190, 52), StudsOffsetWorldSpace = Vector3.new(0, (m:GetAttribute("Height") or 5) - 0.6, 0), MaxDistance = 70, AlwaysOnTop = false, LightInfluence = 0, Parent = anchor })
+		rec.board = bb
 		local box = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = CREAM, BackgroundTransparency = 0.1, Parent = bb })
 		corner(box, 10)
 		rec.title = new("TextLabel", { Size = UDim2.new(1, -12, 0, 22), Position = UDim2.fromOffset(6, 3), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = BROWN, Text = m:GetAttribute("MachineName") or "기계", Parent = box })
@@ -87,11 +98,13 @@ local function setupMachine(plot, m)
 		end
 	end
 	machines[m] = rec
-	m.AncestryChanged:Connect(function()
-		if not m:IsDescendantOf(workspace) then
-			machines[m] = nil
-		end
-	end)
+	if not old then
+		m.AncestryChanged:Connect(function()
+			if not m:IsDescendantOf(workspace) then
+				machines[m] = nil
+			end
+		end)
+	end
 end
 
 local function isOwner(plot)
@@ -441,9 +454,22 @@ local function watchPlot(plot)
 		end
 	end
 	scan()
+	local pending = false
 	plot.DescendantAdded:Connect(function(d)
 		if d.Name == "Machine" or (d:IsA("ProximityPrompt") and d.Name == "MachinePrompt") then
 			task.defer(scan)
+		elseif d:IsA("BasePart") and not pending then
+			-- 기계 부품이 나중에 들어옴 (스트리밍) → 잠깐 모았다가 다시 훑음
+			local m = plot:FindFirstChild("Machine")
+			if m and d:IsDescendantOf(m) then
+				pending = true
+				task.delay(0.5, function()
+					pending = false
+					if m.Parent then
+						setupMachine(plot, m, true)
+					end
+				end)
+			end
 		end
 	end)
 	plot:GetAttributeChangedSignal("OwnerUserId"):Connect(scan)
