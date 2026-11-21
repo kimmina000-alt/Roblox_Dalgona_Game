@@ -93,7 +93,12 @@ local function buildPlot(index, parent)
 	for _, side in ipairs({ -1, 1 }) do
 		part(m, "Fence", Vector3.new(0.4, 1.6, P.size.Z), cf * CFrame.new(side * (half - 0.2), P.size.Y + 0.8, 0), DARK_WOOD, Enum.Material.Wood)
 	end
-	part(m, "Fence", Vector3.new(P.size.X, 1.6, 0.4), cf * CFrame.new(0, P.size.Y + 0.8, half - 0.2), DARK_WOOD, Enum.Material.Wood)
+	-- 뒤 울타리: 가운데 공장 뒷문 앞은 비움 (D11 2026-11-22: 공장은 가게 뒤에 붙고 뒷문으로 걸어 들어감)
+	local gap = P.factoryDoor.gap
+	local backW = (P.size.X - gap) / 2
+	for _, side in ipairs({ -1, 1 }) do
+		part(m, "Fence", Vector3.new(backW, 1.6, 0.4), cf * CFrame.new(side * (gap / 2 + backW / 2), P.size.Y + 0.8, half - 0.2), DARK_WOOD, Enum.Material.Wood)
+	end
 
 	-- 손 작업대 자리 (D10)
 	local hs = spot(m, "HandStationSpot", cf * CFrame.new(P.handStation.pos), P.handStation.size, Color3.fromRGB(255, 214, 150), "손 작업대 자리")

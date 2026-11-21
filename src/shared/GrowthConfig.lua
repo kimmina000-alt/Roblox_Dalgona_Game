@@ -218,7 +218,7 @@ G.Plots = {
 	buildWorkstation = true, -- 부지를 배정하면 손 작업대를 만듦 (2026-11-21)
 	minimeBehind = 1.8, -- 미니미 알바생: 작업대 뒤쪽(테이블 끝에서) 거리
 	minimeGap = 2.2, -- 미니미끼리 간격 (화로 가운데 기준)
-	factoryDoor = { pos = Vector3.new(0, 0, 17.5) }, -- 가게 뒤 공장 문 (D11, 지금은 자리만)
+	factoryDoor = { pos = Vector3.new(0, 0, 17.5), gap = 7.4 }, -- 가게 뒤 공장 문 (D11). gap = 뒤 울타리에서 비우는 폭 (뒷벽 문 폭과 같음)
 	sign = { pos = Vector3.new(0, 0, -17.5), height = 9 },
 	-- 가게 건물 (D21): 작업대 뒤. 앞면(셔터)이 골목 쪽. 부지 로컬 z = front ~ back
 	building = { front = 8.5, back = 17.6, halfWidth = 16.8, height = 10.5 }, -- 높이는 공장 문(9.7)보다 높게
@@ -285,15 +285,9 @@ G.Factory = {
 		{ key = "autopack", name = "자동 포장 시스템", desc = "포장해서 나옴 (판매가 ×1.1)", costs = { 100000 } },
 		{ key = "warehouse", name = "대형 완제품 창고", desc = "보관함 2배", costs = { 80000 } },
 	},
-	-- 공간 (D11): 맵 밖 먼 곳에 부지 번호마다 한 칸
-	space = {
-		origin = Vector3.new(0, 0, 3000),
-		step = Vector3.new(160, 0, 0),
-		floor = Vector3.new(60, 1, 44),
-		spawn = Vector3.new(0, 3, -16), -- 공간 기준: 문 안쪽
-		exitDoor = Vector3.new(0, 4, -21), -- 앞(-Z) 벽 가운데
-		guardRadius = 70, -- 남의 공장 공간 안에 들어온 플레이어를 돌려보내는 범위
-	},
+	-- 공장 부지 (D11, 2026-11-22 바뀜): 가게 건물 뒤에 바로 붙은 울타리 부지 (폭 28 × 깊이 44), 뒷문으로 걸어 들어감.
+	-- 부지·공장 3D는 제작 세션이 만듦 (Plot<i>.FactoryLot.Ground = 영역). 없을 때는 아래 값(부지 기준 로컬)으로 판정
+	lot = { pos = Vector3.new(0, 0, 40), size = Vector3.new(28, 0, 44), guardHeight = 40 },
 }
 
 -- 공장 한 판: 시간(초)

@@ -1,6 +1,6 @@
--- 5단계 달고나 공장 (2026-11-21): 가게 뒤 문 → 플레이어별 공장 공간, 제어대로 자동 생산
+-- 5단계 달고나 공장 (2026-11-21): 가게 뒷문 → 뒤에 붙은 공장 부지, 제어대로 자동 생산
 -- 기준: SHOP_GROWTH_PLAN 6~8장, GDD 13장 D8·D11·D13·D26. 수치는 GrowthConfig.Factory
---  - 해금: Lv25 + 300,000, 연속 생산 설비(4단계) 보유, 가게 임대·매입
+--  - 해금: Lv25 + 300,000, 연속 생산 설비(4단계) 보유, 가게 임대·매입. 공장은 가게 건물 뒤에 붙음 (D11, 2026-11-22)
 --  - 제어대 설정(도안·수량·방식)으로 생산을 켜면, 빈 라인마다 판을 시작: 재료·운영비·전력비를 먼저 빼고 시간이 지나면 다 나옴
 --  - 한 판 20개(대량 생산 모듈 30·40) / 100초 (+3초/개), 정밀 ×1.5(Good~Excellent), 고속 ×0.7(Poor~Good), 일반 Normal~Good
 --  - 도안 Legendary까지, Perfect 없음. 다 만든 것은 stockProduced (진열대 빈 칸 → 보관함, D26)
@@ -9,9 +9,10 @@
 --  - 접속 중에만 돈다 (오프라인 생산은 아직 안 정함)
 --
 -- 화면 쪽과의 약속 (제작 세션: 공장 모델·제어대 화면·연출): workspace.Factories.Factory<부지 번호>
---   Floor·Spawn·ExitDoor(ExitPrompt) 파트, 속성 Origin(CFrame), OwnerUserId, Unlocked, On, Shape, Qty, Mode, Lines, Status,
---   Line<k>Start·Line<k>Seconds·Line<k>Count·Line<k>Shape, MadeAt·MadeCount·MadeSlots. 공장 모델은 그 안에 "Building"으로.
---   들어가기 = 가게 FactoryDoor의 FactoryPrompt (PlotService.onFactoryDoor)
+--   (Folder, 속성만) OwnerUserId, Unlocked, On, Shape, Qty, Mode, Lines, Status,
+--   Line<k>Start·Line<k>Seconds·Line<k>Count·Line<k>Shape, MadeAt·MadeCount·MadeSlots.
+--   공장 부지·3D는 제작 세션의 Plot<i>.FactoryLot (Ground = 영역, Building = 해금하면 그 가게만). 뒷문으로 걸어 들어감 (D11, 11-22)
+--   남의 공장 부지에 들어오면 서버가 자기 가게 앞으로 돌려보냄. 뒷문 FactoryPrompt는 안내만
 -- 조작: Remotes.GrowthAction ("buy","factory") / ("factorySet", {shape,qty,mode}) / ("factoryRun", bool) / ("factoryUp", key)
 
 local Players = game:GetService("Players")
@@ -101,118 +102,80 @@ local function rollQuality(d, mode)
 	return q, "Normal", 0.8
 end
 
----------------------------------------------------------------- 공간 (D11)
+---------------------------------------------------------------- 공장 부지 (D11, 2026-11-22: 가게 건물 뒤에 붙음, 뒷문으로 걸어 들어감)
 
-local function spaceCF(i)
-	return CFrame.new(F.space.origin + F.space.step * (i - 1))
-end
-
-local function buildSpace(i)
-	local cf = spaceCF(i)
-	local m = Instance.new("Model")
+-- 신호를 담는 곳: workspace.Factories.Factory<i> (Folder, 속성만)
+local function buildSignals(i)
+	local m = Instance.new("Folder")
 	m.Name = "Factory" .. i
-	m:SetAttribute("Origin", cf)
 	m:SetAttribute("PlotIndex", i)
-	local function part(name, size, at, props)
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Anchored = true
-		p.Size = size
-		p.CFrame = at
-		p.Color = Color3.fromRGB(205, 200, 210)
-		p.Material = Enum.Material.SmoothPlastic
-		p.TopSurface = Enum.SurfaceType.Smooth
-		for k, v in pairs(props or {}) do
-			p[k] = v
-		end
-		p.Parent = m
-		return p
-	end
-	local fs = F.space.floor
-	part("Floor", fs, cf * CFrame.new(0, -fs.Y / 2, 0))
-	part("Spawn", Vector3.new(4, 1, 4), cf * CFrame.new(F.space.spawn), { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
-	local door = part("ExitDoor", Vector3.new(6, 8, 0.4), cf * CFrame.new(F.space.exitDoor), { Color = Color3.fromRGB(150, 160, 170), Material = Enum.Material.DiamondPlate })
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "ExitPrompt"
-	prompt.ActionText = "가게로 나가기"
-	prompt.ObjectText = "공장 문"
-	prompt.KeyboardKeyCode = Enum.KeyCode.F
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = door
-	prompt.Triggered:Connect(function(player)
-		FactoryService.leave(player)
-	end)
-	m.PrimaryPart = m.Floor
+	m:SetAttribute("OwnerUserId", 0)
+	m:SetAttribute("Unlocked", false)
 	m.Parent = workspace:WaitForChild("Factories")
 	spaces[i] = m
 	return m
 end
 
-local function teleport(player, cf)
-	local char = player.Character
-	local root = char and char:FindFirstChild("HumanoidRootPart")
-	if root then
-		-- 맵 밖 먼 곳이라 스트리밍으로 바닥이 아직 없을 수 있음: 먼저 그 주변을 받게 함
-		pcall(function()
-			player:RequestStreamAroundAsync(cf.Position, 5)
-		end)
-		if char.Parent then
-			char:PivotTo(cf)
-		end
-	end
-end
-
--- 가게 공장 문 앞 (골목 쪽을 봄)
-local function shopDoorCF(player)
-	local plot = Plots.get(player)
+-- 공장 부지 영역: Plot<i>.FactoryLot.Ground (제작 세션), 없으면 설정값. 반환 CFrame(바닥 가운데), 크기
+local function lotArea(i)
+	local plot = Plots.plotAt(i)
 	if not plot then
 		return nil
 	end
-	local p = G.Plots.factoryDoor.pos
-	local at = plot.cframe * CFrame.new(p.X, G.Plots.size.Y + 3, p.Z - 3)
-	return CFrame.lookAt(at.Position, at.Position + plot.cframe.LookVector * -1)
+	local lot = plot.model:FindFirstChild("FactoryLot")
+	local ground = lot and lot:FindFirstChild("Ground")
+	if ground and ground:IsA("BasePart") then
+		return ground.CFrame, ground.Size
+	end
+	return plot.cframe * CFrame.new(F.lot.pos), F.lot.size
 end
 
-function FactoryService.enter(player)
-	local d = Data.get(player)
-	local _, i = Plots.get(player)
-	if not d or not i then
+-- 내 가게 입구 (골목 쪽)
+local function sendHome(player)
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local plot = Plots.get(player)
+	if not root then
 		return
 	end
-	if not d.factory.unlocked then
-		Economy.notify(player, string.format("공장은 Lv%d에 %d코인으로 열어요 (연속 생산 설비 필요)", F.level, F.price))
-		return
-	end
-	local sp = spaces[i]
-	if sp then
-		teleport(player, sp.Spawn.CFrame)
-	end
-end
-
-function FactoryService.leave(player)
-	local cf = shopDoorCF(player)
-	if cf then
-		teleport(player, cf)
+	if plot then
+		local at = plot.cframe * CFrame.new(G.Plots.entry) * CFrame.new(0, G.Plots.size.Y + 3, 0)
+		char:PivotTo(CFrame.lookAt(at.Position, at.Position - plot.cframe.LookVector))
 	else
 		player:LoadCharacter()
 	end
 end
 
--- 남의 공장 공간 안에 있는 플레이어는 돌려보냄
+-- 가게 뒷문 안내 (PlotService.onFactoryDoor, 내 가게일 때만 불림). 열려 있으면 걸어 들어가면 되므로 안내만
+function FactoryService.door(player)
+	local d = Data.get(player)
+	if not d then
+		return
+	end
+	if not d.factory.unlocked then
+		Economy.notify(player, string.format("공장은 Lv%d에 %d코인으로 지어요 (연속 생산 설비 필요)", F.level, F.price))
+	else
+		Economy.notify(player, "뒷문으로 걸어 들어가 제어대에서 생산을 설정해요")
+	end
+end
+
+-- 남의 공장 부지(또는 아직 안 지은 내 부지)에 들어간 플레이어는 내 가게 앞으로
 local function guard()
 	for _, player in ipairs(Players:GetPlayers()) do
 		local char = player.Character
 		local root = char and char:FindFirstChild("HumanoidRootPart")
 		if root then
 			local _, mine = Plots.get(player)
-			for i, sp in pairs(spaces) do
-				local o = sp:GetAttribute("Origin").Position
-				local off = root.Position - o
-				if Vector3.new(off.X, 0, off.Z).Magnitude < F.space.guardRadius and math.abs(off.Y) < 60 then
-					local d = Data.get(player)
-					if i ~= mine or not (d and d.factory.unlocked) then
-						FactoryService.leave(player)
+			for i = 1, G.Plots.count do
+				local cf, size = lotArea(i)
+				if cf then
+					local off = cf:PointToObjectSpace(root.Position)
+					if math.abs(off.X) < size.X / 2 and math.abs(off.Z) < size.Z / 2 and off.Y > -5 and off.Y < F.lot.guardHeight then
+						local d = Data.get(player)
+						if i ~= mine or not (d and d.factory.unlocked) then
+							sendHome(player)
+							Economy.notify(player, i ~= mine and "다른 사람의 공장이에요" or "공장을 지어야 들어갈 수 있어요")
+						end
 					end
 				end
 			end
@@ -557,9 +520,9 @@ function FactoryService.init(dataService, economyService, plotService, growthHoo
 	folder.Name = "Factories"
 	folder.Parent = workspace
 	for i = 1, G.Plots.count do
-		buildSpace(i)
+		buildSignals(i)
 	end
-	Plots.onFactoryDoor = FactoryService.enter
+	Plots.onFactoryDoor = FactoryService.door
 	Data.Changed:Connect(function(player)
 		local d = Data.get(player)
 		if d and d.factory then
