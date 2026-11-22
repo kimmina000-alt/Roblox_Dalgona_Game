@@ -38,6 +38,8 @@
 
 - 가게 작업대 틀 = 편집 모드 `Workspace.WorkstationLayout` (ㄷ자 카운터, (-50,0,10), 2026-11-21 교체). 사용자가 물건 자리를 직접 옮긴다 (막대 통 `Stage1Decor.StickBox`, 비닐 통 `PackArea.BagBin`, 빵끈 통 `PackArea.TieBox`는 묶음). 게임 시작 때 서버가 Workspace에서 빼서 `ServerStorage.Assets.WorkstationTemplate`으로 쓰고(`syncCounter`), 꾸미기(dress·streetLayout)는 다시 안 한다. 예전 노점 틀 백업: `ServerStorage.Backup.WorkstationTemplate_Old`. `counterLayout`·`StallDecor` 값을 바꿔도 저장된 틀에는 안 들어가므로, 다시 만들려면 사용자에게 먼저 묻는다 (옮긴 자리가 사라짐).
 
+- 가게 부지 틀 = 편집 모드 `Workspace.PlotLayout` (부지 하나, 속성 `PlotCFrame` = 기준, 2026-11-22). 사용자가 울타리·건물·간판·파라솔·자리 표시·공장 문·입구를 직접 옮기거나 크기·색을 바꾸고, 부품을 지우거나 새로 넣을 수 있다. 서버(`PlotService`)가 코드로 6칸을 만든 뒤 부품 속성 `LayoutKey`로 틀과 맞춰 6칸 모두에 옮긴다 (게임 중에는 ServerStorage로 옮겨 안 보임). 진열대·작업대·기계·공장 부지는 다른 코드가 붙여서 이 틀에 없다. 바닥(Floor)·입구(Entry)·간판(Sign)·셔터·간판판(Header)·임대 종이·기계 자리·공장 문짝은 지워도 숨김만 됨.
+
 ## Studio 동기화
 - Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).
 - 2026-11-22부터 **Rojo**(7.7.1, `C:\Tools\rojo\rojo.exe`)로 넣는다. `default.project.json`이 Shared·Server·Client·StarterGui(`src/gui`, 비어 있음)를 `$path`로 관리하고, 이 4곳에서 저장소에 없는 인스턴스는 Rojo가 지운다 (첫 연결 전 확인: Studio에만 있는 것 없음, 되돌리기용 장소 버전 152).

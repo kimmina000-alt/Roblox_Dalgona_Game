@@ -78,6 +78,113 @@ local function spot(m, name, cf, size, color, text)
 	return p
 end
 
+---------------------------------------------------------------- 편집 화면에서 고친 부지 모양 (2026-11-22 사용자 "부지 수정할 수 있게")
+-- Studio 편집 모드 Workspace.PlotLayout(부지 하나, 속성 PlotCFrame = 그 부지의 기준 CFrame)을 틀로 씀.
+-- 서버는 지금처럼 코드로 6칸을 만든 뒤, 부품마다 붙인 속성 LayoutKey(경로#번째)로 틀의 같은 부품을 찾아
+-- 위치(부지 기준)·크기·색·재질·투명도를 6칸 모두에 옮김. 틀에서 지운 부품은 지우고(꼭 필요한 부품은 숨김),
+-- 틀에 새로 넣은 부품(LayoutKey 없음)은 6칸 모두에 복제. 진열대·작업대·공장 부지·기계는 다른 코드가 붙여서 틀 밖.
+
+local KEEP_ALWAYS = { Floor = true, Entry = true, Sign = true, Shutter = true, Header = true, RentPaper = true, MachineSlot = true, Door = true }
+local layoutTemplate = nil -- { model, cf }
+
+-- 부품마다 LayoutKey = 부지 기준 경로 + "#" + 같은 경로에서 몇 번째
+local function tagLayout(m)
+	local count = {}
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") then
+			local names = {}
+			local a = d
+			while a and a ~= m do
+				table.insert(names, 1, a.Name)
+				a = a.Parent
+			end
+			local path = table.concat(names, "/")
+			count[path] = (count[path] or 0) + 1
+			d:SetAttribute("LayoutKey", path .. "#" .. count[path])
+		end
+	end
+end
+
+local function findLayoutTemplate()
+	local src = workspace:FindFirstChild("PlotLayout")
+	if src then
+		-- 게임에서는 보이지 않게 ServerStorage로 옮겨 둠 (편집 모드의 원본은 그대로)
+		local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+		src.Parent = assets or game:GetService("ServerStorage")
+	else
+		local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+		src = assets and assets:FindFirstChild("PlotLayout")
+	end
+	local cf = src and src:GetAttribute("PlotCFrame")
+	if src and typeof(cf) == "CFrame" then
+		return { model = src, cf = cf }
+	end
+	return nil
+end
+
+-- 틀(templateCF 기준)의 모양을 부지 plotCF로 옮김
+local function applyLayout(m, plotCF)
+	local T = layoutTemplate
+	if not T then
+		return
+	end
+	local function place(cf)
+		return plotCF * T.cf:ToObjectSpace(cf)
+	end
+	local built = {}
+	for _, d in ipairs(m:GetDescendants()) do
+		local key = d:IsA("BasePart") and d:GetAttribute("LayoutKey")
+		if key then
+			built[key] = d
+		end
+	end
+	local seen = {}
+	for _, tp in ipairs(T.model:GetDescendants()) do
+		if tp:IsA("BasePart") then
+			local key = tp:GetAttribute("LayoutKey")
+			local target = key and built[key]
+			if target then
+				seen[key] = true
+				target.CFrame = place(tp.CFrame)
+				target.Size = tp.Size
+				target.Color = tp.Color
+				target.Material = tp.Material
+				target.Transparency = tp.Transparency
+				if target:IsA("Part") and tp:IsA("Part") then
+					target.Shape = tp.Shape
+				end
+				-- 셔터 올림·내림 자리 같은 CFrame 속성도 부지 기준으로
+				for name, v in pairs(tp:GetAttributes()) do
+					if typeof(v) == "CFrame" then
+						target:SetAttribute(name, place(v))
+					end
+				end
+			elseif not key then
+				-- 틀에 새로 넣은 부품: 같은 경로의 부모가 있으면 그 아래, 없으면 부지 바로 아래
+				local copy = tp:Clone()
+				copy.CFrame = place(tp.CFrame)
+				copy.Anchored = true
+				local parent = m
+				if tp.Parent ~= T.model then
+					parent = m:FindFirstChild(tp.Parent.Name, true) or m
+				end
+				copy.Parent = parent
+			end
+		end
+	end
+	-- 틀에서 지운 부품
+	for key, d in pairs(built) do
+		if not seen[key] then
+			if KEEP_ALWAYS[d.Name] then
+				d.Transparency = 1
+				d.CanCollide = false
+			else
+				d:Destroy()
+			end
+		end
+	end
+end
+
 local function buildPlot(index, parent)
 	local x = (index - (P.count + 1) / 2) * P.spacing
 	local cf = CFrame.new(x, 0, P.rowZ) * CFrame.Angles(0, math.pi, 0) -- 로컬 -Z(앞) = 월드 +Z (스폰 쪽)
@@ -236,6 +343,9 @@ local function buildPlot(index, parent)
 		CanCollide = false,
 	})
 
+	tagLayout(m)
+	applyLayout(m, cf)
+	m:SetAttribute("PlotCFrame", cf)
 	m.Parent = parent
 	return { model = m, owner = nil, cframe = cf, signLabel = label }
 end
@@ -480,6 +590,10 @@ function PlotService.init(opts)
 	folder = Instance.new("Folder")
 	folder.Name = "ShopPlots"
 	folder.Parent = workspace
+	layoutTemplate = findLayoutTemplate()
+	if layoutTemplate then
+		print("[Plot] 편집 화면에서 고친 부지 틀(PlotLayout)을 씀")
+	end
 	for i = 1, P.count do
 		plots[i] = buildPlot(i, folder)
 	end
