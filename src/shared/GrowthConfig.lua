@@ -236,7 +236,7 @@ G.Plots = {
 	workstationTurn = 180, -- 도
 	removeDecorDisplay = true,
 	rowGap = 0.3, -- 진열대와 작업대 사이
-	entry = Vector3.new(0, 0, -21), -- 접속하면 서는 곳: 내 가게 앞 골목 (간판 앞)
+	entry = Vector3.new(-10, 0, -28), -- 접속하면 서는 곳: 내 가게 앞 골목. 2026-11-23 새 가게 3D 의자(앉는 자리) 옆을 피해 옮김 (틀 Entry도 같은 자리)
 	teleportOnSpawn = true, -- 스폰을 내 가게 앞으로 (사용자 2026-11-21)
 }
 
