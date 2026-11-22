@@ -4,7 +4,9 @@
 --     CycleStart·CycleSeconds(서버 시각 workspace:GetServerTimeNow), MadeAt·MadeCount·MadeSlots("3,4,7")
 --   모델 Plot<n>.Machine (서버 MachineDisplay): 부품 속성 Anim = spin·press·lampRun·lampStop·outlet·window, 앞 안내 MachinePrompt
 --   화면 상태: GetPlayerState / PlayerState 의 growth.machine = { stage, id, name, shape, status, running, t, seconds, batch, next, shapes }
---   조작: Remotes.GrowthAction:InvokeServer("buy", "machine") · ("machineShape", shapeId) → { ok, reason, msg }
+--   조작: Remotes.GrowthAction:InvokeServer("buy", "machine") · ("machineShape", shapeId, stage) → { ok, reason, msg }
+--   D32 (2026-11-23): 기계가 단계마다 따로 (Plot.Machine2·3·4, 슬롯 MachineSlot2·3·4). 상태 growth.machine.machines =
+--   가진 기계마다 { stage, ... }. 기계 앞 안내의 속성 MachineStage로 그 기계 창을 열고, 도안은 그 단계로 보냄
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -52,9 +54,21 @@ local DIST = 140 -- 이 거리 밖 기계는 움직이지 않음 (아낌)
 
 -- force: 부품이 스트리밍으로 나중에 들어오면 다시 훑음 (멀리 있던 가게 기계)
 local function setupMachine(plot, m, force)
-	local slot = plot:FindFirstChild("MachineSlot")
+	local slot = plot:FindFirstChild(m:GetAttribute("SlotName") or "MachineSlot")
 	local old = machines[m]
 	if not slot or (old and not force) then
+		return
+	end
+	-- 새로 산 기계가 커지는 중(서버 MachineDisplay popIn): 다 커진 뒤에 처음 자리를 잼
+	if m:GetAttribute("Popping") then
+		if not m:GetAttribute("PopWatch") then
+			m:SetAttribute("PopWatch", true)
+			m:GetAttributeChangedSignal("Popping"):Connect(function()
+				if not m:GetAttribute("Popping") and m.Parent then
+					setupMachine(plot, m, true)
+				end
+			end)
+		end
 		return
 	end
 	if old and old.board then
@@ -309,14 +323,14 @@ end
 
 local render -- 아래에서 정의
 local busy = false
-local function act(what, a)
+local function act(what, a, b)
 	if busy then
 		return
 	end
 	busy = true
 	msgL.Text = ""
 	local ok, res = pcall(function()
-		return Remotes.GrowthAction:InvokeServer(what, a)
+		return Remotes.GrowthAction:InvokeServer(what, a, b)
 	end)
 	busy = false
 	-- 바뀐 상태를 바로 다시 받아 그림 (갱신 신호를 기다리지 않음)
@@ -345,8 +359,26 @@ local function act(what, a)
 end
 
 local cards = {}
+local openStage = nil -- 지금 연 기계 단계 (빈 자리 안내로 열었으면 nil)
+-- 상태에서 그 단계 기계 칸을 찾음 (없으면 옛 칸 = 가장 높은 단계). 다음 기계·도안 목록은 바깥 칸에서 가져옴
+local function machineEntry(root, stage)
+	if not root then
+		return nil
+	end
+	if stage and type(root.machines) == "table" then
+		for _, e in ipairs(root.machines) do
+			if e.stage == stage then
+				local t = table.clone(e)
+				t.next = root.next
+				t.shapes = e.shapes or root.shapes
+				return t
+			end
+		end
+	end
+	return root
+end
 function render()
-	local mc = state and state.growth and state.growth.machine
+	local mc = machineEntry(state and state.growth and state.growth.machine, openStage)
 	for _, c in ipairs(cards) do
 		c:Destroy()
 	end
@@ -383,7 +415,7 @@ function render()
 				new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -1), Size = UDim2.new(1, -6, 0, 13), BackgroundTransparency = 1, FontFace = UI.F.heavy, TextSize = 13, TextColor3 = g and g.color or SOFT, Text = chosen and "만드는 중" or (g and g.label or ""), ZIndex = 14, Parent = card })
 				card.Activated:Connect(function()
 					if not chosen then
-						act("machineShape", id)
+						act("machineShape", id, mc.stage)
 					end
 				end)
 				table.insert(cards, card)
@@ -409,7 +441,8 @@ closeBtn.Activated:Connect(function()
 	gui.Enabled = false
 end)
 
-local function open()
+local function open(stage)
+	openStage = stage
 	gui.Enabled = true
 	msgL.Text = ""
 	render()
@@ -441,16 +474,20 @@ local function hookPrompt(plot, pr)
 	pr:SetAttribute("Hooked", true)
 	pr.Triggered:Connect(function()
 		if isOwner(plot) then
-			open()
+			open(pr:GetAttribute("MachineStage")) -- 빈 자리 안내는 nil → 다음 기계 사기 화면
 		end
 	end)
 end
 
 local function watchPlot(plot)
+	local function isMachine(c)
+		return c:IsA("Model") and (c.Name == "Machine" or c.Name:match("^Machine%d$") ~= nil)
+	end
 	local function scan()
-		local m = plot:FindFirstChild("Machine")
-		if m then
-			setupMachine(plot, m)
+		for _, c in ipairs(plot:GetChildren()) do
+			if isMachine(c) then
+				setupMachine(plot, c)
+			end
 		end
 		for _, d in ipairs(plot:GetDescendants()) do
 			if d:IsA("ProximityPrompt") and d.Name == "MachinePrompt" then
@@ -462,12 +499,15 @@ local function watchPlot(plot)
 	scan()
 	local pending = false
 	plot.DescendantAdded:Connect(function(d)
-		if d.Name == "Machine" or (d:IsA("ProximityPrompt") and d.Name == "MachinePrompt") then
+		if (d.Parent == plot and isMachine(d)) or (d:IsA("ProximityPrompt") and d.Name == "MachinePrompt") then
 			task.defer(scan)
 		elseif d:IsA("BasePart") and not pending then
 			-- 기계 부품이 나중에 들어옴 (스트리밍) → 잠깐 모았다가 다시 훑음
-			local m = plot:FindFirstChild("Machine")
-			if m and d:IsDescendantOf(m) then
+			local m = d.Parent -- 부지 바로 아래 조상 = 기계 모델
+			while m and m.Parent ~= plot do
+				m = m.Parent
+			end
+			if m and isMachine(m) and not m:GetAttribute("Popping") then
 				pending = true
 				task.delay(0.5, function()
 					pending = false
