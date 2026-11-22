@@ -4,7 +4,6 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -13,94 +12,70 @@ local G = require(Shared:WaitForChild("GrowthConfig"))
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
-local CREAM = Color3.fromRGB(255, 247, 232)
-local ROW = Color3.fromRGB(250, 236, 214)
-local BROWN = Color3.fromRGB(92, 58, 36)
-local SOFT = Color3.fromRGB(150, 110, 80)
-local CARAMEL = Color3.fromRGB(222, 150, 70)
-local GREEN = Color3.fromRGB(110, 190, 90)
-local GREY = Color3.fromRGB(180, 170, 160)
-local RED = Color3.fromRGB(200, 70, 60)
-local touch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
-local S = touch and 0.8 or 1
-
-local function new(class, props, children)
-	local o = Instance.new(class)
-	for k, v in pairs(props or {}) do
-		if k ~= "Parent" then
-			o[k] = v
-		end
-	end
-	for _, c in ipairs(children or {}) do
-		c.Parent = o
-	end
-	o.Parent = props and props.Parent
-	return o
-end
-local function corner(r)
-	return new("UICorner", { CornerRadius = UDim.new(0, r) })
-end
+local UI = require(Shared:WaitForChild("UiStyle"))
+local C = UI.C
+local new = UI.new
+local ROW = C.cream
+local SOFT = C.soft
+local GREEN = C.good
+local RED = C.bad
 local function label(props)
-	props.BackgroundTransparency = 1
-	props.Font = props.Font or Enum.Font.GothamBold
-	props.TextColor3 = props.TextColor3 or BROWN
-	props.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
-	props.TextSize = props.TextSize or 15 * S
-	return new("TextLabel", props)
-end
-local function button(props)
-	props.Font = Enum.Font.GothamBlack
-	props.TextColor3 = props.TextColor3 or Color3.new(1, 1, 1)
-	props.TextSize = props.TextSize or 14 * S
-	props.BackgroundColor3 = props.BackgroundColor3 or GREEN
-	return new("TextButton", props, { corner(10) })
+	props.TextSize = props.TextSize or 15
+	return UI.text(props)
 end
 
-local gui = new("ScreenGui", { Name = "GrowthUi", ResetOnSpawn = false, DisplayOrder = 6, Parent = playerGui })
-local openBtn = button({
-	Name = "Open",
-	Text = "🌱 성장",
-	Position = UDim2.new(0, 12, 0, 12 + 140 * S),
-	Size = UDim2.fromOffset(96 * S, 32 * S),
-	BackgroundColor3 = CARAMEL,
-	Parent = gui,
-})
+local gui = UI.screen("GrowthUi", 6, playerGui)
+local root = UI.root(gui)
+local fit = UI.fitter(root)
 
-local win = new("Frame", {
-	Name = "Window",
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromOffset(420 * S, 380 * S),
-	BackgroundColor3 = CREAM,
-	Visible = false,
-	Parent = gui,
-}, { corner(18), new("UIStroke", { Color = CARAMEL, Thickness = 3 }) })
-local closeBtn = button({ Text = "X", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 10), Size = UDim2.fromOffset(34 * S, 34 * S), BackgroundColor3 = Color3.fromRGB(240, 222, 196), TextColor3 = BROWN, Parent = win })
-local msg = label({ Text = "", Position = UDim2.new(0, 16, 1, -26 * S), Size = UDim2.new(1, -32, 0, 20 * S), TextSize = 13 * S, TextColor3 = RED, Parent = win })
+-- 열기 버튼: HUD 오른쪽 위 메뉴(ShopHud.Root.Menu)에 상점 아래로 넣는다 (2026-11-22 새 스타일)
+local menu = playerGui:WaitForChild("ShopHud"):WaitForChild("Root"):WaitForChild("Menu")
+local openSlot = new("Frame", { Name = "GrowthSlot", LayoutOrder = 2, Size = UDim2.fromOffset(72, 86), BackgroundTransparency = 1, Parent = menu })
+local openBtn = UI.button({ Name = "Open", Text = "🌱", Color = C.blue, Radius = 18, TextSize = 32, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.fromOffset(64, 66), Parent = openSlot })
+label({ Text = "성장", TextSize = 17, TextColor3 = C.white, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(0, 64), Size = UDim2.new(1, 0, 0, 20), Parent = openSlot })
 
+local win, body = UI.window({ Name = "Window", Title = "가게 키우기", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(760, 320), ZIndex = 10, Parent = root })
+fit(win, 760, 345)
+body.Size = UDim2.new(1, -28, 1, -34 - 14 - 26)
+local closeBtn = win.Close
+local msg = label({ Text = "", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 20, 1, -8), Size = UDim2.new(1, -40, 0, 22), TextSize = 16, TextColor3 = C.white, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 12, Parent = win })
+local function setMsg(text, good)
+	msg.Text = text
+	msg:FindFirstChildOfClass("UIStroke").Color = good and C.good or C.bad
+end
+
+-- 왼쪽 세로 탭 (고른 탭은 밝은 나무 + 크림색 테두리)
 local TABS = { { id = "shop", text = "가게" }, { id = "goals", text = "목표" }, { id = "book", text = "도감" } }
 local tabButtons, pages = {}, {}
+local tabCol = new("Frame", { Name = "Tabs", Position = UDim2.fromOffset(10, 12), Size = UDim2.new(0, 120, 1, -24), BackgroundTransparency = 1, ZIndex = 12, Parent = body }, {
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+})
 for i, t in ipairs(TABS) do
-	tabButtons[t.id] = button({ Text = t.text, Position = UDim2.fromOffset(14 + (i - 1) * 86 * S, 12), Size = UDim2.fromOffset(80 * S, 32 * S), BackgroundColor3 = GREY, Parent = win })
+	tabButtons[t.id] = UI.button({ Name = "Tab_" .. t.id, Text = t.text, Color = C.woodLight, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 54), TextSize = 21, ZIndex = 12, Parent = tabCol })
 	pages[t.id] = new("ScrollingFrame", {
 		Name = t.id,
-		Position = UDim2.fromOffset(12, 52 * S),
-		Size = UDim2.new(1, -24, 1, -86 * S),
+		Position = UDim2.fromOffset(142, 10),
+		Size = UDim2.new(1, -152, 1, -20),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 6,
+		ScrollBarImageColor3 = C.cream,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		Visible = false,
-		Parent = win,
-	}, { new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
+		ZIndex = 12,
+		Parent = body,
+	}, { new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }) })
 end
 local current = "shop"
 local function showTab(id)
 	current = id
 	for tid, p in pairs(pages) do
 		p.Visible = tid == id
-		tabButtons[tid].BackgroundColor3 = tid == id and CARAMEL or GREY
+		local on = tid == id
+		local b = tabButtons[tid]
+		UI.setButton(b, { Color = on and C.yellow or C.woodLight })
+		b:FindFirstChildOfClass("UIStroke").Color = on and C.cream or C.woodDark
 	end
 end
 for _, t in ipairs(TABS) do
@@ -119,11 +94,12 @@ local function clear(page)
 end
 
 local function row(page, order, title, sub, btnText, enabled, onClick)
-	local r = new("Frame", { LayoutOrder = order, Size = UDim2.new(1, -8, 0, 50 * S), BackgroundColor3 = ROW, Parent = page }, { corner(12) })
-	label({ Text = title, Position = UDim2.fromOffset(12, 4 * S), Size = UDim2.new(1, -150 * S, 0, 22 * S), TextSize = 16 * S, Parent = r })
-	label({ Text = sub, Position = UDim2.fromOffset(12, 26 * S), Size = UDim2.new(1, -150 * S, 0, 18 * S), TextSize = 12 * S, TextColor3 = SOFT, Font = Enum.Font.Gotham, Parent = r })
+	local r = UI.card({ LayoutOrder = order, Size = UDim2.new(1, -10, 0, 76), ZIndex = 13, Parent = page })
+	label({ Text = title, Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -176, 0, 26), TextSize = 19, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 14, Parent = r })
+	label({ Text = sub, Position = UDim2.fromOffset(14, 34), Size = UDim2.new(1, -176, 0, 34), TextSize = 14, FontFace = UI.F.bold, TextColor3 = SOFT, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 14, Parent = r })
 	if btnText then
-		local b = button({ Text = btnText, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(130 * S, 36 * S), BackgroundColor3 = enabled and GREEN or GREY, AutoButtonColor = enabled, Parent = r })
+		local b = UI.button({ Text = btnText, Color = C.yellow, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(150, 48), TextSize = 18, ZIndex = 14, Parent = r })
+		UI.setButton(b, { Enabled = enabled and true or false })
 		b.Activated:Connect(function()
 			if enabled and onClick then
 				onClick()
@@ -144,11 +120,9 @@ local function act(what, a, b)
 	end)
 	busy = false
 	if ok and type(res) == "table" and res.ok then
-		msg.TextColor3 = GREEN
-		msg.Text = res.msg or "완료!"
+		setMsg(res.msg or "완료!", true)
 	else
-		msg.TextColor3 = RED
-		msg.Text = (ok and type(res) == "table" and res.reason) or "할 수 없어요"
+		setMsg((ok and type(res) == "table" and res.reason) or "할 수 없어요", false)
 	end
 end
 
@@ -294,7 +268,7 @@ local function render()
 	for i, g in ipairs(gr.daily or {}) do
 		row(page, i, (g.done and "✅ " or "") .. g.text, string.format("%d / %d · 보상 %d EXP + %d 코인", g.p, g.n, G.ExpDailyGoal, G.Daily.rewardCoins))
 	end
-	label({ LayoutOrder = 10, Text = "목표는 날마다(UTC) 바뀌어요", Size = UDim2.new(1, -8, 0, 20 * S), TextSize = 12 * S, TextColor3 = SOFT, Font = Enum.Font.Gotham, Parent = page })
+	label({ LayoutOrder = 10, Text = "목표는 날마다(UTC) 바뀌어요", Size = UDim2.new(1, -8, 0, 22), TextSize = 15, TextColor3 = C.cream, ZIndex = 13, Parent = page })
 
 	-- 도감
 	page = pages.book
@@ -315,9 +289,9 @@ local function render()
 			sub = need and ("🔒 Lv" .. need .. "에 열림") or "🔒 신화 도안을 손으로 Excellent 이상"
 		end
 		local r = row(page, i + 1, string.format("%s  [%s]", e.name, grade.label), sub)
-		r.BackgroundColor3 = c and ROW or Color3.fromRGB(236, 228, 216)
+		r.BackgroundColor3 = c and ROW or C.tan
 	end
-	label({ LayoutOrder = 0, Text = string.format("모은 도안 %d / %d", found, #ShapeCatalog.list), Size = UDim2.new(1, -8, 0, 22 * S), TextSize = 15 * S, Parent = page })
+	label({ LayoutOrder = 0, Text = string.format("모은 도안 %d / %d", found, #ShapeCatalog.list), Size = UDim2.new(1, -8, 0, 26), TextSize = 19, TextColor3 = C.cream, Outline = C.woodDark, ZIndex = 13, Parent = page })
 end
 
 openBtn.Activated:Connect(function()
