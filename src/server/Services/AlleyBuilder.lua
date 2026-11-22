@@ -1,15 +1,14 @@
 -- 레트로 골목 맵 (21번, DEVELOPMENT_PLAN 6장 Phase 6, 2026-11-23)
 -- 맵은 스크립트로 만든다 (DEVELOPMENT_PLAN §8: Studio에서 손으로 끌어 옮기지 않음). 서버가 시작할 때 Workspace.Alley에 만든다.
 --
--- 배치 (사용자 2026-11-23: 가게 6칸은 한 줄 그대로, 길 건너편은 꾸미기 가게 줄, 분위기는 따뜻한 오후 낮)
---   가게 6칸: z = GrowthConfig.Plots.rowZ(-72) 한 줄, x = (i - 3.5) * spacing. 앞(간판)이 +Z
---   손님 길: z ≈ rowZ - Sales.streetZ(-46). 길 바닥 z -54 ~ -28
---   길 건너 인도 z -28 ~ -22, 꾸미기 가게 줄 z -22 ~ -6 (앞이 -Z, 가게 쪽을 봄). x = 0은 스폰으로 가는 샛길
---   골목 양 끝 x = ±HALF: 담벼락 + 입구
+-- 배치 (사용자 2026-11-23: 분위기는 따뜻한 오후 낮, 가게는 길 양쪽에 3칸씩 마주 봄 — GDD §9)
+--   남쪽 줄: 가게 1~3 (앞 = +Z, 앞선 z = S_FRONT), 북쪽 줄: 가게 4~6 (앞 = -Z, 앞선 z = N_FRONT). 자리 계산은 PlotService
+--   길: 두 줄 앞선 사이 (폭 ROAD_W). 노점·진열대·손님 줄은 각 가게 앞 8칸 안 (PlotService·SalesService)
+--   골목 양 끝 x = ±HALF: 꾸미기 가게(가상 가게) 줄 + 담벼락 + 입구
 -- 부지·작업대·진열대·공장 자리는 저장·부지 세션(PlotService·PlotLayout) 것이라 건드리지 않는다.
 --
 -- 소품: ServerStorage.Assets.Alley.<이름> 모델(Blender, 손님 NPC 세션)이 있으면 그것을 복제하고, 없으면 Part로 임시 모양을 만든다.
--- 폰 예산(docs/PERFORMANCE_BUDGET.md): 이 골목 전체 약 400~500 부품, 삼각형 1만 안팎 (Part 하나 = 삼각형 12)
+-- 폰 예산(docs/PERFORMANCE_BUDGET.md): 이 골목 전체 약 500 부품, 삼각형 2만 안팎
 
 local Lighting = game:GetService("Lighting")
 local ServerStorage = game:GetService("ServerStorage")
@@ -20,11 +19,18 @@ local GrowthConfig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChi
 local A = {}
 
 local P = GrowthConfig.Plots
-local HALF = ((P.count - 1) / 2) * P.spacing + 80 -- 골목 끝 (마지막 가게에서 80칸 더)
-local ROAD_Z0, ROAD_Z1 = -54, -28 -- 길 (가게 앞선 ~ 건너 인도)
-local WALK_Z1 = -22 -- 건너 인도 끝 = 꾸미기 가게 앞면
+local PER_ROW = math.ceil(P.count / 2) -- 한 줄 가게 수 (3)
+local ROAD_W = 32 -- 두 줄 가게 앞선 사이
+local S_FRONT = P.rowZ + P.size.Z / 2 -- 남쪽 줄 가게 앞선 (-54)
+local N_FRONT = S_FRONT + ROAD_W -- 북쪽 줄 가게 앞선 (-22)
+local ROAD_Z0, ROAD_Z1 = S_FRONT, N_FRONT
+local ROAD_ZC = (ROAD_Z0 + ROAD_Z1) / 2
+local ROOM_HALF = 46 -- 가게 뒤 공장 방 반폭 (PlotLayout.FactoryRoom 약 91)
+local LAST_X = ((PER_ROW - 1) / 2) * P.spacing -- 끝 가게 가운데 x (100)
+local END_X0 = LAST_X + ROOM_HALF + 8 -- 골목 끝 꾸미기 가게가 시작하는 x (154)
+local HALF = END_X0 + 52 -- 골목 끝 (꾸미기 가게 2칸쯤)
+local CANON_Z = 0 -- 꾸미기 가게를 만들 때 쓰는 기준 앞선 (만든 뒤 제자리로 돌려 옮김)
 local SHOP_DEPTH = 14
-local SIDE_GAP = 18 -- x = 0 샛길 폭 (스폰 쪽)
 
 -- 색 (기존 가게 벽돌·분홍 차양·파스텔 공장과 맞춤: 낮은 채도의 따뜻한 파스텔)
 local C = {
@@ -137,7 +143,7 @@ local PIVOT = {
 
 -- Blender 모델이 있으면 그것을, 없으면 fallback(m, cf)으로 Part 모양을 만든다. cf = 바닥 가운데, 앞 = -Z
 local assets = nil
-local function prop(name, cf, fallback)
+local function prop(name, cf, fallback, parent)
 	local src = assets and assets:FindFirstChild(name)
 	if src then
 		local c = src:Clone()
@@ -145,7 +151,7 @@ local function prop(name, cf, fallback)
 			c.PivotOffset = CFrame.new(PIVOT[name])
 		end
 		c:PivotTo(cf)
-		c.Parent = folder
+		c.Parent = parent or folder
 		for _, d in ipairs(c:GetDescendants()) do
 			if d:IsA("BasePart") then
 				d.Anchored = true
@@ -154,7 +160,7 @@ local function prop(name, cf, fallback)
 		end
 		return c
 	end
-	local m = model(name)
+	local m = model(name, parent)
 	fallback(m, cf)
 	return m
 end
@@ -164,16 +170,11 @@ end
 local function ground()
 	local g = model("Ground")
 	local len = HALF * 2 + 20
-	local zc = (ROAD_Z0 + ROAD_Z1) / 2
-	-- 길: 낡은 콘크리트 (가게 부지 바닥보다 낮게)
-	part(g, "Road", Vector3.new(len, 0.2, ROAD_Z1 - ROAD_Z0), CFrame.new(0, 0.1, zc), C.road, Enum.Material.Concrete)
-	-- 가게 쪽 길 가장자리 턱 (부지 바닥 앞선)
-	part(g, "CurbShop", Vector3.new(len, 0.35, 0.8), CFrame.new(0, 0.18, ROAD_Z0 - 0.4), C.curb, Enum.Material.Concrete)
-	-- 건너 인도
-	part(g, "Sidewalk", Vector3.new(len, 0.5, WALK_Z1 - ROAD_Z1), CFrame.new(0, 0.25, (ROAD_Z1 + WALK_Z1) / 2), C.walk, Enum.Material.Pavement)
-	part(g, "CurbWalk", Vector3.new(len, 0.55, 0.6), CFrame.new(0, 0.27, ROAD_Z1 + 0.3), C.curb, Enum.Material.Concrete)
-	-- 가게 줄 뒤 땅 (꾸미기 가게 뒤 ~ 스폰)
-	part(g, "BackLot", Vector3.new(len, 0.2, 40), CFrame.new(0, 0.1, WALK_Z1 + 20), C.walk, Enum.Material.Pavement)
+	-- 길: 낡은 콘크리트 (가게 부지 바닥 0.4보다 낮게)
+	part(g, "Road", Vector3.new(len, 0.2, ROAD_W), CFrame.new(0, 0.1, ROAD_ZC), C.road, Enum.Material.Concrete)
+	-- 양쪽 가게 앞선 턱
+	part(g, "Curb", Vector3.new(len, 0.35, 0.8), CFrame.new(0, 0.18, ROAD_Z0 - 0.4), C.curb, Enum.Material.Concrete)
+	part(g, "Curb", Vector3.new(len, 0.35, 0.8), CFrame.new(0, 0.18, ROAD_Z1 + 0.4), C.curb, Enum.Material.Concrete)
 	-- 바탕 Baseplate(회색 격자)가 가게 사이·뒤로 보임 → 따뜻한 흙빛 콘크리트로 (격자 무늬는 숨김)
 	local base = workspace:FindFirstChild("Baseplate")
 	if base and base:IsA("BasePart") then
@@ -189,15 +190,15 @@ local function ground()
 	local rng = Random.new(1123)
 	for i = 1, 14 do
 		local x = -HALF + (i - 0.5) * (HALF * 2 / 14) + rng:NextNumber(-10, 10)
-		local z = rng:NextNumber(ROAD_Z0 + 3, ROAD_Z1 - 3)
+		local z = rng:NextNumber(ROAD_ZC - 5, ROAD_ZC + 5) -- 가게 앞 8칸(노점·손님)은 비움
 		part(g, "Patch", Vector3.new(rng:NextNumber(3, 7), 0.02, rng:NextNumber(2, 5)), CFrame.new(x, 0.21, z) * CFrame.Angles(0, rng:NextNumber(-0.4, 0.4), 0), C.roadPatch, Enum.Material.Concrete)
 	end
-	for _, x in ipairs({ -P.spacing * 1.5, P.spacing * 0.5, P.spacing * 2 }) do
-		cyl(g, "Manhole", 0.06, 3, upright(Vector3.new(x, 0.23, -40)), C.metal, Enum.Material.DiamondPlate)
+	for _, x in ipairs({ -P.spacing * 0.5, P.spacing * 0.5, HALF - 30 }) do
+		cyl(g, "Manhole", 0.06, 3, upright(Vector3.new(x, 0.23, ROAD_ZC)), C.metal, Enum.Material.DiamondPlate)
 	end
 end
 
----------------------------------------------------------------- 꾸미기 가게 (길 건너편)
+---------------------------------------------------------------- 꾸미기 가게 (골목 양 끝, 가상 가게)
 
 -- 가상 가게 (실제 상표 아님). style: 벽 재질·색, 차양 색, 앞모습 종류
 local SHOPS = {
@@ -228,7 +229,7 @@ local function awning(m, x0, w, y, z, colors)
 end
 
 local function frontDetail(m, kind, x0, w, z)
-	local front = z - 0.1 -- 가게 앞면 (z = WALK_Z1)
+	local front = z - 0.1 -- 가게 앞면 (z = CANON_Z)
 	if kind == "shutter" then
 		-- 반쯤 내린 셔터 + 줄
 		part(m, "Shutter", Vector3.new(w * 0.6, 5.5, 0.15), CFrame.new(x0, 3.6, front), C.shutter, Enum.Material.Metal)
@@ -278,70 +279,55 @@ local function decorShop(def, x0)
 	local name, w, st = def[1], def[2], def[3]
 	local m = model("Shop_" .. name)
 	local h = 11 + (#name % 3) * 1.5
-	local zc = WALK_Z1 + SHOP_DEPTH / 2
+	local zc = CANON_Z + SHOP_DEPTH / 2
 	part(m, "Body", Vector3.new(w, h, SHOP_DEPTH), CFrame.new(x0, h / 2 + 0.5, zc), st.wall, st.mat)
 	part(m, "Base", Vector3.new(w + 0.2, 1, SHOP_DEPTH + 0.2), CFrame.new(x0, 1, zc), C.concrete, Enum.Material.Concrete)
 	part(m, "Roof", Vector3.new(w + 1, 0.6, SHOP_DEPTH + 1), CFrame.new(x0, h + 0.8, zc), st.awn[1]:Lerp(C.brickDark, 0.45), Enum.Material.SmoothPlastic) -- 위에서 볼 때 회색이 밋밋해서 차양 색 쪽으로
-	part(m, "RoofLip", Vector3.new(w + 1, 1, 0.4), CFrame.new(x0, h + 0.6, WALK_Z1 - 0.5), st.awn[1], Enum.Material.SmoothPlastic)
+	part(m, "RoofLip", Vector3.new(w + 1, 1, 0.4), CFrame.new(x0, h + 0.6, CANON_Z - 0.5), st.awn[1], Enum.Material.SmoothPlastic)
 	-- 간판 (나무판 + 글씨)
-	local sign = part(m, "Sign", Vector3.new(w * 0.78, 2.6, 0.35), CFrame.new(x0, h - 1.6, WALK_Z1 - 0.3), C.cream, Enum.Material.Wood)
-	part(m, "SignFrame", Vector3.new(w * 0.78 + 0.5, 3.1, 0.25), CFrame.new(x0, h - 1.6, WALK_Z1 - 0.15), C.wood, Enum.Material.Wood)
+	local sign = part(m, "Sign", Vector3.new(w * 0.78, 2.6, 0.35), CFrame.new(x0, h - 1.6, CANON_Z - 0.3), C.cream, Enum.Material.Wood)
+	part(m, "SignFrame", Vector3.new(w * 0.78 + 0.5, 3.1, 0.25), CFrame.new(x0, h - 1.6, CANON_Z - 0.15), C.wood, Enum.Material.Wood)
 	signText(sign, name, C.ink)
-	awning(m, x0, w * 0.9, h - 3.8, WALK_Z1, st.awn)
-	frontDetail(m, st.kind, x0, w, WALK_Z1)
+	awning(m, x0, w * 0.9, h - 3.8, CANON_Z, st.awn)
+	frontDetail(m, st.kind, x0, w, CANON_Z)
 	-- 지붕 위 물탱크 (멀리서 보는 실루엣)
 	part(m, "RoofBox", Vector3.new(3, 2, 2.2), CFrame.new(x0 + w * 0.25, h + 2.1, zc + 3), C.white, Enum.Material.SmoothPlastic)
 	-- 앞벽 아래 실외기 (뒷면이 벽에 닿음, 차양 아래), 분식·연탄집 옆 가스통
 	if #name % 2 == 0 then
-		prop("AcUnit", CFrame.new(x0 + w / 2 - 1.8, 2.6, WALK_Z1), function(mm, cf)
+		prop("AcUnit", CFrame.new(x0 + w / 2 - 1.8, 2.6, CANON_Z), function(mm, cf)
 			part(mm, "Ac", Vector3.new(3, 2.4, 1.2), cf * CFrame.new(0, 0.9, -0.6), C.white, Enum.Material.SmoothPlastic)
-		end)
+		end, m)
 	end
 	if st.kind == "coal" or name:find("분식") then
-		prop("GasTank", CFrame.new(x0 - w / 2 + 1.5, 0.5, WALK_Z1 - 1), function(mm, cf)
+		prop("GasTank", CFrame.new(x0 - w / 2 + 1.5, 0.5, CANON_Z - 1), function(mm, cf)
 			cyl(mm, "Tank", 2.9, 1.3, cf * CFrame.new(0, 1.45, 0) * CFrame.Angles(0, 0, math.rad(90)), C.sky, Enum.Material.Metal)
-		end)
+		end, m)
 	end
 	return m
 end
 
-local function decorRow()
-	-- 왼쪽(-x)에서 x = -SIDE_GAP/2까지, 오른쪽은 +SIDE_GAP/2부터 HALF까지 가게를 채움. 사이는 좁은 골목(2칸)
+-- 골목 양 끝, 길 양쪽에 꾸미기 가게. 기준 자리(앞선 z = CANON_Z, 앞 = -Z)에서 만든 뒤 제자리로 옮김
+local function endShops()
 	local idx = 1
-	local function fill(from, to, dir)
-		local x = from
-		while true do
-			local def = SHOPS[((idx - 1) % #SHOPS) + 1]
-			local w = def[2]
-			local nx = x + dir * w
-			if (dir > 0 and nx > to) or (dir < 0 and nx < to) then
-				break
-			end
-			decorShop(def, x + dir * w / 2)
-			idx += 1
-			x = nx + dir * 2 -- 가게 사이 틈
-		end
-		return x
-	end
-	local leftEnd = fill(-SIDE_GAP / 2, -HALF + 10, -1)
-	local rightEnd = fill(SIDE_GAP / 2, HALF - 10, 1)
-	-- 남은 끝자리는 담장으로 메움
-	local wall = model("RowEndWalls")
-	for _, pair in ipairs({ { leftEnd, -HALF }, { rightEnd, HALF } }) do
-		local a, b = pair[1], pair[2]
-		local w = math.abs(b - a)
-		if w > 1 then
-			part(wall, "Wall", Vector3.new(w, 6, 1), CFrame.new((a + b) / 2, 3.5, WALK_Z1 + 0.5), C.brick, Enum.Material.Brick)
-		end
-	end
-	-- 스폰 쪽 샛길 입구 (아치 간판)
-	local gate = model("SideStreetGate")
 	for _, sx in ipairs({ -1, 1 }) do
-		cyl(gate, "GatePost", 12, 1, upright(Vector3.new(sx * (SIDE_GAP / 2 - 1), 6.5, WALK_Z1 - 0.2)), C.wood, Enum.Material.Wood)
+		for _, side in ipairs({ "S", "N" }) do
+			local frontZ = side == "S" and ROAD_Z0 or ROAD_Z1
+			local rot = side == "S" and CFrame.Angles(0, math.pi, 0) or CFrame.new() -- 남쪽 줄은 +Z(길)를 봄
+			local x = END_X0
+			while true do
+				local def = SHOPS[((idx - 1) % #SHOPS) + 1]
+				local w = def[2]
+				if x + w > HALF - 2 then
+					break
+				end
+				local m = decorShop(def, 0)
+				local target = CFrame.new(sx * (x + w / 2), 0, frontZ) * rot
+				m:PivotTo(target * CFrame.new(0, 0, CANON_Z):Inverse() * m:GetPivot())
+				idx += 1
+				x += w + 2
+			end
+		end
 	end
-	local arch = part(gate, "GateSign", Vector3.new(SIDE_GAP - 1, 2.4, 0.4), CFrame.new(0, 11.5, WALK_Z1 - 0.2), C.butter, Enum.Material.Wood)
-	signText(arch, "달고나 골목", C.ink)
-	part(gate, "SideStreet", Vector3.new(SIDE_GAP, 0.25, SHOP_DEPTH + 26), CFrame.new(0, 0.14, WALK_Z1 + (SHOP_DEPTH + 26) / 2), C.walk, Enum.Material.Pavement)
 end
 
 ---------------------------------------------------------------- 전봇대·전깃줄·가로등
@@ -370,63 +356,63 @@ local function lampFallback(m, cf)
 end
 
 local function poles()
-	-- 건너 인도 가장자리(길 쪽)를 따라 전봇대. 위 전선 Attachment 2개(가로대 양 끝)
+	-- 전봇대: 길 양쪽 가장자리, 가게 사이 틈(x = ±spacing/2 …)과 골목 끝 꾸미기 가게 앞. 가로대 양 끝에 전선 Attachment
 	local wires = model("Wires")
 	local xs = {}
-	local step = 46
-	local n = math.floor(HALF * 2 / step)
-	for i = 0, n do
-		table.insert(xs, -HALF + 10 + i * step)
+	for k = 1, PER_ROW - 1 do
+		table.insert(xs, (k - PER_ROW / 2) * P.spacing)
 	end
-	local tops = {}
-	for i, x in ipairs(xs) do
-		local cf = CFrame.new(x, 0.5, ROAD_Z1 + 1.6)
-		local m = prop("UtilityPole", cf, poleFallback)
-		-- 전선 매달 자리 (모델이 바뀌어도 같은 높이)
-		local anchor = part(wires, "WireAnchor", Vector3.new(0.2, 0.2, 0.2), cf * CFrame.new(0, 20.6, 0), C.metal, Enum.Material.Metal, { Transparency = 1, CanCollide = false, CanQuery = false })
-		local a1 = Instance.new("Attachment")
-		a1.Position = Vector3.new(-2.6, 0, 0)
-		a1.Parent = anchor
-		local a2 = Instance.new("Attachment")
-		a2.Position = Vector3.new(2.6, 0, 0)
-		a2.Parent = anchor
-		tops[i] = { a1, a2, anchor }
-		if i % 2 == 0 then
-			prop("StreetLamp", cf * CFrame.new(0, 14, -0.75), lampFallback) -- 전봇대 길 쪽 면, 높이 14
+	table.insert(xs, 1, -(END_X0 - 3))
+	table.insert(xs, END_X0 - 3)
+	table.insert(xs, 1, -(HALF - 6))
+	table.insert(xs, HALF - 6)
+	table.sort(xs)
+	local rows = {}
+	for _, side in ipairs({ "S", "N" }) do
+		local z = side == "S" and ROAD_Z0 - 1.6 or ROAD_Z1 + 1.6
+		local toRoad = side == "S" and CFrame.Angles(0, math.pi, 0) or CFrame.new() -- 가로등 팔이 길 쪽(-Z 기준)으로
+		local tops = {}
+		for i, x in ipairs(xs) do
+			local cf = CFrame.new(x, 0.4, z)
+			local m = prop("UtilityPole", cf, poleFallback)
+			m.Name = "UtilityPole"
+			local anchor = part(wires, "WireAnchor", Vector3.new(0.2, 0.2, 0.2), cf * CFrame.new(0, 20.6, 0), C.metal, Enum.Material.Metal, { Transparency = 1, CanCollide = false, CanQuery = false })
+			local a1 = Instance.new("Attachment")
+			a1.Position = Vector3.new(-2.6, 0, 0)
+			a1.Parent = anchor
+			local a2 = Instance.new("Attachment")
+			a2.Position = Vector3.new(2.6, 0, 0)
+			a2.Parent = anchor
+			tops[i] = { a1, a2, anchor }
+			if (i + (side == "S" and 0 or 1)) % 2 == 0 then
+				local face = CFrame.new(cf.Position) * toRoad
+				prop("StreetLamp", face * CFrame.new(0, 14, -0.75), lampFallback)
+			end
 		end
-		m.Name = "UtilityPole"
+		rows[side] = tops
 	end
-	-- 전봇대 사이 처진 전선 (Beam: 부품 없이 곡선, 삼각형 거의 없음)
-	for i = 1, #tops - 1 do
-		for k = 1, 2 do
-			local b = Instance.new("Beam")
-			b.Attachment0 = tops[i][k]
-			b.Attachment1 = tops[i + 1][k]
-			b.Width0, b.Width1 = 0.12, 0.12
-			b.Color = ColorSequence.new(Color3.fromRGB(50, 46, 46))
-			b.LightInfluence = 1
-			b.Segments = 12
-			b.CurveSize0 = -3
-			b.CurveSize1 = 3
-			b.FaceCamera = true
-			b.Parent = tops[i][3]
-		end
-	end
-	-- 길을 가로질러 가게 쪽으로 가는 전선 몇 가닥 (골목 느낌)
-	for i = 2, #tops - 1, 3 do
-		local anchor = part(wires, "WireAnchorShop", Vector3.new(0.2, 0.2, 0.2), CFrame.new(xs[i] + 6, 13, ROAD_Z0 - 1), C.metal, Enum.Material.Metal, { Transparency = 1, CanCollide = false, CanQuery = false })
-		local a = Instance.new("Attachment")
-		a.Parent = anchor
+	local function wire(a0, a1, parent, sag)
 		local b = Instance.new("Beam")
-		b.Attachment0 = tops[i][1]
-		b.Attachment1 = a
-		b.Width0, b.Width1 = 0.1, 0.1
+		b.Attachment0 = a0
+		b.Attachment1 = a1
+		b.Width0, b.Width1 = 0.12, 0.12
 		b.Color = ColorSequence.new(Color3.fromRGB(50, 46, 46))
-		b.Segments = 10
-		b.CurveSize0 = -2
-		b.CurveSize1 = 2
+		b.Segments = 12
+		b.CurveSize0 = -sag
+		b.CurveSize1 = sag
 		b.FaceCamera = true
-		b.Parent = anchor
+		b.Parent = parent
+	end
+	-- 같은 줄 전봇대 사이 (처진 전선, Beam: 부품 없이 곡선)
+	for _, tops in pairs(rows) do
+		for i = 1, #tops - 1 do
+			wire(tops[i][1], tops[i + 1][1], tops[i][3], 3)
+			wire(tops[i][2], tops[i + 1][2], tops[i][3], 3)
+		end
+	end
+	-- 길을 가로지르는 전선 (골목 느낌)
+	for i = 1, #xs do
+		wire(rows.S[i][2], rows.N[i][1], rows.S[i][3], 2)
 	end
 end
 
@@ -480,35 +466,24 @@ end
 
 local function streetProps()
 	local rng = Random.new(2311)
-	local front = CFrame.Angles(0, math.pi, 0) -- 길 건너 소품이 길(-Z) 쪽을 봄
-	-- 건너 인도: 꾸미기 가게 앞
-	local walkZ = (ROAD_Z1 + WALK_Z1) / 2 + 0.5
-	local kinds = {
-		{ "Bicycle", bikeFallback },
-		{ "PotBasin", potFallback },
-		{ "PlasticCrate", crateFallback },
-		{ "BriquetteStack", briquetteFallback },
-		{ "TrashBin", binFallback },
-		{ "PotBasin", potFallback },
-	}
-	local x = -HALF + 22
-	local i = 0
-	while x < HALF - 20 do
-		if math.abs(x) > SIDE_GAP / 2 + 3 then
-			i += 1
-			local k = kinds[(i % #kinds) + 1]
-			prop(k[1], CFrame.new(x, 0.5, walkZ + 1.5) * front * CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0), k[2])
-		end
-		x += rng:NextNumber(17, 26)
+	-- 가게 사이 틈 (앞선 뒤쪽, 손님 길·노점 자리는 비움): 평상 + 화분, 북쪽은 자전거·연탄
+	for k = 1, PER_ROW - 1 do
+		local gx = (k - PER_ROW / 2) * P.spacing
+		prop("Pyeongsang", CFrame.new(gx, 0.2, ROAD_Z0 - 5), benchFallback)
+		prop("PotBasin", CFrame.new(gx - 7, 0.2, ROAD_Z0 - 2.5), potFallback)
+		prop("PotBasin", CFrame.new(gx + 7, 0.2, ROAD_Z0 - 2.5), potFallback)
+		local back = CFrame.Angles(0, math.pi, 0)
+		prop("Bicycle", CFrame.new(gx - 4, 0.2, ROAD_Z1 + 3) * back * CFrame.Angles(0, rng:NextNumber(-0.2, 0.2), 0), bikeFallback)
+		prop("BriquetteStack", CFrame.new(gx + 5, 0.2, ROAD_Z1 + 3.5), briquetteFallback)
+		prop("PlasticCrate", CFrame.new(gx + 8, 0.2, ROAD_Z1 + 3), crateFallback)
+		prop("TrashBin", CFrame.new(gx - 8, 0.2, ROAD_Z1 + 2.5), binFallback)
 	end
-	-- 가게 사이 길 가장자리 (부지 사이 틈 앞, 손님 길은 비움)
-	for gi = 1, P.count - 1 do
-		local gx = (gi - P.count / 2) * P.spacing
-		prop("Pyeongsang", CFrame.new(gx, 0.2, ROAD_Z0 - 4), benchFallback)
-		prop("PotBasin", CFrame.new(gx - 6, 0.2, ROAD_Z0 - 2), potFallback)
-		prop("PotBasin", CFrame.new(gx + 6, 0.2, ROAD_Z0 - 2), potFallback)
+	-- 골목 끝 꾸미기 가게 앞 (길 가장자리)
+	for _, sx in ipairs({ -1, 1 }) do
+		prop("PotBasin", CFrame.new(sx * (END_X0 + 8), 0.2, ROAD_Z0 + 2), potFallback)
+		prop("Mailbox", CFrame.new(sx * (END_X0 + 22), 0.2, ROAD_Z1 - 2) * CFrame.Angles(0, math.pi, 0), mailboxFallback)
+		prop("Bicycle", CFrame.new(sx * (END_X0 + 34), 0.2, ROAD_Z0 + 2.5), bikeFallback)
 	end
-	prop("Mailbox", CFrame.new(SIDE_GAP / 2 + 2, 0.5, walkZ - 0.5) * front, mailboxFallback)
 end
 
 ---------------------------------------------------------------- 골목 양 끝
@@ -516,19 +491,19 @@ end
 local function ends()
 	local e = model("AlleyEnds")
 	for _, sx in ipairs({ -1, 1 }) do
-		local x = sx * (HALF + 8)
-		-- 담벼락 (가게 쪽부터 건너 가게 뒤까지), 가운데에 좁은 입구
-		local z0, z1 = -100, WALK_Z1 + SHOP_DEPTH + 4
-		local gapZ0, gapZ1 = ROAD_Z0 + 6, ROAD_Z1 - 6
+		local x = sx * (HALF + 2)
+		-- 담벼락 (양쪽 꾸미기 가게 뒤까지), 길 가운데에 좁은 입구
+		local z0, z1 = ROAD_Z0 - SHOP_DEPTH - 4, ROAD_Z1 + SHOP_DEPTH + 4
+		local gapZ0, gapZ1 = ROAD_ZC - 6, ROAD_ZC + 6
 		part(e, "EndWall", Vector3.new(1.2, 9, gapZ0 - z0), CFrame.new(x, 4.5, (z0 + gapZ0) / 2), C.brick, Enum.Material.Brick)
 		part(e, "EndWall", Vector3.new(1.2, 9, z1 - gapZ1), CFrame.new(x, 4.5, (gapZ1 + z1) / 2), C.brick, Enum.Material.Brick)
 		part(e, "WallCap", Vector3.new(1.6, 0.4, gapZ0 - z0), CFrame.new(x, 9.2, (z0 + gapZ0) / 2), C.concrete, Enum.Material.Concrete)
 		part(e, "WallCap", Vector3.new(1.6, 0.4, z1 - gapZ1), CFrame.new(x, 9.2, (gapZ1 + z1) / 2), C.concrete, Enum.Material.Concrete)
-		-- 입구 너머는 막아 둠 (나가지 못하게, 보이는 건 계단 골목 느낌의 벽)
-		part(e, "EndBlock", Vector3.new(1, 12, gapZ1 - gapZ0 + 2), CFrame.new(x + sx * 10, 6, (gapZ0 + gapZ1) / 2), C.cream, Enum.Material.Plaster)
-		part(e, "EndFloor", Vector3.new(10, 0.2, gapZ1 - gapZ0), CFrame.new(x + sx * 5, 0.1, (gapZ0 + gapZ1) / 2), C.road, Enum.Material.Concrete)
-		-- 입구 위 작은 간판
-		local s = part(e, "EndSign", Vector3.new(0.3, 2, 8), CFrame.new(x - sx * 0.8, 9, (gapZ0 + gapZ1) / 2), C.butter, Enum.Material.Wood)
+		-- 입구 너머는 막아 둠 (나가지 못하게)
+		part(e, "EndBlock", Vector3.new(1, 12, gapZ1 - gapZ0 + 2), CFrame.new(x + sx * 10, 6, ROAD_ZC), C.cream, Enum.Material.Plaster)
+		part(e, "EndFloor", Vector3.new(10, 0.2, gapZ1 - gapZ0), CFrame.new(x + sx * 5, 0.1, ROAD_ZC), C.road, Enum.Material.Concrete)
+		-- 입구 위 간판 (골목 안쪽을 봄)
+		local s = part(e, "EndSign", Vector3.new(0.3, 2, 8), CFrame.new(x - sx * 0.8, 9, ROAD_ZC), C.butter, Enum.Material.Wood)
 		signText(s, "달고나 골목", C.ink, sx < 0 and Enum.NormalId.Right or Enum.NormalId.Left)
 		prop("TrashBin", CFrame.new(x - sx * 3, 0.2, gapZ0 - 3), binFallback)
 		prop("BriquetteStack", CFrame.new(x - sx * 3, 0.2, gapZ1 + 3), briquetteFallback)
@@ -575,11 +550,16 @@ function A.build()
 	folder = Instance.new("Folder")
 	folder.Name = "Alley"
 	ground()
-	decorRow()
+	endShops()
 	poles()
 	streetProps()
 	ends()
 	folder.Parent = workspace
+	-- 처음 나타나는 자리: 골목 서쪽 끝 길 위 (들어오면 PlotService가 내 가게 앞으로 옮김). 예전 (0,0,0)은 북쪽 가게 안
+	local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
+	if spawn then
+		spawn.CFrame = CFrame.new(-HALF + 16, 0.5, ROAD_ZC)
+	end
 	A.lighting()
 	return folder
 end
