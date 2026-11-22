@@ -117,12 +117,33 @@ local function signText(p, text, color, face)
 	return g
 end
 
+-- Blender 소품 (손님 NPC 세션 tools/blender/alley.py → 레퍼런스/alley/dalgona_alley.glb, 소품 하나 = MeshPart 하나).
+-- MeshPart는 경계 상자 가운데가 기준이라, 바닥 가운데(예외: StreetLamp = 전봇대에 붙는 끝, AcUnit = 벽에 닿는 뒷면 가운데)
+-- 까지의 거리(alley_parts.txt의 center_to_pivot)를 PivotOffset으로 넣고 놓는다
+local PIVOT = {
+	UtilityPole = Vector3.new(0, -11, 0),
+	StreetLamp = Vector3.new(0, -0.23, 2.07),
+	Bicycle = Vector3.new(-0.04, -1.28, 0),
+	BriquetteStack = Vector3.new(0, -1.06, 0),
+	PotBasin = Vector3.new(0, -0.85, 0),
+	PlasticCrate = Vector3.new(0, -0.75, 0),
+	Pyeongsang = Vector3.new(0, -0.74, 0),
+	AcUnit = Vector3.new(0, -0.93, 0.63),
+	GasTank = Vector3.new(0, -1.48, 0),
+	TrashBin = Vector3.new(0, -1.49, 0),
+	Mailbox = Vector3.new(0, -2.05, 0.03),
+	ShopShutterSign = Vector3.new(0, 0, -0.01),
+}
+
 -- Blender 모델이 있으면 그것을, 없으면 fallback(m, cf)으로 Part 모양을 만든다. cf = 바닥 가운데, 앞 = -Z
 local assets = nil
 local function prop(name, cf, fallback)
 	local src = assets and assets:FindFirstChild(name)
 	if src then
 		local c = src:Clone()
+		if c:IsA("BasePart") and PIVOT[name] then
+			c.PivotOffset = CFrame.new(PIVOT[name])
+		end
 		c:PivotTo(cf)
 		c.Parent = folder
 		for _, d in ipairs(c:GetDescendants()) do
@@ -268,8 +289,19 @@ local function decorShop(def, x0)
 	signText(sign, name, C.ink)
 	awning(m, x0, w * 0.9, h - 3.8, WALK_Z1, st.awn)
 	frontDetail(m, st.kind, x0, w, WALK_Z1)
-	-- 지붕 위 실외기·물탱크 (멀리서 보는 실루엣)
+	-- 지붕 위 물탱크 (멀리서 보는 실루엣)
 	part(m, "RoofBox", Vector3.new(3, 2, 2.2), CFrame.new(x0 + w * 0.25, h + 2.1, zc + 3), C.white, Enum.Material.SmoothPlastic)
+	-- 앞벽 아래 실외기 (뒷면이 벽에 닿음, 차양 아래), 분식·연탄집 옆 가스통
+	if #name % 2 == 0 then
+		prop("AcUnit", CFrame.new(x0 + w / 2 - 1.8, 2.6, WALK_Z1), function(mm, cf)
+			part(mm, "Ac", Vector3.new(3, 2.4, 1.2), cf * CFrame.new(0, 0.9, -0.6), C.white, Enum.Material.SmoothPlastic)
+		end)
+	end
+	if st.kind == "coal" or name:find("분식") then
+		prop("GasTank", CFrame.new(x0 - w / 2 + 1.5, 0.5, WALK_Z1 - 1), function(mm, cf)
+			cyl(mm, "Tank", 2.9, 1.3, cf * CFrame.new(0, 1.45, 0) * CFrame.Angles(0, 0, math.rad(90)), C.sky, Enum.Material.Metal)
+		end)
+	end
 	return m
 end
 
@@ -323,10 +355,11 @@ local function poleFallback(m, cf)
 	cyl(m, "Transformer", 2.2, 1.4, cf * CFrame.new(0, 16.5, 0.9) * CFrame.Angles(0, 0, math.rad(90)), C.metal, Enum.Material.Metal)
 end
 
+-- cf = 전봇대에 붙는 끝 (팔이 -Z로 뻗음)
 local function lampFallback(m, cf)
-	part(m, "LampArm", Vector3.new(0.25, 0.25, 3.2), cf * CFrame.new(0, 14, -1.6), C.metal, Enum.Material.Metal)
-	local shade = part(m, "LampShade", Vector3.new(1.6, 0.5, 1.6), cf * CFrame.new(0, 13.7, -3.2), C.mint, Enum.Material.Metal)
-	local bulb = part(m, "LampBulb", Vector3.new(0.7, 0.7, 0.7), cf * CFrame.new(0, 13.3, -3.2), C.butter, Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+	part(m, "LampArm", Vector3.new(0.25, 0.25, 3.2), cf * CFrame.new(0, 0, -1.6), C.metal, Enum.Material.Metal)
+	local shade = part(m, "LampShade", Vector3.new(1.6, 0.5, 1.6), cf * CFrame.new(0, -0.3, -3.2), C.mint, Enum.Material.Metal)
+	local bulb = part(m, "LampBulb", Vector3.new(0.7, 0.7, 0.7), cf * CFrame.new(0, -0.7, -3.2), C.butter, Enum.Material.Neon, { Shape = Enum.PartType.Ball })
 	local light = Instance.new("PointLight")
 	light.Range = 18
 	light.Brightness = 0.6
@@ -359,7 +392,7 @@ local function poles()
 		a2.Parent = anchor
 		tops[i] = { a1, a2, anchor }
 		if i % 2 == 0 then
-			prop("StreetLamp", cf, lampFallback)
+			prop("StreetLamp", cf * CFrame.new(0, 14, -0.75), lampFallback) -- 전봇대 길 쪽 면, 높이 14
 		end
 		m.Name = "UtilityPole"
 	end
