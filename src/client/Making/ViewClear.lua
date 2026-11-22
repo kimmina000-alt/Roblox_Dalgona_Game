@@ -63,30 +63,39 @@ local function scan()
 	for p in pairs(hidden) do
 		table.insert(ex, p)
 	end
-	-- 카메라가 부품 안에 들어가 있으면 레이캐스트가 못 잡음 → 카메라 둘레에 겹친 부품부터
-	local op = OverlapParams.new()
-	op.FilterType = Enum.RaycastFilterType.Exclude
-	op.FilterDescendantsInstances = ex
-	for _, p in ipairs(workspace:GetPartBoundsInRadius(origin, 1, op)) do
-		if hideable(p, plot) then
-			hide(p)
-			table.insert(ex, p)
-		end
-	end
-	-- 테이블 바로 위 기둥(작업대 바닥 넓이, 테이블 윗면 ~ 카메라 높이) 안의 부품: 노점 차양(Awning)처럼
-	-- 작업대 위에 걸려 화면 위쪽을 가리는 것 (2026-11-22 저장·부지 세션 제안). 지붕·천장·간판·전구줄도 같이
+	-- 공간 검색(GetPartBounds*)과 레이캐스트는 CanQuery=false 부품을 못 잡음 (가게 꾸미기 차양·천장판·들보·창은 전부 false).
+	-- 그래서 이 가게 부지 부품을 직접 돌며 축 정렬 상자로 겹침을 잼:
+	--   ① 카메라 둘레(1 stud)에 걸친 부품  ② 테이블 바로 위 기둥(작업대 바닥 넓이 + 여유, 테이블 윗면 ~ 카메라 위)과 겹치는 부품
+	-- 알바생 미니미(모델 속성 Minime)는 카운터 위에 서 있어도 남김 (카메라를 직접 가리면 아래 레이캐스트가 숨김)
 	local top = model:FindFirstChild("TableTop")
 	local cf, size = model:GetBoundingBox()
 	local y0 = (top and top:IsA("BasePart")) and (top.Position.Y + top.Size.Y / 2 + 0.3) or (cf.Position.Y + size.Y / 2)
-	local y1 = math.max(origin.Y, y0 + 1)
-	local boxCf = CFrame.new(cf.Position.X, (y0 + y1) / 2, cf.Position.Z) * (cf - cf.Position)
-	for _, p in ipairs(workspace:GetPartBoundsInBox(boxCf, Vector3.new(size.X, y1 - y0, size.Z), op)) do
-		-- 알바생 미니미(서버 Minime, 모델 속성 Minime)는 카운터 위에 서 있어도 남김. 카메라를 직접 가리면 아래 레이캐스트가 숨김
-		local mm = p:FindFirstAncestorWhichIsA("Model")
-		local isMinime = mm ~= nil and (mm:GetAttribute("Minime") == true or (mm.Parent and mm.Parent:GetAttribute("Minime") == true))
-		if not isMinime and hideable(p, plot) then
-			hide(p)
-			table.insert(ex, p)
+	local y1 = math.max(origin.Y + 1, y0 + 1)
+	local half = (cf - cf.Position):VectorToWorldSpace(size / 2)
+	local hx, hz = math.abs(half.X) + 0.5, math.abs(half.Z) + 0.5
+	local cmin = Vector3.new(cf.Position.X - hx, y0, cf.Position.Z - hz)
+	local cmax = Vector3.new(cf.Position.X + hx, y1, cf.Position.Z + hz)
+	local omin, omax = origin - Vector3.one, origin + Vector3.one
+	for _, p in ipairs(plot:GetDescendants()) do
+		if p:IsA("BasePart") and hidden[p] == nil and not p:IsDescendantOf(model) then
+			local mm = p:FindFirstAncestorWhichIsA("Model")
+			local isMinime = mm ~= nil and (mm:GetAttribute("Minime") == true or (mm.Parent ~= nil and mm.Parent:GetAttribute("Minime") == true))
+			if not isMinime then
+				local h, r = p.Size / 2, p.CFrame
+				local rx, ry, rz = r.RightVector * h.X, r.UpVector * h.Y, r.LookVector * h.Z
+				local ext = Vector3.new(
+					math.abs(rx.X) + math.abs(ry.X) + math.abs(rz.X),
+					math.abs(rx.Y) + math.abs(ry.Y) + math.abs(rz.Y),
+					math.abs(rx.Z) + math.abs(ry.Z) + math.abs(rz.Z)
+				)
+				local pmin, pmax = p.Position - ext, p.Position + ext
+				local inColumn = pmax.X > cmin.X and pmin.X < cmax.X and pmax.Y > cmin.Y and pmin.Y < cmax.Y and pmax.Z > cmin.Z and pmin.Z < cmax.Z
+				local atCam = pmax.X > omin.X and pmin.X < omax.X and pmax.Y > omin.Y and pmin.Y < omax.Y and pmax.Z > omin.Z and pmin.Z < omax.Z
+				if inColumn or atCam then
+					hide(p)
+					table.insert(ex, p)
+				end
+			end
 		end
 	end
 	local params = RaycastParams.new()
