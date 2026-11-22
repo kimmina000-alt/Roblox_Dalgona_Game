@@ -40,10 +40,16 @@
 
 ## Studio 동기화
 - Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).
-- 이 PC에는 Rojo가 없고, Studio Assistant의 HTTP 허용 목록 때문에 로컬 서버에서 받아 오는 방식도 막혀 있다.
-  그래서 지금은 Studio MCP(`multi_edit` / `execute_luau`로 `Source` 설정)로 넣는다. **`src/`와 Studio를 항상 같게 유지한다.**
-- 확인 방법: 양쪽에서 같은 체크섬(`x = (x*31 + byte) % 2147483647`)을 계산해 모든 스크립트가 같은지 본다.
-- Rojo를 설치하면 `rojo serve`로 바꾼다 (프로젝트 파일은 이미 맞춰 둠).
+- 2026-11-22부터 **Rojo**(7.7.1, `C:\Toolsojoojo.exe`)로 넣는다. `default.project.json`이 Shared·Server·Client·StarterGui(`src/gui`, 비어 있음)를 `$path`로 관리하고, 이 4곳에서 저장소에 없는 인스턴스는 Rojo가 지운다 (첫 연결 전 확인: Studio에만 있는 것 없음, 되돌리기용 장소 버전 152).
+- **`rojo serve`는 한 번에 하나만.** Studio를 쓸 차례인 세션이 켠다.
+  - 최신 main을 넣을 때: `.claude/worktrees/rojo-main`(main을 가리키는 전용 worktree)에서 켠다. 머지 뒤에는 `git -C .claude/worktrees/rojo-main checkout --detach origin/main`으로 갱신.
+  - 자기 브랜치를 시험할 때: 자기 worktree에서 켠다.
+  - **공유 폴더 `D:\Roblox\Roblox_Dalgona_Game`에서는 켜지 않는다** (옛 브랜치라 Studio 스크립트를 옛것으로 덮어씀 — 2026-11-22 실제로 일어남).
+- 차례를 넘길 때: 내 serve를 끄고(Studio Rojo 플러그인 Disconnect) 다음 세션에 알린다. 다음 세션이 자기 폴더에서 serve를 켜고 사용자에게 Studio 플러그인 Connect(localhost:34872)를 부탁한다.
+- **Rojo가 연결된 동안에는 MCP로 스크립트 `Source`를 쓰지 않는다** (덮어써짐). Studio 전용 에셋(ServerStorage.Assets, ReplicatedStorage.Assets, Workspace 모델·속성)은 지금처럼 MCP로 다룬다.
+- 체크섬(`x = (x*31 + byte) % 2147483647`)으로 모든 스크립트가 `src/`와 같은지는 연결을 바꿀 때 한 번만 본다.
+- Play를 켜기 전에 서로 알리는 규칙은 그대로.
+- 스트리밍 반경 `Workspace.StreamingTargetRadius = 256` (2026-11-22, 장소에 저장).
 
 ## 테스트
 - Play → 작업대 앞에서 E (또는 클라이언트에서 `MakingClient.StartMaking:Fire()`).
