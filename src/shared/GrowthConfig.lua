@@ -215,7 +215,7 @@ G.Plots = {
 	size = Vector3.new(36, 0.4, 36),
 	-- 부지 중심: 스폰 뒤쪽(-Z) 골목 한 줄. 앞(간판)이 +Z(스폰 쪽)를 봄
 	rowZ = -72,
-	spacing = 40,
+	spacing = 120, -- 2026-11-22 40 → 120: 가게 뒤 공장 방(폭 약 116, 편집 화면 PlotLayout)이 옆 가게와 안 겹치게
 	-- 부지 안 자리 (부지 기준 로컬 좌표, -Z = 앞/골목 쪽)
 	handStation = { pos = Vector3.new(0, 0, 2), size = Vector3.new(22, 0.2, 7) }, -- 손 작업대: 꾸미기 포함 가운데 (가게마다 작업대, 17b)
 	machineSlot = { pos = Vector3.new(11, 0, 13), size = Vector3.new(9, 0.2, 9) }, -- 기계 1자리 (D10), 작업대·알바생 뒤

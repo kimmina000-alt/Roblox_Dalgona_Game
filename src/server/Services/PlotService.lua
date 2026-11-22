@@ -305,6 +305,13 @@ local function buildPlot(index, parent)
 	Layout.tag(m)
 	applyLayout(m, cf)
 	m:SetAttribute("PlotCFrame", cf)
+	-- 셔터: 편집 화면에서 옮긴 자리(내린 모습)를 기준으로 올림·내림 자리를 다시 계산 (2026-11-22 사용자 "철문 위치 옮겼으니 함께 이동")
+	local sh = m:FindFirstChild("ShopBuilding") and m.ShopBuilding:FindFirstChild("Shutter")
+	if sh then
+		sh:SetAttribute("DownCF", sh.CFrame)
+		sh:SetAttribute("ClosedH", sh.Size.Y)
+		sh:SetAttribute("UpCF", sh.CFrame * CFrame.new(0, sh.Size.Y / 2 - 0.6, 0))
+	end
 	hi.Transparency = 1
 	for _, c in ipairs(hi:GetChildren()) do
 		if c:IsA("SurfaceGui") then
@@ -339,6 +346,9 @@ local function placeWorkstation(i, first)
 		return
 	end
 	local target = CFrame.new(spotPart.Position - spotPart.CFrame.UpVector * (spotPart.Size.Y / 2)) * spotPart.CFrame.Rotation
+	-- 내 화면 크기 줄이기(클라이언트 Making/ViewScale)가 쓰는 값: 가게 안 자리인지, 작업대 바닥 가운데(원래 크기 기준)
+	ws:SetAttribute("AtInside", open and spotPart.Name == "HandStationInside")
+	ws:SetAttribute("ViewOrigin", target.Position)
 	local old = ws:GetPivot()
 	local new = target * rel
 	if (new.Position - old.Position).Magnitude < 1e-3 and new.LookVector:Dot(old.LookVector) > 0.99999 then
@@ -473,7 +483,7 @@ function PlotService.setShopState(i, state, closed, ownerName)
 		if target then
 			shutter.CFrame = target
 		end
-		shutter.Size = Vector3.new(shutter.Size.X, open and 1.2 or (P.building.height - 1.4), shutter.Size.Z)
+		shutter.Size = Vector3.new(shutter.Size.X, open and 1.2 or (shutter:GetAttribute("ClosedH") or (P.building.height - 1.4)), shutter.Size.Z)
 	end
 	local paper = bm:FindFirstChild("RentPaper")
 	if paper then
