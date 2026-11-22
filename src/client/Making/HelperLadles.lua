@@ -360,6 +360,13 @@ function Helper.start()
 					local mini = k and minimeFor(ws, k)
 					local resting = isResting(mini)
 					local grip, center = stepOne(m, now, resting)
+					-- 가게 안 작업대를 내 화면에서 줄여 보이면 (ViewScale, 2026-11-22) 미니미 자리도 같은 기준으로 줄임.
+					-- 국자 자리(Center)는 서버의 원래 크기 값. 숨긴 국자 모델은 그대로 둠
+					local vs, vo = ws:GetAttribute("ViewScale"), ws:GetAttribute("ViewOrigin")
+					if grip and type(vs) == "number" and vs ~= 1 and typeof(vo) == "Vector3" then
+						grip = vo + (grip - vo) * vs
+						center = vo + (center - vo) * vs
+					end
 					if grip and k then
 						poseMinime(ws, k, grip, center, resting)
 					end

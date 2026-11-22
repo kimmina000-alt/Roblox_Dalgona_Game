@@ -38,6 +38,14 @@ local Toon = require(Making:WaitForChild("Toon"))
 -- 작업대 = 내 가게 작업대 (17b, 2026-11-21). 가게를 받으면 생기고, 다시 받으면 바뀜 → 아래 watchStation이 연결
 local station = nil
 require(Making:WaitForChild("HelperLadles")).start() -- 화로 위 알바생 국자 (LadleCount 2~4)
+-- 가게 안 손 작업대는 내 화면에서 1/2로 줄여 보임 (저장·부지 세션 Making/ViewScale, 2026-11-22 사용자 "가게 안 손 제작대 1/2").
+-- 만드는 동안만 내 작업대를 원래 크기로: 되돌리기(setUnturned) 전에 키우고, 다시 돌린 뒤에 줄임. 모듈이 없으면 아무 일 없음
+local ViewScale = Making:FindFirstChild("ViewScale") and require(Making.ViewScale)
+local function setFullSize(full)
+	if ViewScale and station and station.model then
+		ViewScale.setFull(station.model, full)
+	end
+end
 require(Making:WaitForChild("Supplies")).start() -- 재료가 없으면 작업대 통이 빈 통으로 (2026-11-21)
 local ui = Ui.new(player, Config.Steps)
 
@@ -202,6 +210,7 @@ local function finish()
 		station:reset()
 		station:removeHand()
 		setUnturned(false) -- 제자리로 되돌린 뒤 다시 겉모습대로 돌림
+		setFullSize(false)
 		station.Prompt.Enabled = true
 	end
 	-- 손으로 만든 달고나는 직접 진열 (2026-11-21): 들고 있으면 진열대로 안내 (서버 속성 Carrying = 들고 있는 달고나 번호)
@@ -523,6 +532,7 @@ function startMaking(restart)
 	end
 	running = true
 	station.Prompt.Enabled = false
+	setFullSize(true)
 	setUnturned(true)
 	setParasolHidden(true)
 	setControls(false)
