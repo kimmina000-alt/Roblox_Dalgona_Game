@@ -449,6 +449,15 @@ G.Tutorial = {
 	doneText = "이제 혼자서도 잘하겠구나. 맛있는 달고나 많이 팔아라!",
 }
 
+---------------------------------------------------------------- 폰 성능 (2026-11-22, docs/PERFORMANCE_BUDGET.md)
+G.Perf = {
+	factoryLodDistance = 120, -- 남의 공장이 카메라에서 이만큼 넘게 멀면 상자로 (FactoryLod)
+	factoryLodMargin = 10, -- 다시 원래 모습은 (거리 - 여유) 안으로 들어왔을 때 (경계에서 깜빡이지 않게)
+	factoryProxyHeight = 0.55, -- 상자 높이 = 공장 높이 × 이 값
+	lodCheckSeconds = 0.5,
+	-- 스트리밍 반경은 Studio Workspace 속성 (StreamingTargetRadius 256, 2026-11-22 1024에서 줄임)
+}
+
 ---------------------------------------------------------------- 상점·요청 제한
 G.ShopCooldown = 0.25 -- 초당 4번까지 구매
 
