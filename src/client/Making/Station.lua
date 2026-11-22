@@ -57,7 +57,13 @@ function Station.new(m)
 	end
 	-- 국자는 기본으로 연탄 위 철망에 놓여 있음 (사용자 요청 2026-11-19: 저절로 중간 높이에 떠 있지 않고, 플레이어가 들어야 함)
 	self.rest.Ladle = self:ladleAt(Config.Melt.hMin)
-	self.Ladle:PivotTo(self.rest.Ladle)
+	-- 가게 안 작업대가 내 화면에서 줄어 있을 때(ViewScale, 만들기 전)는 국자를 옮기지 않음: 옮기면 ViewScale이 그 자리를
+	-- 서버(원래 크기) 값으로 알고 한 번 더 줄여서 국자가 철망 가운데에서 밀려남 (2026-11-23 "국자가 철망 위쪽으로 치우침").
+	-- 만들기 시작하면 원래 크기로 돌린 뒤 Station을 다시 만들어 그때 놓음
+	local vs = m:GetAttribute("ViewScale")
+	if vs == nil or vs == 1 then
+		self.Ladle:PivotTo(self.rest.Ladle)
+	end
 	-- 소다 통 숟가락은 안 씀 (사용자 요청 2026-11-19: 소다컵에 숟가락 삭제). 모델은 남겨 두고 이 화면에서만 숨김
 	for _, p in ipairs(self.SodaSpoon:GetDescendants()) do
 		if p:IsA("BasePart") then
