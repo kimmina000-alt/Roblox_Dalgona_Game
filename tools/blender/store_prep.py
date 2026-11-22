@@ -4,7 +4,7 @@
 #      - 뒤 공장 방 창문 Cube.019·Cube.022 의 유리 칸 → WindowGlass_1·_2 ("창문의 창 투명하게")
 #      - 유리 진열장 Cube.003 아래 받침 → CaseBase ("밑에 박스는 메탈 재질로")
 #      - 큰 간판 Cube.016 의 안쪽 판 → SignPanel ("간판 여기만 흰색으로 해서 가게 이름")
-#      - 벽·바닥 한 메시 Plane 의 바닥 → Floor (판매 세션: 제작 화면에서 지붕·벽만 숨기고 바닥은 남기게)
+#      - 벽·바닥 한 메시 Plane 의 바닥 → ShopFloor (가게 틀의 숨긴 판 Floor와 헷갈리지 않게, 판매 세션: 제작 화면에서 지붕·벽만 숨기고 바닥은 남기게)
 #      - 의자 3개 한 메시 Cylinder → Stool_1·Stool_2·Stool_3 (의자마다 앉기)
 #   원본: 오브젝트 Cube.015 (메시 Cube.021) — 화구 2개마다 납작한 나선 판 2장(위·아래), 삼각형 3,520개 (기계 전체 3,912).
 #   바꿈: 나선 판을 지우고, 화구마다 어두운 원판 1장 + 동심원 고리 3개(낮은 면 수)로 다시 만듦. 재질 "Coil" 그대로.
@@ -161,7 +161,7 @@ split_faces("Cube.016", "SignPanel", sign_panel)
 
 # 바닥: 모든 꼭짓점이 바닥 높이(z ≤ 0.05) 아래인 면 = 바닥 판
 plane = sc.objects["Plane"]
-split_faces("Plane", "Floor", lambda f, c, n: max((plane.matrix_world @ v.co).z for v in f.verts) <= 0.05)
+split_faces("Plane", "ShopFloor", lambda f, c, n: max((plane.matrix_world @ v.co).z for v in f.verts) <= 0.05)
 # 의자 3개: 면 가운데 x로 세 무리 (왼쪽부터 1·2·3, Blender x 기준)
 stool = sc.objects["Cylinder"]
 _xs = [stool.matrix_world @ v.co for v in stool.data.vertices]
