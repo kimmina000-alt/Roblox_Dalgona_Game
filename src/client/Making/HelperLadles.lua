@@ -258,7 +258,16 @@ local function poseMinime(ws, k, grip, center, resting)
 	hideHandLadle(mini)
 	-- 발 높이: 화로가 땅 위에 있으면(노점 배치, 2026-11-21) 바닥, 아니면 카운터 윗면. 피벗 → 발까지 거리는 처음 한 번 잼
 	if not armRest[mini] then
+		-- 의자(MinimeStool)는 빼고 잼: 같이 재면 의자 높이만큼 커지고, 다시 잴 때마다 1씩 떠오름 (2026-11-22).
+		-- (약한 표의 Instance 키는 사라질 수 있어 다시 재는 일이 생김)
+		local stool = mini:FindFirstChild("MinimeStool")
+		if stool then
+			stool.Parent = nil
+		end
 		local cf, size = mini:GetBoundingBox()
+		if stool then
+			stool.Parent = mini
+		end
 		armRest[mini] = { footDrop = root.Position.Y - (cf.Position.Y - size.Y / 2) }
 	end
 	local footY = top.Position.Y + top.Size.Y / 2
