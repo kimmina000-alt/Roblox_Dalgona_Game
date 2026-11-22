@@ -141,9 +141,34 @@ local PIVOT = {
 	ShopShutterSign = Vector3.new(0, 0, -0.01),
 }
 
+-- 사용자가 가져온 보기용 모델(속성 FollowPlot, 예: ShopScene3D)이 놓인 자리는 비움 (PlotService가 가게 옆으로 옮김)
+local keepOut = {}
+local function collectKeepOut()
+	table.clear(keepOut)
+	for _, m in ipairs(workspace:GetChildren()) do
+		if m:IsA("Model") and m:GetAttribute("FollowPlot") ~= nil then
+			local cf, size = m:GetBoundingBox()
+			local h = (cf - cf.Position):VectorToWorldSpace(size / 2)
+			local ext = Vector3.new(math.abs(h.X), 0, math.abs(h.Z)) + Vector3.new(3, 0, 3)
+			table.insert(keepOut, { cf.Position - ext, cf.Position + ext })
+		end
+	end
+end
+local function blocked(pos)
+	for _, b in ipairs(keepOut) do
+		if pos.X > b[1].X and pos.X < b[2].X and pos.Z > b[1].Z and pos.Z < b[2].Z then
+			return true
+		end
+	end
+	return false
+end
+
 -- Blender 모델이 있으면 그것을, 없으면 fallback(m, cf)으로 Part 모양을 만든다. cf = 바닥 가운데, 앞 = -Z
 local assets = nil
 local function prop(name, cf, fallback, parent)
+	if not parent and blocked(cf.Position) then
+		return nil
+	end
 	local src = assets and assets:FindFirstChild(name)
 	if src then
 		local c = src:Clone()
@@ -375,6 +400,9 @@ local function poles()
 		for i, x in ipairs(xs) do
 			local cf = CFrame.new(x, 0.4, z)
 			local m = prop("UtilityPole", cf, poleFallback)
+			if not m then
+				continue -- 보기용 모델 자리 (전선도 건너뜀)
+			end
 			m.Name = "UtilityPole"
 			local anchor = part(wires, "WireAnchor", Vector3.new(0.2, 0.2, 0.2), cf * CFrame.new(0, 20.6, 0), C.metal, Enum.Material.Metal, { Transparency = 1, CanCollide = false, CanQuery = false })
 			local a1 = Instance.new("Attachment")
@@ -403,16 +431,25 @@ local function poles()
 		b.FaceCamera = true
 		b.Parent = parent
 	end
-	-- 같은 줄 전봇대 사이 (처진 전선, Beam: 부품 없이 곡선)
+	-- 같은 줄 전봇대 사이 (처진 전선, Beam: 부품 없이 곡선). 빠진 전봇대는 건너뛰고 다음 것과 이음
 	for _, tops in pairs(rows) do
-		for i = 1, #tops - 1 do
-			wire(tops[i][1], tops[i + 1][1], tops[i][3], 3)
-			wire(tops[i][2], tops[i + 1][2], tops[i][3], 3)
+		local prev = nil
+		for i = 1, #xs do
+			local t = tops[i]
+			if t then
+				if prev then
+					wire(prev[1], t[1], prev[3], 3)
+					wire(prev[2], t[2], prev[3], 3)
+				end
+				prev = t
+			end
 		end
 	end
 	-- 길을 가로지르는 전선 (골목 느낌)
 	for i = 1, #xs do
-		wire(rows.S[i][2], rows.N[i][1], rows.S[i][3], 2)
+		if rows.S[i] and rows.N[i] then
+			wire(rows.S[i][2], rows.N[i][1], rows.S[i][3], 2)
+		end
 	end
 end
 
@@ -549,6 +586,7 @@ function A.build()
 	assets = sa and sa:FindFirstChild("Alley")
 	folder = Instance.new("Folder")
 	folder.Name = "Alley"
+	collectKeepOut()
 	ground()
 	endShops()
 	poles()
