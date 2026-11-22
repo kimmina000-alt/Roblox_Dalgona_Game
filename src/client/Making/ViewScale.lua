@@ -34,17 +34,24 @@ local function shouldScale(ws, st)
 end
 
 local function same(p, rec)
-	return rec and (p.Position - rec.cf.Position).Magnitude < 1e-3 and p.CFrame.LookVector:Dot(rec.cf.LookVector) > 0.9999 and (p.Size - rec.size).Magnitude < 1e-3
+	return rec and (p.Position - rec.cf.Position).Magnitude < 1e-3 and p.CFrame.LookVector:Dot(rec.cf.LookVector) > 0.9999 and p.CFrame.UpVector:Dot(rec.cf.UpVector) > 0.9999 and (p.Size - rec.size).Magnitude < 1e-3
 end
 
--- 지금 값(원래 크기라고 보고)을 기억
+-- 지금 값(원래 크기라고 보고)을 기억. 값마다 따로 봄: 서버는 바뀐 값만 보내므로(예: 작업대를 옮기면 CFrame만),
+-- 지금 값이 내가 넣은 값과 같으면 그 값은 서버가 안 바꾼 것 → 전에 기억한 원래 값을 그대로 씀 (2026-11-22 노점 전환 때 크기가 또 줄던 문제)
+local function cfSame(a, b)
+	return (a.Position - b.Position).Magnitude < 1e-3 and a.LookVector:Dot(b.LookVector) > 0.9999 and a.UpVector:Dot(b.UpVector) > 0.9999
+end
 local function remember(st, p)
-	local b = { cf = p.CFrame, size = p.Size, att = {}, mesh = {} }
+	local old, m = st.base[p], st.mine[p]
+	local keepCf = old and m and cfSame(p.CFrame, m.cf)
+	local keepSize = old and m and (p.Size - m.size).Magnitude < 1e-3
+	local b = { cf = keepCf and old.cf or p.CFrame, size = keepSize and old.size or p.Size, att = {}, mesh = {} }
 	for _, c in ipairs(p:GetChildren()) do
 		if c:IsA("Attachment") then
-			b.att[c] = c.Position
+			b.att[c] = (old and m and old.att[c]) or c.Position
 		elseif c:IsA("SpecialMesh") or c:IsA("BlockMesh") or c:IsA("CylinderMesh") then
-			b.mesh[c] = { scale = c.Scale, offset = c.Offset }
+			b.mesh[c] = (old and m and old.mesh[c]) or { scale = c.Scale, offset = c.Offset }
 		end
 	end
 	st.base[p] = b
