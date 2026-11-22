@@ -338,6 +338,7 @@ end)
 
 -- 매 프레임: 화살표 통통, 1단계 거리, 6단계 상점 열림, 상점 버튼 화살표 위치
 local sentNear, sentShop = false, false
+local lastMaking = 0
 local t = 0
 RunService.RenderStepped:Connect(function(dt)
 	if current == 0 then
@@ -357,6 +358,13 @@ RunService.RenderStepped:Connect(function(dt)
 				sentNear = true
 				remote:FireServer("near")
 			end
+		end
+	end
+	if current > 0 and current <= 2 then
+		local ms = playerGui:FindFirstChild("MakingScreen")
+		if ms and ms.Enabled and os.clock() - lastMaking > 1 then
+			lastMaking = os.clock()
+			remote:FireServer("making") -- 제작 화면이 열리면 3단계 (도안 고르기부터, 서버 시작은 고른 뒤)
 		end
 	end
 	if current == 6 then

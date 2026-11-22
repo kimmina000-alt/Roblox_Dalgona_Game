@@ -121,6 +121,8 @@ function TutorialService.init(dataService, economyService, remotes)
 			finish(player, true)
 		elseif what == "near" then
 			advance(player, 1, 2)
+		elseif what == "making" then
+			advance(player, 2, 3) -- 제작 화면이 열림 (도안 고르기부터)
 		elseif what == "shop" and s == 6 then
 			finish(player, false)
 		end
