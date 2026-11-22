@@ -73,6 +73,22 @@ local function scan()
 			table.insert(ex, p)
 		end
 	end
+	-- 테이블 바로 위 기둥(작업대 바닥 넓이, 테이블 윗면 ~ 카메라 높이) 안의 부품: 노점 차양(Awning)처럼
+	-- 작업대 위에 걸려 화면 위쪽을 가리는 것 (2026-11-22 저장·부지 세션 제안). 지붕·천장·간판·전구줄도 같이
+	local top = model:FindFirstChild("TableTop")
+	local cf, size = model:GetBoundingBox()
+	local y0 = (top and top:IsA("BasePart")) and (top.Position.Y + top.Size.Y / 2 + 0.3) or (cf.Position.Y + size.Y / 2)
+	local y1 = math.max(origin.Y, y0 + 1)
+	local boxCf = CFrame.new(cf.Position.X, (y0 + y1) / 2, cf.Position.Z) * (cf - cf.Position)
+	for _, p in ipairs(workspace:GetPartBoundsInBox(boxCf, Vector3.new(size.X, y1 - y0, size.Z), op)) do
+		-- 알바생 미니미(서버 Minime, 모델 속성 Minime)는 카운터 위에 서 있어도 남김. 카메라를 직접 가리면 아래 레이캐스트가 숨김
+		local mm = p:FindFirstAncestorWhichIsA("Model")
+		local isMinime = mm ~= nil and (mm:GetAttribute("Minime") == true or (mm.Parent and mm.Parent:GetAttribute("Minime") == true))
+		if not isMinime and hideable(p, plot) then
+			hide(p)
+			table.insert(ex, p)
+		end
+	end
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	for _, t in ipairs(targets()) do
