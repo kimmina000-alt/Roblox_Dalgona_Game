@@ -6,6 +6,8 @@
 #      - 큰 간판 Cube.016 의 안쪽 판 → SignPanel ("간판 여기만 흰색으로 해서 가게 이름")
 #      - 벽·바닥 한 메시 Plane 의 바닥 → ShopFloor (가게 틀의 숨긴 판 Floor와 헷갈리지 않게, 판매 세션: 제작 화면에서 지붕·벽만 숨기고 바닥은 남기게)
 #      - 의자 3개 한 메시 Cylinder → Stool_1·Stool_2·Stool_3 (의자마다 앉기)
+#      - 입간판 Cube.005 앞판 안쪽 → AFramePanel ("입간판에 그림 주황색 선택한 곳에만, 테두리 우드")
+#      - 냉장고 옆 선반 유리병 Cylinder.001(5개)·Cylinder.002(2개) → 병마다 Jar_1~7(내용물 색) + 뚜껑 JarLids ("뭐 들어 있는 것처럼")
 #   원본: 오브젝트 Cube.015 (메시 Cube.021) — 화구 2개마다 납작한 나선 판 2장(위·아래), 삼각형 3,520개 (기계 전체 3,912).
 #   바꿈: 나선 판을 지우고, 화구마다 어두운 원판 1장 + 동심원 고리 3개(낮은 면 수)로 다시 만듦. 재질 "Coil" 그대로.
 #   원본 store.glb·store.blend는 건드리지 않음. 결과:
@@ -172,6 +174,24 @@ for k in range(3):
     split_faces("Cylinder", f"Stool_{k + 1}", lambda f, c, n, lo_=lo_, hi_=hi_: lo_ <= c.x < hi_ + (1e-6 if k == 2 else 0))
 if not sc.objects["Cylinder"].data.polygons:  # 다 떼어 낸 빈 오브젝트는 지움
     bpy.data.objects.remove(sc.objects["Cylinder"], do_unlink=True)
+
+# 입간판 앞판 안쪽 (앞 = -Y, 판이 뒤로 기울어 법선이 조금 위를 봄)
+split_faces("Cube.005", "AFramePanel", lambda f, c, n: n.y < -0.9 and n.z > 0.1 and f.calc_area() > 1.0)
+# 유리병: 위 띠(뚜껑) → JarLids, 몸통은 x로 나눠 병마다
+jar_no = 0
+for name, count in (("Cylinder.001", 5), ("Cylinder.002", 2)):
+    ob = sc.objects[name]
+    ws_ = [ob.matrix_world @ v.co for v in ob.data.vertices]
+    ztop = max(v.z for v in ws_)
+    xlo, xhi = min(v.x for v in ws_), max(v.x for v in ws_)
+    split_faces(name, "JarLids_" + name[-1], lambda f, c, n, ob=ob, ztop=ztop: min((ob.matrix_world @ v.co).z for v in f.verts) >= ztop - 0.32)
+    w_ = (xhi - xlo) / count
+    for k in range(count):
+        jar_no += 1
+        lo_, hi_ = xlo + k * w_, xlo + (k + 1) * w_ + (1e-6 if k == count - 1 else 0)
+        split_faces(name, f"Jar_{jar_no}", lambda f, c, n, lo_=lo_, hi_=hi_: lo_ <= c.x < hi_)
+    if not sc.objects[name].data.polygons:
+        bpy.data.objects.remove(sc.objects[name], do_unlink=True)
 
 bpy.ops.object.select_all(action="DESELECT")
 for ob in sc.objects:
