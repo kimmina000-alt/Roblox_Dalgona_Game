@@ -85,6 +85,14 @@ function L.apply(built, template, fromCF, toCF, opts)
 			if opts.keep and opts.keep(d) then
 				d.Transparency = 1
 				d.CanCollide = false
+				-- 숨긴 부품 위 글씨·그림도 끔 (안 그러면 글씨만 떠 보임, 2026-11-23)
+				for _, g in ipairs(d:GetDescendants()) do
+					if g:IsA("SurfaceGui") or g:IsA("BillboardGui") then
+						g.Enabled = false
+					elseif g:IsA("Decal") or g:IsA("Texture") then
+						g.Transparency = 1
+					end
+				end
 			else
 				d:Destroy()
 			end

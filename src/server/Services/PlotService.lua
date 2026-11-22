@@ -125,9 +125,17 @@ local function applyLayout(m, plotCF)
 			while a.Parent and a.Parent ~= T.model do
 				a = a.Parent
 			end
-			return CHILD_LAYOUTS[a.Name] == true
+			return CHILD_LAYOUTS[a.Name] == true or a:GetAttribute("CloneWhole") == true
 		end,
 	})
+	-- 통째로 넣는 모델 (속성 CloneWhole, 예: 사용자 가게 3D ShopModel, 2026-11-23): 계층·효과 그대로 복제해 같은 자리 관계로
+	for _, c in ipairs(T.model:GetChildren()) do
+		if c:IsA("Model") and c:GetAttribute("CloneWhole") then
+			local copy = c:Clone()
+			copy:PivotTo(plotCF * T.cf:ToObjectSpace(c:GetPivot()))
+			copy.Parent = m
+		end
+	end
 end
 
 -- 다른 코드가 부지에 붙인 묶음(child, 예: 진열대 DisplayShelf)을 틀의 같은 이름 자식 모양으로. 부지 Parent 전에 불러도 됨
@@ -330,6 +338,12 @@ local function buildPlot(index, parent)
 		end
 	end
 	m.Parent = parent
+	-- 가게 3D 간판 글씨(OwnerName)가 있으면 그걸 가게 이름 간판으로 씀 (2026-11-23 사용자: 간판에 주인 닉네임)
+	local ownerLabel = m:FindFirstChild("OwnerName", true)
+	if ownerLabel and ownerLabel:IsA("TextLabel") then
+		ownerLabel.Text = EMPTY_TEXT
+		label = ownerLabel
+	end
 	return { model = m, owner = nil, cframe = cf, signLabel = label }
 end
 
