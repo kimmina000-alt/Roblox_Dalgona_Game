@@ -267,6 +267,183 @@ local function doorLook(plot, unlocked)
 	end
 end
 
+-- ── 공장 공정 알바생 (D30, 2026-11-22): 고용한 공정마다 주인 미니미를 공정 옆 통로에 세움, 공정별 옷 ──
+-- 신호: Factory<i> 속성 Staff_<key>(고용) · StaffOn_<key>(지금 일함, 클라이언트가 움직임). key = sugar·boil·press·inspect·pack
+-- 모습: FactoryLot.Staff.Staff_<key> (Minime.build 복제 + 공정 옷). 한 가게 미니미 최대 8명 (가게 알바생 포함)
+local Minime = require(script.Parent:WaitForChild("Minime"))
+local Players = game:GetService("Players")
+local STATIONS = {
+	-- 공장 모델 기준 자리 (x = 라인 따라, z = 앞 통로 STAND_Z, 라인을 보고 섬). 옷 색
+	{ key = "sugar", n = 1, name = "설탕 넣기", x = 18.5, color = Color3.fromRGB(250, 250, 250) },
+	{ key = "boil", n = 2, name = "끓이기", x = 10.5, color = Color3.fromRGB(220, 70, 70) },
+	{ key = "press", n = 3, name = "붓기·찍기", x = 1.5, color = Color3.fromRGB(255, 205, 60) },
+	{ key = "inspect", n = 4, name = "식히기·검사", x = -9, color = Color3.fromRGB(140, 200, 240) },
+	{ key = "pack", n = 5, name = "포장", x = -16, color = Color3.fromRGB(80, 130, 220) },
+}
+Display.STATIONS = STATIONS
+local MAX_MINIME = 8
+local STAND_Z = -3.2
+
+local function weldPart(model, name, size, cf, color, target, props)
+	local q = Instance.new("Part")
+	q.Name = name
+	q.Size = size
+	q.CFrame = cf
+	q.Color = color
+	q.Material = Enum.Material.SmoothPlastic
+	q.CanCollide = false
+	q.CanQuery = false
+	q.CanTouch = false
+	q.Massless = true
+	q.Anchored = false
+	for k, v in pairs(props or {}) do
+		q[k] = v
+	end
+	q.Parent = model
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = target
+	w.Part1 = q
+	w.Parent = q
+	return q
+end
+
+-- 공정별 옷 (D30 표): ① 흰 두건 + 마스크 ② 빨간 앞치마 + 오븐 장갑 ③ 노란 안전모 ④ 하늘색 위생모 + 돋보기 ⑤ 파란 앞치마 + 빵끈
+local function dress(model, st)
+	local head = model:FindFirstChild("Head")
+	local torso = model:FindFirstChild("UpperTorso")
+	local lower = model:FindFirstChild("LowerTorso")
+	local rh, lh = model:FindFirstChild("RightHand"), model:FindFirstChild("LeftHand")
+	local function apron(color)
+		if torso then
+			local s = torso.Size
+			weldPart(model, "Apron", Vector3.new(s.X * 0.8, s.Y * 0.85, 0.06), torso.CFrame * CFrame.new(0, -s.Y * 0.05, -s.Z / 2 - 0.03), color, torso)
+		end
+		if lower then
+			local s = lower.Size
+			weldPart(model, "ApronSkirt", Vector3.new(s.X * 0.95, s.Y * 1.6, 0.06), lower.CFrame * CFrame.new(0, -s.Y * 0.4, -s.Z / 2 - 0.03), color, lower)
+		end
+	end
+	local hs = head and head.Size
+	if st.key == "sugar" and head then
+		weldPart(model, "Bandana", Vector3.new(hs.X * 1.06, hs.Y * 0.32, hs.Z * 1.06), head.CFrame * CFrame.new(0, hs.Y * 0.3, 0), st.color, head)
+		weldPart(model, "Mask", Vector3.new(hs.X * 0.62, hs.Y * 0.26, 0.05), head.CFrame * CFrame.new(0, -hs.Y * 0.18, -hs.Z / 2 - 0.02), Color3.fromRGB(235, 240, 245), head)
+	elseif st.key == "boil" then
+		apron(st.color)
+		for _, h in ipairs({ rh, lh }) do
+			if h then
+				weldPart(model, "OvenMitt", h.Size * 1.35, h.CFrame, Color3.fromRGB(200, 60, 60), h, { Material = Enum.Material.Fabric })
+			end
+		end
+	elseif st.key == "press" and head then
+		weldPart(model, "HardHat", Vector3.new(hs.X * 1.1, hs.Y * 0.55, hs.Z * 1.1), head.CFrame * CFrame.new(0, hs.Y * 0.42, 0), st.color, head, { Shape = Enum.PartType.Ball })
+		weldPart(model, "HardHatBrim", Vector3.new(hs.X * 1.25, 0.04, hs.Z * 1.25), head.CFrame * CFrame.new(0, hs.Y * 0.3, -hs.Z * 0.08), st.color, head)
+	elseif st.key == "inspect" then
+		if head then
+			weldPart(model, "HygieneCap", Vector3.new(hs.X * 1.08, hs.Y * 0.45, hs.Z * 1.08), head.CFrame * CFrame.new(0, hs.Y * 0.4, 0), st.color, head, { Shape = Enum.PartType.Ball })
+		end
+		if rh then
+			local ring = weldPart(model, "MagnifierRing", Vector3.new(0.05, 0.5, 0.5), rh.CFrame * CFrame.new(0, -0.15, -0.35) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(70, 70, 80), rh, { Shape = Enum.PartType.Cylinder, Material = Enum.Material.Metal })
+			weldPart(model, "MagnifierGlass", Vector3.new(0.03, 0.42, 0.42), ring.CFrame, Color3.fromRGB(200, 230, 255), rh, { Shape = Enum.PartType.Cylinder, Material = Enum.Material.Glass, Transparency = 0.4 })
+		end
+	elseif st.key == "pack" then
+		apron(st.color)
+		if rh then
+			weldPart(model, "TwistTie", Vector3.new(0.05, 0.05, 0.6), rh.CFrame * CFrame.new(0, -0.1, -0.2), Color3.fromRGB(230, 180, 50), rh, { Material = Enum.Material.Metal })
+		end
+	end
+end
+
+local function countMinimes(plot, lot)
+	local n = 0
+	for _, d in ipairs(plot:GetDescendants()) do
+		if d:IsA("Model") and d:GetAttribute("Minime") and not d:IsDescendantOf(lot) then
+			n += 1
+		end
+	end
+	return n
+end
+
+local staffBusy = {} -- [lot] = true / "again" (Minime.build가 기다리는 동안 또 불리면 끝나고 한 번 더)
+local function syncStaff(plot, fac)
+	local lot = plot:FindFirstChild("FactoryLot")
+	if not lot then
+		return
+	end
+	local folder = lot:FindFirstChild("Staff")
+	local b = lot:FindFirstChild("Building")
+	local owner = fac and Players:GetPlayerByUserId(fac:GetAttribute("OwnerUserId") or 0)
+	if not (b and owner and fac:GetAttribute("Unlocked")) then
+		if folder then
+			folder:Destroy()
+		end
+		return
+	end
+	if staffBusy[lot] then
+		staffBusy[lot] = "again"
+		return
+	end
+	staffBusy[lot] = true
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "Staff"
+		folder.Parent = lot
+	end
+	local pv = b:GetPivot()
+	local floorY = pv.Position.Y
+	local fl = b:FindFirstChild("Factory_Floor_Node", true)
+	if fl and fl:IsA("BasePart") then
+		floorY = fl.Position.Y + fl.Size.Y / 2
+	end
+	local others = countMinimes(plot, lot)
+	for _, st in ipairs(STATIONS) do
+		local name = "Staff_" .. st.key
+		local have = folder:FindFirstChild(name)
+		local want = fac:GetAttribute("Staff_" .. st.key) == true
+		if want and not have then
+			if others + #folder:GetChildren() < MAX_MINIME then -- 폰 성능: 한 가게 미니미 8명까지
+				local spot = pv * CFrame.new(st.x, 0, STAND_Z)
+				local pos = Vector3.new(spot.Position.X, floorY, spot.Position.Z)
+				local facing = pv:VectorToWorldSpace(Vector3.new(0, 0, 1)) -- 라인(모델 +Z) 쪽을 봄
+				local ok, m = pcall(Minime.build, owner, folder, CFrame.lookAt(pos, pos + facing), st.n, 0)
+				if ok and m then
+					m.Name = name
+					m:SetAttribute("StaffKey", st.key)
+					m:SetAttribute("StationName", st.name) -- 클라이언트가 머리 위 글에 "· 일하는 중"을 붙일 때 씀
+					m:SetAttribute("HelperIndex", nil)
+					for _, n in ipairs({ "Apron", "ApronSkirt", "HandLadle" }) do
+						local x = m:FindFirstChild(n)
+						if x then
+							x:Destroy()
+						end
+					end
+					dress(m, st)
+					-- 머리 위 표: 공정 번호(색) + 공정 이름 (일하는 중/쉬는 중은 클라이언트가 붙임)
+					local bb = m:FindFirstChild("Status", true)
+					if bb then
+						local num = bb:FindFirstChild("Number")
+						if num then
+							num.Text = tostring(st.n)
+							num.BackgroundColor3 = st.color
+							num.TextColor3 = st.key == "sugar" and Color3.fromRGB(92, 58, 36) or Color3.new(1, 1, 1)
+						end
+						local t = bb:FindFirstChild("TextLabel")
+						if t then
+							t.Text = st.name
+						end
+					end
+				end
+			end
+		elseif not want and have then
+			have:Destroy()
+		end
+	end
+	local again = staffBusy[lot] == "again"
+	staffBusy[lot] = nil
+	if again then
+		task.defer(syncStaff, plot, fac)
+	end
+end
+
 local function sync(plot, fac)
 	local lot = buildLot(plot)
 	local unlocked = fac ~= nil and fac:GetAttribute("Unlocked") == true
@@ -278,6 +455,7 @@ local function sync(plot, fac)
 		end
 	end
 	doorLook(plot, unlocked)
+	task.spawn(syncStaff, plot, fac)
 end
 
 function Display.init()
@@ -319,6 +497,21 @@ function Display.init()
 				local p = i and plots:FindFirstChild("Plot" .. i)
 				if p then
 					sync(p, fac)
+				end
+			end)
+			-- 공정 알바생 고용·해고, 주인이 바뀜 → 알바생만 다시 맞춤
+			for _, st in ipairs(STATIONS) do
+				fac:GetAttributeChangedSignal("Staff_" .. st.key):Connect(function()
+					local p = i and plots:FindFirstChild("Plot" .. i)
+					if p then
+						task.spawn(syncStaff, p, fac)
+					end
+				end)
+			end
+			fac:GetAttributeChangedSignal("OwnerUserId"):Connect(function()
+				local p = i and plots:FindFirstChild("Plot" .. i)
+				if p then
+					task.spawn(syncStaff, p, fac)
 				end
 			end)
 		end

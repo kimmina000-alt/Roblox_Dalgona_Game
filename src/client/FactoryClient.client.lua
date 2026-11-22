@@ -161,6 +161,83 @@ local function playMade(rec)
 	end)
 end
 
+-- ── 공장 공정 알바생 (D30): 고용한 공정의 미니미가 그 공정 동작을 되풀이. 멀거나(STAFF_DIST) 쉬면 멈춘 자세 ──
+-- 미니미 = FactoryLot.Staff.Staff_<key> (서버 FactoryDisplay), 일하는지 = Factory<i> 속성 StaffOn_<key>
+local STAFF_DIST = 60
+local JOINTS = { R = { "RightUpperArm", "RightShoulder" }, L = { "LeftUpperArm", "LeftShoulder" }, W = { "UpperTorso", "Waist" }, N = { "Head", "Neck" } }
+local MOTION = {
+	-- 공정마다 팔·허리·고개 각도(라디안)를 시간 t로: 설탕 붓기 · 솥 젓기 · 레버 당기기 · 들여다보기 · 상자 접기
+	sugar = function(t)
+		local k = (math.sin(t * 2.4) + 1) / 2
+		return { R = CFrame.Angles(math.rad(-40 - 70 * k), 0, math.rad(-20 * k)), N = CFrame.Angles(math.rad(-10), 0, 0) }
+	end,
+	boil = function(t)
+		return { R = CFrame.Angles(math.rad(-55 + 12 * math.sin(t * 4)), math.rad(18 * math.cos(t * 4)), 0), L = CFrame.Angles(math.rad(-30), 0, 0), W = CFrame.Angles(0, math.rad(8 * math.sin(t * 4)), 0) }
+	end,
+	press = function(t)
+		local k = math.max(0, math.sin(t * 1.8))
+		return { R = CFrame.Angles(math.rad(-120 + 90 * k), 0, 0), L = CFrame.Angles(math.rad(-120 + 90 * k), 0, 0), W = CFrame.Angles(math.rad(12 * k), 0, 0) }
+	end,
+	inspect = function(t)
+		return { R = CFrame.Angles(math.rad(-80), 0, math.rad(-10)), W = CFrame.Angles(math.rad(18), math.rad(15 * math.sin(t * 0.9)), 0), N = CFrame.Angles(math.rad(-15), math.rad(20 * math.sin(t * 0.9)), 0) }
+	end,
+	pack = function(t)
+		local k = (math.sin(t * 3) + 1) / 2
+		return { R = CFrame.Angles(math.rad(-60), 0, math.rad(-25 + 35 * k)), L = CFrame.Angles(math.rad(-60), 0, math.rad(25 - 35 * k)), W = CFrame.Angles(math.rad(10), 0, 0) }
+	end,
+}
+local function setPose(m, pose)
+	for key, j in pairs(JOINTS) do
+		local part = m:FindFirstChild(j[1])
+		local motor = part and part:FindFirstChild(j[2])
+		if motor and motor:IsA("Motor6D") then
+			local base = motor:GetAttribute("BaseC0")
+			if base == nil then
+				base = motor.C0
+				motor:SetAttribute("BaseC0", base)
+			end
+			motor.C0 = pose and pose[key] and base * pose[key] or base
+		elseif motor and motor:IsA("AnimationConstraint") then
+			-- 새 아바타 관절(AnimationConstraint): 자세는 Transform으로
+			motor.Transform = pose and pose[key] or CFrame.identity
+		end
+	end
+end
+local function animateStaff(fac, now, camPos)
+	local i = tonumber(fac.Name:match("%d+"))
+	local plots = workspace:FindFirstChild("ShopPlots")
+	local plot = plots and i and plots:FindFirstChild("Plot" .. i)
+	local lot = plot and plot:FindFirstChild("FactoryLot")
+	local folder = lot and lot:FindFirstChild("Staff")
+	if not folder then
+		return
+	end
+	for _, m in ipairs(folder:GetChildren()) do
+		local key = m:GetAttribute("StaffKey")
+		local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
+		if key and root then
+			local on = fac:GetAttribute("StaffOn_" .. key) == true
+			local near = (root.Position - camPos).Magnitude < STAFF_DIST
+			if on and near and MOTION[key] then
+				setPose(m, MOTION[key](now + #key * 0.37))
+				m:SetAttribute("Posed", true)
+			elseif m:GetAttribute("Posed") then
+				setPose(m, nil) -- 멈춘 자세 (멀리 있거나 쉬는 중)
+				m:SetAttribute("Posed", false)
+			end
+			-- 머리 위 글: 공정 이름 · 일하는 중/쉬는 중
+			local t = m:FindFirstChild("TextLabel", true)
+			local base = m:GetAttribute("StationName")
+			if t and base then
+				local want = base .. (on and " · 일하는 중" or " · 쉬는 중")
+				if t.Text ~= want then
+					t.Text = want
+				end
+			end
+		end
+	end
+end
+
 -- ── 매 프레임: 움직임 · 표시등 · 상태판 ──
 RunService.Heartbeat:Connect(function()
 	local now = workspace:GetServerTimeNow()
@@ -184,6 +261,7 @@ RunService.Heartbeat:Connect(function()
 				playMade(rec)
 			end
 		end
+		animateStaff(fac, now, camPos)
 		if (rec.building:GetPivot().Position - camPos).Magnitude > 160 then
 			continue
 		end
@@ -294,6 +372,7 @@ local function tabButton(i, text)
 end
 tabButton(1, "생산")
 tabButton(2, "업그레이드")
+tabButton(3, "알바생") -- 공정별 알바생 고용 (D30)
 local msgL = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10), Size = UDim2.new(1, -36, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = RED, Text = "", Parent = win })
 
 -- 생산 탭: 왼쪽 도안 카드, 오른쪽 수량·방식·예상·라인 진행·시작/멈춤
@@ -323,6 +402,10 @@ corner(runBtn, 12)
 -- 업그레이드 탭
 local upList = new("ScrollingFrame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ScrollBarThickness = 6, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = pages[2] })
 new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = upList })
+
+-- 알바생 탭: 공정 5곳마다 효과 · 고용비 · 급여 · 고용/내보내기 (D30)
+local staffList = new("ScrollingFrame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, ScrollBarThickness = 6, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = pages[3] })
+new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = staffList })
 
 local function selectTab(i)
 	for k, p in ipairs(pages) do
@@ -511,6 +594,23 @@ function render()
 		end)
 		table.insert(made, row)
 	end
+	-- 알바생 (공정별 고용)
+	local STAFF_COLOR = { sugar = Color3.fromRGB(240, 240, 240), boil = Color3.fromRGB(220, 70, 70), press = Color3.fromRGB(255, 205, 60), inspect = Color3.fromRGB(140, 200, 240), pack = Color3.fromRGB(80, 130, 220) }
+	for i, s in ipairs(f.staff or {}) do
+		local row = new("Frame", { LayoutOrder = i, Size = UDim2.new(1, -8, 0, 66), BackgroundColor3 = PANEL, Parent = staffList })
+		corner(row, 10)
+		local chipC = new("TextLabel", { Position = UDim2.fromOffset(10, 13), Size = UDim2.fromOffset(40, 40), BackgroundColor3 = STAFF_COLOR[s.key] or SOFT, Font = Enum.Font.GothamBlack, TextSize = 20, TextColor3 = s.key == "sugar" and BROWN or Color3.new(1, 1, 1), Text = tostring(i), Parent = row })
+		corner(chipC, 20)
+		new("TextLabel", { Position = UDim2.fromOffset(60, 5), Size = UDim2.new(1, -220, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = BROWN, Text = (s.name or s.key) .. (s.hired and (s.on and "  · 일하는 중" or "  · 쉬는 중") or ""), Parent = row })
+		new("TextLabel", { Position = UDim2.fromOffset(60, 25), Size = UDim2.new(1, -220, 0, 36), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = SOFT, Text = string.format("%s\n급여 30초당 6 · 이번 판 %s 코인", s.desc or "", tostring(s.wage or 0)), Parent = row })
+		local hireCost = f.staffHireCost or 10000
+		local b = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(140, 40), BackgroundColor3 = s.hired and RED or GREEN, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Color3.new(1, 1, 1), Text = s.hired and "내보내기" or string.format("고용 · %d 코인", hireCost), Parent = row })
+		corner(b, 10)
+		b.Activated:Connect(function()
+			act(s.hired and "factoryFire" or "factoryHire", s.key)
+		end)
+		table.insert(made, row)
+	end
 end
 
 runBtn.Activated:Connect(function()
@@ -532,12 +632,20 @@ task.spawn(function()
 	end
 end)
 
+-- 알바생 고용·일하는지 바뀜을 알아보는 짧은 글 (매초 오는 갱신에서 바뀌었을 때만 다시 그림)
+local function staffSig(f)
+	local t = {}
+	for _, s in ipairs(f and f.staff or {}) do
+		table.insert(t, (s.hired and "1" or "0") .. (s.on and "1" or "0"))
+	end
+	return table.concat(t)
+end
 Remotes:WaitForChild("PlayerState").OnClientEvent:Connect(function(s)
 	local old = state and state.growth and state.growth.factory
 	state = s
 	local f = s and s.growth and s.growth.factory
 	-- 설정·상태가 바뀌었을 때만 다시 그림 (매초 오는 진행 갱신은 글씨만)
-	if gui.Enabled and f and (not old or old.shape ~= f.shape or old.qty ~= f.qty or old.mode ~= f.mode or old.on ~= f.on or old.status ~= f.status or old.lines ~= f.lines or old.maxQty ~= f.maxQty) then
+	if gui.Enabled and f and (not old or old.shape ~= f.shape or old.qty ~= f.qty or old.mode ~= f.mode or old.on ~= f.on or old.status ~= f.status or old.lines ~= f.lines or old.maxQty ~= f.maxQty or staffSig(old) ~= staffSig(f)) then
 		render()
 	end
 end)
@@ -583,6 +691,23 @@ local function hook(fac)
 	if plot then
 		plot.DescendantAdded:Connect(onAdded)
 	end
+	-- 가게 부지가 다시 만들어지면(주인이 나갔다 들어옴) 위 연결이 옛 부지에 걸려 있음 → 2초마다 공장 3D를 다시 찾음
+	task.spawn(function()
+		while fac.Parent do
+			task.wait(2)
+			local rec = factories[fac]
+			local lot = lotOf(fac)
+			local b = lot and lot:FindFirstChild("Building")
+			if b and (not rec or rec.building ~= b) then
+				scan(true)
+				local _, p2 = lotOf(fac)
+				if p2 and p2 ~= plot then
+					plot = p2
+					plot.DescendantAdded:Connect(onAdded)
+				end
+			end
+		end
+	end)
 end
 
 task.spawn(function()
