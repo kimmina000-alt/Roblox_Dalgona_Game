@@ -7,8 +7,9 @@
 #   ④ 반죽 노즐대(노즐 3개, 전구) → ⑤ 찍는 프레스(줄무늬 옆판, 별 도장 누름 머리) → ⑥ 둥근 식힘 덮개(둥근 창)
 #   ⑦ 미끄럼판 + 나무 상자(다 된 달고나) / ⑧ 앞 조작대(계기 3개, 도안 버튼 6개, 시작·정지, 레버)
 #
-# 부품(MeshPart): Fac_Body, Fac_Hopper(유리), Fac_Sugar, Fac_Kettle(구리), Fac_Belt, Fac_Rollers(돎), Fac_Press(오르내림),
-#   Fac_Lights(Neon), Fac_BeltDalgona(벨트 위), Fac_Output(상자 속)
+# 부품(MeshPart): Fac_Body, Fac_Hopper(유리), Fac_Sugar, Fac_Kettle(구리), Fac_Belt, Fac_Press(오르내림),
+#   Fac_Lights(Neon), Fac_BeltDalgona(벨트 위), Fac_Chute(나오는 곳), Fac_Output(상자 속), Fac_Fan(환풍기),
+#   Fac_Console(조작대), Fac_StartButton, Fac_StopButton. 게임(FactoryDisplay ANIM)이 이름으로 움직임을 붙임
 #
 # 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/cozy_factory.py -- <출력 폴더(절대 경로)>
 # 결과: dalgona_cozy_factory.glb, cozy_factory_preview.png, cozy_factory_preview2.png(프레스 내린 모습), cozy_factory_parts.txt
@@ -101,8 +102,8 @@ class Part:
                 f[self.col] = idx
 
 
-P = {n: Part(n) for n in ("Fac_Body", "Fac_Hopper", "Fac_Sugar", "Fac_Kettle", "Fac_Belt", "Fac_Rollers", "Fac_Press",
-                         "Fac_Lights", "Fac_BeltDalgona", "Fac_Output")}
+P = {n: Part(n) for n in ("Fac_Body", "Fac_Hopper", "Fac_Sugar", "Fac_Kettle", "Fac_Belt", "Fac_Press", "Fac_Fan",
+                         "Fac_Lights", "Fac_BeltDalgona", "Fac_Chute", "Fac_Output", "Fac_Console", "Fac_StartButton", "Fac_StopButton")}
 
 
 def V(v):
@@ -258,7 +259,7 @@ for x in (BX0 + 0.5, cx, BX1 - 0.5):
     for sy in (-1, 1):
         post((x, sy * (BWID / 2 - 0.2)), BZ - 0.45, w=0.28)
 for x in (BX0 + 0.15, BX1 - 0.15):
-    cyl(P["Fac_Rollers"], (x, -BWID / 2 + 0.05, BZ - 0.15), (x, BWID / 2 - 0.05, BZ - 0.15), 0.2, 0.2, BRASS, seg=14)
+    cyl(body, (x, -BWID / 2 + 0.05, BZ - 0.15), (x, BWID / 2 - 0.05, BZ - 0.15), 0.2, 0.2, BRASS, seg=14)
 
 # ④ 반죽 노즐대: 나무 문 모양 틀 + 크림 판 + 놋쇠 노즐 3개 + 꼭대기 전구 2개
 nx = -1.2
@@ -296,12 +297,18 @@ for dx in (-0.45, 0.45):
     q = Vector((cx6 + dx, -1.1, BZ + 0.85))
     cyl(body, q + Vector((0, 0.04, 0)), q + Vector((0, -0.06, 0)), 0.3, 0.3, BRASS, seg=16)
     cyl(P["Fac_Lights"], q + Vector((0, -0.04, 0)), q + Vector((0, -0.08, 0)), 0.23, 0.23, (255, 210, 170), seg=16)
-lathe(body, [(0.38, 0), (0.42, 0.05), (0.42, 0.25), (0.3, 0.3), (0, 0.3)], BRASS, seg=14, c=(cx6, 0.2, BZ + 1.4))
+lathe(body, [(0.46, 0), (0.5, 0.05), (0.5, 0.16), (0.44, 0.18), (0.44, 0.05), (0.0, 0.05)], BRASS, seg=16, c=(cx6, 0.2, BZ + 1.4))  # 환풍구 테
+fan = P["Fac_Fan"]
+fc = Vector((cx6, 0.2, BZ + 1.55))
+cyl(fan, fc + Vector((0, 0, -0.03)), fc + Vector((0, 0, 0.03)), 0.09, 0.09, WOOD_D, seg=10)
+for k in range(4):  # 날개 4장 (납작해서 세로축으로 돎)
+    box(fan, fc + rot(z=k * 90).to_3x3() @ Vector((0.22, 0, 0)), (0.3, 0.12, 0.03), CREAM_D, bev=0.012, seg=2, m=rot(z=k * 90) @ rot(x=18))
 
 # ⑦ 나오는 곳: 나무 미끄럼판 + 나무 상자 + 다 된 달고나
-box(body, (BX1 + 0.55, 0, BZ - 0.55), (1.3, 1.2, 0.1), WOOD_L, bev=0.03, m=rot(y=35))
+ch = P["Fac_Chute"]
+box(ch, (BX1 + 0.55, 0, BZ - 0.55), (1.3, 1.2, 0.1), WOOD_L, bev=0.03, m=rot(y=35))
 for sy in (-1, 1):
-    box(body, (BX1 + 0.55, sy * 0.62, BZ - 0.45), (1.3, 0.06, 0.25), WOOD_D, bev=0.02, seg=2, m=rot(y=35))
+    box(ch, (BX1 + 0.55, sy * 0.62, BZ - 0.45), (1.3, 0.06, 0.25), WOOD_D, bev=0.02, seg=2, m=rot(y=35))
 ox = BX1 + 1.45
 box(body, (ox, 0, 0.55), (1.6, 1.6, 1.1), WOOD, bev=0.1)
 box(body, (ox, 0, 1.08), (1.4, 1.4, 0.06), WOOD_D, bev=0.02)
@@ -321,24 +328,25 @@ for x in (3.0, 5.2):
 
 # ⑧ 앞 조작대: 나무 책상 + 기울어진 크림 판(계기 3개, 도안 버튼 6개, 큰 시작·정지 버튼, 레버)
 dx0, dy0 = 0.6, -2.35
-box(body, (dx0, dy0, 0.55), (2.4, 1.0, 1.1), WOOD, bev=0.1)
-box(body, (dx0, dy0 - 0.52, 0.55), (2.0, 0.06, 0.75), CREAM, bev=0.04)
+con = P["Fac_Console"]
+box(con, (dx0, dy0, 0.55), (2.4, 1.0, 1.1), WOOD, bev=0.1)
+box(con, (dx0, dy0 - 0.52, 0.55), (2.0, 0.06, 0.75), CREAM, bev=0.04)
 panel = Matrix.Translation(Vector((dx0, dy0, 1.32))) @ rot(x=-35)
-box(body, (dx0, dy0, 1.3), (2.6, 1.1, 0.24), WOOD_D, bev=0.08, m=rot(x=-35))
-box(body, panel @ Vector((0, 0, 0.13)), (2.35, 0.9, 0.06), CREAM, bev=0.03, m=rot(x=-35))
+box(con, (dx0, dy0, 1.3), (2.6, 1.1, 0.24), WOOD_D, bev=0.08, m=rot(x=-35))
+box(con, panel @ Vector((0, 0, 0.13)), (2.35, 0.9, 0.06), CREAM, bev=0.03, m=rot(x=-35))
 for k, x in enumerate((-0.75, 0.0, 0.75)):  # 계기
     q = panel @ Vector((x, 0.18, 0.17))
-    cyl(body, q, q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.05)), 0.2, 0.2, BRASS, seg=14)
-    cyl(body, q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.04)), q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.07)), 0.16, 0.16, GAUGE_FACE, seg=14)
+    cyl(con, q, q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.05)), 0.2, 0.2, BRASS, seg=14)
+    cyl(con, q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.04)), q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.07)), 0.16, 0.16, GAUGE_FACE, seg=14)
 for k, col in enumerate((ORANGE, MINT_BTN, SKY_BTN, LEMON_BTN, (210, 170, 220), (250, 190, 200))):  # 도안 버튼
     q = panel @ Vector((-0.9 + k * 0.36, -0.22, 0.17))
-    cyl(body, q, q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.06)), 0.1, 0.09, col, seg=10)
+    cyl(con, q, q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.06)), 0.1, 0.09, col, seg=10)
 q = Vector((dx0 + 1.45, dy0 - 0.1, 1.15))
-box(body, q, (0.5, 0.8, 0.3), WOOD_D, bev=0.06)
-ball(body, q + Vector((0, -0.18, 0.2)), (0.14, 0.14, 0.08), MINT_BTN, seg=(12, 6))  # 시작
-ball(body, q + Vector((0, 0.18, 0.2)), (0.14, 0.14, 0.08), RED_BTN, seg=(12, 6))  # 정지
-cyl(body, (dx0 - 1.35, dy0, 1.0), (dx0 - 1.35, dy0 - 0.25, 1.55), 0.05, 0.04, BRASS, seg=8)  # 레버
-ball(body, (dx0 - 1.35, dy0 - 0.27, 1.6), 0.1, RED_BTN, seg=(10, 6))
+box(con, q, (0.5, 0.8, 0.3), WOOD_D, bev=0.06)
+ball(P["Fac_StartButton"], q + Vector((0, -0.18, 0.2)), (0.14, 0.14, 0.08), MINT_BTN, seg=(12, 6))  # 시작 (돌 때 켜짐)
+ball(P["Fac_StopButton"], q + Vector((0, 0.18, 0.2)), (0.14, 0.14, 0.08), RED_BTN, seg=(12, 6))  # 정지 (멈추면 깜빡)
+cyl(con, (dx0 - 1.35, dy0, 1.0), (dx0 - 1.35, dy0 - 0.25, 1.55), 0.05, 0.04, BRASS, seg=8)  # 레버
+ball(con, (dx0 - 1.35, dy0 - 0.27, 1.6), 0.1, RED_BTN, seg=(10, 6))
 
 # ───────────── 오브젝트 + 팔레트 재질 ─────────────
 IMG = palette_image()
@@ -355,14 +363,18 @@ nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
 NOTES = {
     "Fac_Body": "나무·크림 몸, 설탕 탑 틀, 관, 노즐대, 프레스 틀, 식힘 덮개, 상자, 조작대 (SmoothPlastic 또는 Wood)",
     "Fac_Hopper": "유리 설탕 통 (Glass, Transparency 0.5)",
-    "Fac_Sugar": "통 속 설탕",
-    "Fac_Kettle": "구리 솥 (Metal)",
+    "Fac_Sugar": "통 속 설탕 (Anim hopper)",
+    "Fac_Kettle": "구리 솥 (Anim kettle, Metal)",
     "Fac_Belt": "컨베이어 벨트 (움직임은 위 달고나를 옮겨서 표현)",
-    "Fac_Rollers": "벨트 끝 롤러 2개 (각자 축이 Roblox Z 방향, 돌리면 벨트가 도는 느낌)",
-    "Fac_Press": "누름 머리 (Roblox Y로 약 0.55 내리면 벨트 위 달고나에 닿음)",
-    "Fac_Lights": "전구·식힘 덮개 창 (Neon 또는 PointLight를 넣을 자리)",
-    "Fac_BeltDalgona": "벨트 위 달고나 (노즐 밑 반죽 3개 + 프레스 지난 별 2개)",
+    "Fac_Fan": "식힘 덮개 위 환풍기 날개 (Anim spin: 가장 얇은 축 = 세로축으로 돎)",
+    "Fac_Press": "누름 머리 (Anim press, Roblox Y로 약 0.55 내리면 벨트 위 달고나에 닿음)",
+    "Fac_Lights": "전구·식힘 덮개 창 (Anim lampRun: 돌 때 Neon)",
+    "Fac_BeltDalgona": "벨트 위 달고나 (Anim belt: 부품 -X로 흐름)",
+    "Fac_Chute": "나무 미끄럼판 (Anim outlet: 다 된 달고나가 나오는 곳)",
     "Fac_Output": "상자 속 다 된 달고나",
+    "Fac_Console": "앞 조작대 (제어대 ProximityPrompt를 붙일 부품)",
+    "Fac_StartButton": "시작 버튼 (Anim lampRun)",
+    "Fac_StopButton": "정지 버튼 (Anim lampStop)",
 }
 rows = []
 objs = []

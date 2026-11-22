@@ -40,7 +40,18 @@ local ANIM = {
 	Line_TowerR_Node = "lampStop",
 	Line_TowerY_Node = "lampIdle",
 	Line_Chute_Node = "outlet",
+	-- 아늑한 가게 그림체 공장 기계 (tools/blender/cozy_factory.py, 2026-11-23 사용자: 기존 기계 백업하고 교체)
+	Fac_Press_Node = "press",
+	Fac_Fan_Node = "spin",
+	Fac_BeltDalgona_Node = "belt",
+	Fac_Sugar_Node = "hopper",
+	Fac_Kettle_Node = "kettle",
+	Fac_Lights_Node = "lampRun",
+	Fac_StartButton_Node = "lampRun",
+	Fac_StopButton_Node = "lampStop",
+	Fac_Chute_Node = "outlet",
 }
+local CONSOLE = { Line_ConsolePanel_Node = true, Fac_Console_Node = true } -- 제어대 ProximityPrompt를 붙일 부품
 
 local function part(parent, name, size, cf, color, material, props)
 	local p = Instance.new("Part")
@@ -207,7 +218,7 @@ local function buildBuilding(lot)
 			if key then
 				d:SetAttribute("Anim", key)
 			end
-			if d.Name == "Line_ConsolePanel_Node" or (d.Parent and d.Parent.Name == "Line_ConsolePanel_Node") then
+			if CONSOLE[d.Name] or (d.Parent and CONSOLE[d.Parent.Name]) then
 				console = console or d
 			end
 		end
