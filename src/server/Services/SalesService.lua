@@ -223,6 +223,32 @@ local function buildShelf(shop, plot)
 	shop.shelfLocal = toLocal(bodyCF.Position)
 	shop.standLocal = toLocal((bodyCF * CFrame.new(0, 0, -front)).Position)
 	shop.standSide = toLocal((bodyCF * CFrame.new(1, 0, -front)).Position) - shop.standLocal
+	-- 손님 주문 자리 (2026-11-23 사용자: 카운터를 넘어오지 말고 카운터 앞 의자 쪽에서 주문): 틀 부품 CustomerSpot이 있으면 그 자리,
+	-- 그 부품의 앞(LookVector)을 보고 섬. 게임에서는 안 보임
+	local spotPart = plot.model:FindFirstChild("CustomerSpot")
+	if spotPart and spotPart:IsA("BasePart") then
+		shop.standLocal = toLocal(spotPart.Position)
+		shop.standSide = toLocal(spotPart.Position + spotPart.CFrame.RightVector) - shop.standLocal
+		shop.shelfLocal = toLocal(spotPart.Position + spotPart.CFrame.LookVector * 4)
+		spotPart.Transparency = 1
+		for _, g in ipairs(spotPart:GetChildren()) do
+			if g:IsA("SurfaceGui") then
+				g.Enabled = false
+			end
+		end
+	end
+	-- 진열장 앞 이름표 카드 (가게 3D의 SurfaceGui CardNames.Card1~4 = 진열 1~4칸의 도안 이름)
+	local cards = plot.model:FindFirstChild("CardNames", true)
+	shop.cards = {}
+	if cards then
+		for i = 1, 4 do
+			local c = cards:FindFirstChild("Card" .. i, true)
+			if c and c:IsA("TextLabel") then
+				shop.cards[i] = c
+				c.Text = ""
+			end
+		end
+	end
 	m.Parent = plot.model
 	shop.shelf = m
 end
@@ -284,6 +310,11 @@ local function refreshShelf(index)
 		end
 	end
 	shop.label.Text = string.format(slots < SALES.shelfSlots and "쟁반 %d/%d" or "진열대 %d/%d", n, slots) -- 노점은 쟁반 5칸 (D21)
+	for i, c in pairs(shop.cards or {}) do
+		local item = bySlot[i]
+		local shape = item and ShapeCatalog.get(item.s)
+		c.Text = shape and shape.name or ""
+	end
 end
 
 ---------------------------------------------------------------- 들고 있는 달고나 (속성 Carrying, 2026-11-21)
