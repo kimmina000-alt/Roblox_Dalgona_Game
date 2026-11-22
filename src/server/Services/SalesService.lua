@@ -733,6 +733,15 @@ local function count(t)
 	return n
 end
 
+-- 이 플레이어 가게에 손님이 바로 오게 (첫 60초 안내: 첫 달고나를 진열하면)
+function SalesService.hurry(player)
+	for _, shop in pairs(shops) do
+		if shop.owner == player then
+			shop.nextVisit = 0
+		end
+	end
+end
+
 function SalesService.init(dataService, economyService, plotService)
 	Data, Economy, Plots = dataService, economyService, plotService
 	for i = 1, G.Plots.count do

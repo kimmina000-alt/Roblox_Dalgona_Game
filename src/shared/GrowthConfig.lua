@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 8 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생
+G.SchemaVersion = 9 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -42,6 +42,7 @@ G.DefaultData = {
 	stats = { made = 0, sold = 0, coinsEarned = 0, helperMade = 0, wagesPaid = 0 },
 	collection = {}, -- 도감 [도안 id] = { best = 손으로 만든 최고 등급, n = 손으로 만든 수 } (자동 생산은 안 셈)
 	daily = { day = "", goals = {} }, -- 일일 목표 3개 (UTC 날짜가 바뀌면 새로)
+	tutorialDone = false, -- 첫 60초 안내를 끝냈거나 건너뜀 (21번). 새 플레이어만 false
 	lastSeen = 0, -- 마지막으로 접속해 있던 시각 (os.time, 저장할 때마다 갱신). 0 = 아직 없음 → 정산 안 함 (D29)
 	offline = { settledAt = 0, from = 0, seconds = 0 }, -- 마지막 오프라인 정산 기록
 }
@@ -428,6 +429,24 @@ G.Offline = {
 	step = 1, -- 시뮬레이션 간격(초)
 	reportDelay = 4, -- 들어온 뒤 요약 팝업을 보내기까지 (화면 준비)
 	-- 판매 없음, 월세 없음. 나갈 때 가게 문이 닫혀 있었으면 알바생·기계·공장 모두 멈춘 채
+}
+
+---------------------------------------------------------------- 첫 60초 안내 (21번, 2026-11-22, DEVELOPMENT_PLAN 6장 Phase 6)
+-- 할아버지 NPC가 말풍선으로 단계마다 알려 줌. 새 플레이어(tutorialDone = false)만. 건너뛰기 가능
+G.Tutorial = {
+	nearDistance = 11, -- 작업대에 이만큼 가까이 가면 1단계 끝
+	hurryCustomer = true, -- 첫 달고나를 진열하면 손님이 바로 옴
+	-- 만드는 동안 안내 판: 화면 아래 가운데, 작게, 버튼 없이 입력을 막지 않게 (제작 화면 위쪽 0~190은 게이지·막대가 씀, 제작 세션 2026-11-22)
+	makePanel = { width = 420, height = 72, bottom = 16, maxWidthScale = 0.48 },
+	steps = {
+		{ key = "go", text = "어서 와! 여기가 네 노점이란다. 반짝이는 작업대로 가 보렴", target = "workstation" },
+		{ key = "press", text = "작업대 앞에서 E를 누르면 달고나를 만들 수 있어", touchText = "작업대 앞에서 손 모양 버튼을 누르면 달고나를 만들 수 있어", target = "workstation" },
+		{ key = "make", text = "모양을 고르고, 설탕을 녹이고 소다를 넣어 부풀린 다음 붓고 눌러서 찍어 보렴", target = nil },
+		{ key = "place", text = "잘했다! 들고 있는 달고나를 반짝이는 진열대에 놓아 보렴 (R)", touchText = "잘했다! 들고 있는 달고나를 반짝이는 진열대 칸에 놓아 보렴", target = "shelf" },
+		{ key = "sale", text = "곧 손님이 와서 사 갈 거야. 조금만 기다려 보렴", target = "shelf" },
+		{ key = "shop", text = "첫 장사 축하한다! 재료가 떨어지면 상점에서 사면 돼. 상점 버튼을 눌러 보렴", target = "shopButton" },
+	},
+	doneText = "이제 혼자서도 잘하겠구나. 맛있는 달고나 많이 팔아라!",
 }
 
 ---------------------------------------------------------------- 상점·요청 제한

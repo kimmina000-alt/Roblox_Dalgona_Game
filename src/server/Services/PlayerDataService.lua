@@ -79,6 +79,13 @@ PlayerDataService.MIGRATIONS = {
 			end
 		end
 	end,
+	[9] = function(data)
+		-- v8 → v9 (첫 60초 안내, 2026-11-22): 이미 하던 플레이어(저장된 코인이 있음)는 안내 없이.
+		-- 처음 온 플레이어는 빈 데이터가 v0부터 모든 단계를 지나므로 여기서 건드리지 않음 (기본값 false)
+		if data.coins ~= nil then
+			data.tutorialDone = true
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))
