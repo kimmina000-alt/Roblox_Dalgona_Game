@@ -76,13 +76,31 @@ local function upgradeSteps(d)
 	return n
 end
 
--- 한 판에 드는 것 (재료·코인)
-local function jobCost(d, shape, qty)
-	local need = { sugar = (G.recipe(shape.grade).sugar or 1) * qty }
+---------------------------------------------------------------- 공정 알바생 (D30)
+
+local STAFF = F.staff
+
+local function hired(d, key)
+	return d.factory.staff ~= nil and d.factory.staff[key] == true
+end
+
+-- 1명 급여 (그 판 시간만큼)
+local function staffWage(sec)
+	return math.floor(sec / 30 * STAFF.wagePer30s + 0.5)
+end
+
+-- 한 판에 드는 것 (재료·코인). on = 이번 판에 일하는 공정 { key = true } (없으면 고용한 공정 모두로 미리 보기)
+local function jobCost(d, shape, qty, on)
+	on = on or d.factory.staff or {}
+	local sugar = (G.recipe(shape.grade).sugar or 1) * qty
+	if on.sugar then
+		sugar -= math.floor(sugar * STAFF.sugarSave) -- ① 설탕 넣기
+	end
+	local need = { sugar = sugar }
 	for id, k in pairs(F.perItem) do
 		need[id] = (need[id] or 0) + k * qty
 	end
-	if (d.factory.ups.autopack or 0) > 0 then
+	if on.pack then -- ⑤ 포장 = 자동 포장 (D28)
 		for id, k in pairs(F.packPerItem) do
 			need[id] = (need[id] or 0) + k * qty
 		end
@@ -91,7 +109,47 @@ local function jobCost(d, shape, qty)
 	return need, coins
 end
 
-local function rollQuality(d, mode)
+-- 이번 판에 일할 공정·판 시간·급여 합. 운영비를 뺀 코인으로 공정 순서대로(③ 먼저: 시간이 바뀌므로) 급여를 낼 수 있는 만큼
+local function planStaff(d, qty, mode, baseCoins)
+	local sec = G.factorySeconds(qty, mode, d.factory.ups)
+	local budget = d.coins - baseCoins
+	local on, wages = {}, 0
+	if hired(d, "press") then
+		local s2 = math.floor(sec * STAFF.pressTime + 0.5)
+		local w = staffWage(s2)
+		if budget >= w then
+			on.press = true
+			sec = s2
+			budget -= w
+			wages += w
+		end
+	end
+	for _, st in ipairs(STAFF.stations) do
+		local key = st.key
+		if key ~= "press" and hired(d, key) then
+			local w = staffWage(sec)
+			local ok = budget >= w
+			if key == "pack" and (d.ingredients.wrapper or 0) < qty then
+				ok = false -- 포장지가 없으면 포장 안 함
+			end
+			if ok then
+				on[key] = true
+				budget -= w
+				wages += w
+			end
+		end
+	end
+	return on, sec, wages
+end
+
+-- 품질: 생산 방식 범위 + 정밀 품질 제어기, ④ 검사는 Poor 절반, ② 끓이기는 15%로 한 칸 위 (최고 Excellent)
+local GRADE_POS = {}
+for i, g in ipairs(Config.Grades) do
+	GRADE_POS[g.name] = i
+end
+
+local function rollQuality(d, mode, st)
+	st = st or {}
 	local m = F.modes[mode] or F.modes.normal
 	local lo, hi = m.qMin, m.qMax
 	if (d.factory.ups.precision or 0) > 0 then
@@ -99,12 +157,26 @@ local function rollQuality(d, mode)
 		hi = math.min(hi + F.precisionQ, 94)
 	end
 	local q = math.random(lo, hi)
+	local grade = nil
 	for _, g in ipairs(Config.Grades) do
 		if q >= g.min then
-			return q, g.name, g.mult
+			grade = g
+			break
 		end
 	end
-	return q, "Normal", 0.8
+	grade = grade or Config.Grades[#Config.Grades]
+	if st.inspect and grade.name == "Poor" and math.random() >= STAFF.inspectPoorKeep then
+		grade = Config.Grades[GRADE_POS.Normal]
+		q = grade.min
+	end
+	if st.boil and math.random() < STAFF.boilUpChance and grade.name ~= "Excellent" and grade.name ~= "Perfect" then
+		local up = Config.Grades[GRADE_POS[grade.name] - 1]
+		if up and up.name ~= "Perfect" then
+			grade = up
+			q = up.min
+		end
+	end
+	return q, grade.name, grade.mult
 end
 
 ---------------------------------------------------------------- 공장 부지 (D11, 2026-11-22: 가게 건물 뒤에 붙음, 뒷문으로 걸어 들어감)
@@ -212,6 +284,18 @@ local function publish(player, d)
 	setAttr(sp, "Mode", f.mode)
 	setAttr(sp, "Lines", lineCount(d))
 	setAttr(sp, "Status", status[player] or (f.on and "work" or "off"))
+	-- 공정 알바생 (D30): 고용 / 지금 일하는지 (돌고 있는 판에서 급여를 냈는지)
+	for _, st in ipairs(STAFF.stations) do
+		local working = false
+		for k = 1, 2 do
+			local job = f.lines[k]
+			if job and job.on and job.on[st.key] then
+				working = true
+			end
+		end
+		setAttr(sp, "Staff_" .. st.key, hired(d, st.key))
+		setAttr(sp, "StaffOn_" .. st.key, working)
+	end
 	local now = workspace:GetServerTimeNow()
 	for k = 1, 2 do
 		local job = f.lines[k]
@@ -340,6 +424,41 @@ function FactoryService.upgrade(d, key)
 	return true, string.format("%s 설치!", u.name)
 end
 
+-- 공정 알바생 고용·내보내기 (D30)
+local STATION = {}
+for _, st in ipairs(STAFF.stations) do
+	STATION[st.key] = st
+end
+
+function FactoryService.hire(d, key)
+	local st = STATION[key]
+	if not st then
+		return false, "모르는 공정"
+	end
+	if not d.factory.unlocked then
+		return false, "공장이 없어요"
+	end
+	d.factory.staff = d.factory.staff or {}
+	if d.factory.staff[key] then
+		return false, st.name .. " 알바생은 이미 있어요"
+	end
+	if d.coins < STAFF.hireCost then
+		return false, string.format("%d코인이 필요해요", STAFF.hireCost)
+	end
+	d.coins -= STAFF.hireCost
+	d.factory.staff[key] = true
+	return true, string.format("%s 알바생 고용! (%s)", st.name, st.desc)
+end
+
+function FactoryService.fire(d, key)
+	local st = STATION[key]
+	if not st or not d.factory.staff or not d.factory.staff[key] then
+		return false, "그 공정에 알바생이 없어요"
+	end
+	d.factory.staff[key] = nil
+	return true, st.name .. " 알바생을 내보냈어요"
+end
+
 -- 바꾼 뒤 (Data.update 밖)
 function FactoryService.changed(player)
 	local d = Data.get(player)
@@ -367,10 +486,31 @@ function FactoryService.snapshot(player, d)
 		ups[u.key] = lv
 		table.insert(list, { key = u.key, name = u.name, desc = u.desc, level = lv, max = #u.costs, cost = u.costs[lv + 1] })
 	end
+	local staff = {}
+	local previewSec = G.factorySeconds(f.qty, f.mode, f.ups)
+	if hired(d, "press") then
+		previewSec = math.floor(previewSec * STAFF.pressTime + 0.5)
+	end
+	for _, st in ipairs(STAFF.stations) do
+		local working = false
+		for k = 1, 2 do
+			local job = f.lines[k]
+			if job and job.on and job.on[st.key] then
+				working = true
+			end
+		end
+		table.insert(staff, { key = st.key, name = st.name, desc = st.desc, hired = hired(d, st.key), on = working, wage = staffWage(previewSec) })
+	end
 	local preview = nil
 	if shape then
 		local need, coins = jobCost(d, shape, f.qty)
-		preview = { seconds = G.factorySeconds(f.qty, f.mode, f.ups), sugar = need.sugar, soda = need.soda, wrapper = need.wrapper, coins = coins }
+		local wages = 0
+		for _, st in ipairs(staff) do
+			if st.hired then
+				wages += st.wage
+			end
+		end
+		preview = { seconds = previewSec, sugar = need.sugar, soda = need.soda, wrapper = need.wrapper, coins = coins + wages, wages = wages }
 	end
 	return {
 		unlocked = f.unlocked == true,
@@ -386,6 +526,8 @@ function FactoryService.snapshot(player, d)
 		upgrades = list,
 		shapes = allowedShapes(d),
 		preview = preview,
+		staff = staff,
+		staffHireCost = STAFF.hireCost,
 		price = F.price,
 		level = F.level,
 	}
@@ -414,7 +556,9 @@ local function beginJob(dd, k)
 	if #dd.stock + pending + f.qty > G.stockMax(dd) then
 		return "보관함 가득"
 	end
-	local need, coins = jobCost(dd, shape, f.qty)
+	local _, baseCoins = jobCost(dd, shape, f.qty, {})
+	local on, sec, wages = planStaff(dd, f.qty, f.mode, baseCoins)
+	local need, coins = jobCost(dd, shape, f.qty, on)
 	for _, ing in ipairs(G.Ingredients) do
 		if (need[ing.id] or 0) > (dd.ingredients[ing.id] or 0) then
 			return "재료 부족: " .. ing.name
@@ -426,10 +570,11 @@ local function beginJob(dd, k)
 	for id, n in pairs(need) do
 		dd.ingredients[id] -= n
 	end
-	dd.coins -= coins
+	dd.coins -= coins + wages
 	dd.stats.factorySpent = (dd.stats.factorySpent or 0) + coins
-	f.lines[k] = { s = shape.id, n = f.qty, m = f.mode, t = 0, sec = G.factorySeconds(f.qty, f.mode, f.ups), pk = (f.ups.autopack or 0) > 0 }
-	return nil, need, coins
+	dd.stats.staffWages = (dd.stats.staffWages or 0) + wages
+	f.lines[k] = { s = shape.id, n = f.qty, m = f.mode, t = 0, sec = sec, pk = on.pack == true, st = { boil = on.boil, inspect = on.inspect }, on = on }
+	return nil, need, coins, wages
 end
 
 -- 끝난 판 꺼내기 (데이터만 바꿈). 반환: 만든 수, 진열 칸 목록, 레벨업 목록
@@ -445,7 +590,7 @@ local function endJob(dd, k, job)
 	local packed = job.pk == true -- 판을 시작할 때 포장지를 냈을 때만 (자동 포장)
 	local slots = {}
 	for _ = 1, n do
-		local q, grade, mult = rollQuality(dd, job.m)
+		local q, grade, mult = rollQuality(dd, job.m, job.st)
 		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = packed, a = true, f = true }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, packed)
 		local sl = Economy.stockProduced(dd, item, "factory")
@@ -522,7 +667,7 @@ function FactoryService.offlineTick(dd, dt, rep)
 	if f.on then
 		for k = 1, lineCount(dd) do
 			if not f.lines[k] then
-				local why, need, coins = beginJob(dd, k)
+				local why, need, coins, wages = beginJob(dd, k)
 				if why then
 					rep.stops["공장"] = rep.stops["공장"] or why
 				else
@@ -531,6 +676,7 @@ function FactoryService.offlineTick(dd, dt, rep)
 						rep.used[id] = (rep.used[id] or 0) + n
 					end
 					rep.factoryCoins += coins
+					rep.wages += wages -- 공정 알바생 급여 (D30)
 				end
 			end
 		end

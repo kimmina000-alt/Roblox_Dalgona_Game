@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 7 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen)
+G.SchemaVersion = 8 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -35,7 +35,8 @@ G.DefaultData = {
 	machine = { shapes = {}, t = 0 }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, t = 이번 판 진행 초
 	-- 가게 뒤 공장 (D11, 5단계): on = 생산 켬, shape·qty·mode = 제어대 설정, lines = 라인별 진행 중인 판 { s, n, m, t, sec } 또는 false,
 	-- ups = 제어대 업그레이드 단계 [key] = 0..
-	factory = { unlocked = false, on = false, shape = "", qty = 20, mode = "normal", lines = {}, ups = {} },
+	-- staff[공정 key] = true: 고용한 공정 알바생 (D30)
+	factory = { unlocked = false, on = false, shape = "", qty = 20, mode = "normal", lines = {}, ups = {}, staff = {} },
 	-- 가게 (D21): state = "stall"(야외 노점) | "rented"(월세) | "owned"(매입). rentTimer = 지난 월세 뒤 접속한 초, closed = 월세 못 내 문 닫힘
 	shop = { state = "stall", rentTimer = 0, closed = false },
 	stats = { made = 0, sold = 0, coinsEarned = 0, helperMade = 0, wagesPaid = 0 },
@@ -272,7 +273,7 @@ G.Factory = {
 	modeOrder = { "normal", "precise", "fast" },
 	maxGrade = "Legendary", -- D13
 	-- 1개 원가: 설탕(도안 등급만큼, 1회분 3) + 소다 1 + 운영비 1코인. 판을 시작할 때 한 번에 뺌
-	-- 포장지는 "자동 포장 시스템"이 있을 때만 1개씩 쓰고 판매가 ×1.1 (사용자 확정 2026-11-22, 손 포장 D18과 같은 규칙)
+	-- 포장지는 자동 포장(⑤ 포장 공정 알바생, D30)이 있을 때만 1개씩 쓰고 판매가 ×1.1 (D28, 손 포장 D18과 같은 규칙)
 	perItem = { soda = 1 }, -- 설탕은 G.recipe(등급)
 	packPerItem = { wrapper = 1 }, -- 자동 포장일 때만
 	operatingCoins = 1, -- 제한 4: 공장 유지비 (1개당)
@@ -286,8 +287,25 @@ G.Factory = {
 		{ key = "parallel", name = "병렬 생산 라인", desc = "동시 작업 2개", costs = { 100000 } },
 		{ key = "conveyor", name = "고속 컨베이어 시스템", desc = "생산 시간 15% 감소", costs = { 120000 } },
 		{ key = "precision", name = "정밀 품질 제어기", desc = "Excellent 확률 증가", costs = { 150000 } },
-		{ key = "autopack", name = "자동 포장 시스템", desc = "포장해서 나옴 (판매가 ×1.1)", costs = { 100000 } },
 		{ key = "warehouse", name = "대형 완제품 창고", desc = "보관함 2배", costs = { 80000 } },
+	},
+	-- 공정 알바생 (D30, 사용자 2026-11-22, 수치 기획안). 공정마다 따로 고용, 생김새는 내 캐릭터 미니미 + 공정별 옷 (제작 세션)
+	-- 효과와 급여는 판을 시작할 때 정함: 그 판 시간만큼 급여를 먼저 내고, 코인이 모자라면 그 공정만 그 판에서 효과 꺼짐.
+	-- 제어대 업그레이드와 겹치면 곱해서 적용. 예전 "자동 포장 시스템" 업그레이드는 ⑤ 포장 알바생이 대신함
+	staff = {
+		hireCost = 10000,
+		wagePer30s = 6, -- 1명당 30초당 6 (공장이 돌아가는 동안만, 오프라인도 일한 만큼)
+		sugarSave = 0.10, -- ① 설탕 10% 덜 씀 (내림: 10개마다 1회분)
+		boilUpChance = 0.15, -- ② 품질 한 칸 위로 (최고 Excellent)
+		pressTime = 0.9, -- ③ 생산 시간 -10%
+		inspectPoorKeep = 0.5, -- ④ Poor가 나올 확률 절반 (나머지 절반은 Normal로)
+		stations = {
+			{ key = "sugar", name = "설탕 넣기", desc = "설탕 10% 덜 씀", outfit = "흰 두건 + 마스크" },
+			{ key = "boil", name = "끓이기", desc = "15% 확률로 품질 한 칸 위로 (최고 Excellent)", outfit = "빨간 앞치마 + 오븐 장갑" },
+			{ key = "press", name = "붓기·찍기", desc = "생산 시간 -10%", outfit = "노란 안전모" },
+			{ key = "inspect", name = "식히기·검사", desc = "Poor 확률 절반", outfit = "하늘색 위생모 + 돋보기" },
+			{ key = "pack", name = "포장", desc = "자동 포장: 포장지 1개씩, 판매가 ×1.1", outfit = "파란 앞치마 + 빵끈" },
+		},
 	},
 	-- 공장 부지 (D11, 2026-11-22 바뀜): 가게 건물 뒤에 바로 붙은 울타리 부지 (폭 28 × 깊이 44), 뒷문으로 걸어 들어감.
 	-- 부지·공장 3D는 제작 세션이 만듦 (Plot<i>.FactoryLot.Ground = 영역). 없을 때는 아래 값(부지 기준 로컬)으로 판정

@@ -66,6 +66,19 @@ PlayerDataService.MIGRATIONS = {
 		data.lastSeen = os.time()
 		data.offline = { settledAt = 0, from = 0, seconds = 0 }
 	end,
+	[8] = function(data)
+		-- v7 → v8 (공장 공정 알바생 D30, 2026-11-22): "자동 포장 시스템" 업그레이드를 산 사람은 ⑤ 포장 알바생을 고용한 것으로
+		local f = type(data.factory) == "table" and data.factory or nil
+		if f then
+			f.staff = type(f.staff) == "table" and f.staff or {}
+			if type(f.ups) == "table" and (tonumber(f.ups.autopack) or 0) > 0 then
+				f.staff.pack = true
+			end
+			if type(f.ups) == "table" then
+				f.ups.autopack = nil
+			end
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

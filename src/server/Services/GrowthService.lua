@@ -303,6 +303,10 @@ function GrowthService.action(player, what, a, b)
 			ok, msg = Factory.run(dd, a == true)
 		elseif what == "factoryUp" and type(a) == "string" then
 			ok, msg = Factory.upgrade(dd, a)
+		elseif what == "factoryHire" and type(a) == "string" then
+			ok, msg = Factory.hire(dd, a) -- 공장 공정 알바생 (D30)
+		elseif what == "factoryFire" and type(a) == "string" then
+			ok, msg = Factory.fire(dd, a)
 		end
 		if not ok then
 			return false
@@ -748,11 +752,11 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 		clearHelpers(p)
 	end)
 
-	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP, 월세 타이머 초, 달고나 목록) (실서버에서는 안 만듦)
+	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP, 월세 타이머 초, 달고나 목록, 보관함 비우기) (실서버에서는 안 만듦)
 	if game:GetService("RunService"):IsStudio() then
 		local dev = Instance.new("BindableFunction")
 		dev.Name = "DevGrant"
-		dev.OnInvoke = function(userId, coins, exp, rentTimer, items)
+		dev.OnInvoke = function(userId, coins, exp, rentTimer, items, clearStock)
 			local p = Players:GetPlayerByUserId(userId)
 			if not p then
 				return "no player"
@@ -763,6 +767,9 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 				ups = Economy.addExp(d, exp or 0)
 				if rentTimer then
 					d.shop.rentTimer = rentTimer
+				end
+				if clearStock then
+					d.stock = {} -- 시험용: 보관함 비우기
 				end
 				for _, item in ipairs(items or {}) do -- 시험용 달고나 (빈 진열 칸 → 없으면 보관함)
 					Economy.stockProduced(d, item, "dev")
