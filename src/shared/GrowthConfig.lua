@@ -455,6 +455,12 @@ G.Perf = {
 	factoryLodMargin = 10, -- 다시 원래 모습은 (거리 - 여유) 안으로 들어왔을 때 (경계에서 깜빡이지 않게)
 	factoryProxyHeight = 0.55, -- 상자 높이 = 공장 높이 × 이 값
 	lodCheckSeconds = 0.5,
+	-- 남의 가게 작업대 소품 숨기기 (WorkstationLod, 2026-11-22): 화면 삼각형의 70%가 작업대 소품
+	workstationLodDistance = 70, -- 남의 작업대가 이만큼 넘게 멀면 소품을 숨김 (옆 가게 40칸은 보이고, 두 칸 건너 80칸부터 숨김)
+	workstationLodMargin = 8, -- 다시 보이는 건 (거리 - 여유) 안
+	-- 숨길 소품 = 작업대 바로 아래 자식 이름 (화로·테이블·국자·철판·누름판·틀·러그는 남김)
+	workstationHide = { "Stage1Decor", "SugarBowlWhite", "SugarBowlBrown", "WoodSpoon", "SodaTub", "SodaSpoon", "ChopstickCup" },
+	workstationPackKeep = { "Mat" }, -- 포장 공간(PackArea)에서 남길 것 (비닐 통·빵끈 통은 숨김)
 	-- 스트리밍 반경은 Studio Workspace 속성 (StreamingTargetRadius 256, 2026-11-22 1024에서 줄임)
 }
 
