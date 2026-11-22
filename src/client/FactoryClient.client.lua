@@ -197,6 +197,9 @@ local function setPose(m, pose)
 				motor:SetAttribute("BaseC0", base)
 			end
 			motor.C0 = pose and pose[key] and base * pose[key] or base
+		elseif motor and motor:IsA("AnimationConstraint") then
+			-- 새 아바타 관절(AnimationConstraint): 자세는 Transform으로
+			motor.Transform = pose and pose[key] or CFrame.identity
 		end
 	end
 end
@@ -224,9 +227,8 @@ local function animateStaff(fac, now, camPos)
 			end
 			-- 머리 위 글: 공정 이름 · 일하는 중/쉬는 중
 			local t = m:FindFirstChild("TextLabel", true)
-			if t then
-				local base = t:GetAttribute("BaseText") or t.Text
-				t:SetAttribute("BaseText", base)
+			local base = m:GetAttribute("StationName")
+			if t and base then
 				local want = base .. (on and " · 일하는 중" or " · 쉬는 중")
 				if t.Text ~= want then
 					t.Text = want
@@ -689,6 +691,23 @@ local function hook(fac)
 	if plot then
 		plot.DescendantAdded:Connect(onAdded)
 	end
+	-- 가게 부지가 다시 만들어지면(주인이 나갔다 들어옴) 위 연결이 옛 부지에 걸려 있음 → 2초마다 공장 3D를 다시 찾음
+	task.spawn(function()
+		while fac.Parent do
+			task.wait(2)
+			local rec = factories[fac]
+			local lot = lotOf(fac)
+			local b = lot and lot:FindFirstChild("Building")
+			if b and (not rec or rec.building ~= b) then
+				scan(true)
+				local _, p2 = lotOf(fac)
+				if p2 and p2 ~= plot then
+					plot = p2
+					plot.DescendantAdded:Connect(onAdded)
+				end
+			end
+		end
+	end)
 end
 
 task.spawn(function()

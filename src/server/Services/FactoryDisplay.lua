@@ -408,6 +408,7 @@ local function syncStaff(plot, fac)
 				if ok and m then
 					m.Name = name
 					m:SetAttribute("StaffKey", st.key)
+					m:SetAttribute("StationName", st.name) -- 클라이언트가 머리 위 글에 "· 일하는 중"을 붙일 때 씀
 					m:SetAttribute("HelperIndex", nil)
 					for _, n in ipairs({ "Apron", "ApronSkirt", "HandLadle" }) do
 						local x = m:FindFirstChild(n)
