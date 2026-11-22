@@ -436,7 +436,8 @@ G.Offline = {
 G.Tutorial = {
 	nearDistance = 11, -- 작업대에 이만큼 가까이 가면 1단계 끝
 	hurryCustomer = true, -- 첫 달고나를 진열하면 손님이 바로 옴
-	makePanelTop = 70, -- 만드는 동안 안내 판을 화면 위에서 이만큼 아래에 (제작 화면 단계 칩 아래)
+	-- 만드는 동안 안내 판: 화면 아래 가운데, 작게, 버튼 없이 입력을 막지 않게 (제작 화면 위쪽 0~190은 게이지·막대가 씀, 제작 세션 2026-11-22)
+	makePanel = { width = 420, height = 72, bottom = 16, maxWidthScale = 0.48 },
 	steps = {
 		{ key = "go", text = "어서 와! 여기가 네 노점이란다. 반짝이는 작업대로 가 보렴", target = "workstation" },
 		{ key = "press", text = "작업대 앞에서 E를 누르면 달고나를 만들 수 있어", touchText = "작업대 앞에서 손 모양 버튼을 누르면 달고나를 만들 수 있어", target = "workstation" },

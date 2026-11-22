@@ -265,13 +265,19 @@ local function show(n)
 		buildNpc()
 	end
 	gui.Enabled = true
-	-- 만드는 동안(3단계)은 제작 화면 아래 버튼을 가리지 않게 위쪽에 둠
+	-- 만드는 동안(3단계): 아래 가운데에 작게, 건너뛰기 없이, 입력을 막지 않게 (누르기·찍기는 화면 어디를 눌러도 되는 단계)
+	panel.AnchorPoint = Vector2.new(0.5, 1)
 	if st.key == "make" then
-		panel.AnchorPoint = Vector2.new(0.5, 0)
-		panel.Position = UDim2.new(0.5, 0, 0, T.makePanelTop * S)
+		local mp = T.makePanel
+		local w = math.min(mp.width * S, gui.AbsoluteSize.X * mp.maxWidthScale)
+		panel.Size = UDim2.fromOffset(w, mp.height * S)
+		panel.Position = UDim2.new(0.5, 0, 1, -mp.bottom * S)
+		panel.Active = false
+		skip.Visible = false
 	else
-		panel.AnchorPoint = Vector2.new(0.5, 1)
+		panel.Size = UDim2.fromOffset(520 * S, 92 * S)
 		panel.Position = UDim2.new(0.5, 0, 1, -16 * S)
+		skip.Visible = true
 	end
 	body.Text = stepText(n)
 	count.Text = string.format("%d / %d", n, #T.steps)
