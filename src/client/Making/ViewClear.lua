@@ -1,6 +1,6 @@
 -- 만드는 동안 카메라와 작업대 사이를 가리는 가게 부품(천장·지붕·벽·간판 등)을 내 화면에서만 숨김
 -- (2026-11-22 버그 "가게 안 작업대에서 제작 화면이 분홍 단색": 제작 카메라가 가게 천장 위·안에 걸림).
--- 층고·작업대 자리와 상관없이 동작하도록 레이캐스트로 찾음. 숨기는 건 이 가게 부지(Plot<n>) 안의 부품만:
+-- 층고·작업대 자리와 상관없이 동작하도록 상자 겹침·레이캐스트로 찾음. 숨기는 건 이 가게 부지(Plot<n>) 안의 부품만:
 -- 작업대 자체와 제작 도구(클라이언트가 만든 국자·반죽·도구 등)는 건드리지 않음. 끝나면 되돌림.
 
 local RunService = game:GetService("RunService")
@@ -15,10 +15,23 @@ local acc = 0
 
 local SCAN_EVERY = 0.15 -- 초. 카메라가 단계마다 옮겨 가서 계속 다시 봄
 
+local guis = {} -- 숨긴 부품에 붙은 글씨판·그림 → 되돌릴 값 (LocalTransparencyModifier로는 안 숨겨짐)
 local function hide(p)
 	if hidden[p] == nil then
 		hidden[p] = p.LocalTransparencyModifier
 		p.LocalTransparencyModifier = 1
+		-- 간판 글씨(SurfaceGui "…의 달고나 가게") 등이 부품 없이 떠 보임 (2026-11-22 2인 테스트)
+		for _, d in ipairs(p:GetChildren()) do
+			if guis[d] == nil then
+				if d:IsA("SurfaceGui") or d:IsA("BillboardGui") then
+					guis[d] = d.Enabled
+					d.Enabled = false
+				elseif d:IsA("Decal") or d:IsA("Texture") then
+					guis[d] = d.Transparency
+					d.Transparency = 1
+				end
+			end
+		end
 	end
 end
 
@@ -171,6 +184,16 @@ function ViewClear.stop()
 		end
 	end
 	table.clear(hidden)
+	for d, v in pairs(guis) do
+		if d.Parent then
+			if d:IsA("Decal") or d:IsA("Texture") then
+				d.Transparency = v
+			else
+				d.Enabled = v
+			end
+		end
+	end
+	table.clear(guis)
 	model = nil
 end
 
