@@ -4,6 +4,7 @@
 --  - 대신 공장 크기·색을 딴 낮은 상자 2개를 내 화면에만 놓음 (workspace.CurrentCamera 아래)
 --  - 가까워지면(경계 - 여유) 원래대로. 내 공장은 건드리지 않음
 --  - 공장 모습·연출은 제작 세션의 FactoryDisplay·FactoryClient (Transparency를 안 건드림을 확인, 2026-11-22)
+--  - 신호: 멀어서 숨기면 Building 속성 LodFar = true (내 화면에서만 바꾼 값). FactoryClient가 상태판·알바생 움직임을 멈출 때 씀
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -73,6 +74,7 @@ local function setFar(st, building, lot, far)
 		return
 	end
 	st.far = far
+	building:SetAttribute("LodFar", far) -- 내 화면에만 (FactoryClient가 상태판·움직임을 멈추는 데 씀)
 	st.parts = partsOf(lot)
 	for _, p in ipairs(st.parts) do
 		p.LocalTransparencyModifier = far and 1 or 0
