@@ -103,8 +103,13 @@ local function setCharacterHidden(hidden)
 	end
 end
 
+-- 만드는 동안 카메라를 가리는 가게 천장·벽은 내 화면에서 숨김 (2026-11-22 "가게 안 제작 화면 분홍 단색")
+local ViewClear = require(Making:WaitForChild("ViewClear"))
 -- 노점 파라솔 (D21)이 위에서 내려다보는 제작 화면을 가림 → 만드는 동안 내 화면에서만 숨김 (2026-11-21)
 local function setParasolHidden(hidden)
+	if not hidden then
+		ViewClear.stop() -- 먼저 되돌린 뒤 파라솔을 보이게 (반대 순서면 숨긴 채로 되돌려짐)
+	end
 	local plot = station and station.model.Parent
 	if not plot then
 		return
@@ -115,6 +120,9 @@ local function setParasolHidden(hidden)
 				p.LocalTransparencyModifier = hidden and 1 or 0
 			end
 		end
+	end
+	if hidden then
+		ViewClear.start(station.model)
 	end
 end
 
