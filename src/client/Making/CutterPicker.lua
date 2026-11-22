@@ -10,10 +10,10 @@ local Sfx = require(script.Parent:WaitForChild("Sfx"))
 
 local Picker = {}
 
-local FONT = Enum.Font.GothamBold
-local FONT_REG = Enum.Font.Gotham
-local CREAM = Color3.fromRGB(255, 248, 232)
-local INK = Color3.fromRGB(60, 44, 30)
+-- 2026-11-22 새 스타일(shared/UiStyle): 나무 판 + 크림 카드, 둥근 굵은 글꼴
+local UI = require(Shared:WaitForChild("UiStyle"))
+local CREAM = UI.C.cream
+local INK = UI.C.ink
 
 local function new(class, props)
 	local o = Instance.new(class)
@@ -38,7 +38,7 @@ local function preview(parent, entry)
 		Ambient = Color3.fromRGB(190, 190, 195),
 		LightColor = Color3.fromRGB(255, 255, 255),
 		LightDirection = Vector3.new(-0.4, -1, -0.6),
-		Size = UDim2.new(1, -12, 1, -50),
+		Size = UDim2.new(1, -12, 1, -52),
 		Position = UDim2.fromOffset(6, 6),
 		ZIndex = 33,
 		Parent = parent,
@@ -89,17 +89,18 @@ function Picker.run(ctx, currentId)
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -10),
 		Size = UDim2.new(0.94, 0, 0.8, 0),
-		BackgroundColor3 = CREAM,
+		BackgroundColor3 = UI.C.wood,
 		ZIndex = 31,
 		Parent = ui.root,
 	})
-	corner(panel, 16)
-	new("UIStroke", { Color = Color3.fromRGB(200, 160, 110), Thickness = 2, Parent = panel })
-	new("TextLabel", {
+	corner(panel, 20)
+	new("UIStroke", { Color = UI.C.woodDark, Thickness = 4, Parent = panel })
+	UI.gloss(0.2).Parent = panel
+	local title = new("TextLabel", {
 		Text = "도안 고르기",
-		Font = FONT,
-		TextSize = 22,
-		TextColor3 = INK,
+		FontFace = UI.F.heavy,
+		TextSize = 26,
+		TextColor3 = UI.C.cream,
 		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Position = UDim2.fromOffset(18, 8),
@@ -107,11 +108,12 @@ function Picker.run(ctx, currentId)
 		ZIndex = 32,
 		Parent = panel,
 	})
+	UI.stroke(UI.C.woodDark, 2.5, true).Parent = title
 	new("TextLabel", {
 		Text = "등급이 높을수록 선이 많고 어려워요",
-		Font = FONT_REG,
-		TextSize = 14,
-		TextColor3 = Color3.fromRGB(130, 110, 90),
+		FontFace = UI.F.bold,
+		TextSize = 16,
+		TextColor3 = UI.C.tan,
 		BackgroundTransparency = 1,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		AnchorPoint = Vector2.new(1, 0),
@@ -127,7 +129,7 @@ function Picker.run(ctx, currentId)
 		Position = UDim2.fromOffset(10, 46),
 		Size = UDim2.new(1, -20, 1, -54),
 		ScrollBarThickness = 6,
-		ScrollBarImageColor3 = Color3.fromRGB(200, 160, 110),
+		ScrollBarImageColor3 = UI.C.cream,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
@@ -149,7 +151,7 @@ function Picker.run(ctx, currentId)
 			Name = entry.id,
 			Text = "",
 			AutoButtonColor = true,
-			BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+			BackgroundColor3 = CREAM,
 			LayoutOrder = i,
 			ZIndex = 32,
 			Parent = scroll,
@@ -164,12 +166,12 @@ function Picker.run(ctx, currentId)
 		preview(card, entry)
 		new("TextLabel", {
 			Text = entry.name,
-			Font = FONT,
-			TextSize = 15,
+			FontFace = UI.F.heavy,
+			TextSize = 17,
 			TextScaled = false,
 			TextColor3 = INK,
 			BackgroundTransparency = 1,
-			Position = UDim2.new(0, 4, 1, -42),
+			Position = UDim2.new(0, 4, 1, -45),
 			Size = UDim2.new(1, -8, 0, 20),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 33,
@@ -177,12 +179,12 @@ function Picker.run(ctx, currentId)
 		})
 		local tag = new("TextLabel", {
 			Text = string.format("%s · %d코인", g.label, entry.price),
-			Font = FONT,
-			TextSize = 12,
+			FontFace = UI.F.heavy,
+			TextSize = 13,
 			TextColor3 = Color3.new(1, 1, 1),
 			BackgroundColor3 = g.color,
-			Position = UDim2.new(0, 8, 1, -21),
-			Size = UDim2.new(1, -16, 0, 17),
+			Position = UDim2.new(0, 8, 1, -24),
+			Size = UDim2.new(1, -16, 0, 19),
 			ZIndex = 33,
 			Parent = card,
 		})
@@ -195,7 +197,7 @@ function Picker.run(ctx, currentId)
 			local need = G.UnlockLevel[entry.grade]
 			local cover = new("TextLabel", {
 				Text = need and ("🔒 Lv" .. need) or "🔒 도감",
-				Font = FONT,
+				FontFace = UI.F.heavy,
 				TextSize = 18,
 				TextColor3 = Color3.new(1, 1, 1),
 				BackgroundColor3 = Color3.fromRGB(40, 30, 24),
