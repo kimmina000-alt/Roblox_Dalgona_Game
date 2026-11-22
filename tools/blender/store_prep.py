@@ -1,9 +1,14 @@
-# 사용자 가게 3D(store.glb)의 2단계 기계 화구 코일 단순화 (사용자 2026-11-23: "코일 단순화해")
+# 사용자 가게 3D(store.glb)를 게임용으로 손봄 (사용자 2026-11-23)
+#   ① 2단계 기계 화구 코일 단순화 ("코일 단순화해")
+#   ② 한 메시 안에 붙어 있던 것 중 재질을 따로 줘야 하는 면을 새 오브젝트로 떼어 냄
+#      - 뒤 공장 방 창문 Cube.019·Cube.022 의 유리 칸 → WindowGlass_1·_2 ("창문의 창 투명하게")
+#      - 유리 진열장 Cube.003 아래 받침 → CaseBase ("밑에 박스는 메탈 재질로")
+#      - 큰 간판 Cube.016 의 안쪽 판 → SignPanel ("간판 여기만 흰색으로 해서 가게 이름")
 #   원본: 오브젝트 Cube.015 (메시 Cube.021) — 화구 2개마다 납작한 나선 판 2장(위·아래), 삼각형 3,520개 (기계 전체 3,912).
 #   바꿈: 나선 판을 지우고, 화구마다 어두운 원판 1장 + 동심원 고리 3개(낮은 면 수)로 다시 만듦. 재질 "Coil" 그대로.
 #   원본 store.glb·store.blend는 건드리지 않음. 결과:
 #     <출력>/store_machine2_lowcoil.glb  — 이 기계 하나만 (Studio에서 같은 자리 부품을 바꿔 끼움)
-#     <출력>/store_lowcoil.glb           — 가게 전체 (코일만 바뀜)
+#     <출력>/store_lowcoil.glb           — 가게 전체 (코일 단순화 + 떼어 낸 오브젝트 4개) = Studio로 가져올 파일
 #     <출력>/store_coil_before_after.png — 바꾸기 전·후 비교
 # 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/store_coil_fix.py -- <store.glb> <출력 폴더>
 
@@ -89,6 +94,68 @@ bm.to_mesh(me)
 bm.free()
 after = sum(len(p.vertices) - 2 for p in me.polygons)
 print(f"[coil] {o.name} (mesh {me.name}) tris {before} -> {after}, burners at {[tuple(round(x, 2) for x in b[0]) for b in burners]}")
+
+
+
+def split_faces(name, new_name, pick):
+    """오브젝트 name에서 pick(면, 세계 좌표 가운데)이 True인 면을 떼어 new_name 오브젝트로 만듦."""
+    ob = sc.objects[name]
+    b = bmesh.new()
+    b.from_mesh(ob.data)
+    mw = ob.matrix_world
+    nmat = mw.to_3x3().inverted().transposed()
+    sel = [f for f in b.faces if pick(f, mw @ f.calc_center_median(), (nmat @ f.normal).normalized())]
+    if not sel:
+        print("[split] nothing picked in", name)
+        b.free()
+        return
+    nb = bmesh.new()
+    vmap = {}
+    for f in sel:
+        vs = []
+        for v in f.verts:
+            if v not in vmap:
+                vmap[v] = nb.verts.new(v.co)
+            vs.append(vmap[v])
+        nf = nb.faces.new(vs)
+        nf.smooth = f.smooth
+    bmesh.ops.delete(b, geom=sel, context="FACES_ONLY")
+    b.to_mesh(ob.data)
+    b.free()
+    me2 = bpy.data.meshes.new(new_name)
+    nb.to_mesh(me2)
+    nb.free()
+    o2 = bpy.data.objects.new(new_name, me2)
+    o2.matrix_world = mw.copy()
+    sc.collection.objects.link(o2)
+    print(f"[split] {name} -> {new_name}: {len(sel)} faces")
+
+
+def pane(f, c, n):  # 창문 유리 칸: 옆(±X)을 보는 면 중 폭 1.5·높이 0.9 넘는 것 (창살·틀은 가늘어서 빠짐, 면은 삼각형)
+    if abs(n.x) < 0.9:
+        return False
+    ys = [v.co.y for v in f.verts]
+    zs = [v.co.z for v in f.verts]
+    return max(ys) - min(ys) > 1.5 and max(zs) - min(zs) > 0.9
+
+
+split_faces("Cube.019", "WindowGlass_1", pane)
+split_faces("Cube.022", "WindowGlass_2", pane)
+split_faces("Cube.003", "CaseBase", lambda f, c, n: max((sc.objects["Cube.003"].matrix_world @ v.co).z for v in f.verts) <= 2.66)
+sign = sc.objects["Cube.016"]
+_sb = [sign.matrix_world @ v.co for v in sign.data.vertices]
+_sxlo, _sxhi = min(v.x for v in _sb), max(v.x for v in _sb)
+_szlo, _szhi = min(v.z for v in _sb), max(v.z for v in _sb)
+
+
+def sign_panel(f, c, n):  # 간판 앞면 중 테 안쪽 넓은 판 (앞 = -Y)
+    if n.y > -0.9:
+        return False
+    vs = [sign.matrix_world @ v.co for v in f.verts]
+    return min(v.x for v in vs) > _sxlo + 0.5 and max(v.x for v in vs) < _sxhi - 0.5 and         min(v.z for v in vs) > _szlo + 0.45 and max(v.z for v in vs) < _szhi - 0.45
+
+
+split_faces("Cube.016", "SignPanel", sign_panel)
 
 bpy.ops.object.select_all(action="DESELECT")
 for ob in sc.objects:
