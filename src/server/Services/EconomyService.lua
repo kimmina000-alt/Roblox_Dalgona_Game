@@ -197,6 +197,7 @@ function EconomyService.place(player, slot)
 	if fromHand then
 		setCarrying(player, nil)
 	end
+	fire("placed", player, slot) -- 첫 60초 안내 (TutorialService)
 	return true, string.format("진열대 %d번 칸에 놓았어요", slot)
 end
 
@@ -298,6 +299,7 @@ function EconomyService.onStart(player, _shape)
 	Data.update(player, function(d)
 		d.ingredients.chopsticks = math.max(0, (d.ingredients.chopsticks or 0) - G.ChopsticksPerRound)
 	end)
+	fire("started", player) -- 첫 60초 안내 (TutorialService)
 end
 
 -- 진열대에서 n개 팔기 (앞쪽 = 먼저 만든 것부터). 한 번에 꺼내고 지우므로 같은 달고나가 두 번 팔리지 않음.

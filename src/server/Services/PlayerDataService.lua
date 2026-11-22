@@ -79,6 +79,10 @@ PlayerDataService.MIGRATIONS = {
 			end
 		end
 	end,
+	[9] = function(data)
+		-- v8 → v9 (첫 60초 안내, 2026-11-22): 이미 하던 플레이어는 안내 없이
+		data.tutorialDone = true
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

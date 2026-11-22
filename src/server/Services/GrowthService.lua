@@ -19,6 +19,7 @@ local Minime = require(script.Parent:WaitForChild("Minime"))
 local Machine = require(script.Parent:WaitForChild("MachineService")) -- 기계 2~4단계 (20번)
 local Factory = require(script.Parent:WaitForChild("FactoryService")) -- 5단계 공장
 local Offline = require(script.Parent:WaitForChild("OfflineService")) -- 오프라인 생산 정산 (D29)
+local Tutorial = require(script.Parent:WaitForChild("TutorialService")) -- 첫 60초 안내 (21번)
 
 local GrowthService = {}
 
@@ -708,6 +709,7 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 	remotes.GrowthAction.OnServerInvoke = GrowthService.action
 	Machine.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
 	Factory.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
+	Tutorial.init(Data, Economy, remotes)
 	Offline.init(Data, Economy, { helper = offlineHelper, machine = Machine.offlineTick, factory = Factory.offlineTick, refreshUnlocks = refreshUnlocks })
 
 	-- 처음 불러올 때: 레벨에 맞게 해금, 오늘 목표, 해금 목록을 속성으로 (제작 화면 도안 고르기가 봄)
