@@ -38,8 +38,10 @@
 
 - 가게 작업대 틀 = 편집 모드 `Workspace.WorkstationLayout` (ㄷ자 카운터, (-50,0,10), 2026-11-21 교체). 사용자가 물건 자리를 직접 옮긴다 (막대 통 `Stage1Decor.StickBox`, 비닐 통 `PackArea.BagBin`, 빵끈 통 `PackArea.TieBox`는 묶음). 게임 시작 때 서버가 Workspace에서 빼서 `ServerStorage.Assets.WorkstationTemplate`으로 쓰고(`syncCounter`), 꾸미기(dress·streetLayout)는 다시 안 한다. 예전 노점 틀 백업: `ServerStorage.Backup.WorkstationTemplate_Old`. `counterLayout`·`StallDecor` 값을 바꿔도 저장된 틀에는 안 들어가므로, 다시 만들려면 사용자에게 먼저 묻는다 (옮긴 자리가 사라짐).
 
-- 가게 부지 틀 = 편집 모드 `Workspace.PlotLayout` (부지 하나, 속성 `PlotCFrame` = 기준, 2026-11-22). 사용자가 울타리·건물·간판·파라솔·자리 표시·공장 문·입구를 직접 옮기거나 크기·색을 바꾸고, 부품을 지우거나 새로 넣을 수 있다. 서버(`PlotService`)가 코드로 6칸을 만든 뒤 부품 속성 `LayoutKey`로 틀과 맞춰 6칸 모두에 옮긴다 (게임 중에는 ServerStorage로 옮겨 안 보임). 진열대·작업대·기계·공장 부지는 다른 코드가 붙여서 이 틀에 없다. 바닥(Floor)·입구(Entry)·간판(Sign)·셔터·간판판(Header)·임대 종이·기계 자리·공장 문짝은 지워도 숨김만 됨.
-- 공장 틀 = 편집 모드 `Workspace.FactoryLayout` (칠한 공장을 Plot1 공장 부지 자리에 놓은 것, 속성 `LotCFrame` = 그 부지 기준, 2026-11-22). 사용자가 공장 부품을 옮기거나 색·크기를 바꾸고 넣고 뺄 수 있다. 서버 `FactoryDisplay`가 시작 때 ServerStorage로 옮기고, 해금된 가게마다 `Assets.Factory`+style() 대신 이걸 복제해 같은 자리 관계로 놓는다. 부품 이름을 바꾸면 움직임(Anim)·제어대가 안 붙으니 이름은 그대로 둔다.
+- 가게 부지 틀 = 편집 모드 `Workspace.PlotLayout` (부지 하나, 속성 `PlotCFrame` = 기준, 2026-11-22). 사용자가 울타리·건물·간판·파라솔·자리 표시·공장 문·입구를 직접 옮기거나 크기·색을 바꾸고, 부품을 지우거나 새로 넣을 수 있다. 서버(`PlotService`)가 코드로 6칸을 만든 뒤 부품 속성 `LayoutKey`로 틀과 맞춰 6칸 모두에 옮긴다 (게임 중에는 ServerStorage로 옮겨 안 보임). 작업대·기계·공장 부지는 이 틀에 없다. 진열대는 틀 안 `DisplayShelf`로 고친다 (`PlotService.applyChild`, 칸 Slot1~10 자리 = 진열 자리, 손님은 몸통 앞에 섬, 칸은 지워도 숨김만). 바닥(Floor)·입구(Entry)·간판(Sign)·셔터·간판판(Header)·임대 종이·기계 자리·공장 문짝은 지워도 숨김만 됨.
+- 공장 틀 = 편집 모드 `Workspace.FactoryLayout` (칠한 공장을 Plot1 공장 부지 자리에 놓은 것, 속성 `LotCFrame` = 그 부지 기준, 2026-11-22). 사용자가 공장 부품을 옮기거나 색·크기를 바꾸고 넣고 뺄 수 있다. 서버 `FactoryDisplay`가 시작 때 ServerStorage로 옮기고, 해금된 가게마다 `Assets.Factory`+style() 대신 이걸 복제해 같은 자리 관계로 놓는다. 부품 이름을 바꾸면 움직임(Anim)·제어대가 안 붙으니 이름은 그대로 둔다. 안의 `Lot`(바닥·울타리·표지판)은 6칸 공장 부지 모두에 옮겨짐 (바닥·표지판은 지워도 숨김만).
+- 기계 틀 = 편집 모드 `Workspace.MachineLayout` 안 `Stage2`(철제 판매기)·`Stage3`(분홍 자판기)·`Stage4`(연속 생산 설비), 2026-11-22. 각 모델 안 분홍 판 `SlotAnchor` = 기계 자리 기준이라 모델째 옮겨도 그대로, 부품만 옮기면 바뀜. 가게 안 기계 위치는 PlotLayout의 `MachineSlot`을 옮긴다. `MachineDisplay`가 시작 때 ServerStorage로 옮김.
+- 세 틀 모두 공통 모듈 `Services/LayoutTemplate`(LayoutKey = 경로#번째로 맞춤). 틀 부품 이름을 바꾸면 새 부품으로 취급된다.
 
 ## Studio 동기화
 - Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).

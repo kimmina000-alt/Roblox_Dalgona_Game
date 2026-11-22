@@ -181,6 +181,39 @@ end
 local BUILDERS = { [2] = buildSteel, [3] = buildPink, [4] = buildLine }
 local NAMES = { [2] = "철제 판매기", [3] = "분홍 자판기", [4] = "연속 생산 설비" }
 
+-- 편집 화면에서 고친 기계 모양 (판매 세션 2026-11-22, 사용자 "기계도 고치게"):
+-- 편집 모드 Workspace.MachineLayout 안 Stage2·Stage3·Stage4 (Model). 각 단계 모델 안 부품 "SlotAnchor" = 기계 자리 윗면(top) 기준.
+-- 서버 시작 때 ServerStorage.Assets.MachineLayout으로 옮기고, 그 단계를 만들 때 부품 LayoutKey로 위치·크기·색을 옮김.
+-- 기계 위치(가게 안 자리)는 PlotLayout의 MachineSlot을 옮기면 됨
+local Layout = require(script.Parent:WaitForChild("LayoutTemplate"))
+local machineLayout = nil
+
+local function findMachineLayout()
+	local SS = game:GetService("ServerStorage")
+	local assets = SS:FindFirstChild("Assets")
+	local src = workspace:FindFirstChild("MachineLayout")
+	if src then
+		src.Parent = assets or SS
+	else
+		src = assets and assets:FindFirstChild("MachineLayout")
+	end
+	return src
+end
+
+local function applyMachineLayout(m, stage, top)
+	local t = machineLayout and machineLayout:FindFirstChild("Stage" .. stage)
+	local anchor = t and t:FindFirstChild("SlotAnchor")
+	if not anchor then
+		return
+	end
+	Layout.tag(m)
+	Layout.apply(m, t, anchor.CFrame, top, {
+		skip = function(tp)
+			return tp == anchor
+		end,
+	})
+end
+
 local function addPrompt(attachTo, objectText, actionText)
 	local att = Instance.new("Attachment")
 	att.Name = "PromptAtt"
@@ -242,6 +275,7 @@ function Display.sync(plot)
 		m:Destroy()
 		return
 	end
+	applyMachineLayout(m, stage, top)
 	local anchor = part(m, "PromptAnchor", Vector3.new(0.2, 0.2, 0.2), top * CFrame.new(0, 2.2, -(d or 2.4) / 2 - 0.3), Color3.new(1, 1, 1), { Transparency = 1, CanQuery = false, CastShadow = false })
 	addPrompt(anchor, NAMES[stage], "도안 고르기")
 	m:SetAttribute("Height", h or 5)
@@ -250,6 +284,10 @@ function Display.sync(plot)
 end
 
 function Display.init()
+	machineLayout = findMachineLayout()
+	if machineLayout then
+		print("[Machine] 편집 화면에서 고친 기계(MachineLayout)를 씀")
+	end
 	task.spawn(function()
 		local folder = workspace:WaitForChild("ShopPlots", 60)
 		if not folder then

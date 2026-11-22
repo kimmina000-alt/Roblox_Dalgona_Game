@@ -87,22 +87,12 @@ end
 local KEEP_ALWAYS = { Floor = true, Entry = true, Sign = true, Shutter = true, Header = true, RentPaper = true, MachineSlot = true, Door = true }
 local layoutTemplate = nil -- { model, cf }
 
--- 부품마다 LayoutKey = 부지 기준 경로 + "#" + 같은 경로에서 몇 번째
-local function tagLayout(m)
-	local count = {}
-	for _, d in ipairs(m:GetDescendants()) do
-		if d:IsA("BasePart") then
-			local names = {}
-			local a = d
-			while a and a ~= m do
-				table.insert(names, 1, a.Name)
-				a = a.Parent
-			end
-			local path = table.concat(names, "/")
-			count[path] = (count[path] or 0) + 1
-			d:SetAttribute("LayoutKey", path .. "#" .. count[path])
-		end
-	end
+local Layout = require(script.Parent:WaitForChild("LayoutTemplate"))
+-- 나중에 다른 코드가 붙이는 묶음 중 틀로 고칠 수 있는 것 (틀 PlotLayout 안 같은 이름 자식, PlotService.applyChild로 옮김)
+local CHILD_LAYOUTS = { DisplayShelf = true }
+
+local function keepPart(d)
+	return KEEP_ALWAYS[d.Name] or d.Name:match("^Slot%d+$") ~= nil
 end
 
 local function findLayoutTemplate()
@@ -122,66 +112,32 @@ local function findLayoutTemplate()
 	return nil
 end
 
--- 틀(templateCF 기준)의 모양을 부지 plotCF로 옮김
+-- 틀(templateCF 기준)의 모양을 부지 plotCF로 옮김 (나중에 붙는 묶음 CHILD_LAYOUTS는 빼고)
 local function applyLayout(m, plotCF)
 	local T = layoutTemplate
 	if not T then
 		return
 	end
-	local function place(cf)
-		return plotCF * T.cf:ToObjectSpace(cf)
-	end
-	local built = {}
-	for _, d in ipairs(m:GetDescendants()) do
-		local key = d:IsA("BasePart") and d:GetAttribute("LayoutKey")
-		if key then
-			built[key] = d
-		end
-	end
-	local seen = {}
-	for _, tp in ipairs(T.model:GetDescendants()) do
-		if tp:IsA("BasePart") then
-			local key = tp:GetAttribute("LayoutKey")
-			local target = key and built[key]
-			if target then
-				seen[key] = true
-				target.CFrame = place(tp.CFrame)
-				target.Size = tp.Size
-				target.Color = tp.Color
-				target.Material = tp.Material
-				target.Transparency = tp.Transparency
-				if target:IsA("Part") and tp:IsA("Part") then
-					target.Shape = tp.Shape
-				end
-				-- 셔터 올림·내림 자리 같은 CFrame 속성도 부지 기준으로
-				for name, v in pairs(tp:GetAttributes()) do
-					if typeof(v) == "CFrame" then
-						target:SetAttribute(name, place(v))
-					end
-				end
-			elseif not key then
-				-- 틀에 새로 넣은 부품: 같은 경로의 부모가 있으면 그 아래, 없으면 부지 바로 아래
-				local copy = tp:Clone()
-				copy.CFrame = place(tp.CFrame)
-				copy.Anchored = true
-				local parent = m
-				if tp.Parent ~= T.model then
-					parent = m:FindFirstChild(tp.Parent.Name, true) or m
-				end
-				copy.Parent = parent
+	Layout.apply(m, T.model, T.cf, plotCF, {
+		keep = keepPart,
+		skip = function(tp)
+			local a = tp
+			while a.Parent and a.Parent ~= T.model do
+				a = a.Parent
 			end
-		end
-	end
-	-- 틀에서 지운 부품
-	for key, d in pairs(built) do
-		if not seen[key] then
-			if KEEP_ALWAYS[d.Name] then
-				d.Transparency = 1
-				d.CanCollide = false
-			else
-				d:Destroy()
-			end
-		end
+			return CHILD_LAYOUTS[a.Name] == true
+		end,
+	})
+end
+
+-- 다른 코드가 부지에 붙인 묶음(child, 예: 진열대 DisplayShelf)을 틀의 같은 이름 자식 모양으로. 부지 Parent 전에 불러도 됨
+function PlotService.applyChild(plotModel, child)
+	Layout.tag(plotModel, child)
+	local T = layoutTemplate
+	local tc = T and T.model:FindFirstChild(child.Name)
+	local cf = plotModel:GetAttribute("PlotCFrame")
+	if tc and typeof(cf) == "CFrame" then
+		Layout.apply(child, tc, T.cf, cf, { keep = keepPart })
 	end
 end
 
@@ -343,7 +299,7 @@ local function buildPlot(index, parent)
 		CanCollide = false,
 	})
 
-	tagLayout(m)
+	Layout.tag(m)
 	applyLayout(m, cf)
 	m:SetAttribute("PlotCFrame", cf)
 	m.Parent = parent

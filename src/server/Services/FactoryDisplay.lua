@@ -13,6 +13,8 @@
 local ServerStorage = game:GetService("ServerStorage")
 
 local FactoryBuilder = require(script.Parent:WaitForChild("FactoryBuilder"))
+local Layout = require(script.Parent:WaitForChild("LayoutTemplate"))
+local layout = nil -- 편집 화면에서 고친 공장 틀 (아래 factoryLayout)
 
 local Display = {}
 
@@ -134,6 +136,16 @@ local function buildLot(plot)
 	c.CornerRadius = UDim.new(0, 10)
 	c.Parent = t
 	bb.Parent = sign
+	-- 편집 화면에서 고친 울타리·바닥·표지판 (FactoryLayout 안 Lot, 판매 세션 2026-11-22). 바닥·표지판은 지워도 숨김만
+	local lotT = layout and layout:FindFirstChild("Lot")
+	if lotT then
+		Layout.tag(lot)
+		Layout.apply(lot, lotT, layout:GetAttribute("LotCFrame"), cf, {
+			keep = function(d)
+				return d.Name == "Ground" or d.Name == "LotSign"
+			end,
+		})
+	end
 	lot.PrimaryPart = ground
 	lot:SetAttribute("LotCFrame", cf)
 	lot.Parent = plot
@@ -156,7 +168,6 @@ local function factoryLayout()
 	end
 	return nil
 end
-local layout = nil
 
 -- 해금된 가게에만 공장 3D
 local function buildBuilding(lot)
@@ -177,6 +188,10 @@ local function buildBuilding(lot)
 		b.Name = "Building"
 		b:SetAttribute("LotCFrame", nil)
 		b:PivotTo(cf * layout:GetAttribute("LotCFrame"):ToObjectSpace(layout:GetPivot()))
+		local lotPart = b:FindFirstChild("Lot")
+		if lotPart then
+			lotPart:Destroy() -- 울타리 틀은 buildLot이 씀
+		end
 	else
 		b = src:Clone()
 		b.Name = "Building"
