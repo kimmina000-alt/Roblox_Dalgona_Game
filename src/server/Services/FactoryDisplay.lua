@@ -13,6 +13,8 @@
 local ServerStorage = game:GetService("ServerStorage")
 
 local FactoryBuilder = require(script.Parent:WaitForChild("FactoryBuilder"))
+local Layout = require(script.Parent:WaitForChild("LayoutTemplate"))
+local layout = nil -- 편집 화면에서 고친 공장 틀 (아래 factoryLayout)
 
 local Display = {}
 
@@ -134,10 +136,37 @@ local function buildLot(plot)
 	c.CornerRadius = UDim.new(0, 10)
 	c.Parent = t
 	bb.Parent = sign
+	-- 편집 화면에서 고친 울타리·바닥·표지판 (FactoryLayout 안 Lot, 판매 세션 2026-11-22). 바닥·표지판은 지워도 숨김만
+	local lotT = layout and layout:FindFirstChild("Lot")
+	if lotT then
+		Layout.tag(lot)
+		Layout.apply(lot, lotT, layout:GetAttribute("LotCFrame"), cf, {
+			keep = function(d)
+				return d.Name == "Ground" or d.Name == "LotSign"
+			end,
+		})
+	end
 	lot.PrimaryPart = ground
 	lot:SetAttribute("LotCFrame", cf)
 	lot.Parent = plot
 	return lot
+end
+
+-- 편집 화면에서 고친 공장 (2026-11-22 사용자 "공장 디자인부터 세부 위치 수정하게", 판매 세션이 넣음):
+-- 편집 모드 Workspace.FactoryLayout = 칠한 공장을 Plot1 공장 부지에 놓은 것 (속성 LotCFrame = 그 부지 기준).
+-- 서버 시작 때 ServerStorage.Assets.FactoryLayout으로 옮기고, 있으면 Assets.Factory 대신 이걸 복제 (style()·BUILD_YAW 안 함)
+local function factoryLayout()
+	local assets = ServerStorage:FindFirstChild("Assets")
+	local src = workspace:FindFirstChild("FactoryLayout")
+	if src then
+		src.Parent = assets or ServerStorage
+	else
+		src = assets and assets:FindFirstChild("FactoryLayout")
+	end
+	if src and typeof(src:GetAttribute("LotCFrame")) == "CFrame" then
+		return src
+	end
+	return nil
 end
 
 -- 해금된 가게에만 공장 3D
@@ -152,11 +181,24 @@ local function buildBuilding(lot)
 		warn("[Factory] 공장 3D를 못 만들어요 (Assets.Factory / LotCFrame)")
 		return
 	end
-	local b = src:Clone()
-	b.Name = "Building"
-	FactoryBuilder.style(b)
-	-- 피벗 = 바닥 가운데 (예전 공용 공장과 같은 기준). 부지 기준으로 BUILD_YAW 돌림
-	b:PivotTo(cf * CFrame.Angles(0, math.rad(BUILD_YAW), 0))
+	local b
+	if layout then
+		-- 편집 화면에서 고친 공장: 그 부지 기준 자리 그대로 이 부지로
+		b = layout:Clone()
+		b.Name = "Building"
+		b:SetAttribute("LotCFrame", nil)
+		b:PivotTo(cf * layout:GetAttribute("LotCFrame"):ToObjectSpace(layout:GetPivot()))
+		local lotPart = b:FindFirstChild("Lot")
+		if lotPart then
+			lotPart:Destroy() -- 울타리 틀은 buildLot이 씀
+		end
+	else
+		b = src:Clone()
+		b.Name = "Building"
+		FactoryBuilder.style(b)
+		-- 피벗 = 바닥 가운데 (예전 공용 공장과 같은 기준). 부지 기준으로 BUILD_YAW 돌림
+		b:PivotTo(cf * CFrame.Angles(0, math.rad(BUILD_YAW), 0))
+	end
 	local console
 	for _, d in ipairs(b:GetDescendants()) do
 		if d:IsA("BasePart") then
@@ -459,6 +501,10 @@ local function sync(plot, fac)
 end
 
 function Display.init()
+	layout = factoryLayout()
+	if layout then
+		print("[Factory] 편집 화면에서 고친 공장(FactoryLayout)을 씀")
+	end
 	task.spawn(function()
 		local plots = workspace:WaitForChild("ShopPlots", 60)
 		if not plots then

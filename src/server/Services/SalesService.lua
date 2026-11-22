@@ -126,6 +126,10 @@ end
 ---------------------------------------------------------------- 진열대
 
 local function slotCFrame(shop, i)
+	-- 편집 화면 틀(PlotLayout.DisplayShelf)로 칸을 옮겼으면 그 칸 자리 (원판에서 거꾸로 계산)
+	if shop.slotCF and shop.slotCF[i] then
+		return shop.slotCF[i]
+	end
 	-- 2줄 × 5칸, 앞줄(골목 쪽)부터 채움. 앞줄 = 먼저 팔리는 것
 	local row = (i - 1) // 5 -- 0 앞줄, 1 뒷줄
 	local col = (i - 1) % 5
@@ -197,6 +201,28 @@ local function buildShelf(shop, plot)
 		end)
 		shop.slots[i] = { disc = d, rim = rim, prompt = prompt }
 	end
+	-- 편집 화면에서 고친 진열대 모양 (PlotLayout 안 DisplayShelf, 2026-11-22). 칸·손님 자리도 옮긴 부품을 따름
+	if Plots.applyChild then
+		Plots.applyChild(plot.model, m)
+	end
+	shop.slotCF = {}
+	for i, s in ipairs(shop.slots) do
+		if s.disc.Parent then
+			shop.slotCF[i] = s.disc.CFrame * CFrame.Angles(0, 0, math.rad(-90)) * CFrame.new(0, -0.09, 0)
+		end
+		s.disc.Transparency = 1 -- 틀에서는 칸이 보이게 반투명으로 둬도, 게임에서는 놓일 때만 보임
+		s.rim.Transparency = 1
+	end
+	-- 손님: 진열대 몸통 앞(-Z) SALES.standZ - shelf.pos.Z 만큼 떨어진 곳 (부지 기준 x, z)
+	local bodyCF = body.Parent and body.CFrame or cf
+	local front = SALES.standZ - SALES.shelf.pos.Z -- 음수 = 앞
+	local function toLocal(p)
+		local l = plot.cframe:PointToObjectSpace(p)
+		return Vector3.new(l.X, 0, l.Z)
+	end
+	shop.shelfLocal = toLocal(bodyCF.Position)
+	shop.standLocal = toLocal((bodyCF * CFrame.new(0, 0, -front)).Position)
+	shop.standSide = toLocal((bodyCF * CFrame.new(1, 0, -front)).Position) - shop.standLocal
 	m.Parent = plot.model
 	shop.shelf = m
 end
@@ -662,11 +688,14 @@ local function spawnCustomer(index)
 	local want = math.random(buyMin, buyMax)
 	local n = math.min(want, available)
 	shop.reserved += n
-	local sx = SALES.shelf.pos.X
+	local stand = shop.standLocal or Vector3.new(SALES.shelf.pos.X, 0, SALES.standZ)
+	local shelfL = shop.shelfLocal or Vector3.new(SALES.shelf.pos.X, 0, SALES.shelf.pos.Z)
+	local standL = stand + (shop.standSide or Vector3.xAxis) * ((math.random() - 0.5) * 3)
+	local sx = stand.X
 	local side = math.random() < 0.5 and -1 or 1
 	local startP = local2world(plot, side * SALES.streetHalf, SALES.streetZ)
 	local doorP = local2world(plot, sx, SALES.streetZ)
-	local standP = local2world(plot, sx + (math.random() - 0.5) * 3, SALES.standZ)
+	local standP = local2world(plot, standL.X, standL.Z)
 	local exitP = local2world(plot, -side * SALES.streetHalf, SALES.streetZ)
 	local model = buildCustomer(CFrame.new(startP))
 	model.Parent = shop.folder
@@ -681,7 +710,7 @@ local function spawnCustomer(index)
 	end
 	walk(model, { startP, doorP, standP }, function()
 		-- 진열대를 보며 고름
-		local shelfP = local2world(plot, sx, SALES.shelf.pos.Z)
+		local shelfP = local2world(plot, shelfL.X, shelfL.Z)
 		model:PivotTo(CFrame.lookAt(standP, Vector3.new(shelfP.X, standP.Y, shelfP.Z)))
 		say(model, LINES[math.random(#LINES)], SALES.browseSeconds + 0.4)
 		task.wait(SALES.browseSeconds)
