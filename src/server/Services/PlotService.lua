@@ -602,6 +602,16 @@ function PlotService.init(opts)
 	for i = 1, P.count do
 		plots[i] = buildPlot(i, folder)
 	end
+	-- 편집 화면에서 가게 틀(PlotLayout) 옆에 놓은 보기용 모델 (2026-11-23 사용자 "1번 가게 옆으로"):
+	-- Workspace 바로 아래 Model에 속성 FollowPlot = 가게 번호가 있으면, 틀과의 자리 관계 그대로 그 가게 옆으로 옮김
+	if layoutTemplate then
+		for _, c in ipairs(workspace:GetChildren()) do
+			local n = c:IsA("Model") and c:GetAttribute("FollowPlot")
+			if type(n) == "number" and plots[n] then
+				c:PivotTo(plots[n].cframe * layoutTemplate.cf:ToObjectSpace(c:GetPivot()))
+			end
+		end
+	end
 
 	local function onAdded(player)
 		local i = PlotService.assign(player)
