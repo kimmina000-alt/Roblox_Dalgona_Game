@@ -68,8 +68,11 @@ end
 
 function Stamp.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
-	local cfg = Config.Stamp
-	local rec = { t0 = ctx.now(), dist = 10, angle = 0, hold = 0 }
+	-- 누르는 시간 기준은 도안 등급별 (14번): 높은 등급일수록 오래 누르면 더 빨리 깊어지고 금이 감
+	local dd = Config.difficulty(st.shape and st.shape.grade)
+	local cfg = { holdMin = Config.Stamp.holdMin, holdMax = dd.holdMax, crackHold = dd.crackHold }
+	-- grade: 도안 등급별 찍기 판정 폭 (14번). 서버는 세션 도안 등급으로 다시 정함
+	local rec = { t0 = ctx.now(), dist = 10, angle = 0, hold = 0, grade = st.shape and st.shape.grade }
 	local dal = st.dalgona
 	local cutter = S.Cutter
 	local shapeName = st.shape and st.shape.name or "별"
@@ -187,7 +190,7 @@ function Stamp.run(ctx)
 				showPreview(true)
 				local flat = Vector3.new(w.X - c.X, 0, w.Z - c.Z)
 				rec.dist = flat.Magnitude
-				ctx.live("stamp", Scoring.stamp({ dist = rec.dist, angle = yaw, hold = 0.3 }))
+				ctx.live("stamp", Scoring.stamp({ dist = rec.dist, angle = yaw, hold = 0.3, grade = rec.grade }))
 				if not P.down then
 					grabbing = false
 					showPreview(false)
@@ -205,7 +208,7 @@ function Stamp.run(ctx)
 						grab = PresserGrab.new(S, P, pv.Position - Vector3.new(0, discHalf, 0))
 						seenPress = P.presses
 						ui:buzz(0.3, 0.05)
-						if rec.dist > 0.3 then
+						if rec.dist > Scoring.diff(rec).stampDist * 0.5 then
 							ui:hint("가운데에서 조금 벗어났어요")
 						end
 						ui:say("화면을 꾹 눌러 틀을 찍어요", "누르는 동안 누름판이 내려가요 · 짧게! 오래 누르면 금이 가요")
