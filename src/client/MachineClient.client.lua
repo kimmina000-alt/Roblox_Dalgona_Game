@@ -17,15 +17,15 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local DalgonaLook = require(Shared:WaitForChild("DalgonaLook"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local UI = require(Shared:WaitForChild("UiStyle")) -- 2026-11-22 새 스타일 (나무 판 창 + 크림 카드 + 사탕 버튼)
 
 local touch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local S = touch and 0.8 or 1
-local CREAM = Color3.fromRGB(255, 247, 232)
-local BROWN = Color3.fromRGB(92, 58, 36)
-local SOFT = Color3.fromRGB(150, 110, 80)
-local CARAMEL = Color3.fromRGB(222, 150, 70)
-local GREEN = Color3.fromRGB(110, 190, 90)
-local RED = Color3.fromRGB(200, 70, 60)
+local CREAM = UI.C.cream
+local BROWN = UI.C.ink
+local SOFT = UI.C.soft
+local GREEN = UI.C.good
+local RED = UI.C.bad
 
 local function new(class, props)
 	local o = Instance.new(class)
@@ -82,14 +82,15 @@ local function setupMachine(plot, m, force)
 	if anchor then
 		local bb = new("BillboardGui", { Name = "MachineStatus", Size = UDim2.fromOffset(190, 52), StudsOffsetWorldSpace = Vector3.new(0, (m:GetAttribute("Height") or 5) - 0.6, 0), MaxDistance = 70, AlwaysOnTop = false, LightInfluence = 0, Parent = anchor })
 		rec.board = bb
-		local box = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = CREAM, BackgroundTransparency = 0.1, Parent = bb })
+		local box = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = CREAM, BackgroundTransparency = 0.05, Parent = bb })
+		new("UIStroke", { Color = UI.C.woodDark, Thickness = 2.5, Parent = box })
 		corner(box, 10)
-		rec.title = new("TextLabel", { Size = UDim2.new(1, -12, 0, 22), Position = UDim2.fromOffset(6, 3), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextScaled = true, TextColor3 = BROWN, Text = m:GetAttribute("MachineName") or "기계", Parent = box })
+		rec.title = new("TextLabel", { Size = UDim2.new(1, -12, 0, 22), Position = UDim2.fromOffset(6, 3), BackgroundTransparency = 1, FontFace = UI.F.heavy, TextScaled = true, TextColor3 = BROWN, Text = m:GetAttribute("MachineName") or "기계", Parent = box })
 		local barBg = new("Frame", { Size = UDim2.new(1, -16, 0, 8), Position = UDim2.fromOffset(8, 27), BackgroundColor3 = Color3.fromRGB(235, 220, 200), Parent = box })
 		corner(barBg, 4)
 		rec.bar = new("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = GREEN, Parent = barBg })
 		corner(rec.bar, 4)
-		rec.status = new("TextLabel", { Size = UDim2.new(1, -12, 0, 14), Position = UDim2.fromOffset(6, 36), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextScaled = true, TextColor3 = SOFT, Text = "", Parent = box })
+		rec.status = new("TextLabel", { Size = UDim2.new(1, -12, 0, 14), Position = UDim2.fromOffset(6, 36), BackgroundTransparency = 1, FontFace = UI.F.bold, TextScaled = true, TextColor3 = SOFT, Text = "", Parent = box })
 	end
 	-- 안내(F)는 이 가게 주인에게만
 	for _, d in ipairs(m:GetDescendants()) do
@@ -251,36 +252,41 @@ end)
 
 -- ── 도안 고르기 · 다음 기계 사기 화면 ──
 local state = nil
-local gui = new("ScreenGui", { Name = "MachineUi", ResetOnSpawn = false, DisplayOrder = 7, Enabled = false, Parent = player:WaitForChild("PlayerGui") })
-local uiScale = new("UIScale", { Scale = S, Parent = gui })
--- 작은 화면에서는 창이 화면 안에 들어오게 줄임
-local function fit()
-	local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
-	uiScale.Scale = math.min(S, (vp.Y - 80) / 420, (vp.X - 24) / 560)
+local gui = UI.screen("MachineUi", 7, player:WaitForChild("PlayerGui"))
+gui.Enabled = false
+-- 폰 가로 화면에 맞춘 넓고 낮은 나무 판 창 (UiStyle.fitter가 화면 안에 들어오게 줄임)
+local fitRoot = UI.root(gui)
+local fitWin = UI.fitter(fitRoot)
+local win, body = UI.window({ Name = "Window", Title = "기계", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(760, 340), ZIndex = 10, Visible = true, Parent = fitRoot })
+fitWin(win, 760, 365)
+body.Size = UDim2.new(1, -28, 1, -34 - 14 - 26)
+local titleL = win.Title.Text
+local closeBtn = win.Close
+local function onWood(props)
+	props.TextColor3 = props.TextColor3 or UI.C.cream
+	props.Outline = UI.C.woodDark
+	props.ZIndex = 12
+	return UI.text(props)
 end
-fit()
-if workspace.CurrentCamera then
-	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
-end
-local win = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.52), Size = UDim2.fromOffset(560, 420), BackgroundColor3 = CREAM, Parent = gui })
-corner(win, 16)
-new("UIStroke", { Color = CARAMEL, Thickness = 3, Parent = win })
-local titleL = new("TextLabel", { Position = UDim2.fromOffset(18, 12), Size = UDim2.new(1, -80, 0, 30), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 22, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = BROWN, Text = "기계", Parent = win })
-local closeBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 10), Size = UDim2.fromOffset(34, 34), BackgroundColor3 = Color3.fromRGB(240, 225, 205), Font = Enum.Font.GothamBold, TextSize = 18, TextColor3 = BROWN, Text = "X", Parent = win })
-corner(closeBtn, 17)
-local statusL = new("TextLabel", { Position = UDim2.fromOffset(18, 44), Size = UDim2.new(1, -36, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = SOFT, Text = "", Parent = win })
-local gridTitle = new("TextLabel", { Position = UDim2.fromOffset(18, 70), Size = UDim2.new(1, -36, 0, 20), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 15, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = BROWN, Text = "기계가 만들 도안", Parent = win })
-local grid = new("ScrollingFrame", { Position = UDim2.fromOffset(14, 94), Size = UDim2.new(1, -28, 1, -206), BackgroundTransparency = 1, ScrollBarThickness = 6, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Parent = win })
+local statusL = onWood({ Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 0, 22), TextSize = 17, FontFace = UI.F.bold, Text = "", Parent = body })
+local gridTitle = onWood({ Position = UDim2.fromOffset(14, 34), Size = UDim2.new(1, -28, 0, 20), TextSize = 16, Text = "기계가 만들 도안", Parent = body })
+local grid = new("ScrollingFrame", { Position = UDim2.fromOffset(10, 58), Size = UDim2.new(1, -20, 1, -58 - 84), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6, ScrollBarImageColor3 = UI.C.cream, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 12, Parent = body })
 new("UIGridLayout", { CellSize = UDim2.fromOffset(100, 118), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid })
-local nextRow = new("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 14, 1, -14), Size = UDim2.new(1, -28, 0, 70), BackgroundColor3 = Color3.fromRGB(250, 236, 214), Parent = win })
-corner(nextRow, 12)
-local nextL = new("TextLabel", { Position = UDim2.fromOffset(12, 6), Size = UDim2.new(1, -150, 1, -12), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 15, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = BROWN, Text = "", Parent = nextRow })
-local buyBtn = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(126, 44), BackgroundColor3 = GREEN, Font = Enum.Font.GothamBold, TextSize = 16, TextColor3 = Color3.new(1, 1, 1), Text = "사기", Parent = nextRow })
-corner(buyBtn, 12)
-local msgL = new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -87), Size = UDim2.new(1, -36, 0, 18), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = RED, Text = "", Parent = win })
+local nextRow = UI.card({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 10, 1, -10), Size = UDim2.new(1, -20, 0, 70), ZIndex = 12, Parent = body })
+local nextL = UI.text({ Position = UDim2.fromOffset(14, 6), Size = UDim2.new(1, -190, 1, -12), TextSize = 17, FontFace = UI.F.bold, TextWrapped = true, Text = "", ZIndex = 13, Parent = nextRow })
+local buyBtn = UI.button({ Name = "Buy", Text = "사기", Color = UI.C.yellow, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(160, 52), TextSize = 22, ZIndex = 13, Parent = nextRow })
+local msgL = UI.text({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -8), Size = UDim2.new(1, -40, 0, 22), TextSize = 16, TextColor3 = Color3.new(1, 1, 1), Outline = RED, TextXAlignment = Enum.TextXAlignment.Center, Text = "", ZIndex = 12, Parent = win })
+-- msgL 색(초록/빨강)은 글자 테두리로 보여 줌 (나무 판 위 흰 글씨)
+msgL:GetPropertyChangedSignal("TextColor3"):Connect(function()
+	local c = msgL.TextColor3
+	if c ~= Color3.new(1, 1, 1) then
+		msgL:FindFirstChildOfClass("UIStroke").Color = c
+		msgL.TextColor3 = Color3.new(1, 1, 1)
+	end
+end)
 
 local function preview(parent, entry)
-	local vpf = new("ViewportFrame", { BackgroundColor3 = Color3.fromRGB(226, 172, 96), Ambient = Color3.fromRGB(190, 190, 195), LightColor = Color3.new(1, 1, 1), LightDirection = Vector3.new(-0.4, -1, -0.6), Size = UDim2.new(1, -10, 1, -36), Position = UDim2.fromOffset(5, 5), Parent = parent })
+	local vpf = new("ViewportFrame", { BackgroundColor3 = Color3.fromRGB(226, 172, 96), Ambient = Color3.fromRGB(190, 190, 195), LightColor = Color3.new(1, 1, 1), LightDirection = Vector3.new(-0.4, -1, -0.6), Size = UDim2.new(1, -10, 1, -36), Position = UDim2.fromOffset(5, 5), ZIndex = 14, Parent = parent })
 	corner(vpf, 8)
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
 	local folder = assets and assets:FindFirstChild("Cutters")
@@ -369,12 +375,12 @@ function render()
 			if e then
 				local g = ShapeCatalog.grade(e.grade)
 				local chosen = id == mc.shape
-				local card = new("TextButton", { LayoutOrder = i, BackgroundColor3 = Color3.new(1, 1, 1), AutoButtonColor = true, Text = "", Parent = grid })
+				local card = new("TextButton", { LayoutOrder = i, BackgroundColor3 = CREAM, AutoButtonColor = true, Text = "", ZIndex = 13, Parent = grid })
 				corner(card, 10)
 				new("UIStroke", { Color = chosen and GREEN or (g and g.color or SOFT), Thickness = chosen and 4 or 2, Parent = card })
 				preview(card, e)
-				new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14), Size = UDim2.new(1, -6, 0, 16), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = BROWN, Text = e.name, Parent = card })
-				new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -1), Size = UDim2.new(1, -6, 0, 13), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 11, TextColor3 = g and g.color or SOFT, Text = chosen and "만드는 중" or (g and g.label or ""), Parent = card })
+				new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14), Size = UDim2.new(1, -6, 0, 16), BackgroundTransparency = 1, FontFace = UI.F.heavy, TextSize = 15, TextColor3 = BROWN, Text = e.name, ZIndex = 14, Parent = card })
+				new("TextLabel", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -1), Size = UDim2.new(1, -6, 0, 13), BackgroundTransparency = 1, FontFace = UI.F.heavy, TextSize = 12, TextColor3 = g and g.color or SOFT, Text = chosen and "만드는 중" or (g and g.label or ""), ZIndex = 14, Parent = card })
 				card.Activated:Connect(function()
 					if not chosen then
 						act("machineShape", id)
