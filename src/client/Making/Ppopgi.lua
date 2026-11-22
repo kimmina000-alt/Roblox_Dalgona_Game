@@ -207,7 +207,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 					ui:hint(string.format("쩍! 금이 갔어요 (%d/%d) 천천히 긁어요", run.cracks, Rules.BREAK))
 					hintT = 1.6
 				elseif state and hintT <= 0 then
-					if state.speed > Rules.SAFE * 1.4 then
+					if state.speed > run.safe * 1.4 then
 						ui:hint("너무 빨라요! 천천히")
 						hintT = 1
 					elseif not state.on and not state.far then

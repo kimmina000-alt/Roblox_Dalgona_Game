@@ -84,6 +84,28 @@ C.Stamp = {
 	crackHold = 0.85,
 }
 
+-- 도안 등급별 난이도 (14번, 2026-11-22, DEVELOPMENT_PLAN §9-7: 도장 판정 폭 + 뽑기 선 허용 오차·속도)
+-- 등급이 오를수록 좁아짐. Uncommon = 예전(모든 도안 같던) 값, Common은 조금 쉽게.
+-- 서버 Scoring·PpopgiRules와 클라이언트가 모두 이 표를 씀 (도안 등급은 ShapeCatalog)
+--   stampDist  : 틀이 가운데에서 이만큼 벗어나면 "가운데" 0점 (stud)
+--   stampAngle : 이만큼 비뚤어지면 "반듯하게" 0점 (도)
+--   holdMax    : 이보다 오래 누르면 세기 점수가 떨어지기 시작 (초). holdMin은 C.Stamp 그대로
+--   crackHold  : 이보다 오래 누르면 금 (초)
+--   ppTol      : 뽑기 바늘이 선에서 이만큼 안이면 "선 위" (stud)
+--   ppSafe     : 뽑기 안전 속도 (stud/초). 넘으면 금 갈 힘이 쌓임
+C.Difficulty = {
+	Common = { stampDist = 0.70, stampAngle = 34, holdMax = 0.55, crackHold = 0.90, ppTol = 0.13, ppSafe = 0.50 },
+	Uncommon = { stampDist = 0.60, stampAngle = 30, holdMax = 0.50, crackHold = 0.85, ppTol = 0.11, ppSafe = 0.45 },
+	Rare = { stampDist = 0.52, stampAngle = 26, holdMax = 0.46, crackHold = 0.80, ppTol = 0.10, ppSafe = 0.42 },
+	Epic = { stampDist = 0.45, stampAngle = 22, holdMax = 0.42, crackHold = 0.75, ppTol = 0.09, ppSafe = 0.39 },
+	Legendary = { stampDist = 0.38, stampAngle = 18, holdMax = 0.38, crackHold = 0.70, ppTol = 0.08, ppSafe = 0.36 },
+	Mythic = { stampDist = 0.32, stampAngle = 15, holdMax = 0.34, crackHold = 0.65, ppTol = 0.07, ppSafe = 0.33 },
+	Master = { stampDist = 0.27, stampAngle = 12, holdMax = 0.30, crackHold = 0.60, ppTol = 0.065, ppSafe = 0.30 },
+}
+function C.difficulty(grade)
+	return C.Difficulty[grade or ""] or C.Difficulty.Uncommon
+end
+
 -- 효과음 (Roblox 무료 효과음, Pro Sound Effects)
 C.Sounds = {
 	paperTear = "rbxassetid://9125724621", -- 종이 찢는 소리 1.1초

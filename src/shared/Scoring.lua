@@ -86,14 +86,21 @@ function Scoring.press(r)
 	return math.clamp(s, 0, 100)
 end
 
-function Scoring.stampForce(hold)
+-- 도안 등급별 난이도 (14번): 찍기 기록 r.grade (서버는 compute에서 세션 도안 등급으로 덮어씀)
+local function diff(r)
+	return Config.difficulty(r and r.grade)
+end
+Scoring.diff = diff
+
+function Scoring.stampForce(hold, d)
 	local cfg = Config.Stamp
+	local holdMax = d and d.holdMax or cfg.holdMax
 	if hold < cfg.holdMin then
 		return 40 + 60 * hold / cfg.holdMin
-	elseif hold <= cfg.holdMax then
+	elseif hold <= holdMax then
 		return 100
 	end
-	return 100 * c01(1 - (hold - cfg.holdMax) / 0.5)
+	return 100 * c01(1 - (hold - holdMax) / 0.5)
 end
 
 function Scoring.stamp(r)
@@ -101,10 +108,11 @@ function Scoring.stamp(r)
 	if (r.skipped or 0) >= 0.5 then
 		return 0
 	end
-	local center = 100 * c01(1 - r.dist / 0.6)
-	local angle = 100 * c01(1 - math.abs(r.angle) / 30)
-	local s = 0.5 * center + 0.2 * angle + 0.3 * Scoring.stampForce(r.hold)
-	if r.hold > Config.Stamp.crackHold then
+	local d = diff(r)
+	local center = 100 * c01(1 - r.dist / d.stampDist)
+	local angle = 100 * c01(1 - math.abs(r.angle) / d.stampAngle)
+	local s = 0.5 * center + 0.2 * angle + 0.3 * Scoring.stampForce(r.hold, d)
+	if r.hold > d.crackHold then
 		s -= 20
 	end
 	return math.clamp(s, 0, 100)
@@ -132,6 +140,10 @@ end
 -- records: { sugar = {...}, melt = {...}, ... } (없는 단계는 0점)
 -- shape: ShapeCatalog 항목 (가격). 없으면 Config.Shape
 function Scoring.compute(records, shape)
+	-- 찍기 난이도는 고른 도안 등급으로 (클라이언트가 보낸 등급은 쓰지 않음)
+	if records.stamp and shape then
+		records.stamp.grade = shape.grade
+	end
 	local s = {}
 	for _, step in ipairs(Config.Steps) do
 		local r = records[step.key]
@@ -175,7 +187,7 @@ function Scoring.compute(records, shape)
 		burnt = burnt,
 		misshaped = misshaped,
 		cracked = (records.press ~= nil and records.press.cracked == true)
-			or (records.stamp ~= nil and records.stamp.hold > Config.Stamp.crackHold),
+			or (records.stamp ~= nil and records.stamp.hold > diff(records.stamp).crackHold),
 		plain = plain,
 		price = round(basePrice * g.mult),
 	}
@@ -220,9 +232,10 @@ function Scoring.explain(records)
 			elseif step.key == "stamp" and (r.skipped or 0) >= 0.5 then
 				table.insert(parts, { "안 찍음", 0 })
 			elseif step.key == "stamp" then
-				table.insert(parts, { "가운데", round(100 * c01(1 - r.dist / 0.6)) })
-				table.insert(parts, { "반듯하게", round(100 * c01(1 - math.abs(r.angle) / 30)) })
-				table.insert(parts, { "누른 세기", round(Scoring.stampForce(r.hold)) })
+				local d = diff(r)
+				table.insert(parts, { "가운데", round(100 * c01(1 - r.dist / d.stampDist)) })
+				table.insert(parts, { "반듯하게", round(100 * c01(1 - math.abs(r.angle) / d.stampAngle)) })
+				table.insert(parts, { "누른 세기", round(Scoring.stampForce(r.hold, d)) })
 			end
 		end
 		table.insert(out, { key = step.key, label = step.label, score = r and round(Scoring[step.key](r)) or 0, parts = parts, tip = r and Scoring.tip(step.key, r) or "안 했어요" })
@@ -309,17 +322,18 @@ function Scoring.tip(key, r)
 		add("모양 틀을 안 찍었어요")
 	elseif key == "stamp" then
 		local cfg = Config.Stamp
-		if r.hold > cfg.crackHold then
+		local d = diff(r)
+		if r.hold > d.crackHold then
 			add("너무 오래 눌러서 금이 갔어요")
-		elseif r.hold > cfg.holdMax then
+		elseif r.hold > d.holdMax then
 			add("조금 오래 눌러서 너무 깊어요")
 		elseif r.hold < cfg.holdMin then
 			add("너무 짧게 눌러서 자국이 흐려요")
 		end
-		if r.dist > 0.3 then
+		if r.dist > d.stampDist * 0.5 then
 			add("틀이 가운데에서 벗어났어요")
 		end
-		if math.abs(r.angle) > 10 then
+		if math.abs(r.angle) > d.stampAngle / 3 then
 			add("틀이 비뚤어졌어요")
 		end
 		add("가운데에 반듯하게 잘 찍었어요")

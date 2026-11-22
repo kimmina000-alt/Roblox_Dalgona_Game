@@ -6,6 +6,9 @@
 -- 쪼개지면 못 팖. (원래 기획: 판매가 × (1 + 0.5 × 정확도), 쪼개지면 Poor 가격)
 
 local CutterShapes = require(script.Parent:WaitForChild("CutterShapes"))
+-- 도안 등급별 허용 오차·안전 속도 (14번, 2026-11-22): DalgonaConfig.Difficulty (서버·클라이언트 같은 표)
+local Config = require(script.Parent:WaitForChild("DalgonaConfig"))
+local ShapeCatalog = require(script.Parent:WaitForChild("ShapeCatalog"))
 
 local R = {}
 
@@ -116,7 +119,10 @@ function R.newRun(path)
 	for li in ipairs(path.loops) do
 		hit[li] = {}
 	end
-	return { path = path, hit = hit, covered = 0, stress = 0, cracks = 0, crackAt = {}, offT = 0, downT = 0, hist = {}, last = nil, t = 0, newBins = {} }
+	-- 도안 등급이 높을수록 선 허용 폭이 좁고 안전 속도가 느림 (R.TOL·R.SAFE는 기본값으로만 남김)
+	local entry = path.id and ShapeCatalog.get(path.id)
+	local d = Config.difficulty(entry and entry.grade)
+	return { path = path, hit = hit, covered = 0, stress = 0, cracks = 0, crackAt = {}, offT = 0, downT = 0, hist = {}, last = nil, t = 0, newBins = {}, tol = d.ppTol or R.TOL, safe = d.ppSafe or R.SAFE }
 end
 
 local function mark(run, li, b)
@@ -158,7 +164,7 @@ function R.feed(run, t, x, y, down)
 		return nil, nil
 	end
 	local li, s, d = R.nearest(run.path, x, y)
-	local on = d <= R.TOL
+	local on = d <= run.tol
 	local far = d > R.OFF_FAR
 	local state = { on = on, d = d, li = li, s = s, speed = 0, far = far }
 	local event = nil
@@ -195,8 +201,8 @@ function R.feed(run, t, x, y, down)
 			state.speed = speed
 			run.downT += dt
 			local add = 0
-			if speed > R.SAFE then
-				add += (speed / R.SAFE - 1) * R.FAST_K * dt
+			if speed > run.safe then
+				add += (speed / run.safe - 1) * R.FAST_K * dt
 			end
 			if not on then
 				add += R.OFF_K * dt
