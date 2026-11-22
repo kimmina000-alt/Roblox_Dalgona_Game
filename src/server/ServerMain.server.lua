@@ -105,6 +105,8 @@ PlotService.init({ notify = EconomyService.notify })
 SalesService.init(PlayerDataService, EconomyService, PlotService) -- 진열대 + 손님 (Phase 3)
 MachineDisplay.init() -- 가게 기계 자리 모습 (2~4단계 기계, MachineSlot 속성 Stage를 따라 바꿈, 20번)
 FactoryDisplay.init() -- 공장 건물(부지별 공장 공간)·가게 뒤 공장 문 모습 (5단계)
+-- 레트로 골목 맵 (21번): 길·길 건너 꾸미기 가게 줄·전봇대·소품·골목 끝, 낮 조명. 부지 자리는 건드리지 않음
+require(Services:WaitForChild("AlleyBuilder")).build()
 ProductionService.hooks.mods = GrowthService.mods
 ProductionService.hooks.canStart = EconomyService.canMake
 ProductionService.hooks.onStart = EconomyService.onStart -- 나무젓가락 1쌍
