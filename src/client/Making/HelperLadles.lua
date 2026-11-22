@@ -307,7 +307,16 @@ local function poseMinime(ws, k, grip, center, resting)
 	local bc = brazier and brazier:GetPivot().Position or center
 	local out = Vector3.new(center.X - bc.X, 0, center.Z - bc.Z)
 	out = out.Magnitude > 0.05 and out.Unit or Vector3.new(1, 0, 0)
-	local side = (out + Vector3.new(0, 0, -0.6)).Unit
+	-- 뒤 = 가게 건물 쪽 (가게 로컬 +Z). 길 양쪽 마주 보는 두 줄(2026-11-23)이라 월드 -Z로 박아 두면 북쪽 줄에서 반대가 됨
+	local plot = ws.Parent
+	local pcf = plot and plot:GetAttribute("PlotCFrame")
+	if typeof(pcf) ~= "CFrame" then
+		local floor = plot and plot:FindFirstChild("Floor")
+		pcf = floor and floor:IsA("BasePart") and floor.CFrame or nil
+	end
+	local back = pcf and pcf:VectorToWorldSpace(Vector3.zAxis) or Vector3.new(0, 0, -1)
+	back = Vector3.new(back.X, 0, back.Z).Unit
+	local side = (out + back * 0.6).Unit
 	local pos = Vector3.new(center.X, footY + armRest[mini].footDrop, center.Z) + side * STAND_OFF
 	local lookAt = Vector3.new(center.X, pos.Y, center.Z)
 	local want = CFrame.lookAt(pos, lookAt)
