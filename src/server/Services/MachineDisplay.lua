@@ -5,6 +5,11 @@
 -- 모델은 부지 모델 바로 아래 "Machine" (앞 = 골목 쪽). 부품 속성 Anim으로 클라이언트가 움직일 곳을 찾음:
 --   "spin"(돌아감) · "press"(위아래) · "lampRun"(돌 때 켜짐) · "lampStop"(멈추면 빨강) · "outlet"(배출구) · "window"(창 속 달고나)
 -- 기계 앞에 ProximityPrompt "MachinePrompt" (주인만 보임: 클라이언트가 숨김) → 도안 고르기·다음 기계 사기 화면
+--
+-- D32 (2026-11-23, 기계 쌓기): 단계마다 고정 자리 MachineSlot2·3·4 (PlotService). 산 기계는 모두 자기 자리에 남아 같이 돎.
+--   슬롯 속성 Owned = 샀는지, Stage = 샀으면 그 단계 번호(아니면 1), SlotStage = 자리 번호. 모델 = Plot.Machine<n>
+--   (속성 Stage·SlotName, 프롬프트 속성 MachineStage = n). 아직 안 산 다음 단계 자리에는 "기계 보기" 안내만 둠.
+--   새 슬롯이 있으면 옛 MachineSlot(가장 높은 단계 하나)은 그리지 않음
 
 local ServerStorage = game:GetService("ServerStorage")
 
@@ -230,8 +235,64 @@ local function addPrompt(attachTo, objectText, actionText)
 	return pr
 end
 
--- 부지 하나의 기계 모습을 Stage에 맞춤
-function Display.sync(plot)
+-- 기계 하나 만들기 (top = 자리 윗면, 앞 = 골목 쪽 -Z)
+local function buildMachine(plot, name, stage, top, slotName)
+	local m = Instance.new("Model")
+	m.Name = name
+	m:SetAttribute("Stage", stage)
+	m:SetAttribute("MachineName", NAMES[stage])
+	m:SetAttribute("SlotName", slotName)
+	local ok, w, d, h = pcall(BUILDERS[stage], m, top)
+	if not ok then
+		warn("[Machine] 모델을 못 만들었어요:", w)
+		m:Destroy()
+		return nil
+	end
+	applyMachineLayout(m, stage, top)
+	local anchor = part(m, "PromptAnchor", Vector3.new(0.2, 0.2, 0.2), top * CFrame.new(0, 2.2, -(d or 2.4) / 2 - 0.3), Color3.new(1, 1, 1), { Transparency = 1, CanQuery = false, CastShadow = false })
+	local pr = addPrompt(anchor, NAMES[stage], "도안 고르기")
+	pr:SetAttribute("MachineStage", stage)
+	m:SetAttribute("Height", h or 5)
+	m.PrimaryPart = anchor
+	return m
+end
+
+-- 자리 파트는 글씨 방향 때문에 90° 돌아가 있음 → 부지 방향(앞 = 골목 쪽 -Z)으로 되돌림
+local function slotTop(slot)
+	return slot.CFrame * CFrame.new(0, slot.Size.Y / 2, 0) * CFrame.Angles(0, -math.pi * 0.5, 0)
+end
+
+-- 새로 산 기계가 나타날 때: 작게 시작해서 0.4초 동안 커짐 (서버에서 크기를 바꾸면 모두에게 보임).
+-- 커지는 동안 속성 Popping = true → MachineClient는 끝난 뒤에 움직일 부품의 처음 자리(AnimBase)를 잼
+-- 부지에 넣기 전에 부름 (처음 한 프레임이 큰 채로 보이지 않게)
+local function popIn(m)
+	local ok = pcall(function()
+		m:ScaleTo(0.05)
+	end)
+	if not ok then
+		return
+	end
+	m:SetAttribute("Popping", true)
+	task.defer(function() -- 부지에 넣은 뒤에 시작
+		local t = 0
+		while t < 0.4 do
+			t += task.wait()
+			if not m.Parent then
+				return
+			end
+			local k = math.min(t / 0.4, 1)
+			local e = 1 - (1 - k) ^ 3 -- 끝에서 부드럽게
+			m:ScaleTo(math.max(0.05, e * (1 + 0.12 * math.sin(math.pi * k))))
+		end
+		if m.Parent then
+			m:ScaleTo(1)
+			m:SetAttribute("Popping", nil)
+		end
+	end)
+end
+
+-- 옛 한 자리(MachineSlot): 새 슬롯이 없는 부지(예전 저장 장소)에서만 씀
+local function syncLegacy(plot)
 	local slot = plot:FindFirstChild("MachineSlot")
 	if not slot then
 		return
@@ -250,8 +311,7 @@ function Display.sync(plot)
 	if slotPrompt then
 		slotPrompt:Destroy()
 	end
-	local builder = BUILDERS[stage]
-	if not builder then
+	if not BUILDERS[stage] then
 		slot.Transparency = 0.35
 		if label then
 			label.Enabled = true
@@ -263,24 +323,82 @@ function Display.sync(plot)
 	if label then
 		label.Enabled = false
 	end
-	-- 자리 파트는 글씨 방향 때문에 90° 돌아가 있음 → 부지 방향(앞 = 골목 쪽 -Z)으로 되돌림
-	local top = slot.CFrame * CFrame.new(0, slot.Size.Y / 2, 0) * CFrame.Angles(0, -math.pi * 0.5, 0)
-	local m = Instance.new("Model")
-	m.Name = "Machine"
-	m:SetAttribute("Stage", stage)
-	m:SetAttribute("MachineName", NAMES[stage])
-	local ok, w, d, h = pcall(builder, m, top)
-	if not ok then
-		warn("[Machine] 모델을 못 만들었어요:", w)
-		m:Destroy()
-		return
+	local m = buildMachine(plot, "Machine", stage, slotTop(slot), "MachineSlot")
+	if m then
+		m.Parent = plot
 	end
-	applyMachineLayout(m, stage, top)
-	local anchor = part(m, "PromptAnchor", Vector3.new(0.2, 0.2, 0.2), top * CFrame.new(0, 2.2, -(d or 2.4) / 2 - 0.3), Color3.new(1, 1, 1), { Transparency = 1, CanQuery = false, CastShadow = false })
-	addPrompt(anchor, NAMES[stage], "도안 고르기")
-	m:SetAttribute("Height", h or 5)
-	m.PrimaryPart = anchor
-	m.Parent = plot
+end
+
+local function hasStack(plot)
+	return plot:FindFirstChild("MachineSlot2") ~= nil
+end
+
+-- 새 자리 3개 (D32): 산 기계는 자기 자리에, 아직 안 산 첫 단계 자리에는 "기계 보기" 안내
+local function syncStack(plot, animate)
+	-- 옛 한 자리 모습은 지움 (서버가 옛 슬롯을 지우기 전까지 두 번 그려지지 않게)
+	local legacy = plot:FindFirstChild("Machine")
+	if legacy then
+		legacy:Destroy()
+	end
+	local oldSlot = plot:FindFirstChild("MachineSlot")
+	if oldSlot then
+		oldSlot.Transparency = 1
+		local att = oldSlot:FindFirstChild("PromptAtt")
+		if att then
+			att:Destroy()
+		end
+		for _, c in ipairs(oldSlot:GetChildren()) do
+			if c:IsA("SurfaceGui") then
+				c.Enabled = false
+			end
+		end
+	end
+	local promptPlaced = false
+	for n = 2, 4 do
+		local slot = plot:FindFirstChild("MachineSlot" .. n)
+		if slot then
+			local owned = slot:GetAttribute("Owned") == true and (slot:GetAttribute("Stage") or 1) >= 2
+			local name = "Machine" .. n
+			local m = plot:FindFirstChild(name)
+			local att = slot:FindFirstChild("PromptAtt")
+			if owned then
+				if att then
+					att:Destroy()
+				end
+				if not m and BUILDERS[n] then
+					m = buildMachine(plot, name, n, slotTop(slot), slot.Name)
+					if m then
+						if animate then
+							popIn(m)
+						end
+						m.Parent = plot
+					end
+				end
+			else
+				if m then
+					m:Destroy()
+				end
+				-- 아직 안 산 첫 자리: 바닥 판은 안 보이고 "기계 보기" 안내만 (다음 기계 사기 화면)
+				if not promptPlaced then
+					promptPlaced = true
+					if not att then
+						addPrompt(slot, "기계 자리", "기계 보기")
+					end
+				elseif att then
+					att:Destroy()
+				end
+			end
+		end
+	end
+end
+
+-- 부지 하나의 기계 모습을 맞춤
+function Display.sync(plot, animate)
+	if hasStack(plot) then
+		syncStack(plot, animate)
+	else
+		syncLegacy(plot)
+	end
 end
 
 function Display.init()
@@ -294,14 +412,28 @@ function Display.init()
 			return
 		end
 		local function hook(plot)
-			local slot = plot:WaitForChild("MachineSlot", 10)
+			local slot = plot:WaitForChild("MachineSlot2", 10) or plot:FindFirstChild("MachineSlot")
 			if not slot then
 				return
 			end
-			Display.sync(plot)
-			slot:GetAttributeChangedSignal("Stage"):Connect(function()
-				Display.sync(plot)
-			end)
+			Display.sync(plot, false)
+			local function watch(s)
+				for _, a in ipairs({ "Stage", "Owned" }) do
+					s:GetAttributeChangedSignal(a):Connect(function()
+						Display.sync(plot, true)
+					end)
+				end
+			end
+			if hasStack(plot) then
+				for n = 2, 4 do
+					local s = plot:FindFirstChild("MachineSlot" .. n)
+					if s then
+						watch(s)
+					end
+				end
+			else
+				watch(slot)
+			end
 		end
 		for _, p in ipairs(folder:GetChildren()) do
 			task.spawn(hook, p)

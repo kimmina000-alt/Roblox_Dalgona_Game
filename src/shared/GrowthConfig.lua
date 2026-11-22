@@ -32,7 +32,7 @@ G.DefaultData = {
 	ladles = 1, -- 국자 수 1~4 (SHOP_GROWTH_PLAN 2장)
 	partTimers = {}, -- 알바생 { { shape = 만들 도안 id, skill = 숙련(자리만) } } 국자 2번째부터 1명씩
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
-	machine = { shapes = {}, t = 0 }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, t = 이번 판 진행 초
+	machine = { shapes = {}, t = 0, ts = {} }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, ts[기계 id] = 이번 판 진행 초 (D32 기계 여러 대, t는 예전 값 → 처음 읽을 때 ts로 옮김)
 	-- 가게 뒤 공장 (D11, 5단계): on = 생산 켬, shape·qty·mode = 제어대 설정, lines = 라인별 진행 중인 판 { s, n, m, t, sec } 또는 false,
 	-- ups = 제어대 업그레이드 단계 [key] = 0..
 	-- staff[공정 key] = true: 고용한 공정 알바생 (D30)
@@ -236,7 +236,7 @@ G.Plots = {
 	workstationTurn = 180, -- 도
 	removeDecorDisplay = true,
 	rowGap = 0.3, -- 진열대와 작업대 사이
-	entry = Vector3.new(0, 0, -21), -- 접속하면 서는 곳: 내 가게 앞 골목 (간판 앞)
+	entry = Vector3.new(-10, 0, -28), -- 접속하면 서는 곳: 내 가게 앞 골목. 2026-11-23 새 가게 3D 의자(앉는 자리) 옆을 피해 옮김 (틀 Entry도 같은 자리)
 	teleportOnSpawn = true, -- 스폰을 내 가게 앞으로 (사용자 2026-11-21)
 }
 
@@ -371,11 +371,12 @@ G.Sales = {
 		{ 18, 1, 2 }, -- 분당 5
 	},
 	-- 2~5단계: 기계·공장
+	-- 2026-11-23 D32 (기계 2·3·4단계 모두 같이 돎): 수요 ≈ 생산의 80%로 올림 (기획 GDD 5-1, 사용자 승인). 분당 9 / 13.3 / 20 / 30
 	demandByStage = {
-		[2] = { 12, 1, 2 },
-		[3] = { 10, 1, 3 },
-		[4] = { 8, 1, 3 },
-		[5] = { 6, 1, 3 },
+		[2] = { 10, 1, 2 },
+		[3] = { 9, 1, 3 },
+		[4] = { 6, 1, 3 },
+		[5] = { 6, 2, 4 },
 	},
 	jitter = 0.3, -- 간격 ±30%
 	testSpeed = 1, -- 테스트용 배율: 2면 손님이 2배 자주 옴 (출시 때는 1)
