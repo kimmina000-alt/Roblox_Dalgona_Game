@@ -1,0 +1,497 @@
+# 아늑한 가게 그림체의 달고나 공장 기계 (사용자 요청 2026-11-23: "공장 기계 만들어 봐")
+#   cozy_machine.py(가게 기계)와 같은 그림체·도구: 따뜻한 나무, 크림, 주황·크림 줄무늬, 구리·놋쇠,
+#   모든 상자 모서리를 3단으로 둥글게 깎음, 평평한 면은 평평하게(set_sharp_from_angle), 팔레트 텍스처 한 장. 글자·상표 없음.
+#
+# 생산 라인 (왼쪽 → 오른쪽, 앞 = Blender -Y):
+#   ① 설탕 통 탑(나무 다리 + 유리 통 + 놋쇠 관) → ② 구리 솥(크림 받침, 계기) → ③ 컨베이어(크림 틀, 나무 옆판, 롤러)
+#   ④ 반죽 노즐대(노즐 3개, 전구) → ⑤ 찍는 프레스(줄무늬 옆판, 별 도장 누름 머리) → ⑥ 둥근 식힘 덮개(둥근 창)
+#   ⑦ 미끄럼판 + 나무 상자(다 된 달고나) / ⑧ 앞 조작대(계기 3개, 도안 버튼 6개, 시작·정지, 레버)
+#
+# 부품(MeshPart): Fac_Body, Fac_Hopper(유리), Fac_Sugar, Fac_Kettle(구리), Fac_Belt, Fac_Press(오르내림),
+#   Fac_Lights(Neon), Fac_BeltDalgona(벨트 위), Fac_Chute(나오는 곳), Fac_Output(상자 속), Fac_Fan(환풍기),
+#   Fac_Console(조작대), Fac_StartButton, Fac_StopButton, Fac_Stand_<공정>(알바생 자리 표시, 투명). 게임(FactoryDisplay ANIM)이 이름으로 움직임을 붙임
+#
+# 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/cozy_factory.py -- <출력 폴더(절대 경로)>
+# 결과: dalgona_cozy_factory.glb, cozy_factory_preview.png, cozy_factory_preview2.png(프레스 내린 모습), cozy_factory_parts.txt
+# 크기 = 게임 stud. 원점 = 바닥 (컨베이어 가운데 근처). 좌표 변환 Blender (x, y, z) → Roblox (-x, z, y).
+
+import math
+import os
+import sys
+
+import bmesh
+import bpy
+import numpy as np
+from mathutils import Matrix, Vector
+
+argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+OUT = os.path.abspath(argv[0] if argv else ".")
+os.makedirs(OUT, exist_ok=True)
+rng = np.random.default_rng(5)
+
+bpy.ops.wm.read_factory_settings(use_empty=True)
+scene = bpy.context.scene
+
+# ───────────── 팔레트 ─────────────
+PALETTE, PIDX = [], {}
+GRID = 8
+
+
+def C(rgb):
+    key = tuple(int(v) for v in rgb)
+    if key not in PIDX:
+        PIDX[key] = len(PALETTE)
+        PALETTE.append(key)
+        assert len(PALETTE) <= GRID * GRID
+    return PIDX[key]
+
+
+def palette_image():
+    cell = 16
+    size = cell * GRID
+    arr = np.ones((size, size, 3))
+    for i, rgb in enumerate(PALETTE):
+        cx, cy = i % GRID, i // GRID
+        arr[cy * cell:(cy + 1) * cell, cx * cell:(cx + 1) * cell] = np.array(rgb) / 255 + rng.normal(0, 0.005, (cell, cell, 1))
+    img = bpy.data.images.new("CozyFactoryPalette", size, size, alpha=False)
+    rgba = np.ones((size, size, 4), dtype=np.float32)
+    rgba[:, :, :3] = np.clip(arr, 0, 1) ** 2.2
+    img.pixels.foreach_set(rgba.ravel())
+    img.pack()
+    return img
+
+
+# 사진에서 고른 색
+WOOD = (198, 144, 98)  # 카운터 나무
+WOOD_D = (146, 98, 62)  # 진한 나무 (테·받침)
+WOOD_L = (222, 176, 122)  # 밝은 나무 (윗판)
+CREAM = (246, 234, 212)  # 크림 벽·문판
+CREAM_D = (230, 212, 184)
+ORANGE = (238, 172, 122)  # 차양 주황
+AWN_CREAM = (250, 240, 222)
+BRASS = (226, 186, 110)
+COPPER = (204, 138, 96)
+COPPER_D = (172, 110, 74)
+BOARD = (56, 58, 56)  # 칠판
+BULB = (255, 226, 160)
+WIRE = (90, 70, 56)
+GLASS = (224, 236, 234)
+SUGAR = (252, 250, 244)
+DALGONA = (226, 172, 98)
+DALGONA_D = (182, 126, 64)
+STEEL = (210, 206, 198)
+KNOB = (120, 84, 60)
+
+I4 = Matrix.Identity(4)
+
+
+def rot(x=0, y=0, z=0):
+    return Matrix.Rotation(math.radians(z), 4, "Z") @ Matrix.Rotation(math.radians(y), 4, "Y") @ Matrix.Rotation(math.radians(x), 4, "X")
+
+
+class Part:
+    def __init__(self, name):
+        self.name = name
+        self.bm = bmesh.new()
+        self.col = self.bm.faces.layers.int.new("col")
+
+    def paint(self, rgb):
+        idx = C(rgb) + 1
+        for f in self.bm.faces:
+            if f[self.col] == 0:
+                f[self.col] = idx
+
+
+P = {n: Part(n) for n in ("Fac_Body", "Fac_Hopper", "Fac_Sugar", "Fac_Kettle", "Fac_Belt", "Fac_Press", "Fac_Fan",
+                         "Fac_Lights", "Fac_BeltDalgona", "Fac_Chute", "Fac_Output", "Fac_Console", "Fac_StartButton", "Fac_StopButton",
+                         "Fac_Stand_sugar", "Fac_Stand_boil", "Fac_Stand_press", "Fac_Stand_inspect", "Fac_Stand_pack")}
+
+
+def V(v):
+    return Vector(v)
+
+
+def box(p, c, size, rgb, bev=None, seg=3, m=I4):
+    """모서리를 둥글게 깎은 상자. bev 기본 = 가장 짧은 변의 18% (최대 0.12)."""
+    if bev is None:
+        bev = min(min(size) * 0.18, 0.12)
+    res = bmesh.ops.create_cube(p.bm, size=1.0, matrix=Matrix.Translation(V(c)) @ m @ Matrix.Diagonal((*size, 1)))
+    if bev > 0:
+        vs = res["verts"]
+        es = list({e for v in vs for e in v.link_edges})
+        bmesh.ops.bevel(p.bm, geom=vs + es, offset=bev, offset_type="OFFSET", segments=seg, profile=0.5, affect="EDGES", clamp_overlap=True)
+    p.paint(rgb)
+
+
+def ball(p, c, r, rgb, seg=(12, 8), m=I4):
+    r = (r, r, r) if isinstance(r, (int, float)) else r
+    bmesh.ops.create_uvsphere(p.bm, u_segments=seg[0], v_segments=seg[1], radius=1.0,
+                              matrix=Matrix.Translation(V(c)) @ m @ Matrix.Diagonal((*r, 1)))
+    p.paint(rgb)
+
+
+def cyl(p, a, b, r0, r1, rgb, seg=12):
+    a, b = V(a), V(b)
+    d = b - a
+    R = Vector((0, 0, 1)).rotation_difference(d.normalized()).to_matrix().to_4x4()
+    bmesh.ops.create_cone(p.bm, cap_ends=True, cap_tris=False, segments=seg, radius1=r0, radius2=r1, depth=d.length,
+                          matrix=Matrix.Translation((a + b) / 2) @ R)
+    p.paint(rgb)
+
+
+def lathe(p, prof, rgb, seg=16, c=(0, 0, 0), m=I4):
+    """prof = [(r, z)...] 아래에서 위로. r = 0 인 끝은 한 점으로 모임."""
+    M = Matrix.Translation(V(c)) @ m
+    rings = []
+    for (r, z) in prof:
+        rings.append([p.bm.verts.new(M @ Vector((math.cos(2 * math.pi * k / seg) * r, math.sin(2 * math.pi * k / seg) * r, z))) for k in range(seg)])
+    faces = []
+    for A, B in zip(rings, rings[1:]):
+        for k in range(seg):
+            k2 = (k + 1) % seg
+            faces.append(p.bm.faces.new((A[k], A[k2], B[k2], B[k])))
+    bmesh.ops.remove_doubles(p.bm, verts=[v for r in rings for v in r], dist=1e-5)
+    faces = [f for f in faces if f.is_valid]
+    bmesh.ops.recalc_face_normals(p.bm, faces=faces)
+    p.paint(rgb)
+
+
+def rounded_disc(p, c, r, h, rgb, seg=20, m=I4):
+    """가장자리가 둥근 납작한 원판 (달고나, 돌림판)."""
+    e = min(h * 0.45, r * 0.2)
+    lathe(p, [(0, 0), (r - e, 0), (r - e * 0.3, e * 0.3), (r, e), (r, h - e), (r - e * 0.3, h - e * 0.3), (r - e, h), (0, h)], rgb, seg=seg, c=c, m=m)
+
+
+def star_relief(p, c, R, h, rgb, m=I4):
+    """달고나 윗면에 찍힌 별 (얕게 솟은 납작한 별)."""
+    M = Matrix.Translation(V(c)) @ m
+    pts = []
+    for k in range(10):
+        a = math.pi / 2 + k * math.pi / 5
+        rr = R if k % 2 == 0 else R * 0.45
+        pts.append((math.cos(a) * rr, math.sin(a) * rr))
+    top = [p.bm.verts.new(M @ Vector((x, y, h))) for x, y in pts]
+    bot = [p.bm.verts.new(M @ Vector((x, y, 0))) for x, y in pts]
+    ct = p.bm.verts.new(M @ Vector((0, 0, h)))
+    faces = []
+    for k in range(10):
+        k2 = (k + 1) % 10
+        faces.append(p.bm.faces.new((ct, top[k], top[k2])))
+        faces.append(p.bm.faces.new((bot[k], bot[k2], top[k2], top[k])))
+    bmesh.ops.recalc_face_normals(p.bm, faces=faces)
+    p.paint(rgb)
+
+
+def dalgona(p, c, r=0.42, h=0.07, star=True, m=I4):
+    rounded_disc(p, c, r, h, DALGONA, seg=18, m=m)
+    if star:
+        star_relief(p, V(c) + (m.to_3x3() @ Vector((0, 0, h - 0.005))), r * 0.55, 0.02, DALGONA_D, m=m)
+
+
+# ───────────── 공장 기계 ─────────────
+BELT = (112, 92, 82)
+GAUGE_FACE = (252, 246, 232)
+RED_BTN = (230, 120, 104)
+MINT_BTN = (150, 204, 176)
+SKY_BTN = (150, 190, 226)
+LEMON_BTN = (246, 214, 120)
+
+body = P["Fac_Body"]
+BZ = 2.4  # 컨베이어 윗면 높이
+BX0, BX1 = -2.4, 5.6  # 컨베이어 왼쪽·오른쪽 끝
+BWID = 1.9
+
+
+def post(c, h, w=0.3):
+    box(body, (c[0], c[1], h / 2), (w, w, h), WOOD_D, bev=0.07)
+
+
+# ① 설탕 통 탑 (왼쪽 끝): 나무 다리 4개 + 띠 + 유리 통 + 나무 뚜껑 + 놋쇠 관
+hx = -6.1
+for sx in (-1, 1):
+    for sy in (-1, 1):
+        post((hx + sx * 0.75, sy * 0.75), 3.6)
+for z in (1.0, 3.45):
+    box(body, (hx, -0.75, z), (1.8, 0.16, 0.16), WOOD, bev=0.05)
+    box(body, (hx, 0.75, z), (1.8, 0.16, 0.16), WOOD, bev=0.05)
+    box(body, (hx - 0.75, 0, z), (0.16, 1.8, 0.16), WOOD, bev=0.05)
+    box(body, (hx + 0.75, 0, z), (0.16, 1.8, 0.16), WOOD, bev=0.05)
+hc = Vector((hx, 0, 3.2))
+lathe(P["Fac_Hopper"], [(0.12, 0), (0.3, 0.2), (1.0, 1.0), (1.05, 1.1), (1.05, 2.6), (0.98, 2.72), (0, 2.72)], GLASS, seg=20, c=hc)
+lathe(P["Fac_Sugar"], [(0.1, 0.05), (0.28, 0.24), (0.96, 1.02), (0.98, 1.9), (0.6, 2.05), (0, 2.1)], SUGAR, seg=18, c=hc)
+lathe(body, [(0, 2.68), (1.12, 2.68), (1.16, 2.78), (1.1, 2.9), (0.4, 2.98), (0, 3.0)], WOOD_D, seg=20, c=hc)
+ball(body, hc + Vector((0, 0, 3.08)), 0.12, BRASS, seg=(10, 6))
+cyl(body, hc + Vector((0, 0, 0.05)), hc + Vector((0, 0, -0.35)), 0.14, 0.14, BRASS, seg=10)
+for a, b in (((hx, 0, 2.85), (hx + 1.4, 0, 2.85)), ((hx + 1.4, 0, 2.85), (-4.1, 0, 3.55))):
+    cyl(body, a, b, 0.1, 0.1, BRASS, seg=10)
+ball(body, (hx + 1.4, 0, 2.85), 0.13, BRASS, seg=(10, 6))
+
+# ② 구리 솥: 크림 받침(나무 테) + 큰 구리 솥 + 놋쇠 띠 + 둥근 계기 + 김 나는 뚜껑
+kx = -3.6
+box(body, (kx, 0, 0.6), (2.5, 2.5, 1.2), CREAM_D, bev=0.18)
+box(body, (kx, 0, 1.24), (2.7, 2.7, 0.14), WOOD_D, bev=0.05)
+for sx in (-1, 1):
+    box(body, (kx + sx * 0.7, -1.27, 0.6), (0.5, 0.06, 0.6), WOOD, bev=0.04)  # 불 보는 작은 문
+kt = P["Fac_Kettle"]
+kc = Vector((kx, 0, 1.3))
+lathe(kt, [(0, 0), (0.9, 0), (1.12, 0.2), (1.2, 0.6), (1.2, 1.55), (1.26, 1.62), (1.18, 1.66), (1.1, 1.6), (0, 1.6)], COPPER, seg=24, c=kc)
+lathe(kt, [(1.16, 1.62), (0.8, 1.98), (0.3, 2.12), (0, 2.14)], COPPER_D, seg=24, c=kc)
+ball(kt, kc + Vector((0, 0, 2.2)), (0.14, 0.14, 0.1), WOOD_D, seg=(10, 6))
+ring_z = (0.55, 1.25)
+for z in ring_z:
+    lathe(kt, [(1.21, z - 0.06), (1.25, z - 0.03), (1.25, z + 0.03), (1.21, z + 0.06)], BRASS, seg=24, c=kc)
+gc = kc + Vector((0, -1.24, 0.9))
+cyl(body, gc + Vector((0, 0.05, 0)), gc + Vector((0, -0.08, 0)), 0.32, 0.32, BRASS, seg=16)
+cyl(body, gc + Vector((0, -0.07, 0)), gc + Vector((0, -0.1, 0)), 0.27, 0.27, GAUGE_FACE, seg=16)
+box(body, gc + Vector((0.08, -0.11, 0.06)), (0.04, 0.02, 0.24), RED_BTN, bev=0.008, seg=1, m=rot(y=-35))
+for a, b in (((kx + 1.1, 0, 2.2), (-1.6, 0, 2.2)), ((-1.6, 0, 2.2), (-1.6, 0, 4.3)), ((-1.6, 0, 4.3), (-1.2, 0, 4.3))):
+    cyl(body, a, b, 0.11, 0.11, BRASS, seg=10)
+for q in ((-1.6, 0, 2.2), (-1.6, 0, 4.3)):
+    ball(body, q, 0.14, BRASS, seg=(10, 6))
+
+# ③ 컨베이어: 크림 틀 + 나무 옆판 + 벨트 + 다리 + 끝 롤러
+L = BX1 - BX0
+cx = (BX0 + BX1) / 2
+box(body, (cx, 0, BZ - 0.25), (L, BWID, 0.4), CREAM, bev=0.12)
+for sy in (-1, 1):
+    box(body, (cx, sy * (BWID / 2 + 0.06), BZ - 0.2), (L + 0.1, 0.12, 0.55), WOOD, bev=0.05)
+box(P["Fac_Belt"], (cx, 0, BZ - 0.02), (L - 0.3, BWID - 0.25, 0.08), BELT, bev=0.03, seg=2)
+for x in (BX0 + 0.5, cx, BX1 - 0.5):
+    for sy in (-1, 1):
+        post((x, sy * (BWID / 2 - 0.2)), BZ - 0.45, w=0.28)
+for x in (BX0 + 0.15, BX1 - 0.15):
+    cyl(body, (x, -BWID / 2 + 0.05, BZ - 0.15), (x, BWID / 2 - 0.05, BZ - 0.15), 0.2, 0.2, BRASS, seg=14)
+
+# ④ 반죽 노즐대: 나무 문 모양 틀 + 크림 판 + 놋쇠 노즐 3개 + 꼭대기 전구 2개
+nx = -1.2
+for sy in (-1, 1):
+    box(body, (nx, sy * 1.15, (BZ + 2.3) / 2), (0.32, 0.32, BZ + 2.3), WOOD_D, bev=0.08)
+box(body, (nx, 0, BZ + 2.1), (0.7, 2.7, 0.6), CREAM, bev=0.16)
+box(body, (nx, 0, BZ + 2.45), (0.8, 2.8, 0.14), WOOD_D, bev=0.05)
+for sy in (-0.55, 0, 0.55):
+    cyl(body, (nx, sy, BZ + 1.8), (nx, sy, BZ + 0.75), 0.13, 0.05, BRASS, seg=10)
+for sy in (-1, 1):
+    cyl(body, (nx, sy * 1.15, BZ + 2.52), (nx, sy * 1.15, BZ + 2.7), 0.06, 0.06, BRASS, seg=8)
+    ball(P["Fac_Lights"], (nx, sy * 1.15, BZ + 2.85), 0.16, BULB, seg=(12, 8))
+
+# ⑤ 찍는 프레스: 나무 기둥 + 주황·크림 줄무늬 옆판 + 지붕 + 놋쇠 실린더 + 움직이는 누름 머리
+px = 2.0
+for sy in (-1, 1):
+    box(body, (px, sy * 1.2, (BZ + 2.6) / 2), (1.2, 0.3, BZ + 2.6), WOOD_D, bev=0.1)
+    for k in range(4):  # 줄무늬 옆판
+        z = BZ + 0.45 + k * 0.5
+        box(body, (px, sy * 1.37, z), (1.0, 0.06, 0.5), ORANGE if k % 2 == 0 else AWN_CREAM, bev=0.02, seg=2)
+box(body, (px, 0, BZ + 2.45), (1.5, 2.9, 0.55), CREAM, bev=0.2)
+box(body, (px, 0, BZ + 2.8), (1.7, 3.1, 0.16), WOOD_D, bev=0.06)
+cyl(body, (px, 0, BZ + 2.2), (px, 0, BZ + 1.6), 0.24, 0.24, BRASS, seg=14)
+pr = P["Fac_Press"]
+cyl(pr, (px, 0, BZ + 1.7), (px, 0, BZ + 0.95), 0.12, 0.12, STEEL, seg=12)
+box(pr, (px, 0, BZ + 0.8), (1.0, 1.5, 0.3), BRASS, bev=0.1)
+for sy in (-0.4, 0.4):  # 아래에 별 도장
+    star_relief(pr, (px, sy, BZ + 0.65), 0.22, 0.04, COPPER_D, m=rot(x=180))
+
+# ⑥ 식히는 덮개: 둥근 크림 덮개 + 둥근 창 2개(놋쇠 테) + 위 환풍구
+cx6 = 4.25
+box(body, (cx6, 0, BZ + 0.75), (2.0, 2.2, 1.4), CREAM, bev=0.5, seg=4)
+box(body, (cx6, 0, BZ + 0.06), (2.1, 2.3, 0.12), WOOD_D, bev=0.04)
+for dx in (-0.45, 0.45):
+    q = Vector((cx6 + dx, -1.1, BZ + 0.85))
+    cyl(body, q + Vector((0, 0.04, 0)), q + Vector((0, -0.06, 0)), 0.3, 0.3, BRASS, seg=16)
+    cyl(P["Fac_Lights"], q + Vector((0, -0.04, 0)), q + Vector((0, -0.08, 0)), 0.23, 0.23, (255, 210, 170), seg=16)
+lathe(body, [(0.46, 0), (0.5, 0.05), (0.5, 0.16), (0.44, 0.18), (0.44, 0.05), (0.0, 0.05)], BRASS, seg=16, c=(cx6, 0.2, BZ + 1.4))  # 환풍구 테
+fan = P["Fac_Fan"]
+fc = Vector((cx6, 0.2, BZ + 1.55))
+cyl(fan, fc + Vector((0, 0, -0.03)), fc + Vector((0, 0, 0.03)), 0.09, 0.09, WOOD_D, seg=10)
+for k in range(4):  # 날개 4장 (납작해서 세로축으로 돎)
+    box(fan, fc + rot(z=k * 90).to_3x3() @ Vector((0.22, 0, 0)), (0.3, 0.12, 0.03), CREAM_D, bev=0.012, seg=2, m=rot(z=k * 90) @ rot(x=18))
+
+# ⑦ 나오는 곳: 나무 미끄럼판 + 나무 상자 + 다 된 달고나
+ch = P["Fac_Chute"]
+box(ch, (BX1 + 0.55, 0, BZ - 0.55), (1.3, 1.2, 0.1), WOOD_L, bev=0.03, m=rot(y=35))
+for sy in (-1, 1):
+    box(ch, (BX1 + 0.55, sy * 0.62, BZ - 0.45), (1.3, 0.06, 0.25), WOOD_D, bev=0.02, seg=2, m=rot(y=35))
+ox = BX1 + 1.45
+box(body, (ox, 0, 0.55), (1.6, 1.6, 1.1), WOOD, bev=0.1)
+box(body, (ox, 0, 1.08), (1.4, 1.4, 0.06), WOOD_D, bev=0.02)
+for sy in (-1, 1):
+    box(body, (ox, sy * 0.81, 0.55), (1.2, 0.04, 0.2), WOOD_D, bev=0.02, seg=2)  # 상자 손잡이 홈
+out = P["Fac_Output"]
+for k, (dx, dy, dz, ry) in enumerate(((-0.35, -0.3, 1.12, 0), (0.3, -0.25, 1.12, 20), (-0.25, 0.35, 1.12, -15),
+                                      (0.35, 0.3, 1.12, 40), (0.0, 0.0, 1.2, 12), (0.05, -0.05, 1.28, -25))):
+    dalgona(out, (ox + dx, dy, dz), r=0.34, h=0.06, m=rot(z=ry))
+
+# 벨트 위 달고나: 노즐 아래 반죽(별 없음) → 프레스 지나서 별
+bd = P["Fac_BeltDalgona"]
+for x in (-0.6, 0.4, 1.2):
+    dalgona(bd, (x, 0, BZ + 0.03), r=0.38, h=0.05, star=False)
+for x in (3.0, 5.2):
+    dalgona(bd, (x, 0, BZ + 0.03), r=0.38, h=0.05)
+
+# ⑧ 앞 조작대 (기울어진 판이 앞쪽 = 플레이어를 봄, 2026-11-23 사용자: 등을 보이는 것 같아 돌림): 나무 책상 + 기울어진 크림 판(계기 3개, 도안 버튼 6개, 큰 시작·정지 버튼, 레버)
+dx0, dy0 = 0.6, -2.35
+con = P["Fac_Console"]
+box(con, (dx0, dy0, 0.55), (2.4, 1.0, 1.1), WOOD, bev=0.1)
+box(con, (dx0, dy0 - 0.52, 0.55), (2.0, 0.06, 0.75), CREAM, bev=0.04)
+panel = Matrix.Translation(Vector((dx0, dy0, 1.32))) @ rot(x=35)
+box(con, (dx0, dy0, 1.3), (2.6, 1.1, 0.24), WOOD_D, bev=0.08, m=rot(x=35))
+box(con, panel @ Vector((0, 0, 0.13)), (2.35, 0.9, 0.06), CREAM, bev=0.03, m=rot(x=35))
+for k, x in enumerate((-0.75, 0.0, 0.75)):  # 계기
+    q = panel @ Vector((x, 0.18, 0.17))
+    cyl(con, q, q + rot(x=35).to_3x3() @ Vector((0, 0, 0.05)), 0.2, 0.2, BRASS, seg=14)
+    cyl(con, q + rot(x=35).to_3x3() @ Vector((0, 0, 0.04)), q + rot(x=35).to_3x3() @ Vector((0, 0, 0.07)), 0.16, 0.16, GAUGE_FACE, seg=14)
+for k, col in enumerate((ORANGE, MINT_BTN, SKY_BTN, LEMON_BTN, (210, 170, 220), (250, 190, 200))):  # 도안 버튼
+    q = panel @ Vector((-0.9 + k * 0.36, -0.22, 0.17))
+    cyl(con, q, q + rot(x=35).to_3x3() @ Vector((0, 0, 0.06)), 0.1, 0.09, col, seg=10)
+q = Vector((dx0 + 1.45, dy0 - 0.1, 1.15))
+box(con, q, (0.5, 0.8, 0.3), WOOD_D, bev=0.06)
+ball(P["Fac_StartButton"], q + Vector((0, -0.18, 0.2)), (0.14, 0.14, 0.08), MINT_BTN, seg=(12, 6))  # 시작 (돌 때 켜짐)
+ball(P["Fac_StopButton"], q + Vector((0, 0.18, 0.2)), (0.14, 0.14, 0.08), RED_BTN, seg=(12, 6))  # 정지 (멈추면 깜빡)
+cyl(con, (dx0 - 1.35, dy0, 1.0), (dx0 - 1.35, dy0 - 0.25, 1.55), 0.05, 0.04, BRASS, seg=8)  # 레버
+ball(con, (dx0 - 1.35, dy0 - 0.27, 1.6), 0.1, RED_BTN, seg=(10, 6))
+
+# ⑨ 공정 알바생이 설 자리 표시 (게임에서 안 보이게 함). 바닥에 놓인 얇은 원판, 라인 앞 통로.
+#    FactoryDisplay가 이 부품 바닥 가운데에 미니미를 세우고, 부품 -LookVector(= 기계 안쪽, Roblox +Z) 쪽을 보게 함.
+STANDS = {"sugar": (hx, -1.75), "boil": (kx, -1.95), "press": (px + 0.75, -1.65), "inspect": (cx6, -1.75), "pack": (ox, -1.5)}
+for key, (x, y) in STANDS.items():
+    cyl(P["Fac_Stand_" + key], (x, y, 0.0), (x, y, 0.02), 0.4, 0.4, MINT_BTN, seg=8)
+
+# ───────────── 오브젝트 + 팔레트 재질 ─────────────
+IMG = palette_image()
+MAT = bpy.data.materials.new("CozyPalette")
+MAT.use_nodes = True
+nt = MAT.node_tree
+bsdf = nt.nodes["Principled BSDF"]
+bsdf.inputs["Roughness"].default_value = 0.7
+tex = nt.nodes.new("ShaderNodeTexImage")
+tex.image = IMG
+tex.interpolation = "Closest"
+nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+
+NOTES = {
+    "Fac_Body": "나무·크림 몸, 설탕 탑 틀, 관, 노즐대, 프레스 틀, 식힘 덮개, 상자, 조작대 (SmoothPlastic 또는 Wood)",
+    "Fac_Hopper": "유리 설탕 통 (Glass, Transparency 0.5)",
+    "Fac_Sugar": "통 속 설탕 (Anim hopper)",
+    "Fac_Kettle": "구리 솥 (Anim kettle, Metal)",
+    "Fac_Belt": "컨베이어 벨트 (움직임은 위 달고나를 옮겨서 표현)",
+    "Fac_Fan": "식힘 덮개 위 환풍기 날개 (Anim spin: 가장 얇은 축 = 세로축으로 돎)",
+    "Fac_Press": "누름 머리 (Anim press, Roblox Y로 약 0.55 내리면 벨트 위 달고나에 닿음)",
+    "Fac_Lights": "전구·식힘 덮개 창 (Anim lampRun: 돌 때 Neon)",
+    "Fac_BeltDalgona": "벨트 위 달고나 (Anim belt: 부품 -X로 흐름)",
+    "Fac_Chute": "나무 미끄럼판 (Anim outlet: 다 된 달고나가 나오는 곳)",
+    "Fac_Output": "상자 속 다 된 달고나",
+    "Fac_Console": "앞 조작대 (제어대 ProximityPrompt를 붙일 부품)",
+    "Fac_StartButton": "시작 버튼 (Anim lampRun)",
+    "Fac_StopButton": "정지 버튼 (Anim lampStop)",
+    "Fac_Stand_sugar": "알바생 자리 표시: 설탕 넣기 (게임에서 투명)",
+    "Fac_Stand_boil": "알바생 자리 표시: 끓이기 (게임에서 투명)",
+    "Fac_Stand_press": "알바생 자리 표시: 붓기·찍기 (게임에서 투명)",
+    "Fac_Stand_inspect": "알바생 자리 표시: 식히기·검사 (게임에서 투명)",
+    "Fac_Stand_pack": "알바생 자리 표시: 포장 (게임에서 투명)",
+}
+rows = []
+objs = []
+total = 0
+for p in P.values():
+    bm = p.bm
+    uv = bm.loops.layers.uv.verify()
+    for f in bm.faces:
+        i = max(f[p.col] - 1, 0)
+        u, v = ((i % GRID) + 0.5) / GRID, ((i // GRID) + 0.5) / GRID
+        for l in f.loops:
+            l[uv].uv = (u, v)
+    bm.normal_update()
+    me = bpy.data.meshes.new(p.name)
+    bm.to_mesh(me)
+    bm.free()
+    me.shade_smooth()
+    me.set_sharp_from_angle(angle=math.radians(35))
+    me.materials.append(MAT)
+    o = bpy.data.objects.new(p.name, me)
+    scene.collection.objects.link(o)
+    objs.append(o)
+    tris = sum(len(f.vertices) - 2 for f in me.polygons)
+    total += tris
+    lo = Vector([min(v.co[i] for v in me.vertices) for i in range(3)])
+    hi = Vector([max(v.co[i] for v in me.vertices) for i in range(3)])
+    c, s = (lo + hi) / 2, hi - lo
+    rows.append(f"{p.name}\ttris={tris}\tsize=({s.x:.2f}, {s.z:.2f}, {s.y:.2f})\tcenter=({-c.x:.2f}, {c.z:.2f}, {c.y:.2f})\t{NOTES[p.name]}")
+rows.append(f"# 합계 삼각형 {total}. center = 기계 원점(바닥 가운데)에서 MeshPart 가운데까지 (Roblox 좌표). 원점 = 컨베이어 아래 바닥 가운데쯤.")
+rows.append(f"# 컨베이어 윗면 높이 {BZ}, 벨트 Roblox X {-BX1:.2f} ~ {-BX0:.2f} (달고나는 Roblox -X 쪽으로 흐름: 노즐 → 프레스 → 식힘 → 상자)")
+with open(os.path.join(OUT, "cozy_factory_parts.txt"), "w", encoding="utf-8") as f:
+    f.write("\n".join(rows) + "\n")
+print("\n".join(rows))
+
+for o in objs:
+    o.select_set(True)
+bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "dalgona_cozy_factory.glb"), export_format="GLB", use_selection=True, export_apply=True)
+
+# ───────────── 미리 보기 ─────────────
+world = bpy.data.worlds.new("W")
+world.use_nodes = True
+world.node_tree.nodes["Background"].inputs["Color"].default_value = (1.0, 0.86, 0.7, 1)
+world.node_tree.nodes["Background"].inputs["Strength"].default_value = 0.55
+scene.world = world
+bpy.ops.mesh.primitive_plane_add(size=60, location=(0, 0, 0))
+fl = bpy.context.active_object
+fm = bpy.data.materials.new("Floor")
+fm.use_nodes = True
+fm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.55, 0.5, 0.46, 1)
+fl.data.materials.append(fm)
+bpy.ops.mesh.primitive_plane_add(size=1, location=(0, 3.0, 6))
+wall = bpy.context.active_object
+wall.scale = (40, 1, 12)
+wall.rotation_euler = (math.radians(90), 0, 0)
+wm = bpy.data.materials.new("Wall")
+wm.use_nodes = True
+wm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.86, 0.74, 0.58, 1)
+wall.data.materials.append(wm)
+sun = bpy.data.objects.new("Sun", bpy.data.lights.new("Sun", "SUN"))
+sun.data.energy = 2.6
+sun.data.angle = math.radians(25)
+sun.data.color = (1.0, 0.92, 0.8)
+sun.rotation_euler = (math.radians(55), math.radians(8), math.radians(-30))
+scene.collection.objects.link(sun)
+for q in ((nx, 0, BZ + 3.2), (cx6, -1.6, BZ + 1.0)):
+    pt = bpy.data.objects.new("Pt", bpy.data.lights.new("Pt", "POINT"))
+    pt.data.energy = 80
+    pt.data.color = (1.0, 0.8, 0.55)
+    pt.location = q
+    scene.collection.objects.link(pt)
+emit = bpy.data.materials.new("Glow")
+emit.use_nodes = True
+eb = emit.node_tree.nodes["Principled BSDF"]
+eb.inputs["Base Color"].default_value = (1, 0.85, 0.6, 1)
+eb.inputs["Emission Color"].default_value = (1, 0.8, 0.5, 1)
+eb.inputs["Emission Strength"].default_value = 4
+scene.objects["Fac_Lights"].data.materials[0] = emit
+glass = bpy.data.materials.new("GlassPrev")
+glass.use_nodes = True
+gb = glass.node_tree.nodes["Principled BSDF"]
+gb.inputs["Base Color"].default_value = (0.85, 0.95, 0.95, 1)
+gb.inputs["Alpha"].default_value = 0.35
+glass.surface_render_method = "BLENDED"
+scene.objects["Fac_Hopper"].data.materials[0] = glass
+cam = bpy.data.objects.new("Cam", bpy.data.cameras.new("Cam"))
+cam.data.lens = 35
+scene.collection.objects.link(cam)
+scene.camera = cam
+scene.render.engine = "BLENDER_EEVEE"
+scene.render.resolution_x, scene.render.resolution_y = 1800, 1000
+scene.view_settings.view_transform = "Standard"
+
+
+def shoot(loc, tgt, name):
+    cam.location = loc
+    cam.rotation_euler = (Vector(tgt) - Vector(loc)).to_track_quat("-Z", "Y").to_euler()
+    scene.render.filepath = os.path.join(OUT, name)
+    bpy.ops.render.render(write_still=True)
+
+
+for o in scene.objects:
+    if o.name.startswith("Fac_Stand_"):
+        o.hide_render = True  # 알바생 자리 표시는 게임에서도 투명
+shoot((3.0, -19.0, 9.0), (0.3, 0, 2.6), "cozy_factory_preview.png")
+press = scene.objects["Fac_Press"]
+press.location.z -= 0.55
+shoot((-9.5, -10.5, 7.0), (0.5, 0, 2.8), "cozy_factory_preview2.png")
+print("[cozy_factory] done")
