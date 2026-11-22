@@ -923,7 +923,11 @@ local function flatBox(floor, rim, items, wallName, w, l, tableY, rng)
 		local y = 0.06 + thin / 2 + layer * thin * 1.1 + 0.002
 		local z = rng:NextNumber(-0.06, 0.06)
 		local at = cf * CFrame.new(x, y, z) * CFrame.Angles(0, rng:NextNumber(-0.06, 0.06), 0)
-		if thinX then
+		if p.Material == Enum.Material.Wood then
+			-- 나무는 결이 부품 X축을 따라감 → 길이 축을 X로 (2026-11-22 "막대 결이 옆으로")
+			p.Size = Vector3.new(s.Y, thin, across)
+			p.CFrame = CFrame.fromMatrix(at.Position, at.LookVector * -1, Vector3.yAxis)
+		elseif thinX then
 			p.CFrame = CFrame.fromMatrix(at.Position, Vector3.yAxis, at.LookVector * -1)
 		else
 			p.CFrame = CFrame.fromMatrix(at.Position, at.RightVector, at.LookVector * -1)

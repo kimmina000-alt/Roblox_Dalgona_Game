@@ -331,6 +331,20 @@ local function poseMinime(ws, k, grip, center, resting)
 end
 
 local started = false
+-- 화로 위 알바생 국자·젓가락·내용물은 안 보이게 (2026-11-22 사용자 "연탄 화로에서 알바생 국자도 빼자", "달고나 재료는 나만").
+-- 모델은 남겨 두고 움직임만 계속 계산 → 알바생 미니미는 그 자리 기준으로 카운터 위에 서고 진열대 배달도 그대로 (사용자 선택)
+-- 광택 메시는 LocalTransparencyModifier로 다 안 사라져서 Transparency
+local function hideLadle(m)
+	for _, d in ipairs(m:GetDescendants()) do
+		if (d:IsA("BasePart") or d:IsA("Decal") or d:IsA("Texture")) and d.Transparency ~= 1 then
+			d.Transparency = 1
+		end
+		if d:IsA("BasePart") and d.CastShadow then
+			d.CastShadow = false
+		end
+	end
+end
+
 function Helper.start()
 	if started then
 		return
@@ -349,6 +363,7 @@ function Helper.start()
 					if grip and k then
 						poseMinime(ws, k, grip, center, resting)
 					end
+					hideLadle(m)
 				end
 			end
 		end

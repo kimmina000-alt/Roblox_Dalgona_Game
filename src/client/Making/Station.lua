@@ -35,6 +35,12 @@ function Station.new(m)
 	self.Flame = self.Brazier:WaitForChild("Briquette"):WaitForChild("FireAtt"):WaitForChild("Flame")
 
 	self.grillTop = self.Brazier:GetAttribute("GrillTopY") or (self.Bowl.Position.Y - 0.825)
+	-- 실제 철망(Grill 부품) 윗면이 더 높으면 그 값 (2026-11-22: 화로를 옮긴 뒤 속성이 1칸 낮게 남아 국자가 철망 밑으로 내려갔음)
+	for _, d in ipairs(self.Brazier:GetDescendants()) do
+		if d:IsA("BasePart") and d.Name == "Grill" then
+			self.grillTop = math.max(self.grillTop, d.Position.Y + d.Size.Y / 2)
+		end
+	end
 	self.plateTop = self.Plate.Position.Y + self.Plate.Size.Y / 2
 	self.ringCenter = Vector3.new(self.Ring.Position.X, self.plateTop, self.Ring.Position.Z)
 	self.ringRadius = self.Ring.Size.Y / 2

@@ -128,13 +128,48 @@ local function setUnturned(on)
 		local m = station.model
 		local cf = m:GetBoundingBox()
 		local c = CFrame.new(cf.Position)
-		m:PivotTo(c * CFrame.Angles(0, -a, 0) * c:Inverse() * m:GetPivot())
-		unturned = { model = m, c = c, a = a }
+		local T = c * CFrame.Angles(0, -a, 0) * c:Inverse()
+		m:PivotTo(T * m:GetPivot())
+		unturned = { model = m, c = c, a = a, conns = {} }
+		-- 서버가 만드는 동안 연탄(높이·새 연탄)을 바꾸면 서버의 돌린 자리 값이 내려와 내 화면의 되돌린 자세가 풀림 →
+		-- 화로 부품의 CFrame이 서버에서 바뀌면 같은 만큼 다시 되돌림 (2026-11-22 "다시하기 누르면 연탄 위치 오류").
+		-- 화로 부품은 클라이언트가 움직이지 않으므로 바뀌면 서버 값
+		local brazier = m:FindFirstChild("Brazier")
+		if brazier then
+			local applying = false
+			local function watch(p)
+				if not p:IsA("BasePart") then
+					return
+				end
+				table.insert(unturned.conns, p:GetPropertyChangedSignal("CFrame"):Connect(function()
+					if applying or not unturned then
+						return
+					end
+					applying = true
+					p.CFrame = T * p.CFrame
+					applying = false
+				end))
+			end
+			for _, d in ipairs(brazier:GetDescendants()) do
+				watch(d)
+			end
+			table.insert(unturned.conns, brazier.DescendantAdded:Connect(function(d)
+				if d:IsA("BasePart") and unturned then
+					applying = true
+					d.CFrame = T * d.CFrame
+					applying = false
+					watch(d)
+				end
+			end))
+		end
 		station = Station.new(m) -- 제자리(rest)를 돌리기 전 자세로 다시 잼
 		CameraRig.init(m:GetPivot(), m)
 	elseif not on and unturned then
 		local u = unturned
 		unturned = nil
+		for _, cn in ipairs(u.conns or {}) do
+			cn:Disconnect()
+		end
 		if u.model.Parent then
 			u.model:PivotTo(u.c * CFrame.Angles(0, u.a, 0) * u.c:Inverse() * u.model:GetPivot())
 			station = Station.new(u.model)
@@ -362,16 +397,19 @@ local function runSession()
 		-- 모양 단계에서 "포장하기"를 눌렀으면 (모양 안 찍음, 2026-11-20) 묻지 않고 바로 포장
 		local stampRec = ctx.records.stamp
 		-- 7. 뽑기 (선택, 15번): 모양을 찍었으면 도전할지 고름. 순서 = 뽑기 → 포장. 쪼개지면 포장 못 함
+		local packDirect = false -- 뽑기 대신 "포장하기"를 골랐으면 포장할지 다시 묻지 않음
 		local canPpopgi = not result.misshaped and ctx.state.stampRoot ~= nil and not (stampRec and stampRec.packNow)
 			and (result.ppopgiOk or not result.verified)
 		if canPpopgi then
-			local pask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "뽑기에 도전할까요? 바늘로 점선을 긁어 모양을 떼어 내요 · 성공하면 달고나 하나 덤 (완벽하면 2개)", "뽑기 도전", "그만하고 넘어가기")
+			-- 2026-11-22 사용자: "그만하고 넘어가기" 대신 "포장하기" → 고르면 묻지 않고 바로 포장
+			local pask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "뽑기에 도전할까요? 바늘로 점선을 긁어 모양을 떼어 내요 · 성공하면 달고나 하나 덤 (완벽하면 2개)", "뽑기 도전", "포장하기")
 			while not pask.choice do
 				if not ctx.frame() then
 					pask.close()
 					return
 				end
 			end
+			packDirect = pask.choice == 2
 			if pask.choice == 1 then
 				local out = Ppopgi.run(ctx, dal, shape.id)
 				if ctx.aborted then
@@ -402,7 +440,7 @@ local function runSession()
 		local ask = { choice = 1 }
 		if result.ppopgi and result.ppopgi.broken then
 			ask = { choice = 2 } -- 쪼개진 달고나는 포장 안 함
-		elseif not (stampRec and stampRec.packNow) then
+		elseif not (stampRec and stampRec.packNow) and not packDirect then
 			ask = ui:ask(string.format("%s · 완성도 %d%%", result.grade, result.Q), "포장할까요? 비닐에 넣고 빵끈으로 묶어요", "포장하기", "그냥 두기")
 			while not ask.choice do
 				if not ctx.frame() then
