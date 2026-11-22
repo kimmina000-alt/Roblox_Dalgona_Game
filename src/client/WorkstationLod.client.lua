@@ -52,9 +52,21 @@ local function propParts(ws)
 	return list
 end
 
+-- 숨길 때 내가 숨겼다는 표시(LodHidden, 내 화면에서만)를 남기고, 되돌릴 때는 그 표시가 있는 것만 0으로.
+-- 제작 쪽 Making/Supplies가 숨긴 빈 통 내용물(속성 SupplyHidden)은 건드리지 않음 (가게 주인이 바뀌는 순간 등)
 local function apply(st, far)
 	for _, p in ipairs(st.parts) do
-		p.LocalTransparencyModifier = far and 1 or 0
+		if far then
+			if p.LocalTransparencyModifier < 1 then
+				p.LocalTransparencyModifier = 1
+				p:SetAttribute("LodHidden", true)
+			end
+		elseif p:GetAttribute("LodHidden") then
+			p:SetAttribute("LodHidden", nil)
+			if not p:GetAttribute("SupplyHidden") then
+				p.LocalTransparencyModifier = 0
+			end
+		end
 	end
 end
 
