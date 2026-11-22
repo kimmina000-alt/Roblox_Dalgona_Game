@@ -297,7 +297,7 @@ function GrowthService.action(player, what, a, b)
 		elseif what == "helperShape" and type(a) == "number" and type(b) == "string" then
 			ok, msg = actionSetShape(dd, math.floor(a), b)
 		elseif what == "machineShape" and type(a) == "string" then
-			ok, msg = Machine.setShape(dd, a)
+			ok, msg = Machine.setShape(dd, a, type(b) == "number" and b or nil) -- b = 기계 단계 (D32, 없으면 가장 높은 단계)
 		elseif what == "factorySet" and type(a) == "table" then
 			ok, msg = Factory.set(dd, a)
 		elseif what == "factoryRun" then

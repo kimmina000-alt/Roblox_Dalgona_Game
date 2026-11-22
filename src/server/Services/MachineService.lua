@@ -1,16 +1,20 @@
 -- 기계 2~4단계 (20번, 2026-11-21): 철제 판매기 → 분홍 자판기 → 연속 생산 설비
 -- 기준: SHOP_GROWTH_PLAN 1·3~5장, GDD 13장 D3·D9·D10·D12·D13·D16·D21·D26. 수치는 GrowthConfig.Machines / G.Machine
---  - 가게 뒤 기계 1자리에서 단계대로 바꿔 산다 (D10). 손 작업대·알바생은 그대로.
+--  - 단계 순서대로 산다. 2026-11-23 D32(일반 타이쿤 방식): 단계마다 고정 자리(Plot.MachineSlot2·3·4)가 있고, 사면 그 자리에 나타나며
+--    앞 단계 기계도 남아 모두 같이 돈다. 저장 machineStage = 가장 높은 단계 (그 아래는 모두 가진 것). 기계마다 도안(shapes[id])·
+--    진행 초(machine.ts[id])가 따로. 손 작업대·알바생은 그대로.
 --  - 가게를 임대·매입했고 문이 열려 있을 때만 사고 돌아간다 (D21).
 --  - 한 판 = batch개 / seconds초. 판을 시작할 때 재료(설탕·소다, 원가대로)를 확인하고 끝날 때 쓴다. 젓가락·빵끈 안 씀 (D16)
 --  - 품질 Normal~Excellent (Perfect는 손으로만), 도안은 Legendary까지 (D13), 1개당 EXP G.ExpMachine
 --  - 다 만들면 EconomyService.stockProduced: 진열대 빈 칸 → 없으면 보관함 (D26). 보관함이 차면 멈춤
 --  - 접속 중에만 돈다 (알바생과 같음). 진행 초(machine.t)는 저장
 --
--- 화면 쪽과의 약속 (제작 세션이 모델·연출·도안 고르기 UI를 맡음): 부지 모델의 MachineSlot 파트 속성
---   Stage(1 없음, 2~4), MachineId, Running, Status("work" | 멈춘 이유), Shape, CycleStart·CycleSeconds(서버 시각),
+-- 화면 쪽과의 약속 (제작 세션이 모델·연출·도안 고르기 UI를 맡음): 부지 모델의 MachineSlot<n>(n = 2·3·4) 파트 속성
+--   Stage(그 단계를 샀으면 n, 아니면 1), Owned, MachineId, Running, Status("work" | 멈춘 이유), Shape, CycleStart·CycleSeconds(서버 시각),
 --   MadeAt·MadeCount·MadeSlots("3,4,7" 진열한 칸) — 한 판 끝날 때마다
--- 조작: Remotes.GrowthAction ("buy","machine") / ("machineShape", 도안 id). 상태: 스냅숏 growth.machine
+--   옛 MachineSlot(하나)에는 바뀌는 동안 가장 높은 단계 기계를 계속 보냄
+-- 조작: Remotes.GrowthAction ("buy","machine") / ("machineShape", 도안 id, 단계(생략 = 가장 높은 단계)).
+-- 상태: 스냅숏 growth.machine (가장 높은 단계 칸 + machines = 가진 기계 목록)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,7 +27,7 @@ local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local MachineService = {}
 
 local Data, Economy, Plots, hooks = nil, nil, nil, nil
-local state = {} -- [player] = { status, running, cycleStart }
+local state = {} -- [player] = { [단계] = { status, cycleStart }, slots = { [단계] = 파트 } }
 
 local GRADE_INDEX = {}
 for i, g in ipairs(ShapeCatalog.Grades) do
@@ -33,6 +37,33 @@ local MAX_GRADE = GRADE_INDEX[G.Machine.maxGrade]
 
 local function spec(d)
 	return G.Machines[d.machineStage or 1]
+end
+
+-- 가진 기계 단계 목록 (낮은 단계부터)
+local function ownedStages(d)
+	local list = {}
+	for s = 2, d.machineStage or 1 do
+		if G.Machines[s] then
+			table.insert(list, s)
+		end
+	end
+	return list
+end
+
+-- 기계마다 진행 초 (예전 데이터의 machine.t는 가장 높은 단계 것으로 옮김)
+local function timers(d)
+	local mc = d.machine
+	if type(mc.ts) ~= "table" then
+		mc.ts = {}
+	end
+	if (mc.t or 0) > 0 then
+		local top = spec(d)
+		if top and mc.ts[top.id] == nil then
+			mc.ts[top.id] = mc.t
+		end
+		mc.t = 0
+	end
+	return mc.ts
 end
 
 local function isUnlocked(d, id)
@@ -50,9 +81,9 @@ local function allowedShapes(d)
 	return list
 end
 
--- 지금 기계가 만들 도안: 고른 것 → 없으면(또는 못 쓰면) 가장 싼 허용 도안 (알바생과 같음)
-local function currentShape(d)
-	local m = spec(d)
+-- 그 기계가 만들 도안: 고른 것 → 없으면(또는 못 쓰면) 가장 싼 허용 도안 (알바생과 같음). m 생략 = 가장 높은 단계
+local function currentShape(d, m)
+	m = m or spec(d)
 	if not m then
 		return nil
 	end
@@ -108,13 +139,26 @@ local function stopReason(d, shape, m)
 	return nil
 end
 
-local function slotPart(player)
+-- 단계 n의 자리 파트 (n = nil 이면 옛 MachineSlot 하나)
+local function slotPart(player, n)
 	local plot = Plots.get(player)
-	local slot = plot and plot.model:FindFirstChild("MachineSlot") or nil
+	local name = n and ("MachineSlot" .. n) or "MachineSlot"
+	local slot = plot and plot.model:FindFirstChild(name) or nil
 	if slot and state[player] then
-		state[player].slot = slot -- 나갈 때 부지가 먼저 풀려도 지울 수 있게
+		state[player].slots = state[player].slots or {}
+		state[player].slots[name] = slot -- 나갈 때 부지가 먼저 풀려도 지울 수 있게
 	end
 	return slot
+end
+
+local function machineState(player, n)
+	local st = state[player]
+	if not st then
+		st = {}
+		state[player] = st
+	end
+	st[n] = st[n] or {}
+	return st[n]
 end
 
 local function setAttr(inst, name, value)
@@ -123,16 +167,12 @@ local function setAttr(inst, name, value)
 	end
 end
 
--- MachineSlot 속성을 지금 상태로
-local function publish(player, d)
-	local slot = slotPart(player)
-	if not slot then
-		return
-	end
-	local m = spec(d)
-	local st = state[player] or {}
-	local shape = currentShape(d)
-	setAttr(slot, "Stage", m and (d.machineStage or 1) or 1)
+local function writeSlot(slot, d, player, n, owned)
+	local m = owned and G.Machines[n] or nil
+	local st = (m and state[player] and state[player][n]) or {}
+	local shape = m and currentShape(d, m) or nil
+	setAttr(slot, "Stage", m and n or 1)
+	setAttr(slot, "Owned", m ~= nil)
 	setAttr(slot, "MachineId", m and m.id or "")
 	setAttr(slot, "Running", m ~= nil and st.status == "work")
 	setAttr(slot, "Status", m and (st.status or "work") or "")
@@ -141,23 +181,40 @@ local function publish(player, d)
 	setAttr(slot, "CycleStart", st.cycleStart or 0)
 end
 
+-- 자리 파트 속성을 지금 상태로 (단계마다 + 옛 MachineSlot에는 가장 높은 단계)
+local function publish(player, d)
+	local top = d.machineStage or 1
+	for n = 2, 4 do
+		local slot = slotPart(player, n)
+		if slot then
+			writeSlot(slot, d, player, n, n <= top and G.Machines[n] ~= nil)
+		end
+	end
+	local old = slotPart(player)
+	if old then
+		writeSlot(old, d, player, top, G.Machines[top] ~= nil)
+	end
+end
+
 local function clearSlot(player)
-	local slot = state[player] and state[player].slot
-	if not slot or not slot.Parent then
-		return
+	local slots = state[player] and state[player].slots
+	for _, slot in pairs(slots or {}) do
+		if slot.Parent then
+			for _, name in ipairs({ "MachineId", "Status", "Shape", "MadeSlots" }) do
+				slot:SetAttribute(name, "")
+			end
+			slot:SetAttribute("Stage", 1)
+			slot:SetAttribute("Owned", false)
+			slot:SetAttribute("Running", false)
+			slot:SetAttribute("CycleStart", 0)
+			slot:SetAttribute("CycleSeconds", 0)
+		end
 	end
-	for _, name in ipairs({ "MachineId", "Status", "Shape", "MadeSlots" }) do
-		slot:SetAttribute(name, "")
-	end
-	slot:SetAttribute("Stage", 1)
-	slot:SetAttribute("Running", false)
-	slot:SetAttribute("CycleStart", 0)
-	slot:SetAttribute("CycleSeconds", 0)
 end
 
 ---------------------------------------------------------------- 구매·도안 (GrowthService.action 안, Data.update 안에서 부름)
 
--- 다음 단계 기계 사기 (단계 순서대로, 이전 기계는 바뀜)
+-- 다음 단계 기계 사기 (단계 순서대로, 앞 단계 기계도 남아 같이 돎: D32)
 function MachineService.buy(d)
 	local nextStage = (d.machineStage or 1) + 1
 	local m = G.Machines[nextStage]
@@ -178,12 +235,19 @@ function MachineService.buy(d)
 	end
 	d.coins -= m.price
 	d.machineStage = nextStage
-	d.machine.t = 0
+	timers(d)[m.id] = 0
 	return true, string.format("%s 설치! %d초마다 %d개", m.name, m.seconds, m.batch)
 end
 
-function MachineService.setShape(d, shapeId)
+function MachineService.setShape(d, shapeId, stage)
 	local m = spec(d)
+	if type(stage) == "number" then
+		stage = math.floor(stage)
+		if stage < 2 or stage > (d.machineStage or 1) then
+			return false, "아직 없는 기계예요"
+		end
+		m = G.Machines[stage]
+	end
 	if not m then
 		return false, "기계가 없어요"
 	end
@@ -198,7 +262,7 @@ function MachineService.setShape(d, shapeId)
 		return false, "기계는 레전더리 도안까지 만들어요"
 	end
 	d.machine.shapes[m.id] = e.id
-	d.machine.t = 0 -- 도안을 바꾸면 그 판은 처음부터
+	timers(d)[m.id] = 0 -- 도안을 바꾸면 그 판은 처음부터
 	return true, string.format("%s: %s", m.name, e.name)
 end
 
@@ -208,29 +272,53 @@ function MachineService.changed(player)
 	if not d then
 		return
 	end
-	local st = state[player]
-	if st then
-		st.cycleStart = nil
-		st.status = nil
+	for k, s in pairs(state[player] or {}) do
+		if type(k) == "number" then
+			s.cycleStart = nil
+			s.status = nil
+		end
 	end
 	publish(player, d)
 end
 
 ---------------------------------------------------------------- 스냅숏 (HUD·도안 고르기 UI)
 
+local function machineSnap(player, d, n)
+	local m = G.Machines[n]
+	local st = (state[player] and state[player][n]) or {}
+	local shape = currentShape(d, m)
+	return {
+		stage = n,
+		id = m.id,
+		name = m.name,
+		shape = shape and shape.id or nil,
+		status = st.status or "work",
+		running = (st.status or "work") == "work",
+		t = math.floor(timers(d)[m.id] or 0),
+		seconds = m.seconds,
+		batch = m.batch,
+		shapes = allowedShapes(d),
+	}
+end
+
 function MachineService.snapshot(player, d)
 	local m = spec(d)
-	local st = state[player] or {}
+	local st = (state[player] and state[player][d.machineStage or 1]) or {}
 	local nx = G.Machines[(d.machineStage or 1) + 1]
 	local shape = currentShape(d)
+	local machines = {}
+	for _, n in ipairs(ownedStages(d)) do
+		table.insert(machines, machineSnap(player, d, n))
+	end
 	return {
+		machines = machines,
 		stage = d.machineStage or 1,
 		id = m and m.id or nil,
 		name = m and m.name or nil,
 		shape = shape and shape.id or nil,
 		status = m and (st.status or "work") or nil,
 		running = m ~= nil and (st.status or "work") == "work",
-		t = m and math.floor(d.machine.t or 0) or 0,
+		t = m and math.floor(timers(d)[m.id] or 0) or 0,
 		seconds = m and m.seconds or 0,
 		batch = m and m.batch or 0,
 		next = nx and { stage = (d.machineStage or 1) + 1, name = nx.name, level = nx.level, price = nx.price } or nil,
@@ -275,7 +363,7 @@ local function produce(dd, shape, m)
 	return n, slots, ups, used
 end
 
-local function finishBatch(player, shape, m)
+local function finishBatch(player, shape, m, n)
 	local made, slots, ups, newShapes = 0, {}, {}, {}
 	Data.update(player, function(dd)
 		made, slots, ups = produce(dd, shape, m)
@@ -293,12 +381,17 @@ local function finishBatch(player, shape, m)
 	if #newShapes > 0 then
 		Economy.notify(player, "새 도안: " .. table.concat(newShapes, ", "))
 	end
-	local slot = slotPart(player)
-	if slot then
-		table.sort(slots)
-		slot:SetAttribute("MadeCount", made)
-		slot:SetAttribute("MadeSlots", table.concat(slots, ","))
-		slot:SetAttribute("MadeAt", workspace:GetServerTimeNow())
+	table.sort(slots)
+	local targets = { slotPart(player, n) }
+	if n == (Data.get(player) and Data.get(player).machineStage) then
+		table.insert(targets, slotPart(player)) -- 옛 MachineSlot (가장 높은 단계)
+	end
+	for _, slot in ipairs(targets) do
+		if slot then
+			slot:SetAttribute("MadeCount", made)
+			slot:SetAttribute("MadeSlots", table.concat(slots, ","))
+			slot:SetAttribute("MadeAt", workspace:GetServerTimeNow())
+		end
 	end
 	print(string.format("[Machine] %s %s made %d %s shelf=%s", player.Name, m.id, made, shape.id, table.concat(slots, ",")))
 	return made
@@ -306,30 +399,32 @@ end
 
 -- 오프라인 정산 (D29): dt초 진행. 반환 = 아직 돌 수 있는가. rep에 만든 수·재료·멈춘 이유·레벨업을 모음
 function MachineService.offlineTick(dd, dt, rep)
-	local m = spec(dd)
-	if not m then
-		return false
-	end
-	local shape = currentShape(dd)
-	local why = stopReason(dd, shape, m)
-	if why then
-		rep.stops["기계"] = rep.stops["기계"] or why -- 처음 멈춘 이유
-		return false
-	end
-	dd.machine.t = (dd.machine.t or 0) + dt
-	if dd.machine.t >= m.seconds then
-		dd.machine.t = 0
-		local n, _, ups, used = produce(dd, shape, m)
-		rep.made.machine += n
-		rep.exp += G.ExpMachine * n
-		for id, k in pairs(used) do
-			rep.used[id] = (rep.used[id] or 0) + k
+	local any = false
+	local ts = timers(dd)
+	for _, s in ipairs(ownedStages(dd)) do
+		local m = G.Machines[s]
+		local shape = currentShape(dd, m)
+		local why = stopReason(dd, shape, m)
+		if why then
+			rep.stops["기계"] = rep.stops["기계"] or why -- 처음 멈춘 이유
+		else
+			any = true
+			ts[m.id] = (ts[m.id] or 0) + dt
+			if ts[m.id] >= m.seconds then
+				ts[m.id] = 0
+				local n, _, ups, used = produce(dd, shape, m)
+				rep.made.machine += n
+				rep.exp += G.ExpMachine * n
+				for id, k in pairs(used) do
+					rep.used[id] = (rep.used[id] or 0) + k
+				end
+				for _, u in ipairs(ups) do
+					table.insert(rep.ups, u)
+				end
+			end
 		end
-		for _, u in ipairs(ups) do
-			table.insert(rep.ups, u)
-		end
 	end
-	return true
+	return any
 end
 
 local function step(player, dt)
@@ -337,39 +432,35 @@ local function step(player, dt)
 	if not d or not d.machine then
 		return
 	end
-	local m = spec(d)
-	local st = state[player]
-	if not st then
-		st = {}
-		state[player] = st
-	end
-	if not m then
-		if st.status ~= nil then
-			st.status = nil
-			publish(player, d)
+	local ts = timers(d)
+	local changedStatus = false
+	for _, n in ipairs(ownedStages(d)) do
+		local m = G.Machines[n]
+		local st = machineState(player, n)
+		local shape = currentShape(d, m)
+		local why = stopReason(d, shape, m)
+		local before = st.status
+		if why then
+			st.status = why
+			st.cycleStart = nil
+		else
+			st.status = "work"
+			ts[m.id] = (ts[m.id] or 0) + dt -- 저장은 자동 저장 때 같이 (매초 알리지 않음)
+			if not st.cycleStart then
+				st.cycleStart = workspace:GetServerTimeNow() - ts[m.id]
+			end
+			if ts[m.id] >= m.seconds then
+				ts[m.id] = 0
+				st.cycleStart = workspace:GetServerTimeNow()
+				finishBatch(player, shape, m, n)
+			end
 		end
-		return
-	end
-	local shape = currentShape(d)
-	local why = stopReason(d, shape, m)
-	local before = st.status
-	if why then
-		st.status = why
-		st.cycleStart = nil
-	else
-		st.status = "work"
-		d.machine.t = (d.machine.t or 0) + dt -- 저장은 자동 저장 때 같이 (매초 알리지 않음)
-		if not st.cycleStart then
-			st.cycleStart = workspace:GetServerTimeNow() - d.machine.t
-		end
-		if d.machine.t >= m.seconds then
-			d.machine.t = 0
-			st.cycleStart = workspace:GetServerTimeNow()
-			finishBatch(player, shape, m)
+		if before ~= st.status then
+			changedStatus = true
 		end
 	end
 	publish(player, d)
-	if before ~= st.status then
+	if changedStatus then
 		Economy.push(player) -- 멈춘 이유가 바뀌면 HUD에도
 	end
 end

@@ -84,7 +84,7 @@ end
 -- 위치(부지 기준)·크기·색·재질·투명도를 6칸 모두에 옮김. 틀에서 지운 부품은 지우고(꼭 필요한 부품은 숨김),
 -- 틀에 새로 넣은 부품(LayoutKey 없음)은 6칸 모두에 복제. 진열대·작업대·공장 부지·기계는 다른 코드가 붙여서 틀 밖.
 
-local KEEP_ALWAYS = { HandStationSpot = true, HandStationInside = true, Floor = true, Entry = true, Sign = true, Shutter = true, Header = true, RentPaper = true, MachineSlot = true, Door = true }
+local KEEP_ALWAYS = { HandStationSpot = true, HandStationInside = true, Floor = true, Entry = true, Sign = true, Shutter = true, Header = true, RentPaper = true, MachineSlot = true, MachineSlot2 = true, MachineSlot3 = true, MachineSlot4 = true, Door = true }
 local layoutTemplate = nil -- { model, cf }
 
 local Layout = require(script.Parent:WaitForChild("LayoutTemplate"))
@@ -192,6 +192,20 @@ local function buildPlot(index, parent)
 	local ms = spot(m, "MachineSlot", cf * CFrame.new(P.machineSlot.pos), P.machineSlot.size, Color3.fromRGB(170, 210, 255), "기계 자리")
 	ms:SetAttribute("Spot", "Machine")
 	ms:SetAttribute("Stage", 1)
+	-- 단계마다 고정 기계 자리 (D32, 2026-11-23): 사면 그 자리에 나타나고 앞 단계도 남음. 바닥 판은 안 보임, 자리는 PlotLayout 틀이 정함
+	for n = 2, 4 do
+		local s = spot(m, "MachineSlot" .. n, cf * CFrame.new(P.machineSlot.pos), P.machineSlot.size, Color3.fromRGB(170, 210, 255), "기계 " .. n .. "단계")
+		s:SetAttribute("Spot", "Machine")
+		s:SetAttribute("SlotStage", n)
+		s:SetAttribute("Stage", 1)
+		s:SetAttribute("Owned", false)
+		s.Transparency = 1
+		for _, c in ipairs(s:GetChildren()) do
+			if c:IsA("SurfaceGui") then
+				c.Enabled = false
+			end
+		end
+	end
 
 	-- 가게 뒤 공장 문 (D11, 자리만): 문틀 + 닫힌 문 + "준비 중" 안내
 	local dcf = cf * CFrame.new(P.factoryDoor.pos)

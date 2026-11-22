@@ -32,7 +32,7 @@ G.DefaultData = {
 	ladles = 1, -- 국자 수 1~4 (SHOP_GROWTH_PLAN 2장)
 	partTimers = {}, -- 알바생 { { shape = 만들 도안 id, skill = 숙련(자리만) } } 국자 2번째부터 1명씩
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
-	machine = { shapes = {}, t = 0 }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, t = 이번 판 진행 초
+	machine = { shapes = {}, t = 0, ts = {} }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, ts[기계 id] = 이번 판 진행 초 (D32 기계 여러 대, t는 예전 값 → 처음 읽을 때 ts로 옮김)
 	-- 가게 뒤 공장 (D11, 5단계): on = 생산 켬, shape·qty·mode = 제어대 설정, lines = 라인별 진행 중인 판 { s, n, m, t, sec } 또는 false,
 	-- ups = 제어대 업그레이드 단계 [key] = 0..
 	-- staff[공정 key] = true: 고용한 공정 알바생 (D30)
