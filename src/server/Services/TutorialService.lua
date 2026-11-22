@@ -94,6 +94,24 @@ function TutorialService.init(dataService, economyService, remotes)
 		advance(player, 5, 6)
 	end)
 
+	-- Studio 전용: 안내를 처음부터 다시 (ServerStorage.DevTutorial:Invoke(userId))
+	if game:GetService("RunService"):IsStudio() then
+		local dev = Instance.new("BindableFunction")
+		dev.Name = "DevTutorial"
+		dev.OnInvoke = function(userId)
+			local p = Players:GetPlayerByUserId(userId)
+			if not p then
+				return "no player"
+			end
+			Data.update(p, function(d)
+				d.tutorialDone = false
+			end)
+			setStep(p, 1)
+			return "restarted"
+		end
+		dev.Parent = game:GetService("ServerStorage")
+	end
+
 	ev.OnServerEvent:Connect(function(player, what)
 		local s = step(player)
 		if s <= 0 then
