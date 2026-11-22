@@ -136,18 +136,27 @@ local function setUnturned(on)
 		-- 화로 부품은 클라이언트가 움직이지 않으므로 바뀌면 서버 값
 		local brazier = m:FindFirstChild("Brazier")
 		if brazier then
-			local applying = false
+			-- 신호가 늦게 옴(Deferred): 내가 넣은 값에도 신호가 다시 와서 또 되돌리면 두 자리를 계속 오감 →
+			-- 마지막으로 내가 넣은 값과 같으면 넘어감
+			local mine = setmetatable({}, { __mode = "k" })
+			local function fix(p)
+				local last = mine[p]
+				if last and (p.Position - last.Position).Magnitude < 1e-3 and p.CFrame.LookVector:Dot(last.LookVector) > 0.9999 then
+					return
+				end
+				local cf = T * p.CFrame
+				mine[p] = cf
+				p.CFrame = cf
+			end
 			local function watch(p)
 				if not p:IsA("BasePart") then
 					return
 				end
+				mine[p] = mine[p] or p.CFrame -- 지금 값은 이미 되돌린 값
 				table.insert(unturned.conns, p:GetPropertyChangedSignal("CFrame"):Connect(function()
-					if applying or not unturned then
-						return
+					if unturned then
+						fix(p)
 					end
-					applying = true
-					p.CFrame = T * p.CFrame
-					applying = false
 				end))
 			end
 			for _, d in ipairs(brazier:GetDescendants()) do
@@ -155,9 +164,7 @@ local function setUnturned(on)
 			end
 			table.insert(unturned.conns, brazier.DescendantAdded:Connect(function(d)
 				if d:IsA("BasePart") and unturned then
-					applying = true
-					d.CFrame = T * d.CFrame
-					applying = false
+					fix(d)
 					watch(d)
 				end
 			end))
