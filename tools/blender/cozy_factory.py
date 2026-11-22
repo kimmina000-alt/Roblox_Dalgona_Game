@@ -9,7 +9,7 @@
 #
 # 부품(MeshPart): Fac_Body, Fac_Hopper(유리), Fac_Sugar, Fac_Kettle(구리), Fac_Belt, Fac_Press(오르내림),
 #   Fac_Lights(Neon), Fac_BeltDalgona(벨트 위), Fac_Chute(나오는 곳), Fac_Output(상자 속), Fac_Fan(환풍기),
-#   Fac_Console(조작대), Fac_StartButton, Fac_StopButton. 게임(FactoryDisplay ANIM)이 이름으로 움직임을 붙임
+#   Fac_Console(조작대), Fac_StartButton, Fac_StopButton, Fac_Stand_<공정>(알바생 자리 표시, 투명). 게임(FactoryDisplay ANIM)이 이름으로 움직임을 붙임
 #
 # 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/cozy_factory.py -- <출력 폴더(절대 경로)>
 # 결과: dalgona_cozy_factory.glb, cozy_factory_preview.png, cozy_factory_preview2.png(프레스 내린 모습), cozy_factory_parts.txt
@@ -103,7 +103,8 @@ class Part:
 
 
 P = {n: Part(n) for n in ("Fac_Body", "Fac_Hopper", "Fac_Sugar", "Fac_Kettle", "Fac_Belt", "Fac_Press", "Fac_Fan",
-                         "Fac_Lights", "Fac_BeltDalgona", "Fac_Chute", "Fac_Output", "Fac_Console", "Fac_StartButton", "Fac_StopButton")}
+                         "Fac_Lights", "Fac_BeltDalgona", "Fac_Chute", "Fac_Output", "Fac_Console", "Fac_StartButton", "Fac_StopButton",
+                         "Fac_Stand_sugar", "Fac_Stand_boil", "Fac_Stand_press", "Fac_Stand_inspect", "Fac_Stand_pack")}
 
 
 def V(v):
@@ -348,6 +349,12 @@ ball(P["Fac_StopButton"], q + Vector((0, 0.18, 0.2)), (0.14, 0.14, 0.08), RED_BT
 cyl(con, (dx0 - 1.35, dy0, 1.0), (dx0 - 1.35, dy0 - 0.25, 1.55), 0.05, 0.04, BRASS, seg=8)  # 레버
 ball(con, (dx0 - 1.35, dy0 - 0.27, 1.6), 0.1, RED_BTN, seg=(10, 6))
 
+# ⑨ 공정 알바생이 설 자리 표시 (게임에서 안 보이게 함). 바닥에 놓인 얇은 원판, 라인 앞 통로.
+#    FactoryDisplay가 이 부품 바닥 가운데에 미니미를 세우고, 부품 -LookVector(= 기계 안쪽, Roblox +Z) 쪽을 보게 함.
+STANDS = {"sugar": (hx, -1.75), "boil": (kx, -1.95), "press": (px + 0.75, -1.65), "inspect": (cx6, -1.75), "pack": (ox, -1.5)}
+for key, (x, y) in STANDS.items():
+    cyl(P["Fac_Stand_" + key], (x, y, 0.0), (x, y, 0.02), 0.4, 0.4, MINT_BTN, seg=8)
+
 # ───────────── 오브젝트 + 팔레트 재질 ─────────────
 IMG = palette_image()
 MAT = bpy.data.materials.new("CozyPalette")
@@ -375,6 +382,11 @@ NOTES = {
     "Fac_Console": "앞 조작대 (제어대 ProximityPrompt를 붙일 부품)",
     "Fac_StartButton": "시작 버튼 (Anim lampRun)",
     "Fac_StopButton": "정지 버튼 (Anim lampStop)",
+    "Fac_Stand_sugar": "알바생 자리 표시: 설탕 넣기 (게임에서 투명)",
+    "Fac_Stand_boil": "알바생 자리 표시: 끓이기 (게임에서 투명)",
+    "Fac_Stand_press": "알바생 자리 표시: 붓기·찍기 (게임에서 투명)",
+    "Fac_Stand_inspect": "알바생 자리 표시: 식히기·검사 (게임에서 투명)",
+    "Fac_Stand_pack": "알바생 자리 표시: 포장 (게임에서 투명)",
 }
 rows = []
 objs = []

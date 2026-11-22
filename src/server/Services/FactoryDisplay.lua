@@ -214,6 +214,12 @@ local function buildBuilding(lot)
 	for _, d in ipairs(b:GetDescendants()) do
 		if d:IsA("BasePart") then
 			d.Anchored = true
+			if string.sub(d.Name, 1, 10) == "Fac_Stand_" then
+				d.Transparency = 1 -- 알바생 자리 표시는 안 보이게
+				d.CanCollide = false
+				d.CanQuery = false
+				d.CanTouch = false
+			end
 			local key = ANIM[d.Name] or (d.Parent and ANIM[d.Parent.Name])
 			if key then
 				d:SetAttribute("Anim", key)
@@ -457,6 +463,16 @@ local function syncStaff(plot, fac)
 				local spot = pv * CFrame.new(st.x, 0, STAND_Z)
 				local pos = Vector3.new(spot.Position.X, floorY, spot.Position.Z)
 				local facing = pv:VectorToWorldSpace(Vector3.new(0, 0, 1)) -- 라인(모델 +Z) 쪽을 봄
+				-- 새 기계(cozy_factory.py)는 공정마다 자리 표시 Fac_Stand_<key>가 있음: 그 바닥 가운데에 서서 기계 안쪽(-LookVector)을 봄
+				local mark = b:FindFirstChild("Fac_Stand_" .. st.key, true)
+				if mark and not mark:IsA("BasePart") then
+					mark = mark:FindFirstChildWhichIsA("BasePart", true)
+				end
+				if mark then
+					pos = mark.Position - Vector3.new(0, mark.Size.Y / 2, 0)
+					local f = -mark.CFrame.LookVector
+					facing = Vector3.new(f.X, 0, f.Z).Unit
+				end
 				local ok, m = pcall(Minime.build, owner, folder, CFrame.lookAt(pos, pos + facing), st.n, 0)
 				if ok and m then
 					m.Name = name
