@@ -84,7 +84,7 @@ end
 -- 위치(부지 기준)·크기·색·재질·투명도를 6칸 모두에 옮김. 틀에서 지운 부품은 지우고(꼭 필요한 부품은 숨김),
 -- 틀에 새로 넣은 부품(LayoutKey 없음)은 6칸 모두에 복제. 진열대·작업대·공장 부지·기계는 다른 코드가 붙여서 틀 밖.
 
-local KEEP_ALWAYS = { Floor = true, Entry = true, Sign = true, Shutter = true, Header = true, RentPaper = true, MachineSlot = true, Door = true }
+local KEEP_ALWAYS = { HandStationSpot = true, HandStationInside = true, Floor = true, Entry = true, Sign = true, Shutter = true, Header = true, RentPaper = true, MachineSlot = true, Door = true }
 local layoutTemplate = nil -- { model, cf }
 
 local Layout = require(script.Parent:WaitForChild("LayoutTemplate"))
@@ -166,6 +166,9 @@ local function buildPlot(index, parent)
 	-- 손 작업대 자리 (D10)
 	local hs = spot(m, "HandStationSpot", cf * CFrame.new(P.handStation.pos), P.handStation.size, Color3.fromRGB(255, 214, 150), "손 작업대 자리")
 	hs:SetAttribute("Spot", "HandStation")
+	-- 월세를 내고 가게가 열리면 작업대가 옮겨 가는 가게 안 자리 (2026-11-22 사용자: "시작할 때는 밖, 월세 사면 안"). 게임에서는 안 보임
+	local hi = spot(m, "HandStationInside", cf * CFrame.new(P.handStation.pos), P.handStation.size, Color3.fromRGB(255, 190, 120), "손 작업대 자리 (월세 낸 뒤)")
+	hi:SetAttribute("Spot", "HandStationInside")
 	-- 기계 1자리 (D10)
 	local ms = spot(m, "MachineSlot", cf * CFrame.new(P.machineSlot.pos), P.machineSlot.size, Color3.fromRGB(170, 210, 255), "기계 자리")
 	ms:SetAttribute("Spot", "Machine")
@@ -302,6 +305,12 @@ local function buildPlot(index, parent)
 	Layout.tag(m)
 	applyLayout(m, cf)
 	m:SetAttribute("PlotCFrame", cf)
+	hi.Transparency = 1
+	for _, c in ipairs(hi:GetChildren()) do
+		if c:IsA("SurfaceGui") then
+			c.Enabled = false
+		end
+	end
 	m.Parent = parent
 	return { model = m, owner = nil, cframe = cf, signLabel = label }
 end
@@ -313,6 +322,49 @@ local Y_ATTRS = { "GrillTopY", "BottomY", "TopY" }
 -- 틀: 꾸며진 작업대(ServerStorage.Assets.WorkstationTemplate, 없으면 공용 DalgonaWorkstation)를 서버 시작 때 복제해 둠.
 -- WorkstationBuilder.build는 실행 중에 국자 광택 텍스처(SurfaceAppearance)를 못 써서 실패하므로 복제해 씀.
 local template = nil
+
+-- 작업대를 지금 가게 상태에 맞는 자리 표시로 옮김 (노점·월세 밀림 = 밖 HandStationSpot, 열림 = 안 HandStationInside).
+-- 높이 속성(Y_ATTRS)·알바생 국자 자리(Center)·알바생 미니미(Helper<n>)도 같이 옮김
+local function placeWorkstation(i, first)
+	local plot = plots[i]
+	local ws = plot and plot.model:FindFirstChild("Workstation")
+	local rel = ws and ws:GetAttribute("SpotRel")
+	if typeof(rel) ~= "CFrame" then
+		return
+	end
+	local state = plot.model:GetAttribute("ShopState")
+	local open = state == "owned" or (state == "rented" and not plot.model:GetAttribute("ShopClosed"))
+	local spotPart = (open and plot.model:FindFirstChild("HandStationInside")) or plot.model:FindFirstChild("HandStationSpot")
+	if not spotPart then
+		return
+	end
+	local target = CFrame.new(spotPart.Position - spotPart.CFrame.UpVector * (spotPart.Size.Y / 2)) * spotPart.CFrame.Rotation
+	local old = ws:GetPivot()
+	local new = target * rel
+	if (new.Position - old.Position).Magnitude < 1e-3 and new.LookVector:Dot(old.LookVector) > 0.99999 then
+		return
+	end
+	local delta = new * old:Inverse()
+	local dy = new.Y - old.Y
+	ws:PivotTo(new)
+	for _, d in ipairs(ws:GetDescendants()) do
+		for _, name in ipairs(Y_ATTRS) do
+			local v = d:GetAttribute(name)
+			if type(v) == "number" then
+				d:SetAttribute(name, v + dy)
+			end
+		end
+		local ctr = d:GetAttribute("Center")
+		if typeof(ctr) == "Vector3" then
+			d:SetAttribute("Center", delta * ctr)
+		end
+	end
+	for _, h in ipairs(first and {} or plot.model:GetChildren()) do
+		if h:IsA("Model") and h.Name:match("^Helper%d+$") then
+			h:PivotTo(delta * h:GetPivot())
+		end
+	end
+end
 
 local function buildWorkstation(i, player)
 	local plot = plots[i]
@@ -358,7 +410,8 @@ local function buildWorkstation(i, player)
 	if (P.workstationTurn or 0) ~= 0 then
 		ws:PivotTo(ws:GetPivot() * CFrame.Angles(0, math.rad(P.workstationTurn), 0))
 	end
-	-- 꾸미기까지 포함한 크기(러그 빼고)
+	-- 꾸미기까지 포함한 크기(러그 빼고)의 가운데를 자리 표시 가운데에 맞춤 (2026-11-22 사용자가 편집 화면에서 자리를 옮김).
+	-- 노점이면 HandStationSpot(가게 밖), 월세를 내고 열면 HandStationInside(가게 안): placeWorkstation
 	local mn, mx = Vector3.new(math.huge, math.huge, math.huge), Vector3.new(-math.huge, -math.huge, -math.huge)
 	for _, d in ipairs(ws:GetDescendants()) do
 		if d:IsA("BasePart") and not d:FindFirstAncestor("Rug") then
@@ -366,26 +419,11 @@ local function buildWorkstation(i, player)
 			mx = mx:Max(d.Position + d.Size / 2)
 		end
 	end
-	-- 한 줄로: 앞선(골목 쪽, 월드 +Z) = 진열대 앞선, 왼쪽(간판에서 볼 때) = 진열대 오른쪽 끝 + 틈
-	local SH = G.Sales.shelf
-	local shelfFront = (plot.cframe * CFrame.new(SH.pos.X, 0, SH.pos.Z - SH.size.Z / 2)).Position.Z
-	local shelfRight = (plot.cframe * CFrame.new(SH.pos.X - SH.size.X / 2, 0, 0)).Position.X
-	local fenceRight = (plot.cframe * CFrame.new(-(P.size.X / 2 - 0.5), 0, 0)).Position.X
-	local dx = (shelfRight + (P.rowGap or 0.3)) - mn.X
-	if mx.X + dx > fenceRight then
-		dx = fenceRight - mx.X -- 울타리 밖으로 나가지 않게 (진열대 쪽으로 붙음)
-	end
-	local dy = P.size.Y -- 부지 바닥 위로
-	local move = Vector3.new(dx, dy, shelfFront - mx.Z)
-	ws:PivotTo(ws:GetPivot() + move)
-	for _, d in ipairs(ws:GetDescendants()) do
-		for _, name in ipairs(Y_ATTRS) do
-			local v = d:GetAttribute(name)
-			if type(v) == "number" then
-				d:SetAttribute(name, v + dy)
-			end
-		end
-	end
+	local c = (mn + mx) / 2
+	-- 틀 바닥 = y 0, 방향 = 자리 표시 기본 방향(부지 방향에서 90° 돈 것)
+	local f0 = CFrame.new(c.X, 0, c.Z) * plot.cframe.Rotation * CFrame.Angles(0, math.pi * 0.5, 0)
+	ws:SetAttribute("SpotRel", f0:ToObjectSpace(ws:GetPivot()))
+	placeWorkstation(i, true) -- 처음 놓기 (알바생 미니미는 아직 없음)
 	WorkstationBuilder.setCoal(ws, 1) -- 연탄은 작업대마다 (CoalLeft)
 	WorkstationBuilder.watchLadles(ws) -- 국자 자리(Center 속성)를 옮긴 뒤 계산
 	-- 바닥 표시는 숨김 (진짜 작업대가 있음)
@@ -452,6 +490,7 @@ function PlotService.setShopState(i, state, closed, ownerName)
 	end
 	plot.model:SetAttribute("ShopState", state)
 	plot.model:SetAttribute("ShopClosed", closed == true)
+	placeWorkstation(i) -- 월세를 내면 가게 안으로, 노점·월세 밀림이면 밖으로
 	if ownerName then
 		plot.signLabel.Text = ownerName .. (state == "stall" and "의 달고나 노점" or "의 달고나 가게")
 	end
