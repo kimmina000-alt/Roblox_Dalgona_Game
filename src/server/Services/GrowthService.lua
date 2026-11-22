@@ -336,10 +336,12 @@ local function helperFoot(plot, i)
 	local top = ws and ws:FindFirstChild("TableTop")
 	local y = G.Plots.size.Y
 	if brazier and top then
-		local bp = brazier:GetPivot().Position
-		local z = top.Position.Z - top.Size.Z / 2 - G.Plots.minimeBehind
-		local x = bp.X + (i - 2) * G.Plots.minimeGap
-		return CFrame.lookAt(Vector3.new(x, y, z), Vector3.new(x, y, z + 1))
+		-- 가게 기준(로컬 -Z = 앞·손님 쪽)으로 계산 (2026-11-23 마주 보는 두 줄: 북쪽 줄은 월드 방향이 반대)
+		local lb = plot.cframe:PointToObjectSpace(brazier:GetPivot().Position)
+		local lt = plot.cframe:PointToObjectSpace(top.Position)
+		local z = lt.Z + top.Size.Z / 2 + G.Plots.minimeBehind
+		local x = lb.X - (i - 2) * G.Plots.minimeGap
+		return plot.cframe * CFrame.lookAt(Vector3.new(x, y, z), Vector3.new(x, y, z - 1))
 	end
 	local spot = G.Plots.handStation.pos
 	return plot.cframe * CFrame.new(spot.X - 8 + (i - 1) * 5, y, spot.Z - 2.5)

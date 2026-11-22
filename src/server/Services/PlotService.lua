@@ -142,8 +142,19 @@ function PlotService.applyChild(plotModel, child)
 end
 
 local function buildPlot(index, parent)
-	local x = (index - (P.count + 1) / 2) * P.spacing
-	local cf = CFrame.new(x, 0, P.rowZ) * CFrame.Angles(0, math.pi, 0) -- 로컬 -Z(앞) = 월드 +Z (스폰 쪽)
+	local cf
+	local slot = P.slots and P.slots[index]
+	if slot then
+		-- 마주 보는 두 줄 (2026-11-23): 남쪽 줄은 앞이 +Z, 북쪽 줄은 앞이 -Z. 가게 안 모든 것은 이 CFrame 기준
+		if slot[2] == "N" then
+			cf = CFrame.new(slot[1] * P.spacing, 0, P.rowZNorth)
+		else
+			cf = CFrame.new(slot[1] * P.spacing, 0, P.rowZ) * CFrame.Angles(0, math.pi, 0)
+		end
+	else
+		local x = (index - (P.count + 1) / 2) * P.spacing
+		cf = CFrame.new(x, 0, P.rowZ) * CFrame.Angles(0, math.pi, 0) -- 로컬 -Z(앞) = 월드 +Z (스폰 쪽)
+	end
 	local m = Instance.new("Model")
 	m.Name = "Plot" .. index
 	m:SetAttribute("PlotIndex", index)
