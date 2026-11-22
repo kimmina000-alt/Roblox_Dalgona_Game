@@ -24,7 +24,7 @@ local fit, _, onScale = UI.fitter(root)
 local panel = new("Frame", {
 	Name = "Status",
 	Position = UDim2.fromOffset(8, 6),
-	Size = UDim2.fromOffset(330, 150),
+	Size = UDim2.fromOffset(330, 166),
 	BackgroundTransparency = 1,
 	Parent = root,
 })
@@ -51,7 +51,7 @@ local levelText = label({ Name = "Level", Text = "1", FontFace = UI.F.round, Tex
 -- 재료 줄 (0개면 빨갛게)
 local ingBar = new("Frame", {
 	Name = "Ingredients",
-	Position = UDim2.fromOffset(6, 78),
+	Position = UDim2.fromOffset(6, 94), -- 레벨 동그라미·이름판과 띄움 (2026-11-23 사용자 요청)
 	Size = UDim2.fromOffset(0, 36),
 	AutomaticSize = Enum.AutomaticSize.X,
 	BackgroundColor3 = C.pill,
@@ -77,7 +77,7 @@ for i, ing in ipairs(G.Ingredients) do
 		Parent = ingBar,
 	})
 end
-local saveWarn = label({ Name = "SaveWarn", Position = UDim2.fromOffset(10, 120), Size = UDim2.fromOffset(300, 20), TextSize = 14, TextColor3 = C.white, Outline = C.bad, Text = "⚠ 저장 안 됨 (DataStore 꺼짐)", Visible = false, Parent = panel })
+local saveWarn = label({ Name = "SaveWarn", Position = UDim2.fromOffset(10, 136), Size = UDim2.fromOffset(300, 20), TextSize = 14, TextColor3 = C.white, Outline = C.bad, Text = "⚠ 저장 안 됨 (DataStore 꺼짐)", Visible = false, Parent = panel })
 
 ---------------------------------------------------------------- 위: 코인 · 달고나 보관함 알약 (가게 이름판 바로 오른쪽 — 폰에서 겹치지 않게)
 local top = new("Frame", {
