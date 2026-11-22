@@ -27,10 +27,47 @@ local function hideable(p, plot)
 	return p:IsA("BasePart") and plot ~= nil and p:IsDescendantOf(plot) and not p:IsDescendantOf(model)
 end
 
+-- 작업대 상자: 테이블 상판·다리·화로(서버 부품)만으로 잼. 클라이언트가 만든 부품(설탕 더미·손·효과)은
+-- 작업대가 가게 안↔밖으로 옮겨져도 옛 자리에 남을 수 있어서 뺌 (2026-11-22)
+local function aabb(p)
+	local h, r = p.Size / 2, p.CFrame
+	local rx, ry, rz = r.RightVector * h.X, r.UpVector * h.Y, r.LookVector * h.Z
+	local ext = Vector3.new(
+		math.abs(rx.X) + math.abs(ry.X) + math.abs(rz.X),
+		math.abs(rx.Y) + math.abs(ry.Y) + math.abs(rz.Y),
+		math.abs(rx.Z) + math.abs(ry.Z) + math.abs(rz.Z)
+	)
+	return p.Position - ext, p.Position + ext
+end
+local function tableBox()
+	local mn, mx = Vector3.new(math.huge, math.huge, math.huge), -Vector3.new(math.huge, math.huge, math.huge)
+	local function add(p)
+		local a, b = aabb(p)
+		mn, mx = mn:Min(a), mx:Max(b)
+	end
+	for _, d in ipairs(model:GetChildren()) do
+		if d:IsA("BasePart") and (d.Name == "TableTop" or d.Name == "TableLeg") then
+			add(d)
+		end
+	end
+	local br = model:FindFirstChild("Brazier")
+	if br then
+		for _, d in ipairs(br:GetDescendants()) do
+			if d:IsA("BasePart") then
+				add(d)
+			end
+		end
+	end
+	if mn.X == math.huge then
+		return model:GetBoundingBox()
+	end
+	return CFrame.new((mn + mx) / 2), mx - mn
+end
+
 -- 카메라가 봐야 하는 자리: 작업대 가운데·윗면·화로 + 네 귀퉁이 쪽
 local function targets()
 	local pts = {}
-	local cf, size = model:GetBoundingBox()
+	local cf, size = tableBox()
 	table.insert(pts, cf.Position)
 	local top = model:FindFirstChild("TableTop")
 	if top and top:IsA("BasePart") then
@@ -68,7 +105,7 @@ local function scan()
 	--   ① 카메라 둘레(1 stud)에 걸친 부품  ② 테이블 바로 위 기둥(작업대 바닥 넓이 + 여유, 테이블 윗면 ~ 카메라 위)과 겹치는 부품
 	-- 알바생 미니미(모델 속성 Minime)는 카운터 위에 서 있어도 남김 (카메라를 직접 가리면 아래 레이캐스트가 숨김)
 	local top = model:FindFirstChild("TableTop")
-	local cf, size = model:GetBoundingBox()
+	local cf, size = tableBox()
 	local y0 = (top and top:IsA("BasePart")) and (top.Position.Y + top.Size.Y / 2 + 0.3) or (cf.Position.Y + size.Y / 2)
 	local y1 = math.max(origin.Y + 1, y0 + 1)
 	local half = (cf - cf.Position):VectorToWorldSpace(size / 2)
@@ -81,14 +118,7 @@ local function scan()
 			local mm = p:FindFirstAncestorWhichIsA("Model")
 			local isMinime = mm ~= nil and (mm:GetAttribute("Minime") == true or (mm.Parent ~= nil and mm.Parent:GetAttribute("Minime") == true))
 			if not isMinime then
-				local h, r = p.Size / 2, p.CFrame
-				local rx, ry, rz = r.RightVector * h.X, r.UpVector * h.Y, r.LookVector * h.Z
-				local ext = Vector3.new(
-					math.abs(rx.X) + math.abs(ry.X) + math.abs(rz.X),
-					math.abs(rx.Y) + math.abs(ry.Y) + math.abs(rz.Y),
-					math.abs(rx.Z) + math.abs(ry.Z) + math.abs(rz.Z)
-				)
-				local pmin, pmax = p.Position - ext, p.Position + ext
+				local pmin, pmax = aabb(p)
 				local inColumn = pmax.X > cmin.X and pmin.X < cmax.X and pmax.Y > cmin.Y and pmin.Y < cmax.Y and pmax.Z > cmin.Z and pmin.Z < cmax.Z
 				local atCam = pmax.X > omin.X and pmin.X < omax.X and pmax.Y > omin.Y and pmin.Y < omax.Y and pmax.Z > omin.Z and pmin.Z < omax.Z
 				if inColumn or atCam then

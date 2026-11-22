@@ -142,32 +142,22 @@ local function setUnturned(on)
 			return
 		end
 		local m = station.model
-		-- 돌리는 가운데: 작업대 부품 상자 가운데. 알바생 국자(HelperLadle*)는 뺌 — 내 화면에서 따로 움직이고
-		-- 작업대가 가게 안↔밖으로 옮겨진 뒤 옛 자리에 남은 부품이 있으면 가운데가 틀어짐 (2026-11-22 "옮긴 뒤 테이블 자리 어긋남")
+		-- 돌리는 가운데: 테이블 상판·다리(서버 부품)만으로 잰 상자 가운데. 작업대 전체 상자는 쓰지 않음 —
+		-- 클라이언트가 만든 부품(숟가락 위 설탕 더미 HeapMound, 손, 효과)과 알바생 국자는 작업대가 가게 안↔밖으로
+		-- 옮겨져도 옛 자리에 남아 가운데가 쏠림 (2026-11-22 "옮긴 뒤 테이블 자리 어긋남", 저장·부지 세션이 찾음)
 		local mn, mx = Vector3.new(math.huge, math.huge, math.huge), -Vector3.new(math.huge, math.huge, math.huge)
-		for _, d in ipairs(m:GetDescendants()) do
-			if d:IsA("BasePart") then
-				local hl = d:FindFirstAncestorWhichIsA("Model")
-				local skip = false
-				while hl and hl ~= m do
-					if hl.Name:sub(1, 11) == "HelperLadle" then
-						skip = true
-						break
-					end
-					hl = hl:FindFirstAncestorWhichIsA("Model")
-				end
-				if not skip then
-					-- 돌아간 부품의 축 정렬 상자 반폭
-					local h, r = d.Size / 2, d.CFrame
-					local rx, ry, rz = r.RightVector * h.X, r.UpVector * h.Y, r.LookVector * h.Z
-					local ext = Vector3.new(
-						math.abs(rx.X) + math.abs(ry.X) + math.abs(rz.X),
-						math.abs(rx.Y) + math.abs(ry.Y) + math.abs(rz.Y),
-						math.abs(rx.Z) + math.abs(ry.Z) + math.abs(rz.Z)
-					)
-					mn = mn:Min(d.Position - ext)
-					mx = mx:Max(d.Position + ext)
-				end
+		for _, d in ipairs(m:GetChildren()) do
+			if d:IsA("BasePart") and (d.Name == "TableTop" or d.Name == "TableLeg") then
+				-- 돌아간 부품의 축 정렬 상자 반폭
+				local h, r = d.Size / 2, d.CFrame
+				local rx, ry, rz = r.RightVector * h.X, r.UpVector * h.Y, r.LookVector * h.Z
+				local ext = Vector3.new(
+					math.abs(rx.X) + math.abs(ry.X) + math.abs(rz.X),
+					math.abs(rx.Y) + math.abs(ry.Y) + math.abs(rz.Y),
+					math.abs(rx.Z) + math.abs(ry.Z) + math.abs(rz.Z)
+				)
+				mn = mn:Min(d.Position - ext)
+				mx = mx:Max(d.Position + ext)
 			end
 		end
 		local c = mn.X < math.huge and CFrame.new((mn + mx) / 2) or CFrame.new((m:GetBoundingBox()).Position)
