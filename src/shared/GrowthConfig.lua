@@ -375,6 +375,7 @@ G.Sales = {
 	jitter = 0.3, -- 간격 ±30%
 	testSpeed = 1, -- 테스트용 배율: 2면 손님이 2배 자주 옴 (출시 때는 1)
 	walkSpeed = 9, -- 스터드/초
+	walkSwing = 0.5, -- 걸을 때 다리·팔 흔드는 각도(라디안, 손님 NPC 모델)
 	browseSeconds = 1.6, -- 진열대 앞에서 고르는 시간
 	-- 부지 기준 로컬 좌표 (-Z = 골목 쪽)
 	shelf = { pos = Vector3.new(14.1, 0, -10), size = Vector3.new(7, 3, 2.4) }, -- 작업대와 한 줄, 간판에서 볼 때 왼쪽 끝 (2026-11-21)
@@ -389,6 +390,9 @@ G.Sales = {
 		size = 0.95, -- 손에 든 달고나 지름
 		hold = Vector3.new(0.55, 2.25, -0.75), -- 들고 걸을 때 원판 가운데
 		mouth = Vector3.new(0.05, 3.05, -0.95), -- 입 앞
+		-- 손님 NPC 모델 (CustomerRig): 원판 가운데 = 손(hand) + modelHold (+ 막대 길이만큼 위), 입 앞 = mouth + modelMouth
+		modelHold = Vector3.new(-0.1, 0, -0.45),
+		modelMouth = Vector3.new(0, -0.05, -0.35),
 		cycle = 2.4, -- 한 입 주기(초)
 		bites = 4, -- 몇 입에 다 먹나
 		biteScale = 0.85, -- 한 입마다 크기

@@ -321,9 +321,127 @@ local function watchCarry(player)
 end
 
 ---------------------------------------------------------------- 손님
+-- 2026-11-22: 손님 NPC 7종 (손님 NPC 세션, tools/blender/customers.py). ServerStorage.Assets.Customers.Customer_<id> 안 <id>_<부품> 6개를
+-- Shared.CustomerRig 값(Root = 두 발 가운데 바닥, 앞 = -Z)으로 놓고, 걷기(다리·팔 흔들기)·먹기(오른팔을 입으로)를 관절 점 기준으로 돌림.
+-- 모델이 없으면 예전 부품 손님. 폰 부담: 손님 1명 = MeshPart 6개 (+ 들고 있는 달고나), 가게당 동시 3명
+
+local LIMBS = { "Head", "Body", "ArmL", "ArmR", "LegL", "LegR" }
+local rigs = setmetatable({}, { __mode = "k" }) -- [손님 모델] = 리그 (CustomerRig.types[id] 또는 FALLBACK)
+local eaters = {} -- [model] = { look, arm, t, bites, scale } (아래 먹기에서 씀, 걷기가 오른팔을 건드리지 않게 먼저 선언)
+
+-- 예전 부품 손님의 관절 (모델이 없을 때)
+local FALLBACK = {
+	fallback = true,
+	height = 3.7,
+	parts = {
+		ArmL = { center = Vector3.new(-0.84, 1.8, 0), joint = Vector3.new(-0.84, 2.35, 0) },
+		ArmR = { center = Vector3.new(0.84, 1.8, 0), joint = Vector3.new(0.84, 2.35, 0) },
+		LegL = { center = Vector3.new(-0.28, 0.55, 0), joint = Vector3.new(-0.28, 1.1, 0) },
+		LegR = { center = Vector3.new(0.28, 0.55, 0), joint = Vector3.new(0.28, 1.1, 0) },
+	},
+}
+
+local rigModule = nil -- nil 아직, false 없음
+local function customerRig()
+	if rigModule == nil then
+		local m = ReplicatedStorage.Shared:FindFirstChild("CustomerRig")
+		local ok, mod = false, nil
+		if m then
+			ok, mod = pcall(require, m)
+		end
+		rigModule = (ok and type(mod) == "table" and mod.types) and mod or false
+	end
+	return rigModule or nil
+end
+
+-- 관절 점에서 rot만큼 돌린 부품 자리 (모두 손님 Root 기준)
+local function poseLimb(model, name, rootCF, rot)
+	local rig = rigs[model]
+	local p = model:FindFirstChild(name)
+	local r = rig and rig.parts[name]
+	if p and r then
+		p.CFrame = rootCF * CFrame.new(r.joint) * rot * CFrame.new(r.center - r.joint)
+	end
+end
+
+-- 7종 모델 중 하나로 손님 만들기. 없으면 nil
+local function buildModelCustomer(cf)
+	local CR = customerRig()
+	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
+	local folder = assets and assets:FindFirstChild("Customers")
+	if not CR or not folder then
+		return nil
+	end
+	local choices = {}
+	for _, id in ipairs(CR.order) do
+		if CR.types[id] and folder:FindFirstChild("Customer_" .. id) then
+			table.insert(choices, id)
+		end
+	end
+	if #choices == 0 then
+		return nil
+	end
+	local id = choices[math.random(#choices)]
+	local rig = CR.types[id]
+	local src = folder["Customer_" .. id]
+	local m = Instance.new("Model")
+	m.Name = "Customer"
+	local root = part(m, "Root", Vector3.new(1, 1, 1), cf, Color3.new(), nil, { Transparency = 1 })
+	m.PrimaryPart = root
+	for _, name in ipairs(LIMBS) do
+		local srcPart = src:FindFirstChild(id .. "_" .. name)
+		local r = rig.parts[name]
+		if srcPart and r then
+			local pp = srcPart:Clone()
+			pp.Name = name
+			pp.Anchored = true
+			pp.CanCollide = false
+			pp.CanQuery = false
+			pp.CanTouch = false
+			pp.CFrame = cf * CFrame.new(r.center)
+			pp.Parent = m
+		end
+	end
+	if not m:FindFirstChild("Head") then
+		m:Destroy()
+		return nil
+	end
+	m:SetAttribute("CustomerType", id)
+	rigs[m] = rig
+	return m
+end
 
 local function buildCustomer(cf)
-	local m = Instance.new("Model")
+	local m = buildModelCustomer(cf)
+	if m then
+		local head = m.Head
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "Bubble"
+		bb.Size = UDim2.fromOffset(150, 40)
+		bb.StudsOffset = Vector3.new(0, head.Size.Y / 2 + 0.95, 0)
+		bb.MaxDistance = 80
+		bb.Enabled = false
+		local t = Instance.new("TextLabel")
+		t.Size = UDim2.fromScale(1, 1)
+		t.BackgroundColor3 = Color3.fromRGB(255, 252, 245)
+		t.TextColor3 = Color3.fromRGB(92, 58, 36)
+		t.Font = Enum.Font.GothamBold
+		t.TextScaled = true
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0.4, 0)
+		c.Parent = t
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, 8)
+		pad.PaddingRight = UDim.new(0, 8)
+		pad.PaddingTop = UDim.new(0, 4)
+		pad.PaddingBottom = UDim.new(0, 4)
+		pad.Parent = t
+		t.Parent = bb
+		bb.Parent = head
+		return m
+	end
+	-- 예전 부품 손님
+	m = Instance.new("Model")
 	m.Name = "Customer"
 	local shirt = SHIRTS[math.random(#SHIRTS)]
 	local skin = SKINS[math.random(#SKINS)]
@@ -365,6 +483,7 @@ local function buildCustomer(cf)
 	pad.Parent = t
 	t.Parent = bb
 	bb.Parent = head
+	rigs[m] = FALLBACK
 	return m
 end
 
@@ -412,6 +531,17 @@ local function stepWalkers(dt)
 		local dir = (b - a)
 		local look = dir.Magnitude > 0.01 and CFrame.lookAt(pos, pos + Vector3.new(dir.X, 0, dir.Z)) or CFrame.new(pos)
 		w.model:PivotTo(look + Vector3.new(0, bob, 0))
+		-- 다리·팔 흔들기 (관절 점 기준, 서면 제자리). 먹는 중이면 오른팔은 먹기가 움직임
+		if rigs[w.model] then
+			local swing = done and 0 or math.sin(w.t * 9) * SALES.walkSwing
+			local rootCF = w.model.PrimaryPart.CFrame
+			poseLimb(w.model, "LegL", rootCF, CFrame.Angles(swing, 0, 0))
+			poseLimb(w.model, "LegR", rootCF, CFrame.Angles(-swing, 0, 0))
+			poseLimb(w.model, "ArmL", rootCF, CFrame.Angles(-swing * 0.8, 0, 0))
+			if not eaters[w.model] then
+				poseLimb(w.model, "ArmR", rootCF, CFrame.Angles(swing * 0.8, 0, 0))
+			end
+		end
 		if done then
 			table.remove(walkers, i)
 			if w.onArrive then
@@ -425,7 +555,7 @@ end
 -- 손님 모델에 달고나 모양을 넣고, 매 프레임(걷기 다음) 오른팔·달고나를 몸 기준으로 다시 놓음.
 -- 한 입 주기: 들고 있다 → 입으로 올림 → 입 앞에서 한 입(조금 작아짐) → 내림. SALES.eat 값
 
-local eaters = {} -- [model] = { look, arm, t, bites, scale }
+-- eaters는 위(손님)에서 선언
 
 local function startEating(model, item)
 	local arm = model:FindFirstChild("ArmR")
@@ -469,7 +599,7 @@ local function stepEaters(dt)
 			if e.bites >= E.bites then
 				e.look:Destroy()
 				eaters[model] = nil
-				model.ArmR.CFrame = model.PrimaryPart.CFrame * CFrame.new(0.84, 1.8, 0)
+				poseLimb(model, "ArmR", model.PrimaryPart.CFrame, CFrame.new())
 				say(model, E.lastLine, 1.2)
 				continue
 			end
@@ -480,19 +610,28 @@ local function stepEaters(dt)
 			say(model, E.lines[math.random(#E.lines)], 0.8)
 		end
 		local root = model.PrimaryPart.CFrame
+		local rig = rigs[model] or FALLBACK
+		-- 원판 가운데 (손님 Root 기준): 예전 부품 손님은 설정값, 모델 손님은 손(hand) 위 / 입(mouth) 앞
 		local hold, mouth = E.hold, E.mouth
+		if not rig.fallback then
+			hold = rig.hand + E.modelHold + Vector3.new(0, E.size * 0.75, 0)
+			mouth = rig.mouth + E.modelMouth
+		end
 		local p = hold:Lerp(mouth, k)
 		-- 원판을 세워 넓은 면이 손님 얼굴 쪽, 막대는 아래 (로컬 +Z → 아래)
 		local discCF = root * CFrame.new(p) * CFrame.Angles(math.rad(90), 0, 0)
 		e.look:PivotTo(discCF)
-		-- 오른팔: 어깨에서 막대 쪽(원판 조금 아래)을 향함
-		local shoulder = (root * CFrame.new(0.84, 2.35, 0)).Position
-		local hand = discCF.Position - root.UpVector * (E.size * 0.75) -- 막대 쥔 곳
-		local dir = hand - shoulder
+		-- 오른팔: 어깨 관절에서 막대 쥔 곳(원판 아래)을 향해 돌림
+		local arm = rig.parts.ArmR
+		local grip = p - Vector3.new(0, E.size * 0.75, 0)
+		local dir = grip - arm.joint
+		local down = (arm.center - arm.joint).Unit
 		if dir.Magnitude > 0.05 then
-			local len = e.arm.Size.Y
-			local mid = shoulder + dir.Unit * (len / 2)
-			e.arm.CFrame = CFrame.lookAt(mid, mid + dir) * CFrame.Angles(math.rad(-90), 0, 0)
+			dir = dir.Unit
+			local axis = down:Cross(dir)
+			local s2 = axis.Magnitude
+			local rot = s2 > 1e-4 and CFrame.fromAxisAngle(axis / s2, math.atan2(s2, down:Dot(dir))) or CFrame.new()
+			poseLimb(model, "ArmR", root, rot)
 		end
 	end
 end
