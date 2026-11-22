@@ -18,10 +18,13 @@ local remote = Remotes:WaitForChild("Tutorial")
 
 local touch = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 local S = touch and 0.85 or 1
-local CREAM = Color3.fromRGB(255, 247, 232)
-local BROWN = Color3.fromRGB(92, 58, 36)
-local CARAMEL = Color3.fromRGB(222, 150, 70)
+-- 2026-11-23 새 스타일(shared/UiStyle): 크림 말풍선 판 + 나무 테두리, 이름은 나무 리본, 할아버지 얼굴은 동그란 액자
+local UI = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiStyle"))
+local CREAM = UI.C.cream
+local BROWN = UI.C.ink
+local CARAMEL = UI.C.woodLight
 local GLOW = Color3.fromRGB(255, 214, 90)
+local PANEL_W, PANEL_H = 580, 104 -- 폰에서도 글씨가 읽히게 (예전 520x92)
 
 ---------------------------------------------------------------- 화면 판
 
@@ -35,41 +38,61 @@ gui.Parent = playerGui
 local panel = Instance.new("Frame")
 panel.AnchorPoint = Vector2.new(0.5, 1)
 panel.Position = UDim2.new(0.5, 0, 1, -16 * S)
-panel.Size = UDim2.fromOffset(520 * S, 92 * S)
+panel.Size = UDim2.fromOffset(PANEL_W * S, PANEL_H * S)
 panel.BackgroundColor3 = CREAM
 panel.Parent = gui
 do
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 16)
+	c.CornerRadius = UDim.new(0, 18)
 	c.Parent = panel
 	local st = Instance.new("UIStroke")
-	st.Color = CARAMEL
-	st.Thickness = 3
+	st.Color = UI.C.woodDark
+	st.Thickness = 3.5
 	st.Parent = panel
 end
+-- 할아버지 얼굴: 판 왼쪽에 걸친 동그란 나무 액자
+local faceRing = Instance.new("Frame")
+faceRing.AnchorPoint = Vector2.new(0, 0.5)
+faceRing.Position = UDim2.new(0, 10 * S, 0.5, 0)
+faceRing.Size = UDim2.fromOffset(70 * S, 70 * S)
+faceRing.BackgroundColor3 = UI.C.tan
+faceRing.Parent = panel
+UI.corner("round").Parent = faceRing
+UI.stroke(UI.C.woodDark, 3).Parent = faceRing
 local face = Instance.new("TextLabel")
 face.BackgroundTransparency = 1
-face.Position = UDim2.fromOffset(10 * S, 10 * S)
-face.Size = UDim2.fromOffset(60 * S, 60 * S)
+face.Position = UDim2.fromScale(0.12, 0.12)
+face.Size = UDim2.fromScale(0.76, 0.76)
 face.Text = "👴"
 face.TextScaled = true
-face.Parent = panel
+face.Parent = faceRing
+-- 이름: 판 위 모서리에 걸친 나무 리본
 local title = Instance.new("TextLabel")
-title.BackgroundTransparency = 1
-title.Position = UDim2.fromOffset(78 * S, 8 * S)
-title.Size = UDim2.new(1, -190 * S, 0, 20 * S)
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 14 * S
-title.TextColor3 = CARAMEL
-title.TextXAlignment = Enum.TextXAlignment.Left
+title.AnchorPoint = Vector2.new(0, 0.5)
+title.Position = UDim2.fromOffset(88 * S, 0)
+title.Size = UDim2.fromOffset(0, 26 * S)
+title.AutomaticSize = Enum.AutomaticSize.X
+title.BackgroundColor3 = UI.C.wood
+title.FontFace = UI.F.heavy
+title.TextSize = 16 * S
+title.TextColor3 = UI.C.cream
 title.Text = "달고나 할아버지"
 title.Parent = panel
+UI.corner(8).Parent = title
+UI.stroke(UI.C.woodDark, 2.5).Parent = title
+UI.stroke(UI.C.woodDark, 1.8, true).Parent = title
+do
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 12 * S)
+	pad.PaddingRight = UDim.new(0, 12 * S)
+	pad.Parent = title
+end
 local body = Instance.new("TextLabel")
 body.BackgroundTransparency = 1
-body.Position = UDim2.fromOffset(78 * S, 28 * S)
-body.Size = UDim2.new(1, -190 * S, 1, -34 * S)
-body.Font = Enum.Font.GothamBold
-body.TextSize = 15 * S
+body.Position = UDim2.fromOffset(92 * S, 18 * S)
+body.Size = UDim2.new(1, -210 * S, 1, -24 * S)
+body.FontFace = UI.F.heavy
+body.TextSize = 18 * S
 body.TextColor3 = BROWN
 body.TextWrapped = true
 body.TextXAlignment = Enum.TextXAlignment.Left
@@ -80,25 +103,28 @@ count.BackgroundTransparency = 1
 count.AnchorPoint = Vector2.new(1, 0)
 count.Position = UDim2.new(1, -12 * S, 0, 8 * S)
 count.Size = UDim2.fromOffset(90 * S, 20 * S)
-count.Font = Enum.Font.GothamBold
-count.TextSize = 13 * S
-count.TextColor3 = CARAMEL
+count.FontFace = UI.F.round
+count.TextSize = 15 * S
+count.TextColor3 = UI.C.soft
 count.TextXAlignment = Enum.TextXAlignment.Right
 count.Parent = panel
 local skip = Instance.new("TextButton")
 skip.AnchorPoint = Vector2.new(1, 1)
 skip.Position = UDim2.new(1, -12 * S, 1, -10 * S)
-skip.Size = UDim2.fromOffset(92 * S, 32 * S)
-skip.BackgroundColor3 = Color3.fromRGB(200, 190, 180)
-skip.Font = Enum.Font.GothamBlack
-skip.TextSize = 13 * S
+skip.Size = UDim2.fromOffset(104 * S, 44 * S)
+skip.BackgroundColor3 = UI.C.grey
+skip.FontFace = UI.F.heavy
+skip.TextSize = 16 * S
 skip.TextColor3 = Color3.new(1, 1, 1)
 skip.Text = "건너뛰기"
 skip.Parent = panel
 do
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 10)
+	c.CornerRadius = UDim.new(0, 12)
 	c.Parent = skip
+	UI.stroke(UI.C.woodDark, 2.5).Parent = skip
+	UI.stroke(UI.darker(UI.C.grey, 0.45), 1.8, true).Parent = skip
+	UI.gloss(0.2).Parent = skip
 end
 
 -- 상점 버튼을 가리키는 화면 화살표
@@ -106,7 +132,7 @@ local uiArrow = Instance.new("TextLabel")
 uiArrow.BackgroundTransparency = 1
 uiArrow.Size = UDim2.fromOffset(40 * S, 40 * S)
 uiArrow.AnchorPoint = Vector2.new(0.5, 0)
-uiArrow.Font = Enum.Font.GothamBlack
+uiArrow.FontFace = UI.F.heavy
 uiArrow.TextScaled = true
 uiArrow.TextColor3 = GLOW
 uiArrow.TextStrokeTransparency = 0.2
@@ -173,9 +199,10 @@ local function buildNpc()
 	bb.AlwaysOnTop = true
 	local t = Instance.new("TextLabel")
 	t.Size = UDim2.fromScale(1, 1)
-	t.BackgroundColor3 = Color3.fromRGB(255, 252, 245)
+	t.BackgroundColor3 = CREAM
 	t.TextColor3 = BROWN
-	t.Font = Enum.Font.GothamBold
+	t.FontFace = UI.F.heavy
+	UI.stroke(UI.C.woodDark, 3).Parent = t
 	t.TextScaled = true
 	t.TextWrapped = true
 	local c = Instance.new("UICorner")
@@ -214,7 +241,7 @@ arrow.Parent = gui
 local arrowText = Instance.new("TextLabel")
 arrowText.BackgroundTransparency = 1
 arrowText.Size = UDim2.fromScale(1, 1)
-arrowText.Font = Enum.Font.GothamBlack
+arrowText.FontFace = UI.F.heavy
 arrowText.TextScaled = true
 arrowText.TextColor3 = GLOW
 arrowText.TextStrokeTransparency = 0.2
@@ -274,10 +301,21 @@ local function show(n)
 		panel.Position = UDim2.new(0.5, 0, 1, -mp.bottom * S)
 		panel.Active = false
 		skip.Visible = false
+		-- 작은 판: 얼굴 액자 숨기고 글씨를 판 전체 폭으로
+		faceRing.Visible = false
+		title.Position = UDim2.fromOffset(14 * S, 0)
+		body.Position = UDim2.fromOffset(14 * S, 16 * S)
+		body.Size = UDim2.new(1, -28 * S, 1, -20 * S)
+		body.TextSize = 15 * S
 	else
-		panel.Size = UDim2.fromOffset(520 * S, 92 * S)
+		panel.Size = UDim2.fromOffset(PANEL_W * S, PANEL_H * S)
 		panel.Position = UDim2.new(0.5, 0, 1, -16 * S)
 		skip.Visible = true
+		faceRing.Visible = true
+		title.Position = UDim2.fromOffset(88 * S, 0)
+		body.Position = UDim2.fromOffset(92 * S, 18 * S)
+		body.Size = UDim2.new(1, -210 * S, 1, -24 * S)
+		body.TextSize = 18 * S
 	end
 	body.Text = stepText(n)
 	count.Text = string.format("%d / %d", n, #T.steps)
