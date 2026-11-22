@@ -10,7 +10,7 @@
 # 부품(MeshPart): Fac_Body, Fac_Hopper(유리), Fac_Sugar, Fac_Kettle(구리), Fac_Belt, Fac_Rollers(돎), Fac_Press(오르내림),
 #   Fac_Lights(Neon), Fac_BeltDalgona(벨트 위), Fac_Output(상자 속)
 #
-# 실행: "D:\Blender 5.2lender.exe" -b --factory-startup -P tools/blender/cozy_factory.py -- <출력 폴더(절대 경로)>
+# 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/cozy_factory.py -- <출력 폴더(절대 경로)>
 # 결과: dalgona_cozy_factory.glb, cozy_factory_preview.png, cozy_factory_preview2.png(프레스 내린 모습), cozy_factory_parts.txt
 # 크기 = 게임 stud. 원점 = 바닥 (컨베이어 가운데 근처). 좌표 변환 Blender (x, y, z) → Roblox (-x, z, y).
 
