@@ -1,6 +1,7 @@
 -- 제작 화면 (DEVELOPMENT_PLAN.md 4-1, 영상 1식 배치)
 -- 위: 단계 칩 / 왼쪽: 다음 단계 카드 / 오른쪽: QUALITY 링 + 별 3개 / 아래: 지시문 알약 + 부제(실수하면 빨강)
 -- 왼쪽 아래 ✕, 오른쪽 위 진동 토글. 1280x720 기준으로 그리고 UIScale로 줄인다.
+-- 2026-11-22 새 스타일(shared/UiStyle): 크림 판 + 나무 테두리, 진한 나무색 안내판, 사탕색 버튼, 둥근 굵은 글꼴. 자리·크기·동작은 그대로.
 
 local GuiService = game:GetService("GuiService")
 local HapticService = game:GetService("HapticService")
@@ -9,17 +10,20 @@ local UserInputService = game:GetService("UserInputService")
 
 local Sfx = require(script.Parent:WaitForChild("Sfx"))
 local Config = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("DalgonaConfig"))
+local UI = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("UiStyle"))
 
 local Ui = {}
 Ui.__index = Ui
 
-local FONT = Enum.Font.GothamBold
-local FONT_REG = Enum.Font.Gotham
-local INK = Color3.fromRGB(24, 22, 22)
-local PAPER = Color3.fromRGB(255, 250, 240)
-local RED = Color3.fromRGB(230, 60, 50)
-local GOLD = Color3.fromRGB(255, 190, 30)
-local GREY = Color3.fromRGB(175, 170, 165)
+local FONT = Enum.Font.GothamBold -- 표시용: label()이 FontFace(UI.F.heavy)로 바꿈
+local FONT_REG = Enum.Font.Gotham -- 표시용: label()이 FontFace(UI.F.bold)로 바꿈
+local INK = UI.C.woodDark -- 안내판·바늘·말풍선 바탕 (예전 검정 → 진한 나무색)
+local PAPER = UI.C.cream
+local RED = UI.C.bad
+local GOLD = UI.C.gold
+local GREY = UI.C.grey
+local SOFT = UI.C.soft -- 보조 글씨
+local SUB_INK = UI.C.ink -- 아래 설명 글씨
 
 local function new(class, props, children)
 	local o = Instance.new(class)
@@ -41,10 +45,39 @@ end
 
 local function label(props)
 	props.BackgroundTransparency = props.BackgroundTransparency or 1
-	props.Font = props.Font or FONT
+	props.FontFace = (props.Font == FONT_REG) and UI.F.bold or UI.F.heavy
+	props.Font = nil
 	props.TextColor3 = props.TextColor3 or INK
 	props.TextScaled = false
 	return new("TextLabel", props)
+end
+
+-- 크림 판 테두리 (나무색)
+local function edge(th)
+	return new("UIStroke", { Color = UI.C.woodDark, Thickness = th or 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border })
+end
+
+-- 글자 테두리 (진한 바탕 위 흰 글자, 밝은 바탕 위 진한 글자를 또렷하게)
+local function outline(color, th)
+	return new("UIStroke", { Color = color, Thickness = th or 1.6, ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual })
+end
+
+-- 사탕 버튼 꾸미기 (TextButton 그대로 두고 색·글꼴·테두리·윤기만): .Text를 바꾸는 코드가 그대로 동작
+local function candy(b, color)
+	b.AutoButtonColor = true
+	b.FontFace = UI.F.heavy
+	b.BackgroundColor3 = color
+	b.TextColor3 = Color3.new(1, 1, 1)
+	edge(3).Parent = b
+	outline(UI.darker(color, 0.45), 2).Parent = b
+	UI.gloss(0.2).Parent = b
+end
+local function plain(b)
+	b.FontFace = UI.F.heavy
+	b.BackgroundColor3 = UI.C.cream
+	b.TextColor3 = UI.C.ink
+	edge(3).Parent = b
+	UI.gloss(0.12).Parent = b
 end
 
 function Ui.new(player, steps)
@@ -164,11 +197,12 @@ function Ui:_buildChips()
 		Size = UDim2.fromOffset(0, self.touch and 52 or 44),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundColor3 = PAPER,
-		BackgroundTransparency = 0.1,
+		BackgroundTransparency = 0.05,
 		LayoutOrder = 1,
 		Parent = self.topRow,
 	}, {
 		corner(22),
+		edge(2.5),
 		new("UIPadding", { PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }),
 		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
 	})
@@ -201,7 +235,7 @@ function Ui:_buildQuality()
 		BackgroundColor3 = PAPER,
 		BackgroundTransparency = 0.08,
 		Parent = self.root,
-	}, { corner(18) })
+	}, { corner(18), edge() })
 	self.qualityBox = box
 	local ring = new("Frame", { Name = "Ring", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), Size = UDim2.fromOffset(120, 120), BackgroundTransparency = 1, Parent = box })
 	self.dots = {}
@@ -218,7 +252,7 @@ function Ui:_buildQuality()
 		}, { corner(5) })
 		self.dots[i] = dot
 	end
-	label({ Text = "QUALITY", TextSize = 12, TextColor3 = GREY, Position = UDim2.new(0, 0, 0.5, -26), Size = UDim2.new(1, 0, 0, 14), Parent = ring })
+	label({ Text = "완성도", TextSize = 13, TextColor3 = SOFT, Position = UDim2.new(0, 0, 0.5, -26), Size = UDim2.new(1, 0, 0, 14), Parent = ring })
 	self.qText = label({ Text = "100%", TextSize = 30, Position = UDim2.new(0, 0, 0.5, -10), Size = UDim2.new(1, 0, 0, 34), Parent = ring })
 	self.stars = {}
 	for i = 1, 3 do
@@ -235,29 +269,32 @@ function Ui:_buildBottom()
 		Position = UDim2.new(0.5, 0, 1, -104), -- 2026-11-20: 위로 올림 (아래 끝은 손가락·홈 바에 가려짐)
 		Size = UDim2.fromOffset(0, 58),
 		AutomaticSize = Enum.AutomaticSize.X,
-		BackgroundColor3 = INK,
+		BackgroundColor3 = UI.C.wood,
 		Parent = self.root,
 	}, {
 		corner(29),
+		edge(3.5),
+		UI.gloss(0.25),
 		new("UIPadding", { PaddingLeft = UDim.new(0, 30), PaddingRight = UDim.new(0, 30) }),
 	})
-	self.main = label({ Text = "", TextSize = 26, TextColor3 = Color3.new(1, 1, 1), Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, Parent = pill })
+	self.main = label({ Text = "", TextSize = 26, TextColor3 = UI.C.cream, Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, Parent = pill })
+	outline(UI.C.woodDark, 2.2).Parent = self.main
 	self.pill = pill
 	self.sub = label({
 		Name = "Sub",
 		Text = "",
 		TextSize = self.touch and 22 or 18,
-		TextColor3 = Color3.fromRGB(70, 66, 62),
+		TextColor3 = SUB_INK,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -70),
 		-- 가운데 칸(온도·속도 막대 사이)에만: 넘치면 두 줄로 (2026-11-20 플레이 테스트: 막대 밑으로 지나감)
 		Size = UDim2.new(0.48, 0, 0, 46),
 		TextWrapped = true,
 		TextYAlignment = Enum.TextYAlignment.Top,
-		TextStrokeColor3 = Color3.new(1, 1, 1),
-		TextStrokeTransparency = 0.3,
 		Parent = self.root,
 	})
+	-- 크림색 글자 테두리: 분홍 바닥·철판 어디서나 읽히게 (예전 흰 TextStroke 대신)
+	outline(UI.C.cream, 2.4).Parent = self.sub
 end
 
 function Ui:_buildCorners()
@@ -266,15 +303,14 @@ function Ui:_buildCorners()
 	local x = new("TextButton", {
 		Name = "Exit",
 		Size = UDim2.fromOffset(size, size),
-		BackgroundColor3 = PAPER,
-		BackgroundTransparency = 0.1,
+		BackgroundColor3 = UI.C.red,
 		Text = "X",
 		TextSize = self.touch and 26 or 22,
-		Font = FONT,
-		TextColor3 = INK,
+		FontFace = UI.F.round,
+		TextColor3 = Color3.new(1, 1, 1),
 		LayoutOrder = 2,
 		Parent = self.topRow,
-	}, { corner(size / 2) })
+	}, { corner(size / 2), new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }), outline(UI.darker(UI.C.red, 0.45), 2), UI.gloss(0.2) })
 	x.Activated:Connect(function()
 		if self.onExit then
 			self.onExit()
@@ -293,13 +329,13 @@ function Ui:_buildGauge()
 		BackgroundTransparency = 0.08,
 		Visible = false,
 		Parent = self.root,
-	}, { corner(14) })
-	self.gaugeTitle = label({ Text = "STIR SPEED", TextSize = 12, TextColor3 = GREY, Position = UDim2.fromOffset(0, 4), Size = UDim2.new(1, 0, 0, 14), Parent = g })
+	}, { corner(14), edge() })
+	self.gaugeTitle = label({ Text = "젓기 속도", TextSize = 13, TextColor3 = SOFT, Position = UDim2.fromOffset(0, 4), Size = UDim2.new(1, 0, 0, 14), Parent = g })
 	local track = new("Frame", { Position = UDim2.fromOffset(14, 22), Size = UDim2.new(1, -28, 0, 26), BackgroundTransparency = 1, Parent = g })
 	local segs = {
-		{ "SLOW", Color3.fromRGB(80, 140, 230) },
-		{ "JUST RIGHT", Color3.fromRGB(80, 190, 90) },
-		{ "FAST", Color3.fromRGB(230, 80, 70) },
+		{ "느림", Color3.fromRGB(80, 140, 230) },
+		{ "딱 좋아", Color3.fromRGB(80, 190, 90) },
+		{ "빠름", Color3.fromRGB(230, 80, 70) },
 	}
 	self.gaugeSegs = {}
 	for i, s in ipairs(segs) do
@@ -319,7 +355,7 @@ function Ui:_buildGauge()
 		BackgroundTransparency = 0.08,
 		Visible = false,
 		Parent = self.root,
-	}, { corner(12) })
+	}, { corner(12), edge() })
 	label({ Text = "속도", TextSize = 13, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(1, 0, 0, 16), Parent = v }) -- 위에 이름 (2026-11-20)
 	local vt = new("Frame", { Position = UDim2.fromOffset(13, 26), Size = UDim2.new(1, -26, 1, -54), BackgroundTransparency = 1, Parent = v })
 	self.vSegs = {}
@@ -339,7 +375,7 @@ function Ui:_buildGauge()
 		BackgroundTransparency = 0.08,
 		Visible = false,
 		Parent = self.root,
-	}, { corner(12) })
+	}, { corner(12), edge() })
 	label({ Text = "두께", TextSize = 13, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(1, 0, 0, 16), Parent = pg })
 	local pt = new("Frame", { Position = UDim2.fromOffset(15, 26), Size = UDim2.new(1, -30, 1, -54), BackgroundTransparency = 1, Parent = pg })
 	self.pSegs = {}
@@ -365,7 +401,7 @@ function Ui:_buildMeter()
 		BackgroundTransparency = 0.08,
 		Visible = false,
 		Parent = self.root,
-	}, { corner(12) })
+	}, { corner(12), edge() })
 	-- 위에 이름 (2026-11-20 "속도 옆에 온도 표시": 속도 막대처럼 맨 위에 무엇인지 적음)
 	self.meterTitle = label({ Text = "", TextSize = 13, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(1, 0, 0, 16), Parent = m })
 	local track = new("Frame", { Position = UDim2.fromOffset(13, 26), Size = UDim2.new(1, -26, 1, -54), BackgroundColor3 = Color3.fromRGB(220, 214, 205), BorderSizePixel = 0, Parent = m }, { corner(6) })
@@ -459,7 +495,7 @@ function Ui:_buildHeight()
 		BackgroundTransparency = 0.08,
 		Visible = false,
 		Parent = self.root,
-	}, { corner(12) })
+	}, { corner(12), edge() })
 	label({ Text = "▲ 멀리", TextSize = 12, Position = UDim2.fromOffset(0, 6), Size = UDim2.new(1, 0, 0, 14), Parent = box })
 	label({ Text = "불 가까이", TextSize = 11, TextColor3 = RED, AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, -6), Size = UDim2.new(1, 0, 0, 14), Parent = box })
 	local track = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 26), Size = UDim2.new(0, 12, 1, -52), BackgroundColor3 = Color3.new(1, 1, 1), BorderSizePixel = 0, Parent = box }, { corner(6) })
@@ -767,7 +803,7 @@ function Ui:_buildResult()
 		Visible = false,
 		ZIndex = 10,
 		Parent = self.root,
-	}, { corner(22) })
+	}, { corner(22), edge(4) })
 	self.resTitle = label({ Text = "달고나 완성!", TextSize = 30, Position = UDim2.fromOffset(0, 16), Size = UDim2.new(1, 0, 0, 36), ZIndex = 11, Parent = pop })
 	self.resGrade = label({
 		Text = "",
@@ -832,15 +868,17 @@ function Ui:_buildResult()
 		local b = new("TextButton", {
 			Name = name,
 			Text = text,
-			TextSize = 20,
-			Font = FONT,
-			TextColor3 = primary and Color3.new(1, 1, 1) or INK,
-			BackgroundColor3 = primary and INK or Color3.fromRGB(232, 226, 216),
+			TextSize = 22,
 			Size = UDim2.fromOffset(self.touch and (primary and 170 or 105) or (primary and 200 or 140), self.btn),
 			LayoutOrder = order,
 			ZIndex = 12,
 			Parent = row,
 		}, { corner(18) })
+		if primary then
+			candy(b, UI.C.green)
+		else
+			plain(b)
+		end
 		return b
 	end
 	self.btnRetry = btn("다시 하기", true, 1, "Retry")
@@ -852,7 +890,7 @@ function Ui:_buildResult()
 		Text = "",
 		TextSize = 18,
 		TextColor3 = Color3.new(1, 1, 1),
-		BackgroundTransparency = 0.15,
+		BackgroundTransparency = 0.05,
 		BackgroundColor3 = INK,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 74),
@@ -884,12 +922,13 @@ function Ui:setStep(i)
 		local step = self.steps[j]
 		if j < i then
 			chip.Text = "✓" .. step.label
-			chip.BackgroundColor3 = Color3.fromRGB(236, 230, 220)
-			chip.TextColor3 = Color3.fromRGB(90, 150, 80)
+			chip.BackgroundColor3 = UI.C.tan
+			chip.TextColor3 = UI.C.good
 		elseif j == i then
+			-- 지금 단계 = 노란 사탕
 			chip.Text = step.label
-			chip.BackgroundColor3 = INK
-			chip.TextColor3 = Color3.new(1, 1, 1)
+			chip.BackgroundColor3 = UI.C.yellow
+			chip.TextColor3 = UI.C.woodDark
 		else
 			chip.Text = step.label
 			chip.BackgroundColor3 = PAPER
@@ -925,7 +964,7 @@ function Ui:say(main, sub)
 	self.baseSub = sub or ""
 	if os.clock() >= self.hintUntil then
 		self.sub.Text = self:subShown() and self.baseSub or ""
-		self.sub.TextColor3 = Color3.fromRGB(70, 66, 62)
+		self.sub.TextColor3 = SUB_INK
 	end
 end
 
@@ -943,7 +982,7 @@ end
 function Ui:tick()
 	if self.hintUntil > 0 and os.clock() >= self.hintUntil then
 		self.hintUntil = 0
-		self.sub.TextColor3 = Color3.fromRGB(70, 66, 62)
+		self.sub.TextColor3 = SUB_INK
 	end
 	if self.hintUntil == 0 then
 		local want = self:subShown() and self.baseSub or ""
@@ -1009,8 +1048,8 @@ function Ui:setGauge(visible, speed, slow, fast, title)
 	x += (target - x) * (1 - math.exp(-3 * dt)) -- 2026-11-20 "바가 너무 빨리 움직임": 느긋하게 따라감
 	self.needleX = x
 	self.needle.Position = UDim2.fromScale(x, 0.5)
-	self.gaugeTitle.Text = title or "STIR SPEED"
-	for i, t in ipairs({ "SLOW", "JUST RIGHT", "FAST" }) do
+	self.gaugeTitle.Text = title or "젓기 속도"
+	for i, t in ipairs({ "느림", "딱 좋아", "빠름" }) do
 		segs[i]:FindFirstChildOfClass("TextLabel").Text = t
 	end
 end
@@ -1049,8 +1088,8 @@ function Ui:_buildThick()
 		BackgroundTransparency = 0.08,
 		Visible = false,
 		Parent = self.root,
-	}, { corner(16) })
-	label({ Text = "두께 (옆에서 본 모습)", TextSize = 12, TextColor3 = GREY, Position = UDim2.fromOffset(0, 4), Size = UDim2.new(1, 0, 0, 14), Parent = box })
+	}, { corner(16), edge() })
+	label({ Text = "두께 (옆에서 본 모습)", TextSize = 13, TextColor3 = SOFT, Position = UDim2.fromOffset(0, 4), Size = UDim2.new(1, 0, 0, 14), Parent = box })
 	local area = new("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(16, 20), Size = UDim2.new(1, -110, 1, -28), Parent = box })
 	new("Frame", { Name = "Plate", AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 6), BackgroundColor3 = Color3.fromRGB(40, 40, 44), BorderSizePixel = 0, Parent = area }, { corner(3) })
 	self.thickBand = new("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.new(1, 8, 0, 10), BackgroundColor3 = Color3.fromRGB(80, 200, 90), BackgroundTransparency = 0.6, BorderSizePixel = 0, ZIndex = 3, Parent = area }, {
@@ -1325,25 +1364,28 @@ function Ui:ask(title, sub, first, second)
 			Visible = false,
 			ZIndex = 10,
 			Parent = self.root,
-		}, { corner(22) })
+		}, { corner(22), edge(4) })
 		self.askTitle = label({ Text = "", TextSize = 24, Position = UDim2.fromOffset(0, 16), Size = UDim2.new(1, 0, 0, 30), ZIndex = 11, Parent = pop })
 		self.askSub = label({ Text = "", TextSize = 16, Font = FONT_REG, TextColor3 = Color3.fromRGB(110, 100, 90), Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 0, 40), TextWrapped = true, ZIndex = 11, Parent = pop })
 		local row = new("Frame", { BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -18), Size = UDim2.new(1, -36, 0, self.btn), ZIndex = 11, Parent = pop }, {
 			new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 12), SortOrder = Enum.SortOrder.LayoutOrder }),
 		})
 		local function btn(primary, order, name)
-			return new("TextButton", {
+			local b = new("TextButton", {
 				Name = name,
 				Text = "",
-				TextSize = 20,
-				Font = FONT,
-				TextColor3 = primary and Color3.new(1, 1, 1) or INK,
-				BackgroundColor3 = primary and INK or Color3.fromRGB(232, 226, 216),
+				TextSize = 22,
 				Size = UDim2.new(0.5, -6, 1, 0),
 				LayoutOrder = order,
 				ZIndex = 12,
 				Parent = row,
 			}, { corner(18) })
+			if primary then
+				candy(b, UI.C.yellow)
+			else
+				plain(b)
+			end
+			return b
 		end
 		self.askA = btn(true, 1, "First")
 		self.askB = btn(false, 2, "Second")
@@ -1390,8 +1432,8 @@ function Ui:setSkip(visible, text)
 			Name = "SkipStamp",
 			Text = "",
 			TextSize = 18,
-			Font = FONT,
-			TextColor3 = INK,
+			FontFace = UI.F.heavy,
+			TextColor3 = UI.C.ink,
 			BackgroundColor3 = PAPER,
 			BackgroundTransparency = 0.05,
 			AnchorPoint = Vector2.new(1, 1),
@@ -1401,7 +1443,7 @@ function Ui:setSkip(visible, text)
 			Visible = false,
 			ZIndex = 8,
 			Parent = self.root,
-		}, { corner(23), new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }), new("UIStroke", { Thickness = 2, Color = Color3.fromRGB(200, 190, 175), ApplyStrokeMode = Enum.ApplyStrokeMode.Border }) })
+		}, { corner(23), new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18) }), edge(3) })
 	end
 	if self.skipConn then
 		self.skipConn:Disconnect()
