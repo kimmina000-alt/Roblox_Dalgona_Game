@@ -1,6 +1,6 @@
 # 달고나 사러 오는 손님 NPC 7종 (사용자 디자인 2026-11-22: 동물 손님 그림 2장)
 #   뽀글이(갈색 푸들, 버건디 베레모, 동그란 안경), 꿀단지(노란 곰), 모찌(흰 토끼, 세라복·하늘 치마·분홍 리본),
-#   춘식이 아저씨(회색 줄무늬 고양이, 흰 수염, 러닝셔츠, 초록 운동복 바지), 도토리(회색 다람쥐, 남색 모자·제복, 갈색 가방),
+#   고등어 아저씨(회색 고등어 무늬 고양이, 흰 수염, 러닝셔츠, 초록 운동복 바지), 도토리(회색 다람쥐, 남색 모자·제복, 갈색 가방),
 #   부엉이(보라 부엉이, 머리 위 초승달, 별무늬 남색 망토), 퐁퐁이(노란 오리, 하늘색 벙거지·원피스, 병아리 가방)
 #
 # 리깅 = 부품 나눔 (스킨드 메시 아님). 이유: 판매 코드(SalesService)는 손님을 Humanoid 없이 Anchored 부품으로 만들고
@@ -386,8 +386,8 @@ def mochi():
     return ch
 
 
-def chunsik():
-    ch = Char("Chunsik", "춘식이 아저씨", leg=1.05, torso_h=1.3, torso_w=1.3, torso_d=1.0, hr=(0.8, 0.72, 0.7),
+def godeungeo():
+    ch = Char("Godeungeo", "고등어 아저씨", leg=1.05, torso_h=1.3, torso_w=1.3, torso_d=1.0, hr=(0.8, 0.72, 0.7),
               arm_len=1.1, arm_r=0.22, leg_r=0.28, foot=(0.27, 0.34, 0.16))
     FUR, DARK, WHITE, PINK, GREEN = (152, 152, 160), (104, 104, 114), (246, 246, 244), (240, 160, 170), (72, 152, 88)
     ch.body(FUR, WHITE, GREEN, FUR)
@@ -544,7 +544,7 @@ def pongpong():
     return ch
 
 
-CHARS = [ppogeuli(), kkuldanji(), mochi(), chunsik(), dotori(), owl(), pongpong()]
+CHARS = [ppogeuli(), kkuldanji(), mochi(), godeungeo(), dotori(), owl(), pongpong()]
 
 # ───────────── 재질·오브젝트 ─────────────
 IMG = palette_image()

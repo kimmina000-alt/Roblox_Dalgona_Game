@@ -7,7 +7,7 @@
 -- mouth = 입 앞 (먹기 연출), hand = 오른손(ArmR 끝) 가운데, height = 키.
 
 return {
-	order = { "Ppogeuli", "Kkuldanji", "Mochi", "Chunsik", "Dotori", "Owl", "Pongpong" },
+	order = { "Ppogeuli", "Kkuldanji", "Mochi", "Godeungeo", "Dotori", "Owl", "Pongpong" },
 	types = {
 		Ppogeuli = {
 			label = "뽀글이",
@@ -51,8 +51,8 @@ return {
 				LegR = { center = Vector3.new(0.240, 0.455, -0.099), size = Vector3.new(0.409, 0.910, 0.660), joint = Vector3.new(0.240, 0.850, 0.000) },
 			},
 		},
-		Chunsik = {
-			label = "춘식이 아저씨",
+		Godeungeo = {
+			label = "고등어 아저씨",
 			height = 3.790,
 			mouth = Vector3.new(-0.000, 2.604, -0.690),
 			hand = Vector3.new(0.771, 1.250, -0.020),
