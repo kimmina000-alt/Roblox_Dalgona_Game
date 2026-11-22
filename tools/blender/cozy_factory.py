@@ -327,21 +327,21 @@ for x in (-0.6, 0.4, 1.2):
 for x in (3.0, 5.2):
     dalgona(bd, (x, 0, BZ + 0.03), r=0.38, h=0.05)
 
-# ⑧ 앞 조작대: 나무 책상 + 기울어진 크림 판(계기 3개, 도안 버튼 6개, 큰 시작·정지 버튼, 레버)
+# ⑧ 앞 조작대 (기울어진 판이 앞쪽 = 플레이어를 봄, 2026-11-23 사용자: 등을 보이는 것 같아 돌림): 나무 책상 + 기울어진 크림 판(계기 3개, 도안 버튼 6개, 큰 시작·정지 버튼, 레버)
 dx0, dy0 = 0.6, -2.35
 con = P["Fac_Console"]
 box(con, (dx0, dy0, 0.55), (2.4, 1.0, 1.1), WOOD, bev=0.1)
 box(con, (dx0, dy0 - 0.52, 0.55), (2.0, 0.06, 0.75), CREAM, bev=0.04)
-panel = Matrix.Translation(Vector((dx0, dy0, 1.32))) @ rot(x=-35)
-box(con, (dx0, dy0, 1.3), (2.6, 1.1, 0.24), WOOD_D, bev=0.08, m=rot(x=-35))
-box(con, panel @ Vector((0, 0, 0.13)), (2.35, 0.9, 0.06), CREAM, bev=0.03, m=rot(x=-35))
+panel = Matrix.Translation(Vector((dx0, dy0, 1.32))) @ rot(x=35)
+box(con, (dx0, dy0, 1.3), (2.6, 1.1, 0.24), WOOD_D, bev=0.08, m=rot(x=35))
+box(con, panel @ Vector((0, 0, 0.13)), (2.35, 0.9, 0.06), CREAM, bev=0.03, m=rot(x=35))
 for k, x in enumerate((-0.75, 0.0, 0.75)):  # 계기
     q = panel @ Vector((x, 0.18, 0.17))
-    cyl(con, q, q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.05)), 0.2, 0.2, BRASS, seg=14)
-    cyl(con, q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.04)), q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.07)), 0.16, 0.16, GAUGE_FACE, seg=14)
+    cyl(con, q, q + rot(x=35).to_3x3() @ Vector((0, 0, 0.05)), 0.2, 0.2, BRASS, seg=14)
+    cyl(con, q + rot(x=35).to_3x3() @ Vector((0, 0, 0.04)), q + rot(x=35).to_3x3() @ Vector((0, 0, 0.07)), 0.16, 0.16, GAUGE_FACE, seg=14)
 for k, col in enumerate((ORANGE, MINT_BTN, SKY_BTN, LEMON_BTN, (210, 170, 220), (250, 190, 200))):  # 도안 버튼
     q = panel @ Vector((-0.9 + k * 0.36, -0.22, 0.17))
-    cyl(con, q, q + rot(x=-35).to_3x3() @ Vector((0, 0, 0.06)), 0.1, 0.09, col, seg=10)
+    cyl(con, q, q + rot(x=35).to_3x3() @ Vector((0, 0, 0.06)), 0.1, 0.09, col, seg=10)
 q = Vector((dx0 + 1.45, dy0 - 0.1, 1.15))
 box(con, q, (0.5, 0.8, 0.3), WOOD_D, bev=0.06)
 ball(P["Fac_StartButton"], q + Vector((0, -0.18, 0.2)), (0.14, 0.14, 0.08), MINT_BTN, seg=(12, 6))  # 시작 (돌 때 켜짐)
@@ -487,6 +487,9 @@ def shoot(loc, tgt, name):
     bpy.ops.render.render(write_still=True)
 
 
+for o in scene.objects:
+    if o.name.startswith("Fac_Stand_"):
+        o.hide_render = True  # 알바생 자리 표시는 게임에서도 투명
 shoot((3.0, -19.0, 9.0), (0.3, 0, 2.6), "cozy_factory_preview.png")
 press = scene.objects["Fac_Press"]
 press.location.z -= 0.55
