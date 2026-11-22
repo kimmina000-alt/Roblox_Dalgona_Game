@@ -25,9 +25,9 @@ local S_FRONT = P.rowZ + P.size.Z / 2 -- 남쪽 줄 가게 앞선 (-54)
 local N_FRONT = S_FRONT + ROAD_W -- 북쪽 줄 가게 앞선 (-22)
 local ROAD_Z0, ROAD_Z1 = S_FRONT, N_FRONT
 local ROAD_ZC = (ROAD_Z0 + ROAD_Z1) / 2
-local ROOM_HALF = 46 -- 가게 뒤 공장 방 반폭 (PlotLayout.FactoryRoom 약 91)
+local SHOP_HALF = 26 -- 가게 3D 반폭 (사용자 가게 모델 폭 46.7 + 걸이 간판, 2026-11-23 간격 55로 바뀜)
 local LAST_X = ((PER_ROW - 1) / 2) * P.spacing -- 끝 가게 가운데 x (100)
-local END_X0 = LAST_X + ROOM_HALF + 8 -- 골목 끝 꾸미기 가게가 시작하는 x (154)
+local END_X0 = LAST_X + SHOP_HALF + 6 -- 골목 끝 꾸미기 가게가 시작하는 x (87)
 local HALF = END_X0 + 52 -- 골목 끝 (꾸미기 가게 2칸쯤)
 local CANON_Z = 0 -- 꾸미기 가게를 만들 때 쓰는 기준 앞선 (만든 뒤 제자리로 돌려 옮김)
 local SHOP_DEPTH = 14
@@ -503,23 +503,20 @@ end
 
 local function streetProps()
 	local rng = Random.new(2311)
-	-- 가게 사이 틈 (앞선 뒤쪽, 손님 길·노점 자리는 비움): 평상 + 화분, 북쪽은 자전거·연탄
+	-- 가게 사이 틈 (폭 약 8, 앞선 뒤쪽. 가게 앞 의자·입간판·노점 자리는 비움): 작은 소품 2개씩
 	for k = 1, PER_ROW - 1 do
 		local gx = (k - PER_ROW / 2) * P.spacing
-		prop("Pyeongsang", CFrame.new(gx, 0.2, ROAD_Z0 - 5), benchFallback)
-		prop("PotBasin", CFrame.new(gx - 7, 0.2, ROAD_Z0 - 2.5), potFallback)
-		prop("PotBasin", CFrame.new(gx + 7, 0.2, ROAD_Z0 - 2.5), potFallback)
-		local back = CFrame.Angles(0, math.pi, 0)
-		prop("Bicycle", CFrame.new(gx - 4, 0.2, ROAD_Z1 + 3) * back * CFrame.Angles(0, rng:NextNumber(-0.2, 0.2), 0), bikeFallback)
-		prop("BriquetteStack", CFrame.new(gx + 5, 0.2, ROAD_Z1 + 3.5), briquetteFallback)
-		prop("PlasticCrate", CFrame.new(gx + 8, 0.2, ROAD_Z1 + 3), crateFallback)
-		prop("TrashBin", CFrame.new(gx - 8, 0.2, ROAD_Z1 + 2.5), binFallback)
+		prop("PotBasin", CFrame.new(gx, 0.2, ROAD_Z0 - 4), potFallback)
+		prop("BriquetteStack", CFrame.new(gx, 0.2, ROAD_Z0 - 8), briquetteFallback)
+		prop("TrashBin", CFrame.new(gx, 0.2, ROAD_Z1 + 4), binFallback)
+		prop("PlasticCrate", CFrame.new(gx, 0.2, ROAD_Z1 + 8) * CFrame.Angles(0, rng:NextNumber(-0.3, 0.3), 0), crateFallback)
 	end
 	-- 골목 끝 꾸미기 가게 앞 (길 가장자리)
 	for _, sx in ipairs({ -1, 1 }) do
 		prop("PotBasin", CFrame.new(sx * (END_X0 + 8), 0.2, ROAD_Z0 + 2), potFallback)
 		prop("Mailbox", CFrame.new(sx * (END_X0 + 22), 0.2, ROAD_Z1 - 2) * CFrame.Angles(0, math.pi, 0), mailboxFallback)
 		prop("Bicycle", CFrame.new(sx * (END_X0 + 34), 0.2, ROAD_Z0 + 2.5), bikeFallback)
+		prop("Pyeongsang", CFrame.new(sx * (END_X0 + 20), 0.2, ROAD_ZC + 7), benchFallback) -- 골목 끝 길가 평상 (가게 사이 틈은 좁아져서 이쪽으로)
 	end
 end
 
