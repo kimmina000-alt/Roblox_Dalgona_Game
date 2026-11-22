@@ -40,7 +40,7 @@
 
 ## Studio 동기화
 - Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).
-- 2026-11-22부터 **Rojo**(7.7.1, `C:\Toolsojoojo.exe`)로 넣는다. `default.project.json`이 Shared·Server·Client·StarterGui(`src/gui`, 비어 있음)를 `$path`로 관리하고, 이 4곳에서 저장소에 없는 인스턴스는 Rojo가 지운다 (첫 연결 전 확인: Studio에만 있는 것 없음, 되돌리기용 장소 버전 152).
+- 2026-11-22부터 **Rojo**(7.7.1, `C:\Tools\rojo\rojo.exe`)로 넣는다. `default.project.json`이 Shared·Server·Client·StarterGui(`src/gui`, 비어 있음)를 `$path`로 관리하고, 이 4곳에서 저장소에 없는 인스턴스는 Rojo가 지운다 (첫 연결 전 확인: Studio에만 있는 것 없음, 되돌리기용 장소 버전 152).
 - **`rojo serve`는 한 번에 하나만.** Studio를 쓸 차례인 세션이 켠다.
   - 최신 main을 넣을 때: `.claude/worktrees/rojo-main`(main을 가리키는 전용 worktree)에서 켠다. 머지 뒤에는 `git -C .claude/worktrees/rojo-main checkout --detach origin/main`으로 갱신.
   - 자기 브랜치를 시험할 때: 자기 worktree에서 켠다.
