@@ -1,6 +1,6 @@
 -- 가게 냉장고·서랍장 (2026-11-24 사용자 "냉장고랑 냉장고 옆 서랍장 기능 구현", 판매 세션)
 --  - 내 가게의 냉장고(Role "냉장고")를 누르면 식재료(설탕·소다), 서랍장(Role "서랍장")을 누르면 그 밖의 재료 창
---  - 칸마다 보유 수 / 최대, 한 묶음 사기 (Remotes.BuyIngredient, 재료 상점과 같은 값). 묶음 목록은 GrowthConfig.StorageGroups
+--  - 칸마다 보유 수 / 최대, 묶음 1·5·10개 사기 버튼 3개 (Remotes.BuyIngredient, 재료 상점과 같은 값, G.BuyPacks). 묶음 목록은 GrowthConfig.StorageGroups
 --  - 제작 화면이 열려 있으면 안 열림. 너무 멀리서(40칸 밖)는 안 됨
 --  - 가까이 가면 "냉장고 열기"·"서랍장 열기" 버튼(ProximityPrompt, 내 화면에만)도 뜸 (2026-11-24 사용자 요청)
 
@@ -31,8 +31,9 @@ end
 local gui = UI.screen("StorageUi", 7, playerGui)
 local root = UI.root(gui)
 local fit = UI.fitter(root)
-local win = UI.window({ Name = "Window", Title = "냉장고", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(640, 300), ZIndex = 10, Parent = root })
-fit(win, 640, 325)
+local BUY_PACKS = G.BuyPacks or { 1, 5, 10 }
+local win = UI.window({ Name = "Window", Title = "냉장고", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(640, 340), ZIndex = 10, Parent = root })
+fit(win, 640, 365)
 win.Visible = false
 local body = win.Body
 body.Size = UDim2.new(1, -28, 1, -34 - 14 - 26)
@@ -51,15 +52,15 @@ local grid = new("Frame", { Name = "Grid", Position = UDim2.fromOffset(10, 10), 
 local state = nil
 local current = nil -- 지금 연 묶음
 local haveText, buyButtons = {}, {}
+local busy = false
 
 local function refresh()
 	for id, t in pairs(haveText) do
 		local n = state and state.ingredients and state.ingredients[id] or 0
 		t.Text = string.format("보유 %d / %d", n, G.IngredientMax)
 	end
-	for id, b in pairs(buyButtons) do
-		local ing = ING[id]
-		UI.setButton(b, { Enabled = state ~= nil and state.coins >= ing.price })
+	for _, info in ipairs(buyButtons) do
+		UI.setButton(info.button, { Enabled = state ~= nil and state.coins >= info.price })
 	end
 end
 
@@ -74,38 +75,41 @@ local function build(group)
 		local ing = ING[id]
 		if ing then
 			local card = UI.card({ Name = id, LayoutOrder = i, ZIndex = 13, Parent = grid })
-			local iconBox = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(76, 76), BackgroundColor3 = C.tan, ZIndex = 14, Parent = card }, { UI.corner(14), UI.stroke(C.line, 2) })
-			UI.text({ Text = ing.icon, TextSize = 42, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.fromScale(1, 1), ZIndex = 15, Parent = iconBox })
-			UI.text({ Text = ing.name, Position = UDim2.fromOffset(4, 92), Size = UDim2.new(1, -8, 0, 24), TextSize = 21, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 14, Parent = card })
-			haveText[id] = UI.text({ Text = "", Position = UDim2.fromOffset(4, 116), Size = UDim2.new(1, -8, 0, 20), TextSize = 15, FontFace = UI.F.bold, TextColor3 = C.soft, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 14, Parent = card })
-			local b = UI.button({
-				Name = "Buy_" .. id,
-				Text = string.format("+%d  %d", ing.pack, ing.price),
-				Color = C.yellow,
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.new(0.5, 0, 1, -8),
-				Size = UDim2.new(1, -16, 0, 44),
-				TextSize = 20,
-				ZIndex = 14,
-				Parent = card,
-			})
-			buyButtons[id] = b
-			local busy = false
-			b.Activated:Connect(function()
-				if busy then
-					return
-				end
-				busy = true
-				local ok, res = pcall(function()
-					return Remotes.BuyIngredient:InvokeServer(id, 1)
+			local iconBox = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = C.tan, ZIndex = 14, Parent = card }, { UI.corner(12), UI.stroke(C.line, 2) })
+			UI.text({ Text = ing.icon, TextSize = 32, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.fromScale(1, 1), ZIndex = 15, Parent = iconBox })
+			UI.text({ Text = ing.name, Position = UDim2.fromOffset(4, 66), Size = UDim2.new(1, -8, 0, 22), TextSize = 19, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 14, Parent = card })
+			haveText[id] = UI.text({ Text = "", Position = UDim2.fromOffset(4, 88), Size = UDim2.new(1, -8, 0, 18), TextSize = 14, FontFace = UI.F.bold, TextColor3 = C.soft, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 14, Parent = card })
+			-- 묶음 버튼 3개 (위에서 아래로 ×1 / ×5 / ×10)
+			for k, packs in ipairs(BUY_PACKS) do
+				local units, price = ing.pack * packs, ing.price * packs
+				local b = UI.button({
+					Name = string.format("Buy_%s_%d", id, units),
+					Text = string.format("+%d · %d코인", units, price),
+					Color = k == 1 and C.yellow or (k == 2 and C.green or C.cyan),
+					AnchorPoint = Vector2.new(0.5, 0),
+					Position = UDim2.new(0.5, 0, 0, 110 + (k - 1) * 40),
+					Size = UDim2.new(1, -14, 0, 36),
+					TextSize = 16,
+					ZIndex = 14,
+					Parent = card,
+				})
+				table.insert(buyButtons, { button = b, price = price })
+				b.Activated:Connect(function()
+					if busy or not b:GetAttribute("Enabled") then
+						return
+					end
+					busy = true
+					local ok, res = pcall(function()
+						return Remotes.BuyIngredient:InvokeServer(id, packs)
+					end)
+					if ok and type(res) == "table" and res.ok then
+						setMsg(string.format("%s %d개를 넣었어요", ing.name, units), true)
+					else
+						setMsg((ok and type(res) == "table" and res.reason) or "살 수 없어요", false)
+					end
+					busy = false
 				end)
-				if ok and type(res) == "table" and res.ok then
-					setMsg(string.format("%s %d개를 넣었어요", ing.name, ing.pack), true)
-				else
-					setMsg((ok and type(res) == "table" and res.reason) or "살 수 없어요", false)
-				end
-				busy = false
-			end)
+			end
 		end
 	end
 	refresh()
