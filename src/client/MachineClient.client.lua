@@ -352,6 +352,9 @@ local function act(what, a, b)
 	elseif type(res) == "table" and not res.ok then
 		msgL.Text = tostring(res.msg or res.reason or "할 수 없어요")
 	elseif type(res) == "table" and res.msg then
+		if what == "buy" and res.ok then
+			UI.coinSound() -- 기계 사기
+		end
 		msgL.TextColor3 = GREEN
 		msgL.Text = tostring(res.msg)
 		task.delay(2, function()

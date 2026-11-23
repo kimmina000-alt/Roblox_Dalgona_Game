@@ -502,4 +502,29 @@ function UI.bar(props)
 	return back, fill, label
 end
 
+---------------------------------------------------------------- 소리
+-- 물건을 샀을 때 코인 소리 (2026-11-24 사용자 요청). Roblox 라이선스 효과음만:
+-- ProSoundEffects "Coin Throws 1 (SFX)" (동전 여러 개, 2.3초) → 앞 0.8초만 짧게 "짤랑"
+local COIN_SOUND = "rbxassetid://9113849579"
+local lastCoin = 0
+function UI.coinSound()
+	local now = os.clock()
+	if now - lastCoin < 0.12 then
+		return -- 연달아 누르면 한 번만
+	end
+	lastCoin = now
+	local s = Instance.new("Sound")
+	s.SoundId = COIN_SOUND
+	s.Volume = 0.7
+	s.PlaybackSpeed = 1.15
+	s.Parent = game:GetService("SoundService")
+	s:Play()
+	task.delay(0.6, function()
+		game:GetService("TweenService"):Create(s, TweenInfo.new(0.25), { Volume = 0 }):Play()
+	end)
+	task.delay(0.9, function()
+		s:Destroy()
+	end)
+end
+
 return UI

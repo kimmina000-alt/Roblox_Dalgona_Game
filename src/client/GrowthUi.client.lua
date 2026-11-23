@@ -134,6 +134,9 @@ local function act(what, a, b)
 	end)
 	busy = false
 	if ok and type(res) == "table" and res.ok then
+		if what == "buy" or what == "train" then
+			UI.coinSound() -- 코인을 쓰는 것 (해금·업그레이드·알바 고용·교육)
+		end
 		setMsg(res.msg or "완료!", true)
 	else
 		setMsg((ok and type(res) == "table" and res.reason) or "할 수 없어요", false)

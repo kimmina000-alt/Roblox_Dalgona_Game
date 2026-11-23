@@ -691,6 +691,9 @@ local function act(what, a)
 		msgL.TextColor3 = GREEN
 		msgL.Text = tostring(res.msg)
 	end
+	if ok and type(res) == "table" and res.ok and (what == "factoryUp" or what == "factoryHire") then
+		UI.coinSound() -- 공장 업그레이드·공정 알바 고용
+	end
 end
 
 local made = {} -- 다시 그릴 때 지울 것

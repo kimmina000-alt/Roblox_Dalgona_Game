@@ -192,6 +192,7 @@ for i, ing in ipairs(G.Ingredients) do
 				return Remotes.BuyIngredient:InvokeServer(ing.id, packs)
 			end)
 			if ok and type(res) == "table" and res.ok then
+				UI.coinSound()
 				setMsg(string.format("%s %d%s을 샀어요 (-%d 코인)", ing.name, units, ing.id == "coal" and "장" or "회분", price), true)
 			else
 				setMsg((ok and type(res) == "table" and res.reason) or "살 수 없어요", false)

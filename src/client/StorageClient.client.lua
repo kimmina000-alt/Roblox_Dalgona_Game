@@ -103,6 +103,7 @@ local function build(group)
 						return Remotes.BuyIngredient:InvokeServer(id, packs)
 					end)
 					if ok and type(res) == "table" and res.ok then
+						UI.coinSound()
 						setMsg(string.format("%s %d개를 넣었어요", ing.name, units), true)
 					else
 						setMsg((ok and type(res) == "table" and res.reason) or "살 수 없어요", false)
