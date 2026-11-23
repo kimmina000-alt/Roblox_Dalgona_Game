@@ -101,14 +101,19 @@ local function showResult(card, ok)
 end
 
 -- 공장 손재주 (D49, 2026-11-24 확정): 공정마다 1~3단계. 단계가 오르면 판정이 넓어지고(width, 서버가 정함 ×1 / ×1.3 / ×1.6)
--- 도움 연출이 붙음 (게임 모듈마다 api.level로 봄). 단계·폭은 서버가 "mini" 신호 5번째 값 { level, width }로 보냄.
--- 없으면 플레이어 속성 FactorySkill_<공정>(1~3), 그것도 없으면 1단계
+-- 도움 연출이 붙음 (게임 모듈마다 api.level로 봄). 단계·폭은 서버가 "mini" 신호 5번째 값 { level(0~3), width(1~1.9), assist, pass }로 보냄
+-- (저장·부지 세션 FactoryService, 성공 = ok 또는 score ≥ pass). 없으면 플레이어 속성 FactorySkill_<공정>, 그것도 없으면 1단계 (0단계 = 1단계와 같음)
 local WIDTH = { 1, 1.3, 1.6 }
 local function skillFor(station, opts)
 	local level = type(opts) == "table" and tonumber(opts.level) or nil
 	level = level or tonumber(player:GetAttribute("FactorySkill_" .. tostring(station)))
 	level = math.clamp(math.floor(level or 1), 1, 3)
 	local width = type(opts) == "table" and tonumber(opts.width) or WIDTH[level]
+	-- 도와주기 (서버: 3판 연속 실패하면 다음 판 assist = true, 폭 +0.3은 width에 이미 들어 있음): 2단계 도움 연출(안내선·고리·
+	-- 반짝임·화살표·느린 바늘)을 보여 줌. 3단계 규칙(바퀴 −1 등)은 손재주 3단계에서만
+	if type(opts) == "table" and opts.assist == true then
+		level = math.max(level, 2)
+	end
 	return level, width
 end
 
