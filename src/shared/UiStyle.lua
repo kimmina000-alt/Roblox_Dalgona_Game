@@ -519,6 +519,51 @@ function UI.coin(parent, size, z)
 	return c
 end
 
+-- 연탄 아이콘 (2026-11-24 사용자 "서랍장에 연탄 그림 구멍 몇 개 뚫어서 더 연탄처럼"): 위에서 본 연탄 = 짙은 회색 동그라미 + 구멍.
+--   size 36 이상이면 진짜 연탄처럼 19구멍(가운데 1 + 안쪽 6 + 바깥 12), 작으면 7구멍(가운데 1 + 6).
+function UI.coal(parent, size, z)
+	z = z or 1
+	local c = new("Frame", {
+		Name = "Coal",
+		Size = UDim2.fromOffset(size, size),
+		BackgroundColor3 = Color3.fromRGB(78, 74, 72),
+		ZIndex = z,
+		Parent = parent,
+	}, { UI.corner("round"), UI.stroke(Color3.fromRGB(36, 34, 34), math.max(1.5, size / 16)), UI.gloss(0.18) })
+	local holes = { { 0, 0 } }
+	local rings = size >= 36 and { { 0.24, 6, 0 }, { 0.385, 12, 15 } } or { { 0.27, 6, 0 } }
+	for _, ring in ipairs(rings) do
+		for i = 0, ring[2] - 1 do
+			local a = math.rad(ring[3] + 360 * i / ring[2])
+			table.insert(holes, { ring[1] * math.cos(a), ring[1] * math.sin(a) })
+		end
+	end
+	local hole = size >= 36 and 0.1 or 0.14
+	for _, h in ipairs(holes) do
+		new("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5 + h[1], 0.5 + h[2]),
+			Size = UDim2.fromScale(hole, hole),
+			BackgroundColor3 = Color3.fromRGB(20, 18, 18),
+			ZIndex = z + 1,
+			Parent = c,
+		}, { UI.corner("round") })
+	end
+	return c
+end
+
+-- 재료 아이콘 칸 채우기: 연탄은 직접 그린 그림, 나머지는 이모지 글자
+function UI.ingredientIcon(ing, parent, textSize, z)
+	if ing.id == "coal" then
+		local s = math.floor(textSize * 1.3)
+		local c = UI.coal(parent, s, z)
+		c.AnchorPoint = Vector2.new(0.5, 0.5)
+		c.Position = UDim2.fromScale(0.5, 0.5)
+		return c
+	end
+	return UI.text({ Text = ing.icon, TextSize = textSize, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.fromScale(1, 1), ZIndex = z, Parent = parent })
+end
+
 -- 진행 막대 (초록 채움, 어두운 홈). 반환: back, fill, label
 function UI.bar(props)
 	local z = props.ZIndex or 1
