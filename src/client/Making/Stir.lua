@@ -90,6 +90,15 @@ function Stir.screenUp()
 	return flat.Magnitude > 1e-3 and flat.Unit or Vector3.new(0, 0, -1)
 end
 
+-- 화면 기준 방향: r = 화면 오른쪽, u = 위(세계 Y), down = 화면 아래쪽 성분 → 세계 단위 벡터.
+-- 예전 코드의 세계 축 값 Vector3.new(x, y, z)는 Stir.screenDir(x, y, z)로 바꾸면 돌린 작업대에서도 같은 모습
+function Stir.screenDir(r, u, down)
+	local cr = workspace.CurrentCamera.CFrame.RightVector
+	local right = Vector3.new(cr.X, 0, cr.Z)
+	right = right.Magnitude > 1e-3 and right.Unit or Vector3.xAxis
+	return (right * r + Vector3.yAxis * u - Stir.screenUp() * down).Unit
+end
+
 function Stir.grip(y)
 	local f = Pointer.toPlane(y)
 	local tip = f + Stir.screenUp() * Stir.GRIP
@@ -124,7 +133,7 @@ end
 
 -- 나무젓가락 끝을 아무 world 위치에 둔다 (국자 밖도: 소다 찍기)
 function Stir.placeChopsticksAt(station, tip, handle)
-	local dir = Vector3.new(0.35, 1, 0.55).Unit
+	local dir = Stir.screenDir(0.35, 1, 0.55)
 	if handle then
 		local d = handle - tip
 		if d.Magnitude > 0.2 and d.Y > 0.3 then

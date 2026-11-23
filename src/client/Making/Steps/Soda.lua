@@ -25,8 +25,14 @@ local METER_MAX = 1.2 -- 소다 막대는 이 양에서 꽉 참 (초록 칸이 �
 local DIP_LAYER = 0.17 -- 한 번 찍을 때 묻는 양 (1번 0.17 적음 · 2~3번 0.34~0.51 알맞음 · 4번 0.68 많음)
 local LAYERS_MAX = 8 -- 한 번 들고 갈 때 최대 겹 수
 local LOAD_MAX = DIP_LAYER * LAYERS_MAX
-local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit
-local STICK_LEAN = Vector3.new(0.45, 0.6, 0.66).Unit -- 소다 넣을 때 젓가락 기울기 (눕혀서 끝에 묻은 소다가 위에서 보이게)
+-- 젓가락 기울기는 화면 기준 (오른쪽, 위, 화면 아래쪽) 성분. 예전엔 세계 축 (X, Y, Z)였는데 작업대를 돌린 채 카메라가
+-- 따라가면서(2026-11-23) 반대로 기울어짐 (2026-11-24 "소다 찍을 때 아직 방향 안 바뀜") → 카메라에서 축을 잼
+local function STICK_DIR_NOW()
+	return Stir.screenDir(0.35, 1, 0.55)
+end
+local function STICK_LEAN_NOW() -- 소다 넣을 때 젓가락 기울기 (눕혀서 끝에 묻은 소다가 위에서 보이게)
+	return Stir.screenDir(0.45, 0.6, 0.66)
+end
 local STIR_LIFT = 1.3 -- 소다 젓기: 국자를 이 높이 넘게 들어야 함 (녹일 때보다 훨씬 위, 2026-11-20 "플레이어한테 더 높게 들라고")
 local TAP_PX = 110 -- 소다 통·국자 화면 위치에서 이만큼 안을 누르면 그 도구
 -- 영상 5·6번: 부푼 반죽은 밝은 땅콩버터 베이지, 젓가락이 지나간 자리에 결이 남음
@@ -415,7 +421,7 @@ function Soda.run(ctx)
 		local tip = stickTip
 		if tip then
 			for k = 0, 4 do
-				if near(tip + STICK_LEAN * 2.75 * (k / 4), 70) then
+				if near(tip + STICK_LEAN_NOW() * 2.75 * (k / 4), 70) then
 					return true
 				end
 			end
@@ -626,7 +632,7 @@ function Soda.run(ctx)
 					end
 				end
 				stickTip = tip
-				Stir.placeChopsticksAt(S, tip, tip + STICK_LEAN * 2.75)
+				Stir.placeChopsticksAt(S, tip, tip + STICK_LEAN_NOW() * 2.75)
 			elseif carrying then
 				-- 손가락 = 젓가락 손잡이. 끝은 소다 통 위면 통 바로 위, 국자 위면 설탕물 위, 아니면 떠 있음
 				local hoverY = math.max(tubPos.Y + 0.35, S:contentsTopY() + 0.35)
@@ -656,7 +662,7 @@ function Soda.run(ctx)
 					ui:say("빠르게 저어요!", "FAST 쪽이 정답 · 불에서 떼고 저어요")
 				end
 			else
-				Stir.placeChopsticksAt(S, tip, tip + STICK_LEAN * 2.75)
+				Stir.placeChopsticksAt(S, tip, tip + STICK_LEAN_NOW() * 2.75)
 			end
 			-- 젓가락 끝에 묻은 흰 소다 (겹이 많을수록 두껍고 길게, 위에서도 잘 보이게 굵게)
 			if load > 0.005 and not tipPowder then
@@ -667,7 +673,7 @@ function Soda.run(ctx)
 				local layers = load / DIP_LAYER
 				local len = 0.2 + 0.1 * layers
 				local d = 0.13 + 0.05 * layers
-				local dir = S.stickDir or STICK_DIR
+				local dir = S.stickDir or STICK_DIR_NOW()
 				local center = stickTip + dir * (len / 2 - 0.02)
 				tipPowder.Size = Vector3.new(len, d, d)
 				tipPowder.CFrame = CFrame.lookAt(center, center + dir) * CFrame.Angles(0, math.rad(90), 0) -- 원기둥 축(X) = 젓가락 방향

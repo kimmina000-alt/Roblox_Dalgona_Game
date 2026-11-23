@@ -101,8 +101,9 @@ local function stop(m, rec)
 end
 
 -- 한 프레임: 서버 시각표대로 자리·자세를 정함
-local function step(m, now)
-	local state = m:GetAttribute("CarryState")
+-- sig(생략 가능) = { state, from, to, t0, dur, shape }: 서버 Carry* 속성 대신 쓸 시각표 (진열 알바, 아래 displaySignal)
+local function step(m, now, sig)
+	local state = sig and sig.state or m:GetAttribute("CarryState")
 	local rec = active[m]
 	if state ~= "go" and state ~= "back" then
 		if rec then
@@ -112,6 +113,9 @@ local function step(m, now)
 	end
 	local from, to = m:GetAttribute("CarryFrom"), m:GetAttribute("CarryTo")
 	local t0, dur = m:GetAttribute("CarryStart"), m:GetAttribute("CarryDur")
+	if sig then
+		from, to, t0, dur = sig.from, sig.to, sig.t0, sig.dur
+	end
 	if typeof(from) ~= "Vector3" or typeof(to) ~= "Vector3" or type(t0) ~= "number" or type(dur) ~= "number" then
 		return
 	end
@@ -121,6 +125,9 @@ local function step(m, now)
 		m:SetAttribute("Carrying", true)
 	end
 	local shape = m:GetAttribute("CarryShape")
+	if sig then
+		shape = sig.shape
+	end
 	local holding = type(shape) == "string" and shape ~= ""
 	local key = state .. tostring(t0)
 	if rec.key ~= key then
@@ -174,12 +181,58 @@ local function step(m, now)
 	end
 end
 
+-- ── 진열 알바 (Helper_display): 서버가 진열 칸에 달고나를 놓을 때 미니미 속성 DeliverSlot(칸)·DeliverAt(서버 시각)을 줌
+-- (GrowthService 진열 역할, 칸은 이미 채워짐). 그 신호로 칸까지 달고나를 들고 걸어갔다 옴 (2026-11-24 "국자 대신 달고나를 들고 다니게")
+local function slotPart(plot, n)
+	local shelf = plot:FindFirstChild("DisplayShelf")
+	local sp = shelf and shelf:FindFirstChild("Slot" .. n, true)
+	sp = sp or plot:FindFirstChild("Slot" .. n, true)
+	if sp and sp:IsA("Model") then
+		return sp:GetPivot().Position
+	end
+	return sp and sp:IsA("BasePart") and sp.Position or nil
+end
+local function displaySignal(m, plot, now)
+	local at, k = m:GetAttribute("DeliverAt"), m:GetAttribute("DeliverSlot")
+	if type(at) ~= "number" or type(k) ~= "number" then
+		return nil
+	end
+	local rec = active[m]
+	local home = (rec and rec.home or m:GetPivot()).Position
+	local to = slotPart(plot, k)
+	if not to then
+		return nil
+	end
+	local walk = math.max(CH.minWalk or 1.5, Vector3.new(to.X - home.X, 0, to.Z - home.Z).Magnitude / (CH.speed or 7))
+	local dur = walk + PICK
+	local age = now - at
+	if age < 0 or age >= dur * 2 then
+		return { state = "" }
+	end
+	if age < dur then
+		return { state = "go", from = home, to = to, t0 = at, dur = dur, shape = m:GetAttribute("DeliverShape") or "circle" }
+	end
+	return { state = "back", from = to, to = home, t0 = at + dur, dur = dur, shape = "" }
+end
+
+-- 서버 미니미(Minime.build)는 모두 오른손에 작은 국자(HandLadle)를 쥠. 국자를 안 쓰는 알바(진열·계산·기계·공장)는
+-- 내 화면에서 숨김 (광택 메시라 LocalTransparencyModifier 대신 Transparency)
+local function hideHandLadles(plot)
+	for _, d in ipairs(plot:GetDescendants()) do
+		if d.Name == "HandLadle" and d:IsA("BasePart") and d.Transparency ~= 1 then
+			d.Transparency = 1
+			d.CastShadow = false
+		end
+	end
+end
+
 local started = false
 function HelperCarry.start()
 	if started then
 		return
 	end
 	started = true
+	local scanT = 0
 	-- 자세는 PreSimulation(애니메이션 다음)에: Animator가 매 프레임 관절을 지움
 	RunService.PreSimulation:Connect(function()
 		local plots = workspace:FindFirstChild("ShopPlots")
@@ -187,7 +240,18 @@ function HelperCarry.start()
 			return
 		end
 		local now = workspace:GetServerTimeNow()
+		scanT += 1
 		for _, plot in ipairs(plots:GetChildren()) do
+			if scanT % 60 == 1 then
+				hideHandLadles(plot) -- 1초쯤마다 (새로 생긴 알바도)
+			end
+			local disp = plot:FindFirstChild("Helper_display")
+			if disp then
+				local sig = displaySignal(disp, plot, now)
+				if sig or active[disp] then
+					step(disp, now, sig or { state = "" })
+				end
+			end
 			local line = plot:FindFirstChild("Helper_line")
 			if line then
 				step(line, now)

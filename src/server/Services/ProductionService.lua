@@ -301,6 +301,13 @@ function ProductionService.init(remotes)
 		sessions[p] = nil
 		ppopgiOpen[p] = nil
 	end)
+	-- 손 제작 화면을 열고 닫았다는 신호 (2026-11-24 "만드는 동안 칭호 숨기기"): 플레이어 속성 Making = true / nil.
+	-- 모두의 화면에서 머리 위 칭호(UI TitleTags)가 이걸 보고 숨김. 보이기만 바꾸는 값이라 검사 없이 받음
+	if remotes.MakingState then
+		remotes.MakingState.OnServerEvent:Connect(function(player, on)
+			player:SetAttribute("Making", on == true or nil)
+		end)
+	end
 end
 
 return ProductionService

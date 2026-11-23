@@ -27,7 +27,7 @@ for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", 
 		rf.Parent = remotes
 	end
 end
-for _, name in ipairs({ "PlayerState", "Notify" }) do
+for _, name in ipairs({ "PlayerState", "Notify", "MakingState" }) do
 	if not remotes:FindFirstChild(name) then
 		local re = Instance.new("RemoteEvent")
 		re.Name = name

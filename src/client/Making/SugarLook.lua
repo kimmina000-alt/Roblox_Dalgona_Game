@@ -10,6 +10,7 @@
 local Making = script.Parent
 local Fx = require(Making:WaitForChild("Fx"))
 local Heat = require(Making:WaitForChild("Heat"))
+local Stir = require(Making:WaitForChild("Stir")) -- 젓가락 기본 방향 (화면 기준, Stir.placeChopsticksAt와 같음)
 
 local SugarLook = {}
 SugarLook.__index = SugarLook
@@ -18,7 +19,6 @@ local POWDER = Color3.fromRGB(246, 244, 240)
 local DOT_COLORS = { Color3.fromRGB(255, 255, 255), Color3.fromRGB(236, 233, 228), Color3.fromRGB(222, 218, 212) }
 local LUMP = Color3.fromRGB(250, 250, 248)
 local SYRUP_BROWN = Color3.fromRGB(118, 60, 20)
-local STICK_DIR = Vector3.new(0.35, 1, 0.55).Unit -- Stir.placeChopsticksAt와 같은 젓가락 방향
 local DOTS = 340
 local LUMPS = 560 -- 결정 많이 (2026-11-19 "결정이 더 많으면 좋겠음")
 -- 가루 → 결정은 녹은 정도 TRANS_A ~ TRANS_B 사이에서 서서히 (사용자 요청 2026-11-18: 너무 갑자기 바뀜).
@@ -189,7 +189,7 @@ function SugarLook:coatTip(tip, amount, burn, p)
 	end
 	local coat = st.tipCoat
 	if not coat or not coat.Parent then
-		local dir = S.stickDir or STICK_DIR
+		local dir = S.stickDir or Stir.screenDir(0.35, 1, 0.55)
 		local center = tip + dir * 0.12 -- 끝에서 젓가락 위쪽으로 묻음
 		coat = Instance.new("Part")
 		coat.Name = "FxTipCoat"

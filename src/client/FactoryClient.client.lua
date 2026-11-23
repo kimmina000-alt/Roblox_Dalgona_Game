@@ -346,6 +346,97 @@ end
 -- ── 매 프레임: 움직임 · 표시등 · 상태판 ──
 -- 공정 알바 자세는 PreSimulation(애니메이션 다음, 물리 전)에: 미니미 Animator가 매 프레임 관절 Transform을 지우므로
 -- Heartbeat에서 넣으면 화면에 안 나옴 (2026-11-24 가게 알바에서 확인)
+-- ── ① 설탕 넣기 연출 (2026-11-24 사용자 "설탕 넣는 모션+소리", 공장 공정): 설탕 알바(Staff_sugar, StaffOn_sugar)나
+-- 내가 맡은 사람(공장 속성 Self_sugar, 주인 캐릭터)이 설탕 포대를 들어 호퍼에 붓는 동작(오른팔, MOTION.sugar와 같은 박자),
+-- 부을 때 호퍼 입구로 설탕 알갱이가 쏟아짐(ParticleEmitter). 공장이 돌 때만, 가까울 때만(STAFF_DIST). 소리는 factorySounds의 ① (붓는 사람이 있을 때만)
+local POUR_T = 2.4 -- MOTION.sugar 박자 (sin(t * 2.4))
+local function sugarDoer(fac, lot)
+	if fac:GetAttribute("StaffOn_sugar") == true then
+		local staff = lot and lot:FindFirstChild("Staff")
+		return staff and staff:FindFirstChild("Staff_sugar"), false
+	end
+	if fac:GetAttribute("Self_sugar") == true then
+		local owner = Players:GetPlayerByUserId(fac:GetAttribute("OwnerUserId") or 0)
+		return owner and owner.Character, true
+	end
+	return nil
+end
+local function hopperTop(rec)
+	for _, want in ipairs({ "hopper", "feed" }) do
+		for _, e in ipairs(rec.parts) do
+			if e.a == want and e.p.Parent then
+				local p = e.p
+				return p, Vector3.new(p.Position.X, p.Position.Y + p.Size.Y / 2, p.Position.Z)
+			end
+		end
+	end
+	return nil
+end
+local function sugarStream(rec)
+	if rec.sugarFx and rec.sugarFx.Parent then
+		return rec.sugarFx
+	end
+	local hopper, top = hopperTop(rec)
+	if not hopper then
+		return nil
+	end
+	local att = Instance.new("Attachment")
+	att.Name = "FxSugarPour"
+	att.WorldPosition = top + Vector3.new(0, 1.2, 0)
+	att.Parent = hopper
+	local pe = Instance.new("ParticleEmitter")
+	pe.Name = "SugarPour"
+	pe.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(236, 232, 224))
+	pe.LightEmission = 0.2
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.12), NumberSequenceKeypoint.new(1, 0.06) })
+	pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.8, 0.1), NumberSequenceKeypoint.new(1, 1) })
+	pe.Lifetime = NumberRange.new(0.35, 0.5)
+	pe.Speed = NumberRange.new(2, 3.5)
+	pe.SpreadAngle = Vector2.new(8, 8)
+	pe.EmissionDirection = Enum.NormalId.Bottom
+	pe.Acceleration = Vector3.new(0, -20, 0)
+	pe.Rate = 90
+	pe.Enabled = false
+	pe.Parent = att
+	rec.sugarFx = pe
+	return pe
+end
+local function pourSugar(fac, rec, now, camPos)
+	local i = tonumber(fac.Name:match("%d+"))
+	local plots = workspace:FindFirstChild("ShopPlots")
+	local plot = plots and i and plots:FindFirstChild("Plot" .. i)
+	local lot = plot and plot:FindFirstChild("FactoryLot")
+	local running = lineActive(fac, 1) or lineActive(fac, 2)
+	local who, isAvatar = sugarDoer(fac, lot)
+	local root = who and (who:FindFirstChild("HumanoidRootPart") or who.PrimaryPart)
+	local near = root ~= nil and (root.Position - camPos).Magnitude < STAFF_DIST
+	local on = running and near and who ~= nil and not who:GetAttribute("Carrying")
+	rec.sugarPouring = false
+	local pe = (on or rec.sugarFx) and sugarStream(rec)
+	if not on then
+		if pe then
+			pe.Enabled = false
+		end
+		if isAvatar and who and rec.sugarPosed then
+			setPose(who, nil)
+		end
+		rec.sugarPosed = false
+		return
+	end
+	local k = (math.sin(now * POUR_T) + 1) / 2 -- 0 = 팔 내림(포대 뜨기), 1 = 들어 올려 붓기
+	if isAvatar then
+		-- 내 아바타(진짜 캐릭터)는 미니미 MOTION과 같은 자세를 직접 넣음 (Animator 다음 PreSimulation)
+		setPose(who, MOTION.sugar(now))
+		rec.sugarPosed = true
+	end
+	local pouring = k > 0.62
+	rec.sugarPouring = pouring
+	if pe then
+		pe.Enabled = pouring
+		pe.Rate = 40 + 120 * math.clamp((k - 0.62) / 0.38, 0, 1)
+	end
+end
+
 RunService.PreSimulation:Connect(function()
 	local cam = workspace.CurrentCamera
 	local camPos = cam and cam.CFrame.Position or Vector3.zero
@@ -353,9 +444,100 @@ RunService.PreSimulation:Connect(function()
 	for fac, rec in pairs(factories) do
 		if rec.building.Parent then
 			animateStaff(fac, now, camPos)
+			pourSugar(fac, rec, now, camPos)
 		end
 	end
 end)
+-- ── 공장 공정별 효과음 (2026-11-24 사용자 "공장 기계 공정별 효과음") ──
+-- 소리 ID = DalgonaConfig.Sounds.factory*. 소리는 그 공정 움직이는 부품에 붙은 3D 소리라 멀어지면 작아지고 SOUND_MAX에서 안 들림
+local Sounds = require(Shared:WaitForChild("DalgonaConfig")).Sounds
+local SOUND_NEAR = 70 -- 이보다 멀면 아예 멈춤 (폰 성능)
+local SOUND_MAX = 45 -- 3D 소리가 사라지는 거리
+local FSOUNDS = {
+	-- key, 붙일 부품 Anim, 반복?, 크기
+	{ key = "sugar", anim = { "hopper", "feed" }, id = "factorySugar", loop = true, vol = 0.25 },
+	{ key = "boil", anim = { "kettle", "stir", "heat" }, id = "factoryBoil", loop = true, vol = 0.45 },
+	{ key = "press", anim = { "press" }, id = "factoryPress", loop = false, vol = 0.5 },
+	{ key = "fan", anim = { "spin", "curtain" }, id = "factoryFan", loop = true, vol = 0.18 },
+	{ key = "box", anim = { "lid", "outlet" }, id = "factoryBox", loop = false, vol = 0.5 },
+}
+local function soundFor(rec, def)
+	rec.snd = rec.snd or {}
+	local s = rec.snd[def.key]
+	if s ~= nil then
+		return s or nil
+	end
+	local id = Sounds[def.id]
+	local part = nil
+	for _, want in ipairs(def.anim) do
+		for _, e in ipairs(rec.parts) do
+			if e.a == want and e.p.Parent then
+				part = e.p
+				break
+			end
+		end
+		if part then
+			break
+		end
+	end
+	if not (id and part) then
+		rec.snd[def.key] = false
+		return nil
+	end
+	s = Instance.new("Sound")
+	s.Name = "FactorySfx_" .. def.key
+	s.SoundId = id
+	s.Looped = def.loop
+	s.Volume = def.vol
+	s.RollOffMode = Enum.RollOffMode.InverseTapered
+	s.RollOffMinDistance = 8
+	s.RollOffMaxDistance = SOUND_MAX
+	s.Parent = part
+	rec.snd[def.key] = s
+	return s
+end
+local function oneShot(s, def)
+	local c = s:Clone()
+	c.Looped = false
+	c.Volume = def.vol
+	c.PlaybackSpeed = 0.95 + math.random() * 0.1
+	c.Parent = s.Parent
+	c:Play()
+	task.delay(4, function()
+		c:Destroy()
+	end)
+end
+local function factorySounds(rec, on, now)
+	for _, def in ipairs(FSOUNDS) do
+		local s = soundFor(rec, def)
+		if s then
+			local want = on
+			if def.key == "sugar" then
+				-- ① 사르르: 설탕 붓는 사람이 있고 붓는 순간에만 (pourSugar가 정함)
+				want = on and rec.sugarPouring == true
+			end
+			if def.loop then
+				local on = want
+				if on and not s.IsPlaying then
+					s:Play()
+				elseif not on and s.IsPlaying then
+					s:Stop()
+				end
+			elseif on then
+				-- ③ 프레스가 바닥에 닿는 순간 (움직임 press: 1 - |sin(now*2.2)|가 1이 되는 때) · ⑤ 상자 뚜껑이 닫히는 순간 (6초마다)
+				local beat = def.key == "press" and math.floor(now * 2.2 / math.pi + 0.5) or math.floor((now - 5.2) / 6)
+				local last = rec["beat_" .. def.key]
+				if last and beat ~= last then
+					oneShot(s, def)
+				end
+				rec["beat_" .. def.key] = beat
+			else
+				rec["beat_" .. def.key] = nil
+			end
+		end
+	end
+end
+
 RunService.Heartbeat:Connect(function()
 	local now = workspace:GetServerTimeNow()
 	local cam = workspace.CurrentCamera
@@ -415,6 +597,8 @@ RunService.Heartbeat:Connect(function()
 				end
 			end
 		end
+		-- 공정별 소리 (① 설탕 ② 솥 ③ 프레스 ④ 환풍기 ⑤ 상자): 돌 때만, 공장 가까이(SOUND_NEAR)일 때만
+		factorySounds(rec, running and (rec.building:GetPivot().Position - camPos).Magnitude < SOUND_NEAR, now)
 		-- 움직임
 		local blink = (math.floor(now * 2) % 2) == 0
 		for _, e in ipairs(rec.parts) do
