@@ -513,6 +513,7 @@ local function buildModelCustomer(cf, want)
 	local src = folder["Customer_" .. id]
 	local m = Instance.new("Model")
 	m.Name = "Customer"
+	m.ModelStreamingMode = Enum.ModelStreamingMode.Atomic -- 폰(스트리밍)에서 몸 부품이 따로 빠지지 않게 (2026-11-24)
 	local root = part(m, "Root", Vector3.new(1, 1, 1), cf, Color3.new(), nil, { Transparency = 1 })
 	m.PrimaryPart = root
 	for _, name in ipairs(LIMBS) do
@@ -570,6 +571,7 @@ local function buildCustomer(cf, want)
 	-- 예전 부품 손님
 	m = Instance.new("Model")
 	m.Name = "Customer"
+	m.ModelStreamingMode = Enum.ModelStreamingMode.Atomic -- 폰(스트리밍)에서 몸 부품이 따로 빠지지 않게 (2026-11-24)
 	local shirt = SHIRTS[math.random(#SHIRTS)]
 	local skin = SKINS[math.random(#SKINS)]
 	local root = part(m, "Root", Vector3.new(1, 1, 1), cf, Color3.new(), nil, { Transparency = 1 })
