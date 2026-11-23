@@ -35,6 +35,7 @@ G.DefaultData = {
 	-- 화로 연탄 남은 양 (D44, 0~1). coalLeft = 화구 ① 내 손 작업대, coalLeft2 = 화구 ② 화로 알바 자리 (2026-11-24: 화구 2개 기본)
 	coalLeft = 1,
 	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
+	layout = {}, -- 건설 배치 (D53): [물건 key] = { x, z, r } (부지 로컬 격자, BuildService). 비면 처음 자리
 	custDex = {}, -- 손님 도감 (D38): [손님 id] = { sold = 판 수, h = 받은 하트 보상 0~3 }
 	titles = { owned = {} }, -- 칭호 (D38): owned = 얻은 이름들, equipped = 단 칭호
 	signGold = false, -- 간판 금테 (D38: 도안 23종 모두 Perfect)
@@ -315,6 +316,36 @@ G.ShopLight = {
 	range = 16,
 	y = 9, -- 가게 바닥 위 높이
 	spots = { { -10, -8 }, { 10, -8 }, { -10, 4 }, { 10, 4 } },
+}
+-- 건설(꾸미기) 모드 (D53 안 A, 2026-11-25 확정, 서버 BuildService): 가게 안 물건을 2스터드 격자·90° 회전으로 옮김. 좌표는 부지 기준 로컬
+G.Build = {
+	cell = 2, -- 격자 한 칸 (스터드)
+	pad = 0.05, -- 겹침 검사 때 사각형을 이만큼 줄임 (딱 붙여 놓기 허용)
+	-- 놓을 수 있는 범위: 가게 앞 카운터 줄(z -24)부터 앞 방 뒷벽(z 15)까지, 벽 안 (x ±21)
+	area = { x0 = -21, x1 = 21, z0 = -24, z1 = 15 },
+	-- 길 검사 범위·입구: 가게 앞 골목 한 줄(z -30)까지 포함. 입구 = 틀 Entry 자리
+	walk = { x0 = -22, x1 = 22, z0 = -30, z1 = 16 },
+	entry = Vector3.new(-10, 0, -27),
+	frontZ = -18, -- 이 안쪽은 건물 벽 안(|x| ≤ wallHalf)만 걸음
+	wallHalf = 21,
+	-- 고정물 (바닥을 차지하는 것): 손 작업대(가게 안, 화면 1/2 크기), 공장 문 (앞 3스터드 비움)
+	fixedNames = { "Workstation", "FactoryDoor" },
+	fixedPad = { FactoryDoor = 3 },
+	fixedScale = { Workstation = 0.5 },
+	fixedRoles = {},
+	-- 옮길 수 있는 물건: key, 이름, 가게 3D Role(그 부품의 노드째 옮김) 또는 부지 안 부품 이름, needPath = 손님·알바가 옆까지 가야 함
+	-- 유리 진열장은 카운터 위에 얹혀 있어 카운터와 한 덩어리. 걸이판·벽 선반은 벽에 붙어 고정
+	items = {
+		{ key = "counter", name = "계산대·유리 진열장", roles = { "앞 카운터 (나무)", "유리 진열장", "진열장 받침 (금속)", "진열 이름표 띠" }, needPath = true },
+		{ key = "table1", name = "작은 탁자", roles = { "작은 탁자" }, needPath = true },
+		{ key = "table2", name = "작은 탁자 2", roles = { "작은 탁자 2" }, needPath = true },
+		{ key = "table3", name = "작은 탁자 3", roles = { "작은 탁자 3" }, needPath = true },
+		{ key = "fridge", name = "냉장고", roles = { "냉장고" } },
+		{ key = "drawer", name = "서랍장", roles = { "서랍장" } }, -- 위 벽 선반은 벽에 붙어 그대로
+		{ key = "m2", name = "철제 판매기 자리", names = { "MachineSlot2" }, machine = true },
+		{ key = "m3", name = "분홍 자판기 자리", names = { "MachineSlot3" }, machine = true },
+		{ key = "m4", name = "연속 생산 설비 자리", names = { "MachineSlot4" }, machine = true },
+	},
 }
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 
