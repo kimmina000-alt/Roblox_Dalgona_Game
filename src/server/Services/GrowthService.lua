@@ -1080,11 +1080,12 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 		clearHelpers(p)
 	end)
 
-	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP, 월세 타이머 초, 달고나 목록, 보관함 비우기) (실서버에서는 안 만듦)
+	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP, 월세 타이머 초, 달고나 목록, 보관함 비우기, 값 바꾸기) (실서버에서는 안 만듦)
+	-- 값 바꾸기 = { coalLeft = 0, ingredients = { coal = 0 } } 처럼 데이터 칸을 바로 씀 (표는 한 단계 안까지)
 	if game:GetService("RunService"):IsStudio() then
 		local dev = Instance.new("BindableFunction")
 		dev.Name = "DevGrant"
-		dev.OnInvoke = function(userId, coins, exp, rentTimer, items, clearStock)
+		dev.OnInvoke = function(userId, coins, exp, rentTimer, items, clearStock, set)
 			local p = Players:GetPlayerByUserId(userId)
 			if not p then
 				return "no player"
@@ -1101,6 +1102,15 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 				end
 				for _, item in ipairs(items or {}) do -- 시험용 달고나 (빈 진열 칸 → 없으면 보관함)
 					Economy.stockProduced(d, item, "dev")
+				end
+				for k, v in pairs(type(set) == "table" and set or {}) do
+					if type(v) == "table" and type(d[k]) == "table" then
+						for k2, v2 in pairs(v) do
+							d[k][k2] = v2
+						end
+					else
+						d[k] = v
+					end
 				end
 			end)
 			Economy.announceLevels(p, ups)
