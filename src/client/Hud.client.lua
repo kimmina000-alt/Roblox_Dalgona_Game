@@ -128,7 +128,7 @@ local shopBtn = menuButton("ShopButton", "🛒", "재료 상점", C.green, 1)
 ---------------------------------------------------------------- 재료 상점 창 (나무 판 + 재료마다 한 줄, 묶음 3가지 ×1 / ×5 / ×10)
 -- 2026-11-24 사용자 "재료 구매 10회분씩만 되는데 10, 50, 100 단위로 추가": 버튼 3개 = 묶음 1·5·10개
 -- (서버 Remotes.BuyIngredient(재료 id, 묶음 수) 그대로, 1~10 허용). 10회분 묶음이면 10 / 50 / 100, 연탄(5장 묶음)은 5 / 25 / 50.
-local BUY_PACKS = { 1, 5, 10 }
+local BUY_PACKS = G.BuyPacks or { 1, 5, 10 } -- 서버(feat/buy-bulk-1124)가 이 값만 받음
 local shop = UI.window({ Name = "Shop", Title = "재료 상점", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(760, 330), ZIndex = 10, Parent = gui })
 fit(shop, 760, 355)
 local shopBody = shop.Body
