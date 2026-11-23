@@ -20,6 +20,7 @@ local SalesService = {}
 
 local Data, Economy, Plots = nil, nil, nil
 local shops = {} -- [plotIndex] = { shelf, slots = {}, customers = {}, reserved, nextVisit, owner }
+local saleFloat = nil -- Remotes.SaleFloat (주인 화면에 "+n코인" 글씨)
 local walkers = {} -- 움직이는 손님 { model, path, seg, t, onArrive }
 
 local DALGONA = Color3.fromRGB(214, 150, 70)
@@ -120,12 +121,93 @@ local function buildLook(item, size)
 end
 
 local function lookKey(item)
-	return table.concat({ tostring(item.id), tostring(item.s), tostring(item.g), tostring(item.pk), tostring(item.plain), tostring(item.br) }, "|")
+	local pp = type(item.pp) == "table" and (tostring(item.pp[1]) .. "," .. tostring(item.pp[2])) or ""
+	return table.concat({ tostring(item.id), tostring(item.s), tostring(item.g), tostring(item.pk), tostring(item.plain), tostring(item.br), pp }, "|")
 end
 
 ---------------------------------------------------------------- 진열대
 
-local function slotCFrame(shop, i)
+-- 진열 가구 (가게 3D 부품 속성 Role, 2026-11-24 사용자): 칸 자리를 가구 기준으로 계산해서, 편집 화면(PlotLayout.ShopModel)에서
+-- 가구를 옮기면 칸도 따라감. 1~4 유리 진열장(길에서 볼 때 왼쪽부터), 5~8 걸이판(누른 자리에 걸림, item.pp), 9 작은 탁자, 10 작은 탁자 2
+local AREA_ROLES = { case = "유리 진열장", peg = "달고나 걸이판", table1 = "작은 탁자", table2 = "작은 탁자 2", counter = "앞 카운터 (나무)" }
+local AREA_SLOTS = { case = { 1, 2, 3, 4 }, peg = { 5, 6, 7, 8 }, table1 = { 9 }, table2 = { 10 } }
+SalesService.AREA_ROLES = AREA_ROLES
+
+local function findRole(model, role)
+	for _, d in ipairs(model:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("Role") == role then
+			return d
+		end
+	end
+	return nil
+end
+
+-- 가게 기준 축으로 본 부품 상자: 가운데(로컬), 반 크기
+local function localBox(plotCF, p)
+	local l = plotCF:ToObjectSpace(p.CFrame)
+	local r, u, k, sz = l.RightVector, l.UpVector, l.LookVector, p.Size
+	local half = Vector3.new(
+		math.abs(r.X) * sz.X + math.abs(u.X) * sz.Y + math.abs(k.X) * sz.Z,
+		math.abs(r.Y) * sz.X + math.abs(u.Y) * sz.Y + math.abs(k.Y) * sz.Z,
+		math.abs(r.Z) * sz.X + math.abs(u.Z) * sz.Y + math.abs(k.Z) * sz.Z
+	) / 2
+	return l.Position, half
+end
+
+-- 걸이판에 거는 자리 (가게 기준, 판 가운데에서 위아래 dy·옆 dz), 기본 2×2
+local function pegDefault(k, half)
+	local col = (k - 1) % 2
+	local row = (k - 1) // 2
+	return (row == 0 and 0.35 or -0.15) * half.Y, (col == 0 and -0.45 or 0.45) * half.Z
+end
+
+-- 가구 기준 칸 자리 (막대 꽂는 자리, LookVector = 달고나 넓은 면이 보는 쪽). 가구가 없으면 nil
+local function furnitureSlot(shop, i, item)
+	local A = shop.areas
+	local pcf = shop.plotCF
+	if not (A and pcf) then
+		return nil
+	end
+	local function at(pos, dir)
+		return pcf * CFrame.lookAt(pos, pos + dir)
+	end
+	if i <= 4 and A.case then
+		local c, h = localBox(pcf, A.case)
+		local x = c.X + h.X - (i - 0.5) * (2 * h.X / 4)
+		return at(Vector3.new(x, c.Y - h.Y + 0.12, c.Z), Vector3.new(0, 0, -1))
+	elseif i >= 5 and i <= 8 and A.peg then
+		local c, h = localBox(pcf, A.peg)
+		local nx = c.X < 0 and 1 or -1 -- 가게 안쪽을 보는 면
+		local dy, dz = pegDefault(i - 4, h)
+		if item and type(item.pp) == "table" then
+			dy, dz = tonumber(item.pp[1]) or dy, tonumber(item.pp[2]) or dz
+		end
+		local lift = SALES.lookSize * 0.5 + SALES.lookStick[1] -- 누른 자리 = 달고나 가운데
+		return at(Vector3.new(c.X + nx * (h.X + 0.08), c.Y + dy - lift, c.Z + dz), Vector3.new(nx, 0, 0))
+	elseif i == 9 or i == 10 then
+		local t = i == 9 and A.table1 or A.table2
+		if t then
+			local c, h = localBox(pcf, t)
+			local pos = Vector3.new(c.X, c.Y + h.Y + 0.02, c.Z)
+			local dir = Vector3.new(1, 0, 0)
+			if A.counter then
+				local cc = localBox(pcf, A.counter)
+				local v = Vector3.new(cc.X - pos.X, 0, cc.Z - pos.Z)
+				if v.Magnitude > 0.1 then
+					dir = v.Unit -- 카운터를 바라봄
+				end
+			end
+			return at(pos, dir)
+		end
+	end
+	return nil
+end
+
+local function slotCFrame(shop, i, item)
+	local f = furnitureSlot(shop, i, item)
+	if f then
+		return f
+	end
 	-- 편집 화면 틀(PlotLayout.DisplayShelf)로 칸을 옮겼으면 그 칸 자리 (원판에서 거꾸로 계산)
 	if shop.slotCF and shop.slotCF[i] then
 		return shop.slotCF[i]
@@ -178,28 +260,8 @@ local function buildShelf(shop, plot)
 			Shape = Enum.PartType.Cylinder,
 			Transparency = 1,
 		})
-		-- 진열대에 직접 놓기 (2026-11-21): 빈 칸을 누르면 들고 있는 달고나(없으면 보관함 것)를 그 칸에 놓음.
-		-- 클라이언트 ShelfClient가 내 가게 칸만 보이게 함
-		local prompt = Instance.new("ProximityPrompt")
-		prompt.Name = "PlacePrompt"
-		prompt.ActionText = "여기에 놓기"
-		prompt.ObjectText = "진열대 " .. i .. "번"
-		prompt.KeyboardKeyCode = Enum.KeyCode.R
-		prompt.HoldDuration = 0
-		prompt.MaxActivationDistance = 7
-		prompt.RequiresLineOfSight = false
-		prompt.Style = Enum.ProximityPromptStyle.Default
-		prompt.Enabled = false
-		prompt:SetAttribute("Slot", i)
-		prompt.Parent = d
-		prompt.Triggered:Connect(function(player)
-			if shop.owner ~= player then
-				return
-			end
-			local ok, msg = Economy.place(player, i)
-			Economy.notify(player, msg)
-		end)
-		shop.slots[i] = { disc = d, rim = rim, prompt = prompt }
+		-- 놓기는 가구를 눌러서 (2026-11-24, ShelfClient → Remotes.ShelfPlace). 칸마다 버튼(ProximityPrompt)은 없앰
+		shop.slots[i] = { disc = d, rim = rim }
 	end
 	-- 편집 화면에서 고친 진열대 모양 (PlotLayout 안 DisplayShelf, 2026-11-22). 칸·손님 자리도 옮긴 부품을 따름
 	if Plots.applyChild then
@@ -249,6 +311,12 @@ local function buildShelf(shop, plot)
 			end
 		end
 	end
+	-- 진열 가구 (가게 3D)
+	shop.plotCF = plot.cframe
+	shop.areas = {}
+	for key, role in pairs(AREA_ROLES) do
+		shop.areas[key] = findRole(plot.model, role)
+	end
 	m.Parent = plot.model
 	shop.shelf = m
 end
@@ -272,10 +340,6 @@ local function refreshShelf(index)
 	end
 	for i, s in ipairs(shop.slots) do
 		local item = bySlot[i]
-		-- 빈 칸(열린 칸 안)에만 "여기에 놓기"
-		local open = shop.owner ~= nil and i <= slots and item == nil
-		s.prompt:SetAttribute("Open", open) -- 클라이언트 ShelfClient가 이 값 + 내 가게 + 놓을 것으로 거름
-		s.prompt.Enabled = open
 		if item then
 			s.disc.Transparency = 0
 			s.rim.Transparency = 0
@@ -292,8 +356,8 @@ local function refreshShelf(index)
 				local look = buildLook(item, SALES.lookSize)
 				-- 세워서 진열 (사용자 2026-11-21): 막대를 진열대 윗면에 꽂고 넓은 면은 골목(-Z) 쪽, 막대는 아래.
 				-- 뒷줄은 막대를 더 길게 보여 앞줄 위로 보이게
-				local stick = SALES.lookStick[(i - 1) // 5 + 1] or SALES.lookStick[1]
-				look:PivotTo(slotCFrame(shop, i) * CFrame.new(0, SALES.lookSize * 0.5 + stick, 0) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(90), 0, 0))
+				local stick = shop.areas and next(shop.areas) and SALES.lookStick[1] or (SALES.lookStick[(i - 1) // 5 + 1] or SALES.lookStick[1])
+				look:PivotTo(slotCFrame(shop, i, item) * CFrame.new(0, SALES.lookSize * 0.5 + stick, 0) * CFrame.Angles(0, math.pi, 0) * CFrame.Angles(math.rad(90), 0, 0))
 				look.Name = "Look" .. i
 				look.Parent = shop.shelf
 				s.look, s.lookKey = look, key
@@ -759,7 +823,11 @@ local function spawnCustomer(index)
 		if sold > 0 then
 			say(model, string.format("%d개 살게요! +%d", sold, coins), 2)
 			startEating(model, items and items[1] or nil)
-			Economy.notify(owner, string.format("손님이 달고나 %d개를 샀어요 (+%d 코인)", sold, coins))
+			-- 알림창 대신 손님 위에 "+n코인" 글씨 (2026-11-24 사용자, 클라이언트 SaleFloatClient)
+			if saleFloat then
+				local cf, size = model:GetBoundingBox()
+				saleFloat:FireClient(owner, cf.Position + Vector3.new(0, size.Y / 2 + 0.6, 0), coins)
+			end
 			print(string.format("[Sales] %s Plot%d sold %d (+%d)", owner.Name, index, sold, coins))
 		else
 			say(model, "다 팔렸네...", 2)
@@ -802,8 +870,81 @@ function SalesService.hurry(player)
 	end
 end
 
+-- 가구를 눌러 진열 (2026-11-24 사용자: 진열대 버튼 없애기). area = "case" | "peg" | "table1" | "table2", hit = 누른 세계 좌표
+local function placeByTouch(player, area, hit)
+	if type(area) ~= "string" or not AREA_SLOTS[area] then
+		return { ok = false, reason = "잘못된 요청" }
+	end
+	local _, index = Plots.get(player)
+	local shop = index and shops[index]
+	local data = Data.get(player)
+	if not shop or shop.owner ~= player or not data then
+		return { ok = false, reason = "내 가게 진열대만 쓸 수 있어요" }
+	end
+	local maxSlots = G.shelfSlots(data)
+	local used = {}
+	for _, it in ipairs(data.stock) do
+		if it.sl then
+			used[it.sl] = true
+		end
+	end
+	local list = AREA_SLOTS[area]
+	if area == "table1" or area == "table2" then
+		list = { area == "table1" and 9 or 10, area == "table1" and 10 or 9 } -- 누른 탁자가 차 있으면 다른 탁자
+	end
+	local free = {}
+	for _, i in ipairs(list) do
+		if i <= maxSlots and not used[i] then
+			table.insert(free, i)
+		end
+	end
+	if #free == 0 then
+		return { ok = false, reason = (list[1] > maxSlots) and "가게를 열어야 쓸 수 있는 자리예요" or "빈 자리가 없어요" }
+	end
+	local slot = free[1]
+	local extra = nil
+	local hitV = typeof(hit) == "Vector3" and hit or nil
+	if area == "case" and hitV then
+		-- 누른 곳에 가장 가까운 빈 칸
+		local best = math.huge
+		for _, i in ipairs(free) do
+			local d = (slotCFrame(shop, i).Position - hitV).Magnitude
+			if d < best then
+				best, slot = d, i
+			end
+		end
+	elseif area == "peg" and hitV and shop.areas and shop.areas.peg then
+		-- 누른 자리 (판 가운데 기준 위아래·옆, 판 안으로 줄임)
+		local c, h = localBox(shop.plotCF, shop.areas.peg)
+		local l = shop.plotCF:PointToObjectSpace(hitV)
+		local r = SALES.lookSize * 0.6
+		local dy = math.clamp(l.Y - c.Y, -h.Y + r, h.Y - r)
+		local dz = math.clamp(l.Z - c.Z, -h.Z + r, h.Z - r)
+		extra = { pp = { math.floor(dy * 100 + 0.5) / 100, math.floor(dz * 100 + 0.5) / 100 } }
+	end
+	local ok, msg = Economy.place(player, slot, extra)
+	if not ok then
+		Economy.notify(player, msg)
+	end
+	return { ok = ok, reason = not ok and msg or nil, slot = ok and slot or nil }
+end
+
 function SalesService.init(dataService, economyService, plotService)
 	Data, Economy, Plots = dataService, economyService, plotService
+	local remotes = ReplicatedStorage:WaitForChild("Remotes")
+	saleFloat = remotes:FindFirstChild("SaleFloat")
+	if not saleFloat then
+		saleFloat = Instance.new("RemoteEvent")
+		saleFloat.Name = "SaleFloat"
+		saleFloat.Parent = remotes
+	end
+	local shelfPlace = remotes:FindFirstChild("ShelfPlace")
+	if not shelfPlace then
+		shelfPlace = Instance.new("RemoteFunction")
+		shelfPlace.Name = "ShelfPlace"
+		shelfPlace.Parent = remotes
+	end
+	shelfPlace.OnServerInvoke = placeByTouch
 	for i = 1, G.Plots.count do
 		local plot = Plots.plotAt(i)
 		local shop = { slots = {}, customers = {}, reserved = 0, nextVisit = 0, owner = nil }
