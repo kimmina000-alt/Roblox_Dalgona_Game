@@ -51,7 +51,7 @@ local levelText = label({ Name = "Level", Text = "1", FontFace = UI.F.round, Tex
 -- 재료 줄 (0개면 빨갛게)
 local ingBar = new("Frame", {
 	Name = "Ingredients",
-	Position = UDim2.fromOffset(6, 140), -- 코인·보관함 알약 아래 (2026-11-24 사용자 요청)
+	Position = UDim2.fromOffset(6, 132), -- 코인·보관함 알약 아래 (2026-11-24 사용자 요청)
 	Size = UDim2.fromOffset(0, 36),
 	AutomaticSize = Enum.AutomaticSize.X,
 	BackgroundColor3 = C.pill,
@@ -83,22 +83,28 @@ local saveWarn = label({ Name = "SaveWarn", Position = UDim2.fromOffset(10, 182)
 local top = new("Frame", {
 	Name = "TopBar",
 	Position = UDim2.fromOffset(24, 84),
-	Size = UDim2.fromOffset(330, 44),
+	Size = UDim2.fromOffset(270, 44),
 	BackgroundTransparency = 1,
 	Parent = panel,
-}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 28), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
-local coinPill, coinText, coinHolder = UI.pill({ Name = "Coins", LayoutOrder = 1, Size = UDim2.fromOffset(170, 40), IconColor = C.gold, Parent = top })
+}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 22), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
+-- 2026-11-24 사용자: 코인·보관함 줄 오른쪽 끝을 가게 이름판 오른쪽 끝(294)에 맞추고 작게
+local coinPill, coinText, coinHolder = UI.pill({ Name = "Coins", LayoutOrder = 1, Size = UDim2.fromOffset(138, 34), IconColor = C.gold, TextSize = 19, Parent = top })
 coinHolder.BackgroundTransparency = 1
 coinHolder:FindFirstChildOfClass("UIStroke"):Destroy()
 coinHolder:FindFirstChildOfClass("UIGradient"):Destroy()
-local coinIcon = UI.coin(coinHolder, 44, 3)
+coinHolder.Size = UDim2.fromOffset(40, 40)
+local coinIcon = UI.coin(coinHolder, 38, 3)
 coinIcon.AnchorPoint = Vector2.new(0.5, 0.5)
 coinIcon.Position = UDim2.fromScale(0.5, 0.5)
-coinText.Size = UDim2.new(1, -70, 1, 0)
+coinText.Size = UDim2.new(1, -60, 1, 0)
+coinText.Position = UDim2.fromOffset(24, 0)
 -- + 누르면 재료 상점
-local plusBtn = UI.button({ Name = "Plus", Text = "+", Color = C.yellow, Radius = 10, TextSize = 24, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -3, 0.5, 0), Size = UDim2.fromOffset(34, 36), ZIndex = 3, Parent = coinPill })
+local plusBtn = UI.button({ Name = "Plus", Text = "+", Color = C.yellow, Radius = 10, TextSize = 20, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -2, 0.5, 0), Size = UDim2.fromOffset(28, 30), ZIndex = 3, Parent = coinPill })
 plusBtn.Face.Label.FontFace = UI.F.round
-local stockPill, stockText = UI.pill({ Name = "Stock", LayoutOrder = 2, Icon = "🍪", Size = UDim2.fromOffset(140, 40), IconColor = C.tan, Parent = top })
+local stockPill, stockText, stockHolder = UI.pill({ Name = "Stock", LayoutOrder = 2, Icon = "🍪", Size = UDim2.fromOffset(110, 34), IconColor = C.tan, TextSize = 18, Parent = top })
+stockHolder.Size = UDim2.fromOffset(40, 40)
+stockText.Position = UDim2.fromOffset(24, 0)
+stockText.Size = UDim2.new(1, -28, 1, 0)
 
 ---------------------------------------------------------------- 오른쪽 위: 네모 메뉴 버튼 (상점, 성장은 GrowthUi가 여기 넣음)
 local menu = new("Frame", {
@@ -236,7 +242,7 @@ local toast = UI.card({
 toast:FindFirstChildOfClass("UIStroke").Color = C.woodDark
 toast:FindFirstChildOfClass("UIStroke").Thickness = 3
 new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18), Parent = toast })
-fit(toast)
+fit(toast, 600, 44) -- 알림 글씨는 창 배율 (읽혀야 함)
 local toastText = label({ Text = "", TextSize = 19, Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 21, Parent = toast })
 local toastSeq = 0
 local function showToast(text)
