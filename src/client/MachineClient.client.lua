@@ -528,3 +528,113 @@ task.spawn(function()
 	end
 	folder.ChildAdded:Connect(watchPlot)
 end)
+
+-- ── 가게 알바생 연출 (D34·D36·D43, 2026-11-24) ──
+-- 서버 GrowthService가 미니미를 맡은 자리 옆에 세움: Helper_steel/_pink/_line (StationKey "m2"/"m3"/"m4"),
+-- Helper_display ("display"), Helper_cashier ("cashier"). 속성 Working = 일하는 중.
+-- 일하는 동안 그 자리 동작을 되풀이하고, 쉬거나 멀면(HELPER_DIST) 멈춘 자세 (폰 성능: 가까이 있을 때만 움직임).
+-- 화로 알바(Helper1)는 Making/HelperLadles가 그림
+local HELPER_DIST = 70
+local H_JOINTS = { R = { "RightUpperArm", "RightShoulder" }, L = { "LeftUpperArm", "LeftShoulder" }, W = { "UpperTorso", "Waist" }, N = { "Head", "Neck" } }
+local function rad(x)
+	return math.rad(x)
+end
+local H_MOTION = {
+	-- 2 철제 판매기: 국자 두 개를 번갈아 젓고, 6초마다 레버 당기기
+	m2 = function(t)
+		local c = t % 6
+		if c > 5 then
+			local k = math.sin((c - 5) * math.pi)
+			return { R = CFrame.Angles(rad(-100 + 70 * k), 0, 0), W = CFrame.Angles(rad(8 * k), 0, 0) }
+		end
+		local a = t * 4
+		return { R = CFrame.Angles(rad(-55 + 10 * math.sin(a)), rad(15 * math.cos(a)), 0), L = CFrame.Angles(rad(-55 + 10 * math.sin(a + math.pi)), rad(15 * math.cos(a + math.pi)), 0) }
+	end,
+	-- 3 분홍 자판기: 버튼 누르기 → 컵 젓기 → 손잡이 누르기 (6초 한 바퀴)
+	m3 = function(t)
+		local c = t % 6
+		if c < 1.5 then
+			local k = math.max(0, math.sin(c / 1.5 * math.pi * 2))
+			return { R = CFrame.Angles(rad(-85 - 10 * k), 0, rad(-8)), N = CFrame.Angles(rad(-5), 0, 0) }
+		elseif c < 4 then
+			local a = t * 5
+			return { R = CFrame.Angles(rad(-60 + 8 * math.sin(a)), rad(14 * math.cos(a)), 0), N = CFrame.Angles(rad(-15), 0, 0) }
+		end
+		local k = math.sin((c - 4) / 2 * math.pi)
+		return { R = CFrame.Angles(rad(-120 + 80 * k), 0, 0), L = CFrame.Angles(rad(-120 + 80 * k), 0, 0), W = CFrame.Angles(rad(10 * k), 0, 0) }
+	end,
+	-- 4 연속 생산 설비: 레버 당기고 쟁반 확인 (몸을 숙여 들여다봄)
+	m4 = function(t)
+		local c = t % 5
+		if c < 1.6 then
+			local k = math.sin(c / 1.6 * math.pi)
+			return { R = CFrame.Angles(rad(-110 + 80 * k), 0, 0), W = CFrame.Angles(rad(6 * k), 0, 0) }
+		end
+		return { R = CFrame.Angles(rad(-35), 0, 0), W = CFrame.Angles(rad(15), rad(12 * math.sin(t * 0.8)), 0), N = CFrame.Angles(rad(-18), rad(18 * math.sin(t * 0.8)), 0) }
+	end,
+	-- 진열: 진열장 쪽으로 손을 뻗어 정리
+	display = function(t)
+		local k = (math.sin(t * 1.6) + 1) / 2
+		return { R = CFrame.Angles(rad(-50 - 30 * k), 0, rad(-10 * k)), W = CFrame.Angles(rad(8), 0, 0), N = CFrame.Angles(rad(-10), 0, 0) }
+	end,
+	-- 계산: 가끔 손을 흔들어 손님 맞이
+	cashier = function(t)
+		local c = t % 7
+		if c > 5.5 then
+			local k = math.sin((c - 5.5) / 1.5 * math.pi)
+			return { R = CFrame.Angles(rad(-150 * k), 0, rad(20 * math.sin(t * 10) * k)) }
+		end
+		return { R = CFrame.Angles(rad(-30), 0, 0), L = CFrame.Angles(rad(-30), 0, 0) }
+	end,
+}
+local function helperPose(m, pose)
+	for key, j in pairs(H_JOINTS) do
+		local part = m:FindFirstChild(j[1])
+		local motor = part and part:FindFirstChild(j[2])
+		if motor and motor:IsA("Motor6D") then
+			local base = motor:GetAttribute("BaseC0")
+			if base == nil then
+				base = motor.C0
+				motor:SetAttribute("BaseC0", base)
+			end
+			motor.C0 = pose and pose[key] and base * pose[key] or base
+		elseif motor and motor:IsA("AnimationConstraint") then
+			-- 새 아바타 관절은 앞뒤(X) 회전 방향이 Motor6D와 반대 → X만 뒤집음 (2026-11-24: 손이 몸 뒤로 가던 것)
+			local cf = pose and pose[key]
+			if cf then
+				local rx, ry, rz = cf:ToEulerAnglesXYZ()
+				cf = CFrame.Angles(-rx, ry, rz)
+			end
+			motor.Transform = cf or CFrame.identity
+		end
+	end
+end
+-- PreSimulation(애니메이션 다음, 물리 전)에 넣어야 함: 미니미 Animator가 매 프레임 관절 Transform을 지우므로
+-- Heartbeat에서 넣으면 화면에 안 나옴 (2026-11-24 Studio에서 확인)
+RunService.PreSimulation:Connect(function()
+	local folder = workspace:FindFirstChild("ShopPlots")
+	local cam = workspace.CurrentCamera
+	if not (folder and cam) then
+		return
+	end
+	local camPos = cam.CFrame.Position
+	local now = workspace:GetServerTimeNow()
+	for _, plot in ipairs(folder:GetChildren()) do
+		for _, m in ipairs(plot:GetChildren()) do
+			local key = m:IsA("Model") and m:GetAttribute("StationKey")
+			local motion = key and H_MOTION[key]
+			if motion then
+				local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
+				local on = m:GetAttribute("Working") == true
+				local near = root and (root.Position - camPos).Magnitude < HELPER_DIST
+				if on and near then
+					helperPose(m, motion(now + #key * 0.41))
+					m:SetAttribute("Posed", true)
+				elseif m:GetAttribute("Posed") then
+					helperPose(m, nil) -- 쉬는 중이거나 멀면 멈춘 자세
+					m:SetAttribute("Posed", false)
+				end
+			end
+		end
+	end
+end)
