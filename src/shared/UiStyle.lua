@@ -600,6 +600,14 @@ function UI.bar(props)
 end
 
 ---------------------------------------------------------------- 소리
+-- 배경 음악 (2026-11-24 사용자 고름): "Sunshine Strum" (DistroKid, 4분 8초). client/Bgm이 골목·가게에서 반복 재생.
+-- volume = 평소, makingVolume = 제작 화면 동안 (조금 줄임), fade = 바뀔 때 초
+UI.Bgm = {
+	id = "rbxassetid://121626073601812",
+	volume = 0.3,
+	makingVolume = 0.12,
+	fade = 1.2,
+}
 -- 물건을 샀을 때 코인 소리 (2026-11-24 사용자 요청). Roblox 라이선스 효과음만:
 -- ProSoundEffects "Coin Throws 1 (SFX)" (동전 여러 개, 2.3초) → 앞 0.8초만 짧게 "짤랑"
 local COIN_SOUND = "rbxassetid://9113849579"
