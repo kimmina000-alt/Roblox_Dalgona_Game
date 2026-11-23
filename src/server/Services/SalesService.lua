@@ -1081,6 +1081,33 @@ function SalesService.slotPosition(player, i)
 	return ok and cf and cf.Position or nil
 end
 
+-- 주문 손님(D55, OrderService)용: 손님 모델 하나 (7종 중 id, 없으면 nil)
+function SalesService.buildGuest(cf, id)
+	local ok, m = pcall(buildModelCustomer, cf, id)
+	return ok and m or nil
+end
+
+-- 주문 대기 자리 (D55): 틀 부품 OrderSeat(3D 세션 의자)가 있으면 그 자리, 없으면 손님 주문 자리 옆 3.5칸. 카운터 쪽을 봄
+function SalesService.orderSeat(index)
+	local shop = shops[index]
+	local plot = Plots.plotAt(index)
+	if not (shop and plot) then
+		return nil
+	end
+	local seat = plot.model:FindFirstChild("OrderSeat", true)
+	if seat and seat:IsA("BasePart") then
+		return CFrame.new(seat.Position + Vector3.new(0, seat.Size.Y / 2, 0)) * (seat.CFrame - seat.CFrame.Position)
+	end
+	local cf = plot.cframe
+	local stand = shop.standLocal or Vector3.new(0, 0, -25)
+	local side = shop.standSide and shop.standSide.Magnitude > 1e-3 and shop.standSide.Unit or Vector3.xAxis
+	local pos = stand + side * 3.5
+	local look = shop.shelfLocal or (stand + Vector3.new(0, 0, 4))
+	local wp = cf * Vector3.new(pos.X, 0.4, pos.Z)
+	local wl = cf * Vector3.new(look.X, 0.4, look.Z)
+	return CFrame.lookAt(wp, wl)
+end
+
 function SalesService.init(dataService, economyService, plotService)
 	Data, Economy, Plots = dataService, economyService, plotService
 	local remotes = ReplicatedStorage:WaitForChild("Remotes")

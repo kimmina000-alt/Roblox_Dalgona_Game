@@ -316,6 +316,30 @@ G.ShopLight = {
 	y = 9, -- 가게 바닥 위 높이
 	spots = { { -10, -8 }, { 10, -8 }, { -10, 4 }, { 10, 4 } },
 }
+-- 주문 제작 손님 (D55, 2026-11-25 확정, 서버 OrderService): 손님 7종이 가끔 주문서를 들고 옴. 동시에 1명, 접속 중에만 (저장 안 함)
+G.OrderCustomer = {
+	level = 3, -- 가게 임대 뒤 (G.shopOpen도 봄)
+	every = 180, -- 주문이 끝나고(채움·떠남) 다음 주문 손님까지 초 (±spread)
+	spread = 0.3,
+	firstDelay = 60, -- 들어와서 첫 주문 손님까지 (±spread)
+	wait = 180, -- 기다리는 초
+	waitBonus = 60, -- Epic 이상 도안이거나 포장 주문이면 더
+	newMult = 1.5, -- 주문 뒤 새로 만든 것: 판매가 ×
+	preMult = 1.3, -- 주문 전에 만들어 둔 것 (진열대·보관함)
+	perfectNew = 2.0, -- Perfect면 ×2 / ×1.7
+	perfectPre = 1.7,
+	tip = { kid = 0, regular = 0.10, tourist = 0.15, vip = 0.30 }, -- 손님 종류 팁
+	exp = 20, -- 주문 한 번
+	hearts = 3, -- 그 손님 하트 판매 수 + (D38)
+	vipLevel = 15, -- 부엉이 주문은 Lv15부터
+	-- 손님 종류별 주문 (GDD 15장 표): 도안 등급 범위, 최소 품질, 포장(true/false/"sometimes"), 개수
+	orders = {
+		kid = { grades = { "Common", "Uncommon" }, minQ = "Normal", pack = false, n = { 1, 1 } },
+		regular = { fav = true, minQ = "Good", pack = "sometimes", packChance = 0.35, n = { 1, 2 } },
+		tourist = { minGrade = "Rare", minQ = "Good", pack = true, n = { 1, 2 } },
+		vip = { minGrade = "Legendary", minQ = "Excellent", pack = true, n = { 1, 1 } },
+	},
+}
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 
 -- 손님 7종 (D37·GDD 14장, 2026-11-24): 레벨 구간마다 오는 비율, 종류마다 고르는 것·개수·팁. 손님 모델 id = CustomerRig.order
