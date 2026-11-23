@@ -332,13 +332,16 @@ local function decorShop(def, x0)
 end
 
 -- ── 골목 슈퍼 (D54, 2026-11-25 확정): 재료는 슈퍼에 걸어가 사 옴. 동쪽 끝 남쪽 줄 꾸미기 가게 1칸을 바꿈 (D31 바뀜), 문은 길 쪽.
--- 모델 = ServerStorage.Assets.AlleyMarket (3D 세션이 만듦: 피벗 = 바닥 앞 가운데, 앞 = -Z, 폭 MARKET_W·깊이 MARKET_D 안).
+-- 모델 = ServerStorage.Assets.Market (3D 세션 tools/blender/cozy_market.py, 공유 노트 market-3d-1125.md: 폭 26 × 깊이 22,
+-- 원점 = 앞벽 바깥면 가운데 바닥, 앞 = -Z, 문 가운데 6 × 8). 예전 이름 AlleyMarket도 찾음.
+-- 모델 자리는 모델 안 자리 표시 Mk_Pt_Door(문 바깥 1.5)로 맞춤 (가져온 모델의 피벗이 원점과 다를 수 있어서). 없으면 상자로.
 -- 모델이 없으면 들어갈 수 있는 임시 건물(바닥·벽 3면·문 뚫린 앞벽·지붕·간판·계산대 자리)을 만듦.
--- 서버 장보기(저장·부지 세션)·길 안내(UI)가 쓰는 자리: Workspace.Alley.AlleyMarket 안 파트
---   MarketSpot (바닥 앞 가운데, 앞 = LookVector = 길 쪽), MarketDoor (문 가운데, 투명·충돌 없음), MarketCounter (계산대, 장보기 안내 붙일 곳)
---   모델 속성 Market = true. 모델 안에 같은 이름 파트가 있으면 그것을 씀
-local MARKET_W, MARKET_D = 36, SHOP_DEPTH -- 폭(길 따라) · 깊이 (꾸미기 가게 줄 뒤 담벼락까지)
-local DOOR_W, DOOR_H = 7, 8
+-- 서버 장보기(저장·부지 세션)·길 안내·주인 NPC가 쓰는 자리: Workspace.Alley.AlleyMarket 안 파트 (투명·충돌 없음)
+--   MarketSpot (앞벽 가운데 바닥, 앞 = LookVector = 길 쪽), MarketDoor (문 바깥 = 모델 Mk_Pt_Door),
+--   MarketCounter (계산대 앞 플레이어 자리 = Mk_Pt_Customer, 장보기 안내), MarketOwner (계산대 뒤 주인 = Mk_Pt_Owner)
+--   모델 속성 Market = true
+local MARKET_W, MARKET_D = 26, 22 -- 폭(길 따라) · 깊이. 꾸미기 가게(14)보다 깊어서 그 칸만 뒤 담벼락을 22까지 뺌 (gapWalls)
+local DOOR_W, DOOR_H = 6, 8
 local function marketShell(m, x0, w)
 	local d, h = MARKET_D, 12
 	local zc = CANON_Z + d / 2
@@ -363,32 +366,59 @@ local function marketShell(m, x0, w)
 	signText(sign, "골목 슈퍼", C.ink)
 	awning(m, x0, w * 0.9, h - 2.8, CANON_Z, { C.leaf, C.white })
 	-- 안: 계산대 (문 들어가서 오른쪽 안), 진열대 두 줄 (가운데 통로는 비움)
-	part(m, "MarketCounter", Vector3.new(6, 3.2, 2.4), CFrame.new(x0 + w / 2 - 5, 2.6, CANON_Z + 4), C.woodLight, Enum.Material.Wood)
+	part(m, "Counter", Vector3.new(2.4, 3.2, 6), CFrame.new(x0 + w / 2 - 4, 2.6, CANON_Z + 5), C.woodLight, Enum.Material.Wood)
 	for _, sx in ipairs({ -1, 1 }) do
 		part(m, "Shelf", Vector3.new(2, 5, d - 6), CFrame.new(x0 + sx * (w / 2 - 3), 3.5, zc + 2), C.wood, Enum.Material.Wood)
 	end
 end
+local function findPart(root, name)
+	local x = root:FindFirstChild(name, true)
+	if x and not x:IsA("BasePart") then
+		x = x:FindFirstChildWhichIsA("BasePart", true)
+	end
+	return x
+end
 local function marketSpot(x0, w, target)
 	local m = model("AlleyMarket")
 	m:SetAttribute("Market", true)
-	local src = ServerStorage:FindFirstChild("Assets") and ServerStorage.Assets:FindFirstChild("AlleyMarket")
+	local sa = ServerStorage:FindFirstChild("Assets")
+	local src = sa and (sa:FindFirstChild("Market") or sa:FindFirstChild("AlleyMarket"))
 	local cx = x0 + w / 2
-	local base = CFrame.new(cx, 0, CANON_Z) -- 기준 자리 (앞 = -Z)
-	if src then
+	local base = CFrame.new(cx, 0, CANON_Z) -- 기준 자리 (앞벽 바깥면 가운데 바닥, 앞 = -Z)
+	local mark = function(name, cf, size)
+		return part(m, name, size or Vector3.new(2, 0.2, 2), cf, C.white, nil, { Transparency = 1, CanCollide = false, CanQuery = false })
+	end
+	if src and src:IsA("Model") then
 		local c = src:Clone()
 		c.Name = "Building"
-		c:PivotTo(base)
+		-- 기준: 문 바깥 표시(Mk_Pt_Door, 앞벽에서 1.5 앞)와 바닥. 없으면 모델 상자 (앞 = 상자 -Z 면)
+		local door = findPart(c, "Mk_Pt_Door")
+		local shell = findPart(c, "Mk_Shell")
+		local bcf, bsize = c:GetBoundingBox()
+		local floorY = shell and (shell.Position.Y - shell.Size.Y / 2) or (bcf.Position.Y - bsize.Y / 2)
+		local at = door and Vector3.new(door.Position.X, floorY, door.Position.Z + 1.5) or Vector3.new(bcf.Position.X, floorY, bcf.Position.Z - bsize.Z / 2)
+		c:PivotTo(CFrame.new(base.Position - at) * c:GetPivot())
 		c.Parent = m
+		-- 모델 표시 → 공용 이름 (서버·UI는 이 이름만 봄)
+		local pts = { MarketDoor = "Mk_Pt_Door", MarketCounter = "Mk_Pt_Customer", MarketOwner = "Mk_Pt_Owner", MarketRegister = "Mk_Pt_Register", MarketDelivery = "Mk_Pt_Delivery" }
+		for mine, theirs in pairs(pts) do
+			local p = findPart(c, theirs)
+			if p then
+				mark(mine, p.CFrame)
+			end
+		end
+		-- 진열 물건(Mk_Goods, 삼각형 많음)은 클라이언트가 멀면 숨기도록 표시
+		local goods = findPart(c, "Mk_Goods")
+		if goods then
+			goods:SetAttribute("FarHide", 80)
+		end
 	else
 		marketShell(m, cx, w)
+		mark("MarketDoor", base * CFrame.new(0, 0.1, -1.5))
+		mark("MarketCounter", CFrame.new(cx + w / 2 - 6.5, 0.1, CANON_Z + 5)) -- 계산대 앞 (가게 안쪽)
+		mark("MarketOwner", CFrame.new(cx + w / 2 - 2, 0.1, CANON_Z + 5))
 	end
-	-- 자리 표시 (모델 안에 같은 이름이 없을 때만)
-	if not m:FindFirstChild("MarketSpot", true) then
-		part(m, "MarketSpot", Vector3.new(2, 0.2, 2), base * CFrame.new(0, 0.1, 0), C.white, nil, { Transparency = 1, CanCollide = false, CanQuery = false })
-	end
-	if not m:FindFirstChild("MarketDoor", true) then
-		part(m, "MarketDoor", Vector3.new(DOOR_W, DOOR_H, 0.4), base * CFrame.new(0, 1 + DOOR_H / 2, 0.5), C.white, nil, { Transparency = 1, CanCollide = false, CanQuery = false })
-	end
+	mark("MarketSpot", base * CFrame.new(0, 0.1, 0))
 	-- MarketSpot 앞(LookVector)이 길 쪽: 기준 자리에서 앞 = -Z
 	m:PivotTo(target * base:Inverse() * m:GetPivot())
 	return m
@@ -651,7 +681,19 @@ local function gapWalls()
 		end
 		-- 꾸미기 가게 줄 뒤 (양 끝)
 		local backZ = front + inward * (SHOP_DEPTH + 0.8)
-		wall(END_X0 - 0.6, HALF + 2, backZ)
+		if side == "S" then
+			-- 동쪽 남쪽 첫 칸 = 골목 슈퍼 (깊이 MARKET_D): 그 칸 뒤는 더 깊게 막고, 양옆을 이어 막음
+			local mz = front + inward * (MARKET_D + 0.8)
+			local mx1 = END_X0 + MARKET_W + 1
+			wall(END_X0 - 0.6, mx1, mz)
+			wall(mx1, HALF + 2, backZ)
+			for _, x in ipairs({ END_X0 - 0.6, mx1 }) do
+				local len = math.abs(mz - backZ)
+				part(m, "GapWall", Vector3.new(1.2, W.height, len), CFrame.new(x, W.height / 2, (mz + backZ) / 2), C.brick, Enum.Material.Brick)
+			end
+		else
+			wall(END_X0 - 0.6, HALF + 2, backZ)
+		end
 		wall(-(HALF + 2), -(END_X0 - 0.6), backZ)
 	end
 end
