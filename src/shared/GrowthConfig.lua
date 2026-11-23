@@ -447,7 +447,7 @@ G.Tutorial = {
 		{ key = "go", text = "어서 와! 여기가 네 노점이란다. 반짝이는 작업대로 가 보렴", target = "workstation" },
 		{ key = "press", text = "작업대 앞에서 E를 누르면 달고나를 만들 수 있어", touchText = "작업대 앞에서 손 모양 버튼을 누르면 달고나를 만들 수 있어", target = "workstation" },
 		{ key = "make", text = "모양을 고르고, 설탕을 녹이고 소다를 넣어 부풀린 다음 붓고 눌러서 찍어 보렴", target = nil },
-		{ key = "place", text = "잘했다! 들고 있는 달고나를 반짝이는 진열대에 놓아 보렴 (R)", touchText = "잘했다! 들고 있는 달고나를 반짝이는 진열대 칸에 놓아 보렴", target = "shelf" },
+		{ key = "place", text = "잘했다! 진열장이나 벽 걸이판을 눌러서 달고나를 놓아 보렴", touchText = "잘했다! 진열장이나 벽 걸이판을 눌러서 달고나를 놓아 보렴", target = "shelf" },
 		{ key = "sale", text = "곧 손님이 와서 사 갈 거야. 조금만 기다려 보렴", target = "shelf" },
 		{ key = "shop", text = "첫 장사 축하한다! 재료가 떨어지면 상점에서 사면 돼. 상점 버튼을 눌러 보렴", target = "shopButton" },
 	},
