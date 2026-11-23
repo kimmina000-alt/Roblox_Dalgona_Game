@@ -104,6 +104,8 @@ end
 G.ChopsticksPerRound = 1
 G.ChopsticksPerHelperRound = 0 -- 알바생은 젓가락을 안 씀 (사용자 결정 2026-11-21: 젓가락은 손 제작 1판에 1쌍만)
 G.CoalPerMake = 0.1 -- 화로 한 판에 타는 연탄 (D44, 1장 = 10판). 손 제작·화로 알바만, 기계·공장은 안 씀
+-- 화구 ②를 연탄 화로 복제로 만들지 (2026-11-24 보류: 사용자 "2단계 기계가 화구 두 개니까 그걸 활용" → PM 확인 전까지 끔)
+G.Burner2Brazier = false
 G.CoalPerMakeCovered = 1 / 15 -- 연탄 덮개(Lv5, 2026-11-24)를 사면 1장 = 15판
 
 function G.coalPerMake(d)

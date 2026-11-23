@@ -1001,7 +1001,7 @@ local function syncHelpers(player, d)
 	-- 서버가 화로(Brazier)를 복제해 작업대 밖(테이블 오른쪽 끝 너머)에 둠. 자리는 작업대 틀 속성 Burner2Rel(작업대 기준 CFrame)로 바꿀 수 있음.
 	-- 작업대 속성 Burner2 = 놓은 자리(작업대 기준), CoalLeft2 = 화구 ② 연탄 (제작 세션 HelperLadles·화면이 봄)
 	if ws then
-		local want = G.shopOpen(d) and (d.level or 1) >= G.Shop.rentLevel
+		local want = G.Burner2Brazier and G.shopOpen(d) and (d.level or 1) >= G.Shop.rentLevel
 		local b2 = ws:FindFirstChild("Brazier2")
 		if want and not b2 then
 			local b1 = ws:FindFirstChild("Brazier")
