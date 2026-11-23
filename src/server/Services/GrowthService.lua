@@ -343,6 +343,11 @@ function GrowthService.action(player, what, a, b)
 	if not d then
 		return { ok = false, reason = "불러오는 중이에요" }
 	end
+	-- 공장 공정 내가 직접 (D45): 위치·세션을 봐야 해서 Data.update 밖에서
+	if what == "factorySelf" and type(a) == "string" then
+		local ok2, msg2 = Factory.selfStart(player, a)
+		return { ok = ok2, reason = not ok2 and msg2 or nil, msg = ok2 and msg2 or nil }
+	end
 	local ok, msg = false, "잘못된 요청"
 	Data.update(player, function(dd)
 		if what == "buy" and type(a) == "string" then
@@ -1161,7 +1166,7 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 	end)
 	remotes.GrowthAction.OnServerInvoke = GrowthService.action
 	Machine.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
-	Factory.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
+	Factory.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks, isMaking = Production.isMaking })
 	Tutorial.init(Data, Economy, remotes)
 	Offline.init(Data, Economy, { helper = offlineHelper, machine = Machine.offlineTick, factory = Factory.offlineTick, refreshUnlocks = refreshUnlocks })
 
