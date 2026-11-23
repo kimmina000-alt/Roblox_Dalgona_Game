@@ -165,7 +165,7 @@ def arc_tube(p, pts, r, rgb, seg=8):
 
 
 FONT = r"C:\Windows\Fonts\malgunbd.ttf"
-HIDDEN = {"MarketSpot", "MarketDoor", "MarketCounter", "OrderSeat"}  # 투명 판정 부품 (미리 보기에서 숨김)
+HIDDEN = {"MarketSpot", "MarketDoor", "MarketCounter", "MarketOwner", "OrderSeat"}  # 투명 판정 부품 (미리 보기에서 숨김)
 
 
 def text(p, s, c, size, depth, rgb, m=I4):

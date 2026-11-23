@@ -381,7 +381,15 @@ def build_market():
     for nm, (c, note) in marks.items():
         mp = part(nm, note + " — 투명·충돌 끔")
         box(mp, c, (0.4, 0.4, 0.1), PINK, bev=0, seg=1)
-    # MarketDoor·MarketCounter 등은 골목 코드(AlleyBuilder, feat/alley-market-1125)가 위 Mk_Pt_*에서 만들어 씀 (이름이 겹치지 않게 여기서는 안 만듦)
+    # 골목 코드(AlleyBuilder, feat/alley-market-1125 788e471)가 이름으로 찾는 부품 (투명·충돌 끔). 모델에 있으면 그대로 씀.
+    ms = part("MarketSpot", "놓는 기준: 바닥 앞선 가운데 (부품 바닥 = 길 높이 0, 앞 = -Z)")
+    box(ms, (0, -0.2, 0.05), (0.4, 0.4, 0.1), SKY, bev=0, seg=1)
+    md = part("MarketDoor", "문 구멍 상자")
+    box(md, (0, T / 2, FLOOR + (DOOR_H - FLOOR) / 2), (DOOR_W - 0.4, T, DOOR_H - FLOOR - 0.1), SKY, bev=0, seg=1)
+    mc = part("MarketCounter", "계산대 윗면 판 (속성 MarketCounter = true, 둘레 14칸 안에서 장보기)")
+    box(mc, (CX, cy, CH + 0.2), (CDp, CY1 - CY0, 0.1), SKY, bev=0, seg=1)
+    mo = part("MarketOwner", "너구리 사장님 서는 곳 (계산대 뒤 바닥). Studio에서 LookVector = 손님 쪽(계산대 쪽)으로 돌려 둠")
+    box(mo, (IX1 - 1.4, cy, FLOOR + 0.05), (0.6, 0.6, 0.1), SKY, bev=0, seg=1)
 
     info = dict(W=W, D=D, H=H)
     cams = {
