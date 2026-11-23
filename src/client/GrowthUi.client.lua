@@ -1,4 +1,5 @@
 -- 성장 창 (Phase 4, 2026-11-20): HUD 아래 "성장" 버튼 → [가게] 장비·국자·알바생 / [목표] 일일 목표 3개 / [도감]
+-- [도감] 탭은 2026-11-24부터 새 도감 화면(CollectionUi)을 여는 버튼 (사용자 요청: 옛 목록과 겹쳐서)
 -- 서버 상태는 Remotes.PlayerState의 growth 칸 (GrowthService). 구매·도안 지정은 Remotes.GrowthAction.
 -- 제작 화면(MakingScreen)이 켜져 있으면 숨긴다.
 
@@ -78,9 +79,22 @@ local function showTab(id)
 		b:FindFirstChildOfClass("UIStroke").Color = on and C.cream or C.woodDark
 	end
 end
+-- 도감 탭 = 새 도감 화면 열기 (성장 창은 닫음)
+local function openCollection()
+	local cs = script.Parent:FindFirstChild("CollectionUi")
+	local open = cs and cs:FindFirstChild("Open")
+	if open then
+		win.Visible = false
+		open:Fire()
+	end
+end
 for _, t in ipairs(TABS) do
 	tabButtons[t.id].Activated:Connect(function()
-		showTab(t.id)
+		if t.id == "book" then
+			openCollection()
+		else
+			showTab(t.id)
+		end
 	end)
 end
 showTab("shop")
@@ -269,29 +283,6 @@ local function render()
 		row(page, i, (g.done and "✅ " or "") .. g.text, string.format("%d / %d · 보상 %d EXP + %d 코인", g.p, g.n, G.ExpDailyGoal, G.Daily.rewardCoins))
 	end
 	label({ LayoutOrder = 10, Text = "목표는 날마다(UTC) 바뀌어요", Size = UDim2.new(1, -8, 0, 22), TextSize = 15, TextColor3 = C.cream, ZIndex = 13, Parent = page })
-
-	-- 도감
-	page = pages.book
-	clear(page)
-	local found = 0
-	for i, e in ipairs(ShapeCatalog.list) do
-		local c = gr.collection[e.id]
-		local grade = ShapeCatalog.grade(e.grade)
-		local unlocked = table.find(gr.unlocked, e.id) ~= nil
-		local need = G.UnlockLevel[e.grade]
-		local sub
-		if c then
-			found += 1
-			sub = string.format("최고 %s · %d개 만듦", c.best, c.n)
-		elseif unlocked then
-			sub = "아직 안 만듦"
-		else
-			sub = need and ("🔒 Lv" .. need .. "에 열림") or "🔒 신화 도안을 손으로 Excellent 이상"
-		end
-		local r = row(page, i + 1, string.format("%s  [%s]", e.name, grade.label), sub)
-		r.BackgroundColor3 = c and ROW or C.tan
-	end
-	label({ LayoutOrder = 0, Text = string.format("모은 도안 %d / %d", found, #ShapeCatalog.list), Size = UDim2.new(1, -8, 0, 26), TextSize = 19, TextColor3 = C.cream, Outline = C.woodDark, ZIndex = 13, Parent = page })
 end
 
 openBtn.Activated:Connect(function()

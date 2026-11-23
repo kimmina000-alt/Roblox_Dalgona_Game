@@ -441,6 +441,16 @@ local function showReward(r)
 	end
 end
 
+-- 다른 화면(성장 창 '도감' 탭)이 도감을 열 수 있게: Open:Fire()
+local openEv = Instance.new("BindableEvent")
+openEv.Name = "Open"
+openEv.Parent = script
+openEv.Event:Connect(function()
+	if not win.Visible then
+		toggle()
+	end
+end)
+
 local ev = Instance.new("BindableEvent")
 ev.Name = "ShowReward"
 ev.Parent = script
