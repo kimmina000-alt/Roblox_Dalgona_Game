@@ -41,7 +41,7 @@ local CUSTOMER_LOOK = {
 	Owl = { icon = "🦉", color = Color3.fromRGB(180, 150, 220), kind = "귀한 손님" },
 }
 local CUSTOMER_ORDER = { "Pongpong", "Mochi", "Dotori", "Godeungeo", "Kkuldanji", "Ppogeuli", "Owl" }
-local HEART_AT = { 10, 50, 150 } -- D38 하트 1·2·3
+local HEART_AT = (G.Collection and G.Collection.hearts) or { 10, 50, 150 } -- D38 하트 1·2·3 (서버 GrowthConfig.Collection과 같게)
 
 -- 손님 이름: 서버와 같은 GrowthConfig.Customers.types[].name (없으면 CustomerRig label)
 local function customerName(id)
