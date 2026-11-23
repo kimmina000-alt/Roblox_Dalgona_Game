@@ -10,7 +10,7 @@
 --
 -- 화면 약속 (UI 세션 CollectionUi.client.lua 맨 위 주석):
 --   PlayerState.collection = { shapes = { [id] = { made, excellent, perfect, ppopgi } },
---     customers = { [id] = { met, sold, hearts, favorite(하트2부터) } }, titles = { owned, equipped } }
+--     customers = { [id] = { met, sold, hearts, favorite(하트2부터, 단골 둘만), tip(하트2 팁, 나머지 5종) } }, titles = { owned, equipped } }
 --   Remotes.CollectionReward (서버 → 클라) { title, text, reward, icon }
 --   Remotes.CollectionAction:InvokeServer("equipTitle", 이름 | "") → { ok, reason }
 
@@ -217,9 +217,16 @@ function CollectionService.onCustomerSold(player, id, n)
 				table.insert(notes, { title = "하트 1", text = name .. " · " .. R.hearts[1] .. "개 판매", reward = "+" .. R.heart1Exp .. " EXP", icon = "💗" })
 			elseif c.h == 2 then
 				d.coins += R.heart2Coins
-				local fav = d.custFav and d.custFav[id]
-				local favName = fav and ShapeCatalog.get(fav) and ShapeCatalog.get(fav).name or nil
-				table.insert(notes, { title = "하트 2", text = name .. (favName and (" · 좋아하는 도안: " .. favName) or ""), reward = "+" .. R.heart2Coins .. " 코인", icon = "💞" })
+				local ct = G.customerType(id)
+				if ct and ct.kind == "regular" then
+					-- 단골 둘: 좋아하는 도안 공개
+					local fav = d.custFav and d.custFav[id]
+					local favName = fav and ShapeCatalog.get(fav) and ShapeCatalog.get(fav).name or nil
+					table.insert(notes, { title = "하트 2", text = name .. (favName and (" · 좋아하는 도안: " .. favName) or ""), reward = "+" .. R.heart2Coins .. " 코인", icon = "💞" })
+				else
+					-- 나머지 5종: 이제부터 그 손님 팁 +5% (G.heartTip)
+					table.insert(notes, { title = "하트 2", text = name .. " · 우리 가게 단골이 됐어요", reward = "+" .. R.heart2Coins .. " 코인 · 팁 +" .. math.floor(R.heart2Tip * 100 + 0.5) .. "%", icon = "💞" })
+				end
 			else
 				local t = name .. "네 단골집"
 				if grantTitle(d, t) then
@@ -263,7 +270,8 @@ function CollectionService.snapshot(d)
 			met = true,
 			sold = c.sold or 0,
 			hearts = hearts,
-			favorite = hearts >= 2 and d.custFav and d.custFav[id] or nil, -- 하트 2부터 공개
+			favorite = hearts >= 2 and d.custFav and d.custFav[id] or nil, -- 하트 2부터 공개 (단골 둘만 있음)
+			tip = G.heartTip(d, G.customerType(id)), -- 하트 2 팁 (단골이 아닌 5종, 0 또는 0.05)
 		}
 	end
 	local titles = d.titles or {}

@@ -381,6 +381,8 @@ function EconomyService.sell(player, n, ctype)
 		end
 		-- 계산 알바 (D43): 모든 판매 팁 +5% (손님 팁과 더함)
 		local cashier = (G.helperAt(d, "cashier") and G.shopOpen(d)) and G.Cashier.tip or 0
+		-- 도감 하트 2 (단골이 아닌 손님 5종): 그 손님 팁 +5% (함께 더함)
+		cashier += G.heartTip(d, ctype)
 		for k = 1, n do
 			local item = list[k]
 			local i = table.find(d.stock, item)
