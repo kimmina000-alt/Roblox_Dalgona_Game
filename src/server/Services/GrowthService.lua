@@ -596,7 +596,7 @@ local function displayPick(player, d)
 	end
 	local slot = nil
 	for k = 1, maxSlots do
-		if not used[k] then
+		if not used[k] and not Economy.isReserved(d, k) then
 			slot = k
 			break
 		end
@@ -688,6 +688,109 @@ local function stepRole(player, d, i, h, st, dt, p)
 			st.model:SetAttribute("DeliverAt", workspace:GetServerTimeNow())
 		end
 	end
+end
+
+-- 들고 가서 진열 (2026-11-24, G.CarryHelpers): 4단계 기계 알바·공장 포장 알바가 그 기계·공장이 만든 달고나(item.src)를 하나씩
+-- 들고 빈 진열 칸으로 걸어가 놓음. 걷는 동안 칸 예약 (Economy.reserveSlot). 연출 신호 = 그 알바 미니미 속성
+--   CarryState("go" | "back" | ""), CarryShape(도안 id), CarrySlot(칸), CarryFrom·CarryTo(Vector3), CarryStart(서버 시각), CarryDur(초)
+local Sales = nil -- SalesService (칸 자리), 처음 쓸 때 가져옴
+local function carryModel(player, h, st)
+	if h.post == "f_pack" then
+		local plot = Plots.get(player)
+		local lot = plot and plot.model:FindFirstChild("FactoryLot", true)
+		local folder = lot and lot:FindFirstChild("Staff")
+		return folder and folder:FindFirstChild("Staff_pack")
+	end
+	return st.model
+end
+
+local function setCarry(m, state, info)
+	if not (m and m.Parent) then
+		return
+	end
+	m:SetAttribute("CarryState", state)
+	if info then
+		m:SetAttribute("CarryShape", info.shape)
+		m:SetAttribute("CarrySlot", info.slot)
+		m:SetAttribute("CarryFrom", info.from)
+		m:SetAttribute("CarryTo", info.to)
+		m:SetAttribute("CarryStart", workspace:GetServerTimeNow())
+		m:SetAttribute("CarryDur", info.dur)
+	end
+end
+
+local function stepCarry(player, d, h, st, dt)
+	local CH = G.CarryHelpers
+	local src = h.post and CH.posts[h.post]
+	local c = st.carry
+	if not src then
+		if c then
+			Economy.releaseSlot(d, c.slot)
+			st.carry = nil
+		end
+		return
+	end
+	local m = carryModel(player, h, st)
+	if c then
+		c.t += dt
+		if c.t < c.dur then
+			return
+		end
+		if c.phase == "go" then
+			-- 도착: 그 달고나가 아직 보관함에 있고 칸이 비어 있으면 놓음
+			local placed = false
+			Data.update(player, function(dd)
+				local item = nil
+				local used = false
+				for _, it in ipairs(dd.stock) do
+					if it.id == c.id then
+						item = it
+					end
+					if it.sl == c.slot then
+						used = true
+					end
+				end
+				if not item or item.sl or used then
+					return false
+				end
+				item.sl = c.slot
+				item.pp = nil
+				placed = true
+			end)
+			Economy.releaseSlot(Data.get(player) or d, c.slot)
+			c.phase, c.t = "back", 0
+			setCarry(m, "back", { shape = placed and "" or c.shape, slot = c.slot, from = c.to, to = c.from, dur = c.dur })
+		else
+			st.carry = nil
+			setCarry(m, "", nil)
+		end
+		return
+	end
+	if not G.shopOpen(d) or not (m and m.Parent) then
+		return
+	end
+	-- 새로 하나 집기
+	local carrying = player:GetAttribute("Carrying")
+	local item = nil
+	for _, it in ipairs(d.stock) do
+		if not it.sl and it.src == src and it.id ~= carrying then
+			item = it
+			break
+		end
+	end
+	if not item then
+		return
+	end
+	local slot = Economy.reserveSlot(d)
+	if not slot then
+		return
+	end
+	Sales = Sales or require(script.Parent:WaitForChild("SalesService"))
+	local from = m:GetPivot().Position
+	local to = Sales.slotPosition(player, slot) or from
+	local dur = math.max(CH.minWalk, (Vector3.new(to.X, from.Y, to.Z) - from).Magnitude / CH.speed) + CH.pickSeconds
+	st.carry = { phase = "go", t = 0, dur = dur, id = item.id, slot = slot, shape = item.s, from = from, to = to }
+	setCarry(m, "go", { shape = item.s, slot = slot, from = from, to = to, dur = dur })
 end
 
 local function stepHelper(player, d, i, h, st, dt)
@@ -1200,6 +1303,7 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 						local st = states[i]
 						if st then
 							stepHelper(player, Data.get(player), i, h, st, dt)
+							stepCarry(player, Data.get(player), h, st, dt) -- 4단계 기계·공장 포장 알바: 들고 가서 진열
 						end
 					end
 					for i, st in pairs(states) do

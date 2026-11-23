@@ -139,7 +139,7 @@ local function stopReason(d, shape, m)
 	if not shape then
 		return "도안 없음"
 	end
-	if G.stockRoom(d) <= 0 then
+	if (m.id == "line" and G.storageRoom(d) or G.stockRoom(d)) <= 0 then
 		return "보관함 가득"
 	end
 	local need = batchNeed(shape, m.batch)
@@ -344,7 +344,9 @@ end
 
 -- 한 판 만들기 (데이터만 바꿈, Data.update 안이나 오프라인 정산에서 부름). 반환: 만든 수, 진열 칸 목록, 레벨업 목록, 쓴 재료
 local function produce(dd, shape, m)
-	local room = G.stockRoom(dd)
+	-- 4단계 연속 생산 설비는 보관함에 두고 기계 알바가 들고 가서 진열 (2026-11-24, G.CarryHelpers) → 보관함 자리만 셈
+	local carry = m.id == "line"
+	local room = carry and G.storageRoom(dd) or G.stockRoom(dd)
 	local n = math.min(m.batch, room)
 	if n <= 0 then
 		return 0, {}, {}, {}
@@ -367,7 +369,10 @@ local function produce(dd, shape, m)
 		local q, grade, mult = rollQuality()
 		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
-		local sl = Economy.stockProduced(dd, item, "machine")
+		if carry then
+			item.src = "line"
+		end
+		local sl = Economy.stockProduced(dd, item, "machine", carry)
 		if sl then
 			table.insert(slots, sl)
 		end

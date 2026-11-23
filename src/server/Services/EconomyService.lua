@@ -117,6 +117,14 @@ function EconomyService.shelved(d)
 end
 
 -- 빈 칸 번호 (없으면 nil)
+-- 들고 가는 중인 칸 (2026-11-24, G.CarryHelpers): [데이터 표] = { [칸] = true }. 저장 안 함 (서버 메모리)
+local reservedByData = setmetatable({}, { __mode = "k" })
+
+function EconomyService.isReserved(d, slot)
+	local r = reservedByData[d]
+	return r ~= nil and r[slot] == true
+end
+
 function EconomyService.freeSlot(d)
 	local used = {}
 	for _, item in ipairs(d.stock) do
@@ -125,19 +133,37 @@ function EconomyService.freeSlot(d)
 		end
 	end
 	for i = 1, G.shelfSlots(d) do
-		if not used[i] then
+		if not used[i] and not EconomyService.isReserved(d, i) then
 			return i
 		end
 	end
 	return nil
 end
 
+-- 빈 칸 하나를 예약 (들고 가는 동안 다른 데서 못 씀). 반환 칸 또는 nil
+function EconomyService.reserveSlot(d)
+	local i = EconomyService.freeSlot(d)
+	if i then
+		reservedByData[d] = reservedByData[d] or {}
+		reservedByData[d][i] = true
+	end
+	return i
+end
+
+function EconomyService.releaseSlot(d, slot)
+	local r = reservedByData[d]
+	if r then
+		r[slot] = nil
+	end
+end
+
 -- 알바생·기계·공장이 만든 달고나 넣기 (D26, 2026-11-21): 빈 칸이 있으면 미니미가 들고 가서 진열(서버는 바로 그 칸에),
 -- 없으면 보관함. 반환: 진열한 칸 번호(또는 nil). by = "helper" | "machine" | "factory" (기계·공장은 Phase 5에서 이걸 부름)
-function EconomyService.stockProduced(d, item, by)
+-- keep = true면 진열하지 않고 보관함에 둠 (알바가 들고 가서 놓음, G.CarryHelpers)
+function EconomyService.stockProduced(d, item, by, keep)
 	item.id = item.id or EconomyService.newItemId(d)
 	item.by = by
-	if G.Shop.autoShelveHelpers then
+	if G.Shop.autoShelveHelpers and not keep then
 		item.sl = EconomyService.freeSlot(d)
 	end
 	table.insert(d.stock, item)

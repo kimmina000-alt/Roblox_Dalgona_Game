@@ -2,6 +2,7 @@
 --  - 내 가게의 냉장고(Role "냉장고")를 누르면 식재료(설탕·소다), 서랍장(Role "서랍장")을 누르면 그 밖의 재료 창
 --  - 칸마다 보유 수 / 최대, 한 묶음 사기 (Remotes.BuyIngredient, 재료 상점과 같은 값). 묶음 목록은 GrowthConfig.StorageGroups
 --  - 제작 화면이 열려 있으면 안 열림. 너무 멀리서(40칸 밖)는 안 됨
+--  - 가까이 가면 "냉장고 열기"·"서랍장 열기" 버튼(ProximityPrompt, 내 화면에만)도 뜸 (2026-11-24 사용자 요청)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -194,6 +195,45 @@ local function tryOpen(screenPos)
 	end
 end
 
+-- 가까이 가면 뜨는 열기 버튼 (내 가게 냉장고·서랍장에만, 이 화면에서만 만듦)
+local prompts = {}
+local function syncPrompts()
+	local plot = myPlot()
+	local want = {}
+	if plot then
+		for _, part in ipairs(targets(plot)) do
+			want[part] = true
+		end
+	end
+	for part, pr in pairs(prompts) do
+		if not want[part] or not part.Parent then
+			pr:Destroy()
+			prompts[part] = nil
+		end
+	end
+	for part in pairs(want) do
+		if not prompts[part] then
+			local group = GROUP_BY_ROLE[part:GetAttribute("Role")]
+			local pr = Instance.new("ProximityPrompt")
+			pr.Name = "StoragePrompt"
+			pr.ActionText = group.role .. " 열기"
+			pr.ObjectText = group.title
+			pr.KeyboardKeyCode = Enum.KeyCode.E
+			pr.HoldDuration = 0
+			pr.MaxActivationDistance = 8
+			pr.RequiresLineOfSight = false
+			pr.Parent = part
+			pr.Triggered:Connect(function()
+				if not making() then
+					open(group)
+				end
+			end)
+			prompts[part] = pr
+		end
+	end
+end
+player:GetAttributeChangedSignal("PlotIndex"):Connect(syncPrompts)
+
 -- 마우스: 거의 안 움직이고 뗐을 때 (카메라 돌리기와 구분). 터치: 톡 친 자리
 local downAt = nil
 UserInputService.InputBegan:Connect(function(input, processed)
@@ -217,12 +257,21 @@ UserInputService.TouchTapInWorld:Connect(function(pos, processedByUI)
 	end
 end)
 
--- 제작 화면이 열리면 닫음
+-- 제작 화면이 열리면 닫음, 열기 버튼은 제작 중에 숨김. 가게가 바뀌거나 부품이 늦게 와도(스트리밍) 버튼을 다시 맞춤
 task.spawn(function()
+	local n = 0
 	while true do
 		task.wait(0.5)
-		if win.Visible and making() then
+		local mk = making()
+		if win.Visible and mk then
 			win.Visible = false
+		end
+		for _, pr in pairs(prompts) do
+			pr.Enabled = not mk
+		end
+		n += 1
+		if n % 6 == 1 then
+			pcall(syncPrompts)
 		end
 	end
 end)

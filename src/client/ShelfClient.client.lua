@@ -20,6 +20,7 @@ local ROLE_AREA = {
 	["달고나 걸이판"] = "peg",
 	["작은 탁자"] = "table1",
 	["작은 탁자 2"] = "table2",
+	["작은 탁자 3"] = "table3",
 }
 local MAX_DISTANCE = 40 -- 너무 멀리서는 안 됨 (가게 안이나 앞에서)
 
@@ -37,11 +38,13 @@ local function myPlot()
 	return nil
 end
 
--- 내 가게의 진열 가구 부품 목록
+-- 내 가게의 진열 가구 부품 목록. 노점(가게 열기 전, 서버가 부지 속성 ShopOpen = false)이면 가게 앞 작은 탁자만 (쟁반 5칸, 2026-11-24)
 local function furniture(plot)
+	local stall = plot:GetAttribute("ShopOpen") == false
 	local list = {}
 	for _, d in ipairs(plot:GetDescendants()) do
-		if d:IsA("BasePart") and ROLE_AREA[d:GetAttribute("Role") or ""] then
+		local area = d:IsA("BasePart") and ROLE_AREA[d:GetAttribute("Role") or ""]
+		if area and (not stall or area == "table1") then
 			table.insert(list, d)
 		end
 	end
