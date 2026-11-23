@@ -49,15 +49,17 @@
 
 ## Studio 동기화
 - Studio 장소: "Vantablack_Dev의 장소: 11172026_1" (placeId 122010099115917).
-- 2026-11-22부터 **Rojo**(7.7.1, `C:\Tools\rojo\rojo.exe`)로 넣는다. `default.project.json`이 Shared·Server·Client·StarterGui(`src/gui`, 비어 있음)를 `$path`로 관리하고, 이 4곳에서 저장소에 없는 인스턴스는 Rojo가 지운다 (첫 연결 전 확인: Studio에만 있는 것 없음, 되돌리기용 장소 버전 152).
-- **`rojo serve`는 한 번에 하나만.** Studio를 쓸 차례인 세션이 켠다.
-  - 최신 main을 넣을 때: `.claude/worktrees/rojo-main`(main을 가리키는 전용 worktree)에서 켠다. 머지 뒤에는 `git -C .claude/worktrees/rojo-main checkout --detach origin/main`으로 갱신.
-  - 자기 브랜치를 시험할 때: 자기 worktree에서 켠다.
-  - **공유 폴더 `D:\Roblox\Roblox_Dalgona_Game`에서는 켜지 않는다** (옛 브랜치라 Studio 스크립트를 옛것으로 덮어씀 — 2026-11-22 실제로 일어남).
-- 차례를 넘길 때: 내 serve를 끄고(Studio Rojo 플러그인 Disconnect) 다음 세션에 알린다. 다음 세션이 자기 폴더에서 serve를 켜고 사용자에게 Studio 플러그인 Connect(localhost:34872)를 부탁한다.
-- **Rojo가 연결된 동안에는 MCP로 스크립트 `Source`를 쓰지 않는다** (덮어써짐). Studio 전용 에셋(ServerStorage.Assets, ReplicatedStorage.Assets, Workspace 모델·속성)은 지금처럼 MCP로 다룬다.
-- 체크섬(`x = (x*31 + byte) % 2147483647`)으로 모든 스크립트가 `src/`와 같은지는 연결을 바꿀 때 한 번만 본다.
-- Play를 켜기 전에 서로 알리는 규칙은 그대로.
+- **Rojo는 쓰지 않는다** (2026-11-24 사용자 결정, 토큰을 너무 많이 씀). `rojo serve`를 켜지 않고 사용자에게 Connect를 부탁하지 않는다. `default.project.json`은 폴더 구조 참고용으로만 남긴다.
+- 스크립트는 **Studio MCP**(`multi_edit` / `execute_luau`로 `Source` 설정)로 넣는다.
+- **평소에는 세션이 Studio에 넣지 않는다.** 자기 브랜치에 커밋·푸시만 한다.
+- **묶음 끝 시험 때 한 세션(시험 담당 = 저장·가게 부지 세션)만** Studio에 넣는다:
+  1. 시험 브랜치(`test/batch-<날짜>`)와 Studio 스크립트를 체크섬(`x = (x*31 + byte) % 2147483647`, CRLF → LF로 바꿔 계산)으로 비교한다.
+  2. **다른 스크립트만** `Source`를 넣고, 새 스크립트는 만들고, 시험 브랜치에 없는 스크립트는 지운다.
+  3. 다시 체크섬으로 전부 같은지 확인한 뒤 시험한다.
+- main 머지 뒤 장소 저장은 머지한 세션(달고나 게임 세션)이 한 번 한다.
+- 예외: 화면을 직접 봐야만 고칠 수 있는 일은 그 세션이 MCP로 확인만 하고 되돌린다(장소 저장 안 함).
+- Studio 전용 에셋(ServerStorage.Assets, ReplicatedStorage.Assets, Workspace 모델·속성)은 MCP로 다룬다.
+- Play를 켜기 전에 서로 알린다.
 - 스트리밍 반경 `Workspace.StreamingTargetRadius = 256` (2026-11-22, 장소에 저장).
 
 ## 테스트
