@@ -577,6 +577,7 @@ function FactoryService.snapshot(player, d)
 		shapes = allowedShapes(d),
 		preview = preview,
 		staff = staff,
+		self = selfBy[player], -- 지금 내가 직접 하는 공정 key 또는 nil (D45)
 		staffHireCost = G.HireCost[#d.partTimers + 1] or STAFF.hireCost, -- D43: 몇 번째로 뽑느냐
 		price = F.price,
 		level = F.level,
@@ -799,6 +800,14 @@ end
 
 -- [내가 하기] (GrowthAction "factorySelf", key). key가 지금 하던 것이면 그만두기
 function FactoryService.selfStart(player, key)
+	if key == "" then
+		-- 그만두기 (UI: GrowthAction("factorySelf", ""))
+		if not selfBy[player] then
+			return false, "공장 일을 하고 있지 않아요"
+		end
+		FactoryService.selfStop(player, nil)
+		return true, "공장 일을 그만뒀어요"
+	end
 	local d = Data.get(player)
 	local st = nil
 	for _, s in ipairs(STAFF.stations) do
