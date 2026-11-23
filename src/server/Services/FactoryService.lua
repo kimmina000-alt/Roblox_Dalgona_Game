@@ -577,7 +577,7 @@ local function beginJob(dd, k)
 			pending += job.n
 		end
 	end
-	if pending + f.qty > G.stockRoom(dd) then
+	if pending + f.qty > G.storageRoom(dd) then -- 공장 것은 보관함으로 (포장 알바가 들고 가서 진열, 2026-11-24)
 		return "보관함 가득"
 	end
 	local _, baseCoins = jobCost(dd, shape, f.qty, {})
@@ -615,9 +615,9 @@ local function endJob(dd, k, job)
 	local slots = {}
 	for _ = 1, n do
 		local q, grade, mult = rollQuality(dd, job.m, job.st)
-		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = packed, a = true, f = true }
+		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = packed, a = true, f = true, src = "factory" }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, packed)
-		local sl = Economy.stockProduced(dd, item, "factory")
+		local sl = Economy.stockProduced(dd, item, "factory", true)
 		if sl then
 			table.insert(slots, sl)
 		end

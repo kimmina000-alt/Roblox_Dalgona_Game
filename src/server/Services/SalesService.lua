@@ -911,7 +911,7 @@ local function placeByTouch(player, area, hit)
 	end
 	local free = {}
 	for _, i in ipairs(list) do
-		if i <= maxSlots and not used[i] then
+		if i <= maxSlots and not used[i] and not Economy.isReserved(data, i) then -- 알바가 들고 가는 칸은 빼고
 			table.insert(free, i)
 		end
 	end
@@ -944,6 +944,17 @@ local function placeByTouch(player, area, hit)
 		Economy.notify(player, msg)
 	end
 	return { ok = ok, reason = not ok and msg or nil, slot = ok and slot or nil }
+end
+
+-- 진열 칸 i의 세계 좌표 (알바가 들고 걸어갈 곳, 2026-11-24). 없으면 nil
+function SalesService.slotPosition(player, i)
+	local _, index = Plots.get(player)
+	local shop = index and shops[index]
+	if not shop then
+		return nil
+	end
+	local ok, cf = pcall(slotCFrame, shop, i)
+	return ok and cf and cf.Position or nil
 end
 
 function SalesService.init(dataService, economyService, plotService)

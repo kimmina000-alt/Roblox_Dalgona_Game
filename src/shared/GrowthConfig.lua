@@ -250,6 +250,14 @@ G.HelperPosts = {
 -- 진열 알바 (D33): 보관함 → 진열대 빈 칸, 4초에 1개. 옮길 게 없으면 쉼(급여 없음). 손 제작품도 옮길지 = 데이터 displayHand (기본 켬)
 G.DisplayHelper = { seconds = 4 }
 -- 계산 알바 (D43): 손님이 고르는 시간 절반 → 손님 수요 +10%, 모든 판매 팁 +5%. 자리 비운 동안은 안 함
+-- 들고 가서 진열하는 알바 (2026-11-24 사용자): 4단계 기계 알바·공장 포장 알바는 만든 달고나를 보관함에 두고, 하나씩 들고 빈 진열 칸으로
+-- 걸어가 놓음 (가는 동안 그 칸을 예약). posts = 역할 key → 옮기는 달고나 src (item.src). 연출은 제작 세션 (미니미 속성 Carry*)
+G.CarryHelpers = {
+	posts = { line = "line", f_pack = "factory" },
+	speed = 7, -- 걷는 빠르기 (스터드/초)
+	pickSeconds = 0.6, -- 집기·놓기
+	minWalk = 1.5, -- 가까워도 이만큼은 걸음 (초)
+}
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 
 -- 손님 7종 (D37·GDD 14장, 2026-11-24): 레벨 구간마다 오는 비율, 종류마다 고르는 것·개수·팁. 손님 모델 id = CustomerRig.order

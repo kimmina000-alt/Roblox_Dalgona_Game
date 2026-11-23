@@ -197,6 +197,10 @@ function Minime.build(player, parent, footCF, index, skill)
 	local lift = pivot.Position.Y - (bbCF.Position.Y - size.Y / 2)
 	model:PivotTo(footCF + Vector3.new(0, lift, 0))
 
+	-- 폰(스트리밍)에서 팔다리가 따로 오거나 늦게 와서 몸에서 떨어져 보이지 않게 모델째 한 번에 보냄 (2026-11-24 사용자 사진)
+	pcall(function()
+		model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
+	end)
 	model:SetAttribute("Minime", true)
 	model:SetAttribute("HelperIndex", index)
 	model:SetAttribute("OwnerUserId", player.UserId)
