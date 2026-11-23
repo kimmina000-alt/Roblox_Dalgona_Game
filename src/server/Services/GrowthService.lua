@@ -354,6 +354,10 @@ function GrowthService.action(player, what, a, b)
 	Data.update(player, function(dd)
 		if what == "buy" and type(a) == "string" then
 			ok, msg = actionBuy(player, dd, a)
+		elseif what == "bgmOff" and type(a) == "boolean" then
+			-- 배경 음악 끄기·켜기 (UI 설정 버튼, 저장됨). 속성 BgmOff는 Data.Changed에서 맞춤
+			dd.bgmOff = a
+			ok, msg = true, a and "배경 음악을 껐어요" or "배경 음악을 켰어요"
 		elseif what == "displayHand" and type(a) == "boolean" then
 			dd.displayHand = a
 			ok, msg = true, a and "진열 알바가 손으로 만든 것도 옮겨요" or "손으로 만든 것은 직접 놓아요"
@@ -1217,6 +1221,11 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 		local d = Data.get(player)
 		if not d then
 			return
+		end
+		-- BGM 끄기 (저장 bgmOff, 2026-11-24): 플레이어 속성 BgmOff = true면 client/Bgm이 끔
+		local bgmOff = d.bgmOff == true or nil
+		if player:GetAttribute("BgmOff") ~= bgmOff then
+			player:SetAttribute("BgmOff", bgmOff)
 		end
 		if not ready[player] then
 			ready[player] = true

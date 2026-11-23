@@ -35,6 +35,7 @@ G.DefaultData = {
 	-- 화로 연탄 남은 양 (D44, 0~1). coalLeft = 화구 ① 내 손 작업대, coalLeft2 = 화구 ② 화로 알바 자리 (2026-11-24: 화구 2개 기본)
 	coalLeft = 1,
 	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
+	bgmOff = false, -- 배경 음악 끔 (설정, GrowthAction("bgmOff", true/false)) → 플레이어 속성 BgmOff
 	custDex = {}, -- 손님 도감 (D38): [손님 id] = { sold = 판 수, h = 받은 하트 보상 0~3 }
 	titles = { owned = {} }, -- 칭호 (D38): owned = 얻은 이름들, equipped = 단 칭호
 	signGold = false, -- 간판 금테 (D38: 도안 23종 모두 Perfect)
@@ -315,6 +316,14 @@ G.ShopLight = {
 	range = 16,
 	y = 9, -- 가게 바닥 위 높이
 	spots = { { -10, -8 }, { 10, -8 }, { -10, 4 }, { 10, 4 } },
+}
+-- 작은 탁자 테이블보 (2026-11-24 사용자, SalesService tableCloth): 흰 천 위에 파스텔 꽃무늬 천을 마름모로.
+-- texture = 꽃무늬 그림 id (3D 세션이 주면 넣음, nil이면 단색), tile = 무늬 한 장 크기(스터드)
+G.ShopCloth = {
+	white = Color3.fromRGB(252, 250, 244),
+	floral = Color3.fromRGB(226, 238, 222), -- 참고 사진처럼 연한 민트·크림 바탕 (무늬는 texture)
+	texture = nil,
+	tile = 2,
 }
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 
