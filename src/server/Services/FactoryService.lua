@@ -33,6 +33,7 @@ local spaces = {} -- [부지 번호] = Model
 local selfBy = {}
 local selfByData = setmetatable({}, { __mode = "k" })
 local selfPending = {} -- [플레이어] = { id, line, key, until } 미니게임 결과 기다리는 판
+local failStreak = {} -- [플레이어] = { [공정 key] = 연속 실패 판 수 } (D49 도와주기, 접속 중만)
 local selfEvent = nil -- Remotes.FactorySelf (서버 → 클라)
 local status = {} -- [player] = 상태 글
 
@@ -85,6 +86,59 @@ end
 ---------------------------------------------------------------- 공정 알바생 (D30)
 
 local STAFF = F.staff
+local SKILL = F.skill
+
+---------------------------------------------------------------- 공장 손재주 (D49)
+
+local function skillLevel(d, key)
+	local t = type(d.factorySkill) == "table" and d.factorySkill or {}
+	return math.clamp(math.floor(tonumber(t[key]) or 0), 0, #SKILL.costs)
+end
+
+-- 이번 판 판정: { level, width(폭 배율), assist(도와주기), pass(성공 점수), half(효과 절반 최저 점수 | nil) }
+local function judgeFor(player, d, key)
+	local lv = skillLevel(d, key)
+	local streak = failStreak[player] and failStreak[player][key] or 0
+	local assist = streak >= SKILL.assistAfter
+	local bonus = (lv > 0 and SKILL.width[lv] or 1) - 1 + (assist and SKILL.assistWidth or 0)
+	bonus = math.min(bonus, SKILL.maxBonus)
+	local top = lv >= #SKILL.costs
+	return {
+		level = lv,
+		width = math.floor((1 + bonus) * 100 + 0.5) / 100,
+		assist = assist,
+		pass = top and SKILL.passTop or SKILL.pass,
+		half = top and SKILL.halfMin or nil,
+	}
+end
+
+-- 손재주 사기 (GrowthAction "factorySkill", 공정 key): 공장을 산 뒤, 1 → 2 → 3 차례로. dd = Data.update 안의 데이터
+function FactoryService.buySkill(dd, key)
+	local st = nil
+	for _, s in ipairs(STAFF.stations) do
+		if s.key == key then
+			st = s
+		end
+	end
+	if not st then
+		return false, "잘못된 요청"
+	end
+	if not (dd.factory and dd.factory.unlocked) then
+		return false, "공장을 먼저 지어요"
+	end
+	local lv = skillLevel(dd, key)
+	local cost = SKILL.costs[lv + 1]
+	if not cost then
+		return false, st.name .. " 손재주는 이미 최고예요"
+	end
+	if dd.coins < cost then
+		return false, string.format("코인이 모자라요 (%d코인 필요)", cost)
+	end
+	dd.coins -= cost
+	dd.factorySkill = type(dd.factorySkill) == "table" and dd.factorySkill or {}
+	dd.factorySkill[key] = lv + 1
+	return true, string.format("%s 손재주 %d단계!", st.name, lv + 1)
+end
 
 -- D43 (2026-11-24): 공정 알바생은 가게 알바생 목록(partTimers)의 역할 f_<key>
 local function hired(d, key)
@@ -191,11 +245,16 @@ local function rollQuality(d, mode, st)
 	end
 	grade = grade or Config.Grades[#Config.Grades]
 	local SW = F.selfWork
-	if st.inspect and grade.name == "Poor" and ((st.boostInspect and SW.inspectNoPoor) or math.random() >= STAFF.inspectPoorKeep) then
+	-- 잘한 판(D45): Poor 없음. 효과 절반(D49)이면 Poor가 남을 확률이 알바의 절반
+	local keep = STAFF.inspectPoorKeep
+	if st.boostInspect and SW.inspectNoPoor then
+		keep = keep * (1 - st.boostInspect)
+	end
+	if st.inspect and grade.name == "Poor" and math.random() >= keep then
 		grade = Config.Grades[GRADE_POS.Normal]
 		q = grade.min
 	end
-	local upChance = st.boostBoil and SW.boilUpChance or STAFF.boilUpChance -- 내가 잘한 판은 더 (D45)
+	local upChance = STAFF.boilUpChance + (st.boostBoil and (SW.boilUpChance - STAFF.boilUpChance) * st.boostBoil or 0) -- 내가 잘한 판은 더 (D45, 절반이면 차이의 절반)
 	if st.boil and math.random() < upChance and grade.name ~= "Excellent" and grade.name ~= "Perfect" then
 		local up = Config.Grades[GRADE_POS[grade.name] - 1]
 		if up and up.name ~= "Perfect" then
@@ -304,6 +363,13 @@ local function publish(player, d)
 	local f = d.factory
 	local shape = shapeOf(d)
 	setAttr(sp, "OwnerUserId", player.UserId)
+	-- 손재주 단계 (D49): 클라 미니게임이 신호를 못 받았을 때 보는 값
+	for _, st in ipairs(STAFF.stations) do
+		local lv = skillLevel(d, st.key)
+		if player:GetAttribute("FactorySkill_" .. st.key) ~= lv then
+			player:SetAttribute("FactorySkill_" .. st.key, lv)
+		end
+	end
 	setAttr(sp, "Unlocked", f.unlocked == true)
 	setAttr(sp, "On", f.on == true)
 	setAttr(sp, "Shape", shape and shape.id or "")
@@ -547,6 +613,8 @@ function FactoryService.snapshot(player, d)
 			hired = helper, -- 알바생 (D30·D43)
 			self = selfBy[player] == st.key, -- 내가 직접 하는 중 (D45)
 			canSelf = not helper, -- [내가 하기] 버튼을 보여도 됨
+			skill = skillLevel(d, st.key), -- 손재주 단계 0~3 (D49)
+			skillCost = SKILL.costs[skillLevel(d, st.key) + 1], -- 다음 단계 값 (최고면 nil)
 			on = working,
 			wage = staffWage(previewSec),
 		})
@@ -578,6 +646,7 @@ function FactoryService.snapshot(player, d)
 		preview = preview,
 		staff = staff,
 		self = selfBy[player], -- 지금 내가 직접 하는 공정 key 또는 nil (D45)
+		skillCosts = SKILL.costs, -- 손재주 단계별 값 (D49, 구매 GrowthAction("factorySkill", 공정 key))
 		staffHireCost = G.HireCost[#d.partTimers + 1] or STAFF.hireCost, -- D43: 몇 번째로 뽑느냐
 		price = F.price,
 		level = F.level,
@@ -647,15 +716,16 @@ local function endJob(dd, k, job)
 	local packed = job.pk == true -- 판을 시작할 때 포장지를 냈을 때만 (자동 포장)
 	local slots = {}
 	local boost = job.boost and job.self or nil -- 미니게임을 잘한 공정 (D45)
+	local bh = job.boost == true and 1 or (tonumber(job.boost) or 0) -- 효과 크기 (D49: 손재주 3단계 40~59점 = 0.5)
 	local st = table.clone(job.st or {})
-	st.boostBoil = boost == "boil"
-	st.boostInspect = boost == "inspect"
+	st.boostBoil = boost == "boil" and bh or nil
+	st.boostInspect = boost == "inspect" and bh or nil
 	for _ = 1, n do
 		local q, grade, mult = rollQuality(dd, job.m, st)
 		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = packed, a = true, f = true, src = "factory" }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, packed)
 		if boost == "pack" and packed then
-			item.p = math.floor(item.p * (1 + F.selfWork.packTip) + 0.5) -- ⑤ 그 판 +5%
+			item.p = math.floor(item.p * (1 + F.selfWork.packTip * bh) + 0.5) -- ⑤ 그 판 +5% (절반이면 +2.5%)
 		end
 		local sl = Economy.stockProduced(dd, item, "factory", true)
 		if sl then
@@ -856,21 +926,34 @@ local function askMinigame(player, k)
 	end
 	job.mg = HttpService:GenerateGUID(false)
 	local SW = F.selfWork
-	selfPending[player] = { id = job.mg, line = k, key = job.self, untilT = os.clock() + SW.answerWindow }
+	local judge = judgeFor(player, d, job.self) -- 손재주·도와주기 (D49)
+	selfPending[player] = { id = job.mg, line = k, key = job.self, untilT = os.clock() + SW.answerWindow, judge = judge }
 	if selfEvent then
-		selfEvent:FireClient(player, "mini", job.self, job.mg, SW.minigameSeconds) -- 제작 세션 FactoryMini (station, token, limit)
+		-- 제작 세션 FactoryMini (station, token, limit, { level 0~3, width 판정 폭 배율, assist, pass 성공 점수 })
+		selfEvent:FireClient(player, "mini", job.self, job.mg, SW.minigameSeconds, { level = judge.level, width = judge.width, assist = judge.assist, pass = judge.pass })
 	end
 end
 
--- 미니게임 결과: Remotes.FactorySelf:FireServer("miniResult", token, 잘했나) (또는 FactorySelfResult:InvokeServer(token, 잘했나)).
--- 신호 (서버 → 내 클라, Remotes.FactorySelf): ("start", key) / ("mini", key, token, 초) / ("end", key, 이유). 잘했으면 그 판 효과를 키움
-local function onResult(player, id, good)
+-- 미니게임 결과: Remotes.FactorySelf:FireServer("miniResult", token, 잘했나, 점수 0~100) (또는 FactorySelfResult:InvokeServer(token, 잘했나, 점수)).
+-- 신호 (서버 → 내 클라, Remotes.FactorySelf): ("start", key) / ("mini", key, token, 초, 판정) / ("end", key, 이유). 잘했으면 그 판 효과를 키움
+-- 성공 = 잘했나 true 또는 점수 ≥ 성공 점수(80, 손재주 3단계 60). 3단계는 40~59점이면 효과 절반 (D49). 3판 연속 실패 → 다음 판 도와주기
+local function onResult(player, id, good, score)
 	local p = selfPending[player]
 	if not p or type(id) ~= "string" or id ~= p.id or os.clock() > p.untilT then
 		return { ok = false, reason = "지난 판이에요" }
 	end
 	selfPending[player] = nil
-	if good ~= true then
+	local judge = p.judge or { pass = SKILL.pass }
+	score = (type(score) == "number" and score == score) and math.clamp(score, 0, 100) or nil
+	local h = 0 -- 효과 크기: 1 = 다, 0.5 = 절반, 0 = 실패
+	if good == true or (score and score >= judge.pass) then
+		h = 1
+	elseif score and judge.half and score >= judge.half then
+		h = 0.5
+	end
+	failStreak[player] = failStreak[player] or {}
+	failStreak[player][p.key] = h > 0 and 0 or (failStreak[player][p.key] or 0) + 1 -- 성공하면 도와주기 꺼짐
+	if h <= 0 then
 		return { ok = true, boosted = false } -- 못해도 알바와 같은 효과는 그대로
 	end
 	local SW = F.selfWork
@@ -880,20 +963,21 @@ local function onResult(player, id, good)
 		if not job or job.mg ~= id or job.boost then
 			return false
 		end
-		job.boost = true
+		job.boost = h -- 1 또는 0.5 (끝날 때 끓이기·검사·포장 효과에 곱함)
 		boosted = true
 		if p.key == "sugar" then
-			-- 시작할 때 알바 값(-10%)만큼 덜 냈으니 차이만큼 돌려줌
+			-- 시작할 때 알바 값(-10%)만큼 덜 냈으니 차이만큼 돌려줌 (절반이면 차이의 절반)
 			local full = math.floor((job.sugar or 0) / (1 - STAFF.sugarSave) + 0.5)
-			local back = math.floor(full * SW.sugarSave) - math.floor(full * STAFF.sugarSave)
+			local back = math.floor((math.floor(full * SW.sugarSave) - math.floor(full * STAFF.sugarSave)) * h)
 			dd.ingredients.sugar = (dd.ingredients.sugar or 0) + math.max(0, back)
 		elseif p.key == "press" then
-			job.sec = math.max(job.t + 1, math.floor(job.sec * SW.pressTime / STAFF.pressTime + 0.5))
+			local factor = 1 - (1 - SW.pressTime / STAFF.pressTime) * h
+			job.sec = math.max(job.t + 1, math.floor(job.sec * factor + 0.5))
 		end
-		ups = Economy.addExp(dd, SW.exp)
+		ups = Economy.addExp(dd, math.max(1, math.floor(SW.exp * h + 0.5)))
 	end)
 	Economy.announceLevels(player, ups)
-	return { ok = true, boosted = boosted }
+	return { ok = true, boosted = boosted, half = h < 1 }
 end
 
 local function selfTick(player, d)
@@ -990,13 +1074,14 @@ function FactoryService.init(dataService, economyService, plotService, growthHoo
 		return ok
 	end
 	-- 제작 세션 미니게임은 같은 RemoteEvent로 돌려보냄: FireServer("miniResult", token, ok)
-	selfEvent.OnServerEvent:Connect(function(player, what, token, good)
+	selfEvent.OnServerEvent:Connect(function(player, what, token, good, score)
 		if what == "miniResult" then
-			onResult(player, token, good == true)
+			onResult(player, token, good == true, score)
 		end
 	end)
 	Players.PlayerRemoving:Connect(function(p)
 		status[p] = nil
+		failStreak[p] = nil
 		local d = Data.get(p)
 		if d then
 			selfByData[d] = nil -- 나가면 그 자리는 다시 빈 자리 (오프라인 효과 없음)

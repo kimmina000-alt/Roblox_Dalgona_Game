@@ -211,6 +211,45 @@ PlayerDataService.MIGRATIONS = {
 			end
 		end
 	end,
+	[16] = function(data)
+		-- v15 → v16 (2026-11-24 D51): 문어 Legendary → Mythic (손으로만, 해금 Lv25).
+		-- 알바·기계·공장이 만들던 도안이 문어면 범선(Legendary 최고)으로. Lv25 전이면 해금 목록에서 뺌 (Lv25에 다시 열림)
+		local FROM, TO = "Octopus", "Sailboat"
+		for _, list in ipairs({ data.partTimers, data.helpers }) do
+			if type(list) == "table" then
+				for _, h in pairs(list) do
+					if type(h) == "table" and h.shape == FROM then
+						h.shape = TO
+					end
+				end
+			end
+		end
+		if type(data.machine) == "table" and type(data.machine.shapes) == "table" then
+			for id, s in pairs(data.machine.shapes) do
+				if s == FROM then
+					data.machine.shapes[id] = TO
+				end
+			end
+		end
+		if type(data.factory) == "table" then
+			if data.factory.shape == FROM then
+				data.factory.shape = TO
+			end
+			if type(data.factory.lines) == "table" then
+				for _, job in pairs(data.factory.lines) do
+					if type(job) == "table" and job.s == FROM then
+						job.s = TO -- 돌던 판도 범선으로 (공장은 Mythic을 못 만듦)
+					end
+				end
+			end
+		end
+		if (tonumber(data.level) or 1) < 25 and type(data.unlockedShapes) == "table" then
+			local i = table.find(data.unlockedShapes, FROM)
+			if i then
+				table.remove(data.unlockedShapes, i)
+			end
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

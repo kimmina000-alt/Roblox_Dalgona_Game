@@ -359,6 +359,8 @@ function GrowthService.action(player, what, a, b)
 			ok, msg = true, a and "진열 알바가 손으로 만든 것도 옮겨요" or "손으로 만든 것은 직접 놓아요"
 		elseif what == "train" and type(a) == "string" then
 			ok, msg = actionTrain(dd, a)
+		elseif what == "factorySkill" and type(a) == "string" then
+			ok, msg = Factory.buySkill(dd, a) -- 공장 손재주 한 단계 (D49, 공정 key)
 		elseif what == "helperPost" and type(a) == "number" and type(b) == "string" then
 			ok, msg = actionSetPost(dd, math.floor(a), b)
 		elseif what == "helperShape" and type(a) == "number" and type(b) == "string" then
