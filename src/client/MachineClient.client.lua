@@ -535,7 +535,7 @@ end)
 -- 서버 GrowthService가 미니미를 맡은 자리 옆에 세움: Helper_steel/_pink/_line (StationKey "m2"/"m3"/"m4"),
 -- Helper_display ("display"), Helper_cashier ("cashier"). 속성 Working = 일하는 중.
 -- 일하는 동안 그 자리 동작을 되풀이하고, 쉬거나 멀면(HELPER_DIST) 멈춘 자세 (폰 성능: 가까이 있을 때만 움직임).
--- 화로 알바(Helper1)는 Making/HelperLadles가 그림
+-- 화로 알바는 2026-11-24에 없어지고 2단계 기계 알바(m2, 국자 2개 번갈아 젓기)로 합쳐짐. 손 작업대 화로에는 알바를 안 그림 (Making/HelperLadles)
 local HELPER_DIST = 70
 local H_JOINTS = { R = { "RightUpperArm", "RightShoulder" }, L = { "LeftUpperArm", "LeftShoulder" }, W = { "UpperTorso", "Waist" }, N = { "Head", "Neck" } }
 local function rad(x)
