@@ -80,7 +80,20 @@ function Ppopgi.run(ctx, dal, shapeId)
 			})
 		end
 	end
+	-- 뽑기 판 위 점선 (칸마다 점 하나)과 긁은 칸 (2026-11-23 뽑기 판)
+	local padDots, padIndex, padDone = {}, {}, {}
+	for li, L in ipairs(path.loops) do
+		for b = 0, L.nb - 1 do
+			local x, y = Rules.pointAt(path, li, (b + 0.5) * L.binLen)
+			table.insert(padDots, toWorld(x, y, LIFT))
+			padIndex[li .. ":" .. b] = #padDots
+		end
+	end
 	local function scrape(li, b)
+		local pi = padIndex[li .. ":" .. b]
+		if pi then
+			padDone[pi] = true
+		end
 		local d = dashes[li] and dashes[li][b]
 		if d then
 			local L = path.loops[li]
@@ -134,11 +147,43 @@ function Ppopgi.run(ctx, dal, shapeId)
 		head.CFrame = CFrame.new(top)
 		shaft.Color = STEEL:Lerp(CRACK_RED, math.clamp(stress, 0, 1) * 0.8)
 	end
+	-- 뽑기 판 (2026-11-23 사용자: 붓기 판처럼 따로 판, 손가락이 도안을 가리지 않게): 판 = 화면에 보이는 달고나 둘레
+	-- 정사각형을 그대로 줄인 것. 판을 누르고 시작하면 판 위 자리와 같은 화면 자리 아래를 긁음. 달고나를 직접 긁어도 됨
+	local cam = workspace.CurrentCamera
+	local function screenFrame()
+		local c = cam:WorldToScreenPoint(toWorld(0, 0))
+		local e = cam:WorldToScreenPoint(toWorld(ext * 1.3 + 0.25, 0))
+		local span = math.max(20, (Vector2.new(e.X, e.Y) - Vector2.new(c.X, c.Y)).Magnitude)
+		return Vector2.new(c.X, c.Y), span
+	end
+	local function padToScreen(u, v)
+		local c, span = screenFrame()
+		return Vector2.new(c.X + (u - 0.5) * 2 * span, c.Y + (v - 0.5) * 2 * span)
+	end
+	local function worldToPad(w)
+		local c, span = screenFrame()
+		local p = cam:WorldToScreenPoint(w)
+		return (p.X - c.X) / (2 * span) + 0.5, (p.Y - c.Y) / (2 * span) + 0.5
+	end
+	local padMode = false -- 이번 누르기를 판에서 시작했나
+	local lastPress = P.presses
 	local function tipFromPointer()
 		-- 누른 곳 그대로 긁음 (2026-11-21 사용자: 누른 곳과 긁히는 곳이 달랐음 → 폰 손가락 보정 뺌)
-		local f = P.toPlane(topY + 0.03)
+		local sp = nil
+		if P.down and P.presses ~= lastPress then
+			lastPress = P.presses
+			padMode = ui:ppPadAt(P.pos) ~= nil
+		end
+		if padMode then
+			local u, v = ui:ppPadAt(P.pos, true)
+			if u then
+				sp = padToScreen(u, v)
+			end
+		end
+		local f = P.toPlane(topY + 0.03, sp)
 		return Vector3.new(f.X, surfY(f) + LIFT - 0.01, f.Z)
 	end
+	ui:setPpPad(true)
 
 	ui:say("바늘로 점선을 따라 긁어요", "천천히! 빠르게 긋거나 선을 벗어나면 금이 가요")
 	local quitBtn = ui:setSkip(true, "그만하기")
@@ -156,6 +201,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 		if not dt then
 			ui:setSkip(false)
 			ui:setMeter(false)
+			ui:setPpPad(false)
 			return nil
 		end
 		t += dt
@@ -163,6 +209,14 @@ function Ppopgi.run(ctx, dal, shapeId)
 		hintT -= dt
 		local tip = tipFromPointer()
 		placeNeedle(tip, not P.down, run.stress)
+		-- 판 위 점선·바늘 (카메라가 움직여도 맞게 매 프레임)
+		local uvs = table.create(#padDots)
+		for i, w in ipairs(padDots) do
+			local u, v = worldToPad(w)
+			uvs[i] = { u, v }
+		end
+		local nu, nv = worldToPad(tip)
+		ui:setPpPadDots(uvs, padDone, math.clamp(nu, 0, 1), math.clamp(nv, 0, 1), P.down and padMode)
 		if quitBtn and quitBtn.clicked then
 			quit = true
 			ended = "quit"
@@ -230,6 +284,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 	Sfx.loop("stirDry", 0)
 	ui:setSkip(false)
 	ui:setMeter(false)
+	ui:setPpPad(false)
 	local res = Rules.result(run)
 	shaft:Destroy()
 	head:Destroy()

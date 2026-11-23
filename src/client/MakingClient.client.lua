@@ -137,7 +137,11 @@ local function setUnturned(on)
 	-- 가게 작업대(주인 속성이 있는 것)만 돌려 놓음. 새 배치 미리 보기 작업대는 안 돌림
 	if on and not unturned and station.model:GetAttribute("OwnerUserId") ~= nil then
 		local plots = GrowthConfig.Plots
-		local a = math.rad((plots and plots.workstationTurn) or 0)
+		-- 2026-11-23 사용자 "손제작대 화면 배경 회전": 작업대를 내 화면에서 되돌리지 않음. 카메라(CameraRig)가 작업대 방향을
+		-- 따라 반대편에서 보므로 도구 배치는 그대로이고, 배경(가게 바닥·길)만 실제 가게 방향대로 보임.
+		-- 다시 되돌리려면 아래를 math.rad((plots and plots.workstationTurn) or 0) 으로
+		local a = 0
+		local _ = plots
 		if a == 0 then
 			return
 		end
@@ -312,28 +316,56 @@ local function runSession()
 	do
 		local need = GrowthConfig.recipe(shape.grade)
 		need.chopsticks = GrowthConfig.ChopsticksPerRound or 1
-		local missing, first = {}, nil
-		for _, ing in ipairs(GrowthConfig.Ingredients) do
-			local n = need[ing.id] or 0
-			local have = player:GetAttribute("Ing_" .. ing.id)
-			if ing.id == "chopsticks" and have == nil then
-				have = player:GetAttribute("Chopsticks")
+		local function missingList()
+			local missing, first = {}, nil
+			for _, ing in ipairs(GrowthConfig.Ingredients) do
+				local n = need[ing.id] or 0
+				local have = player:GetAttribute("Ing_" .. ing.id)
+				if ing.id == "chopsticks" and have == nil then
+					have = player:GetAttribute("Chopsticks")
+				end
+				if n > 0 and have ~= nil and have < n then
+					table.insert(missing, string.format("%s %d", ing.name, n))
+					first = first or ing.id
+				end
 			end
-			if n > 0 and have ~= nil and have < n then
-				table.insert(missing, string.format("%s %d", ing.name, n))
-				first = first or ing.id
-			end
+			return missing, first
 		end
+		local missing, first = missingList()
 		if #missing > 0 then
-			ui:say("재료가 모자라요", table.concat(missing, ", ") .. " 필요 · 재료 상점에서 사 와요")
-			task.wait(2)
-			finish()
+			-- 상점을 연 채로 기다렸다가, 사서 재료가 다 차면 상점을 닫고 그대로 이어서 만듦 (2026-11-23 사용자
+			-- "재료 부족할 때 상점에서 바로 사면 창 닫히지 않고 그대로 제작 이어지게"). 상점을 그냥 닫으면 예전처럼 끝냄
 			local hud = script.Parent:FindFirstChild("Hud")
 			local open = hud and hud:FindFirstChild("OpenShop")
+			local shopGui = player.PlayerGui:FindFirstChild("ShopHud")
+			local shopWin = shopGui and shopGui:FindFirstChild("Shop", true)
+			ui:say("재료가 모자라요", table.concat(missing, ", ") .. " 필요 · 상점에서 사면 바로 이어서 만들어요")
 			if open then
 				open:Fire(first)
 			end
-			return
+			task.wait(0.3)
+			while true do
+				if ctx.aborted then
+					if shopWin then
+						shopWin.Visible = false
+					end
+					return
+				end
+				if #(missingList()) == 0 then
+					if shopWin then
+						shopWin.Visible = false
+					end
+					ui:say("재료가 다 모였어요", "이어서 만들어요")
+					task.wait(0.8)
+					break
+				end
+				if not shopWin or not shopWin.Visible then
+					-- 사지 않고 상점을 닫음 → 끝냄
+					finish()
+					return
+				end
+				task.wait(0.2)
+			end
 		end
 	end
 	-- 0. 나무젓가락 꺼내기 (통을 누르면 한 짝이 뽑혀 테이블 위에 놓임)
