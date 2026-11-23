@@ -297,6 +297,24 @@ local function runSession()
 	Pointer.reset()
 	Pointer.enabled = true
 
+	-- 알바가 맡은 기계는 직접 못 씀 (2026-11-24 사용자 "알바생이 있을 때는 기계 못 쓰게. 알바 빼고 사용", "모든 기계").
+	-- 손 작업대 = 화로 알바(미니미 속성 Post "stove")가 있으면 안내만 하고 끝냄. 알바생 창에서 빼면 만들 수 있음
+	do
+		local plot = station.model.Parent
+		local busy = false
+		for _, m in ipairs(plot and plot:GetChildren() or {}) do
+			if m:IsA("Model") and m:GetAttribute("Post") == "stove" then
+				busy = true
+				break
+			end
+		end
+		if busy then
+			ui:say("화로 알바가 이 작업대에서 일하는 중이에요", "성장 > 알바생에서 화로 알바를 빼면 직접 만들 수 있어요")
+			task.wait(3)
+			finish()
+			return
+		end
+	end
 	-- 0. 도안 고르기 (처음 시작, 또는 결과 화면의 "다른 도안")
 	ui:setStep(1)
 	CameraRig.go("sugar")
