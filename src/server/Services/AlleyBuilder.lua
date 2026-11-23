@@ -228,7 +228,7 @@ end
 -- 가상 가게 (실제 상표 아님). style: 벽 재질·색, 차양 색, 앞모습 종류
 local SHOPS = {
 	{ "행복문방구", 30, { wall = C.cream, mat = Enum.Material.Plaster, awn = { C.pink, C.white }, kind = "toys" } },
-	{ "골목슈퍼", 28, { wall = C.mint, mat = Enum.Material.Plaster, awn = { C.mint, C.white }, kind = "crates" } },
+	{ "솜사탕가게", 28, { wall = C.mint, mat = Enum.Material.Plaster, awn = { C.mint, C.white }, kind = "crates" } }, -- 예전 "골목슈퍼": 진짜 슈퍼(D54)가 동쪽 끝에 생겨 이름을 바꿈
 	{ "별빛이발소", 22, { wall = C.sky, mat = Enum.Material.Plaster, awn = { C.sky, C.white }, kind = "barber" } },
 	{ "동네쌀집", 24, { wall = C.brick, mat = Enum.Material.Brick, awn = { C.butter, C.white }, kind = "sacks" } },
 	{ "보물만화방", 26, { wall = C.lilac, mat = Enum.Material.Plaster, awn = { C.lilac, C.white }, kind = "door" } },
@@ -331,6 +331,69 @@ local function decorShop(def, x0)
 	return m
 end
 
+-- ── 골목 슈퍼 (D54, 2026-11-25 확정): 재료는 슈퍼에 걸어가 사 옴. 동쪽 끝 남쪽 줄 꾸미기 가게 1칸을 바꿈 (D31 바뀜), 문은 길 쪽.
+-- 모델 = ServerStorage.Assets.AlleyMarket (3D 세션이 만듦: 피벗 = 바닥 앞 가운데, 앞 = -Z, 폭 MARKET_W·깊이 MARKET_D 안).
+-- 모델이 없으면 들어갈 수 있는 임시 건물(바닥·벽 3면·문 뚫린 앞벽·지붕·간판·계산대 자리)을 만듦.
+-- 서버 장보기(저장·부지 세션)·길 안내(UI)가 쓰는 자리: Workspace.Alley.AlleyMarket 안 파트
+--   MarketSpot (바닥 앞 가운데, 앞 = LookVector = 길 쪽), MarketDoor (문 가운데, 투명·충돌 없음), MarketCounter (계산대, 장보기 안내 붙일 곳)
+--   모델 속성 Market = true. 모델 안에 같은 이름 파트가 있으면 그것을 씀
+local MARKET_W, MARKET_D = 36, SHOP_DEPTH -- 폭(길 따라) · 깊이 (꾸미기 가게 줄 뒤 담벼락까지)
+local DOOR_W, DOOR_H = 7, 8
+local function marketShell(m, x0, w)
+	local d, h = MARKET_D, 12
+	local zc = CANON_Z + d / 2
+	local wallC, trim = C.cream, C.leaf
+	part(m, "Floor", Vector3.new(w, 1, d), CFrame.new(x0, 0.5, zc), C.white, Enum.Material.Marble)
+	part(m, "BackWall", Vector3.new(w, h, 1), CFrame.new(x0, h / 2 + 1, CANON_Z + d - 0.5), wallC, Enum.Material.Plaster)
+	for _, sx in ipairs({ -1, 1 }) do
+		part(m, "SideWall", Vector3.new(1, h, d), CFrame.new(x0 + sx * (w / 2 - 0.5), h / 2 + 1, zc), wallC, Enum.Material.Plaster)
+	end
+	-- 앞벽: 가운데 문 구멍 (폭 DOOR_W, 높이 DOOR_H) 양옆 유리창 + 문 위 벽
+	local side = (w - DOOR_W) / 2
+	for _, sx in ipairs({ -1, 1 }) do
+		local cx = x0 + sx * (DOOR_W / 2 + side / 2)
+		part(m, "FrontWall", Vector3.new(side, 3, 1), CFrame.new(cx, 2.5, CANON_Z + 0.5), wallC, Enum.Material.Plaster)
+		part(m, "Window", Vector3.new(side - 1, 5, 0.3), CFrame.new(cx, 6.5, CANON_Z + 0.5), C.glass, Enum.Material.Glass, { Transparency = 0.5 })
+		part(m, "FrontWallTop", Vector3.new(side, h - 8, 1), CFrame.new(cx, 9 + (h - 8) / 2, CANON_Z + 0.5), wallC, Enum.Material.Plaster)
+	end
+	part(m, "DoorHeader", Vector3.new(DOOR_W, h - DOOR_H, 1), CFrame.new(x0, 1 + DOOR_H + (h - DOOR_H) / 2, CANON_Z + 0.5), wallC, Enum.Material.Plaster)
+	part(m, "Roof", Vector3.new(w + 1, 0.6, d + 1), CFrame.new(x0, h + 1.3, zc), trim:Lerp(C.brickDark, 0.35), Enum.Material.SmoothPlastic)
+	local sign = part(m, "Sign", Vector3.new(w * 0.6, 2.6, 0.35), CFrame.new(x0, h - 0.4, CANON_Z - 0.3), C.cream, Enum.Material.Wood)
+	part(m, "SignFrame", Vector3.new(w * 0.6 + 0.5, 3.1, 0.25), CFrame.new(x0, h - 0.4, CANON_Z - 0.15), C.wood, Enum.Material.Wood)
+	signText(sign, "골목 슈퍼", C.ink)
+	awning(m, x0, w * 0.9, h - 2.8, CANON_Z, { C.leaf, C.white })
+	-- 안: 계산대 (문 들어가서 오른쪽 안), 진열대 두 줄 (가운데 통로는 비움)
+	part(m, "MarketCounter", Vector3.new(6, 3.2, 2.4), CFrame.new(x0 + w / 2 - 5, 2.6, CANON_Z + 4), C.woodLight, Enum.Material.Wood)
+	for _, sx in ipairs({ -1, 1 }) do
+		part(m, "Shelf", Vector3.new(2, 5, d - 6), CFrame.new(x0 + sx * (w / 2 - 3), 3.5, zc + 2), C.wood, Enum.Material.Wood)
+	end
+end
+local function marketSpot(x0, w, target)
+	local m = model("AlleyMarket")
+	m:SetAttribute("Market", true)
+	local src = ServerStorage:FindFirstChild("Assets") and ServerStorage.Assets:FindFirstChild("AlleyMarket")
+	local cx = x0 + w / 2
+	local base = CFrame.new(cx, 0, CANON_Z) -- 기준 자리 (앞 = -Z)
+	if src then
+		local c = src:Clone()
+		c.Name = "Building"
+		c:PivotTo(base)
+		c.Parent = m
+	else
+		marketShell(m, cx, w)
+	end
+	-- 자리 표시 (모델 안에 같은 이름이 없을 때만)
+	if not m:FindFirstChild("MarketSpot", true) then
+		part(m, "MarketSpot", Vector3.new(2, 0.2, 2), base * CFrame.new(0, 0.1, 0), C.white, nil, { Transparency = 1, CanCollide = false, CanQuery = false })
+	end
+	if not m:FindFirstChild("MarketDoor", true) then
+		part(m, "MarketDoor", Vector3.new(DOOR_W, DOOR_H, 0.4), base * CFrame.new(0, 1 + DOOR_H / 2, 0.5), C.white, nil, { Transparency = 1, CanCollide = false, CanQuery = false })
+	end
+	-- MarketSpot 앞(LookVector)이 길 쪽: 기준 자리에서 앞 = -Z
+	m:PivotTo(target * base:Inverse() * m:GetPivot())
+	return m
+end
+
 -- 골목 양 끝, 길 양쪽에 꾸미기 가게. 기준 자리(앞선 z = CANON_Z, 앞 = -Z)에서 만든 뒤 제자리로 옮김
 local function endShops()
 	local idx = 1
@@ -339,6 +402,11 @@ local function endShops()
 			local frontZ = side == "S" and ROAD_Z0 or ROAD_Z1
 			local rot = side == "S" and CFrame.Angles(0, math.pi, 0) or CFrame.new() -- 남쪽 줄은 +Z(길)를 봄
 			local x = END_X0
+			if sx == 1 and side == "S" then
+				-- 동쪽 끝 남쪽 첫 칸 = 골목 슈퍼 (D54)
+				marketSpot(0, MARKET_W, CFrame.new(sx * (x + MARKET_W / 2), 0, frontZ) * rot)
+				x += MARKET_W + 2
+			end
 			while true do
 				local def = SHOPS[((idx - 1) % #SHOPS) + 1]
 				local w = def[2]
