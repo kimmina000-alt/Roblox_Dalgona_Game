@@ -298,6 +298,10 @@ function EconomyService.canMake(player, shape)
 	if #missing > 0 then
 		return false, "재료가 모자라요: " .. table.concat(missing, ", ") .. " 필요 (상점에서 사요)"
 	end
+	-- 연탄 (D44): 화로 연탄이 다 탔고 보관한 연탄도 없으면 시작 못 함
+	if (tonumber(data.coalLeft) or 1) <= 0.001 and (data.ingredients.coal or 0) < 1 then
+		return false, "연탄이 다 떨어졌어요 (재료 상점에서 사요)"
+	end
 	return true
 end
 
@@ -365,6 +369,34 @@ function EconomyService.sell(player, n, ctype)
 		fire("sold", player, sold, coins)
 	end
 	return sold, coins, items, tips
+end
+
+-- 연탄 (D44): 판을 시작할 때 화로 연탄이 다 탔으면 보관한 연탄 1장을 갈아 넣음. 반환 = 화로 연탄 남은 양
+function EconomyService.coalStart(player)
+	local left = 1
+	Data.update(player, function(d)
+		left = tonumber(d.coalLeft) or 1
+		if left > 0.001 then
+			return false
+		end
+		if (d.ingredients.coal or 0) < 1 then
+			return false -- canMake가 이미 막음
+		end
+		d.ingredients.coal -= 1
+		d.coalLeft = 1
+		left = 1
+	end)
+	return left
+end
+
+-- 한 판 끝: 화로 연탄이 amount만큼 탐. 반환 = 남은 양
+function EconomyService.coalBurn(player, amount)
+	local left = 0
+	Data.update(player, function(d)
+		d.coalLeft = math.max(0, (tonumber(d.coalLeft) or 1) - amount)
+		left = d.coalLeft
+	end)
+	return left
 end
 
 -- 방금 만든 달고나 포장: 포장지 1 + 빵끈 1을 쓰고 판매가 ×1.1. 반환 { ok, reason, price }

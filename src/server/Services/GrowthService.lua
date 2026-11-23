@@ -24,6 +24,7 @@ local Factory = require(script.Parent:WaitForChild("FactoryService")) -- 5단계
 local Offline = require(script.Parent:WaitForChild("OfflineService")) -- 오프라인 생산 정산 (D29)
 local Tutorial = require(script.Parent:WaitForChild("TutorialService")) -- 첫 60초 안내 (21번)
 local Production = require(script.Parent:WaitForChild("ProductionService")) -- 손으로 만드는 중인가 (D34)
+local WorkstationBuilder = require(script.Parent:WaitForChild("WorkstationBuilder")) -- 화로 연탄 모습 (D44)
 
 local GrowthService = {}
 
@@ -438,15 +439,34 @@ local function helperFoot(plot, post, i)
 			local pos = Vector3.new(l.X, y, l.Z)
 			return plot.cframe * CFrame.lookAt(pos, pos + Vector3.new(look.X, 0, look.Z))
 		end
-		local role = p.kind == "display" and "유리 진열장" or "앞 카운터 (나무)"
-		for _, part in ipairs(plot.model:GetDescendants()) do
-			if part:IsA("BasePart") and part:GetAttribute("Role") == role then
-				local l = plot.cframe:ToObjectSpace(part.CFrame)
-				local sz = part.Size
-				local halfZ = (math.abs(l.RightVector.Z) * sz.X + math.abs(l.UpVector.Z) * sz.Y + math.abs(l.LookVector.Z) * sz.Z) / 2
-				local pos = Vector3.new(l.X, y, l.Z + halfZ + 1.3)
-				return plot.cframe * CFrame.lookAt(pos, pos - Vector3.zAxis)
+		local function box(role)
+			for _, part in ipairs(plot.model:GetDescendants()) do
+				if part:IsA("BasePart") and part:GetAttribute("Role") == role then
+					local l = plot.cframe:ToObjectSpace(part.CFrame)
+					local sz = part.Size
+					local hx = (math.abs(l.RightVector.X) * sz.X + math.abs(l.UpVector.X) * sz.Y + math.abs(l.LookVector.X) * sz.Z) / 2
+					local hz = (math.abs(l.RightVector.Z) * sz.X + math.abs(l.UpVector.Z) * sz.Y + math.abs(l.LookVector.Z) * sz.Z) / 2
+					return l.Position, hx, hz
+				end
 			end
+			return nil
+		end
+		local case, _, caseZ = box("유리 진열장")
+		local counter, counterX, counterZ = box("앞 카운터 (나무)")
+		local pos = nil
+		if p.kind == "display" and case then
+			pos = Vector3.new(case.X, y, case.Z + caseZ + 1.3) -- 유리 진열장 뒤
+		elseif p.kind == "cashier" and counter then
+			-- 앞 카운터 뒤, 유리 진열장이 없는 쪽 끝 (진열 알바와 안 겹치게, 2026-11-24)
+			local x = counter.X
+			if case then
+				local side = case.X > counter.X and -1 or 1
+				x = counter.X + side * math.max(0, counterX - 2.5)
+			end
+			pos = Vector3.new(x, y, counter.Z + counterZ + 1.3)
+		end
+		if pos then
+			return plot.cframe * CFrame.lookAt(pos, pos - Vector3.zAxis)
 		end
 	end
 	if post == "stove" then
@@ -545,6 +565,26 @@ local function rollHelperQuality(qMin, qMax)
 end
 
 -- 알바생 1명 1초 진행 (D34: 배치한 제작대에 따라)
+-- 화로 알바 연탄 (D44): 두 번째 화구(D40)가 있으면 그 화구 연탄(coalLeft2), 없으면 내 화로 연탄(coalLeft)을 같이 씀
+local function helperCoalKey(d)
+	return (d.stoveUps and d.stoveUps.burner2) and "coalLeft2" or "coalLeft"
+end
+
+-- 지금 화구에 연탄이 있거나 갈아 넣을 연탄이 있나
+local function helperCoalReady(d)
+	return (tonumber(d[helperCoalKey(d)]) or 1) > 0.001 or (d.ingredients.coal or 0) >= 1
+end
+
+-- 한 판 끝: 다 탔으면 보관 연탄 1장을 갈아 넣고 한 판만큼 태움 (Data.update 안에서)
+local function helperBurnCoal(dd)
+	local key = helperCoalKey(dd)
+	if (tonumber(dd[key]) or 1) <= 0.001 and (dd.ingredients.coal or 0) >= 1 then
+		dd.ingredients.coal -= 1
+		dd[key] = 1
+	end
+	dd[key] = math.max(0, (tonumber(dd[key]) or 1) - G.CoalPerMake)
+end
+
 -- 진열 알바 (D33): 옮길 달고나 하나 고르기 (먼저 만든 것부터, 손 제작품 켜면 손 제작품 먼저, 들고 있는 것은 빼고)
 local function displayPick(player, d)
 	local maxSlots = G.shelfSlots(d)
@@ -687,6 +727,8 @@ local function stepHelper(player, d, i, h, st, dt)
 		why = "보관함 가득"
 	elseif d.coins < wage then
 		why = "급여 부족"
+	elseif not helperCoalReady(d) then
+		why = "연탄 없음" -- D44
 	end
 	if why then
 		st.status = why
@@ -707,6 +749,7 @@ local function stepHelper(player, d, i, h, st, dt)
 		dd.coins -= wage
 		dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + wage
 		dd.stats.helperMade = (dd.stats.helperMade or 0) + 1
+		helperBurnCoal(dd) -- D44
 		local q, grade, mult = rollHelperQuality(qMin, qMax)
 		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
@@ -745,6 +788,8 @@ local function offlineHelper(dd, i, st, dt, rep)
 		why = "보관함 가득"
 	elseif dd.coins < wage then
 		why = "급여 부족"
+	elseif not helperCoalReady(dd) then
+		why = "연탄 없음" -- D44
 	end
 	if why then
 		rep.stops["알바생 " .. i] = rep.stops["알바생 " .. i] or why -- 처음 멈춘 이유
@@ -758,6 +803,11 @@ local function offlineHelper(dd, i, st, dt, rep)
 	dd.coins -= wage
 	dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + wage
 	dd.stats.helperMade = (dd.stats.helperMade or 0) + 1
+	local coalBefore = dd.ingredients.coal or 0
+	helperBurnCoal(dd) -- D44
+	if (dd.ingredients.coal or 0) < coalBefore then
+		rep.used.coal = (rep.used.coal or 0) + (coalBefore - dd.ingredients.coal)
+	end
 	local q, grade, mult = rollHelperQuality(qMin, qMax)
 	local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 	item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
@@ -832,6 +882,11 @@ local function syncHelpers(player, d)
 	local ladles = G.helperAt(d, "stove") and 2 or 1
 	if ws and ws:GetAttribute("LadleCount") ~= ladles then
 		ws:SetAttribute("LadleCount", ladles)
+	end
+	-- 화로 연탄 모습 = 저장된 남은 양 (D44, 화로 알바가 태운 것·자리 비운 동안 쓴 것도)
+	local coal = tonumber(d.coalLeft) or 1
+	if ws and math.abs((ws:GetAttribute("CoalLeft") or 1) - coal) > 0.001 then
+		WorkstationBuilder.setCoal(ws, coal)
 	end
 end
 
@@ -1044,11 +1099,12 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 		clearHelpers(p)
 	end)
 
-	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP, 월세 타이머 초, 달고나 목록, 보관함 비우기) (실서버에서는 안 만듦)
+	-- Studio 테스트용: ServerStorage.DevGrant:Invoke(userId, 코인, EXP, 월세 타이머 초, 달고나 목록, 보관함 비우기, 값 바꾸기) (실서버에서는 안 만듦)
+	-- 값 바꾸기 = { coalLeft = 0, ingredients = { coal = 0 } } 처럼 데이터 칸을 바로 씀 (표는 한 단계 안까지)
 	if game:GetService("RunService"):IsStudio() then
 		local dev = Instance.new("BindableFunction")
 		dev.Name = "DevGrant"
-		dev.OnInvoke = function(userId, coins, exp, rentTimer, items, clearStock)
+		dev.OnInvoke = function(userId, coins, exp, rentTimer, items, clearStock, set)
 			local p = Players:GetPlayerByUserId(userId)
 			if not p then
 				return "no player"
@@ -1065,6 +1121,15 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 				end
 				for _, item in ipairs(items or {}) do -- 시험용 달고나 (빈 진열 칸 → 없으면 보관함)
 					Economy.stockProduced(d, item, "dev")
+				end
+				for k, v in pairs(type(set) == "table" and set or {}) do
+					if type(v) == "table" and type(d[k]) == "table" then
+						for k2, v2 in pairs(v) do
+							d[k][k2] = v2
+						end
+					else
+						d[k] = v
+					end
 				end
 			end)
 			Economy.announceLevels(p, ups)
