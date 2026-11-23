@@ -92,6 +92,9 @@ local function setControls(enabled)
 end
 
 local function setCharacterHidden(hidden)
+	-- 만드는 중 신호 (2026-11-24 "만드는 동안 칭호 숨기기"): 내 화면에서만 플레이어 속성 Making = true/nil.
+	-- 머리 위 칭호(UI 세션 TitleTags)·이름표가 이 속성을 보고 내 화면에서 숨김
+	player:SetAttribute("Making", hidden and true or nil)
 	local char = player.Character
 	if not char then
 		return
