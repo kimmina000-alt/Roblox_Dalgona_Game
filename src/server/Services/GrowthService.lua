@@ -475,6 +475,14 @@ local function helperFoot(plot, post, i)
 		end
 	end
 	if post == "stove" then
+		-- 화구 ② 옆 (2026-11-24 화구 2개 기본): 화구 ② 뒤쪽(주인 쪽)에 서서 화구를 봄
+		local ws = plot.model:FindFirstChild("Workstation")
+		local b2 = ws and ws:FindFirstChild("Brazier2")
+		if b2 then
+			local l = plot.cframe:PointToObjectSpace(b2:GetPivot().Position)
+			local pos = Vector3.new(l.X, G.Plots.size.Y, l.Z + G.Plots.minimeBehind + 1)
+			return plot.cframe * CFrame.lookAt(pos, Vector3.new(l.X, G.Plots.size.Y, l.Z))
+		end
 		return stoveFoot(plot, 1)
 	end
 	return stoveFoot(plot, 1 + i) -- 대기
@@ -988,6 +996,45 @@ local function syncHelpers(player, d)
 	local ladles = G.helperAt(d, "stove") and 2 or 1
 	if ws and ws:GetAttribute("LadleCount") ~= ladles then
 		ws:SetAttribute("LadleCount", ladles)
+	end
+	-- 화구 ② (2026-11-24 사용자: 가게 임대 Lv3부터 화구 2개, ①은 내 손 작업대, ②는 화로 알바 자리).
+	-- 서버가 화로(Brazier)를 복제해 작업대 밖(테이블 오른쪽 끝 너머)에 둠. 자리는 작업대 틀 속성 Burner2Rel(작업대 기준 CFrame)로 바꿀 수 있음.
+	-- 작업대 속성 Burner2 = 놓은 자리(작업대 기준), CoalLeft2 = 화구 ② 연탄 (제작 세션 HelperLadles·화면이 봄)
+	if ws then
+		local want = G.shopOpen(d) and (d.level or 1) >= G.Shop.rentLevel
+		local b2 = ws:FindFirstChild("Brazier2")
+		if want and not b2 then
+			local b1 = ws:FindFirstChild("Brazier")
+			local top = ws:FindFirstChild("TableTop")
+			if b1 and top then
+				b2 = b1:Clone()
+				b2.Name = "Brazier2"
+				local rel = ws:GetAttribute("Burner2Rel")
+				local cf
+				if typeof(rel) == "CFrame" then
+					cf = ws:GetPivot() * rel
+				else
+					cf = b1:GetPivot() + top.CFrame.RightVector * (top.Size.X / 2 + 2.6)
+				end
+				b2:PivotTo(cf)
+				b2.Parent = ws
+				ws:SetAttribute("Burner2", ws:GetPivot():ToObjectSpace(cf))
+				-- 이미 서 있던 화로 알바는 화구 ② 옆으로
+				local h1 = plot and plot.model:FindFirstChild("Helper1")
+				if h1 then
+					h1:PivotTo(helperFoot(plot, "stove", 1))
+				end
+			end
+		elseif not want and b2 then
+			b2:Destroy()
+			ws:SetAttribute("Burner2", nil)
+		end
+		if ws:FindFirstChild("Brazier2") then
+			local c2 = tonumber(d.coalLeft2) or 1
+			if math.abs((ws:GetAttribute("CoalLeft2") or -1) - c2) > 0.001 then
+				WorkstationBuilder.setCoal2(ws, c2)
+			end
+		end
 	end
 	-- 화로 연탄 모습 = 저장된 남은 양 (D44, 화로 알바가 태운 것·자리 비운 동안 쓴 것도)
 	local coal = tonumber(d.coalLeft) or 1
