@@ -229,6 +229,7 @@ end
 -- ── 공장 공정 알바생 (D30): 고용한 공정의 미니미가 그 공정 동작을 되풀이. 멀거나(STAFF_DIST) 쉬면 멈춘 자세 ──
 -- 미니미 = FactoryLot.Staff.Staff_<key> (서버 FactoryDisplay), 일하는지 = Factory<i> 속성 StaffOn_<key>
 local STAFF_DIST = 60
+local STAFF_SHOW = 55 -- 공장 건물 가운데에서 이 안이면 공정 알바가 보임 (공장 안·문 앞)
 local JOINTS = { R = { "RightUpperArm", "RightShoulder" }, L = { "LeftUpperArm", "LeftShoulder" }, W = { "UpperTorso", "Waist" }, N = { "Head", "Neck" } }
 local MOTION = {
 	-- 공정마다 팔·허리·고개 각도(라디안)를 시간 t로: 설탕 붓기 · 솥 젓기 · 레버 당기기 · 들여다보기 · 상자 접기
@@ -275,6 +276,24 @@ local function animateStaff(fac, now, camPos)
 	local lot = plot and plot:FindFirstChild("FactoryLot")
 	local folder = lot and lot:FindFirstChild("Staff")
 	if not folder then
+		return
+	end
+	-- 공장 공정 알바 5명은 공장 안·앞에서만 보임 (D43, 2026-11-24): 공장 건물 가운데에서 STAFF_SHOW보다 멀면 내 화면에서 숨김
+	local b = lot:FindFirstChild("Building")
+	local show = b ~= nil and (b:GetPivot().Position - camPos).Magnitude < STAFF_SHOW
+	for _, m in ipairs(folder:GetChildren()) do
+		if m:GetAttribute("Shown") ~= show then
+			m:SetAttribute("Shown", show)
+			for _, d in ipairs(m:GetDescendants()) do
+				if d:IsA("BasePart") then
+					d.LocalTransparencyModifier = show and 0 or 1
+				elseif d:IsA("BillboardGui") then
+					d.Enabled = show
+				end
+			end
+		end
+	end
+	if not show then
 		return
 	end
 	for _, m in ipairs(folder:GetChildren()) do
