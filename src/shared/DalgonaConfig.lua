@@ -133,6 +133,12 @@ C.Sounds = {
 	-- 비닐 바스락 (2026-11-20 "비닐 씌우고 빵끈 묶을 때 바스락", Creator Store 무료 Pro Sound Effects)
 	bagRustle = "rbxassetid://9125745458", -- 비닐 바스락바스락 (반복, 끄는·돌리는 빠르기 = 크기)
 	bagYank = "rbxassetid://9117414729", -- 비닐 한 장 휙 꺼내는 소리
+	-- 공장 공정별 소리 (2026-11-24 사용자 "공장 기계 공정별 효과음", Creator Store 무료·공식 라이선스). 돌 때만, 멀면 안 들림 (FactoryClient)
+	factorySugar = "rbxassetid://9113597694", -- ① 설탕 통에서 사르르 (반복, 손 제작 sugarPour와 같은 소리)
+	factoryBoil = "rbxassetid://133231513785313", -- ② 솥 보글보글 (반복, DistroKid "Boiling Potatoes In A Pot")
+	factoryPress = "rbxassetid://9120188871", -- ③ 프레스 쿵 (내려올 때마다, Pro Sound Effects "Toolbox Impact Wood Metal Hits 12")
+	factoryFan = "rbxassetid://117763407479894", -- ④ 식힘 덮개 환풍기 웅웅 (반복, DistroKid "Air Conditioner (Loopable)")
+	factoryBox = "rbxassetid://9113721416", -- ⑤ 상자 뚜껑 닫힐 때 툭 (Pro Sound Effects "Cardboard Carton 1")
 	-- 앞쪽 무음 (AudioAnalyzer로 잼). 반복 소리도 이 구간부터 되풀이돼서 끊김이 없음
 	sugarPourStart = 0.08,
 	crackStart = 0.16,

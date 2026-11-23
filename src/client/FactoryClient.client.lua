@@ -356,6 +356,90 @@ RunService.PreSimulation:Connect(function()
 		end
 	end
 end)
+-- ── 공장 공정별 효과음 (2026-11-24 사용자 "공장 기계 공정별 효과음") ──
+-- 소리 ID = DalgonaConfig.Sounds.factory*. 소리는 그 공정 움직이는 부품에 붙은 3D 소리라 멀어지면 작아지고 SOUND_MAX에서 안 들림
+local Sounds = require(Shared:WaitForChild("DalgonaConfig")).Sounds
+local SOUND_NEAR = 70 -- 이보다 멀면 아예 멈춤 (폰 성능)
+local SOUND_MAX = 45 -- 3D 소리가 사라지는 거리
+local FSOUNDS = {
+	-- key, 붙일 부품 Anim, 반복?, 크기
+	{ key = "sugar", anim = { "hopper", "feed" }, id = "factorySugar", loop = true, vol = 0.25 },
+	{ key = "boil", anim = { "kettle", "stir", "heat" }, id = "factoryBoil", loop = true, vol = 0.45 },
+	{ key = "press", anim = { "press" }, id = "factoryPress", loop = false, vol = 0.5 },
+	{ key = "fan", anim = { "spin", "curtain" }, id = "factoryFan", loop = true, vol = 0.18 },
+	{ key = "box", anim = { "lid", "outlet" }, id = "factoryBox", loop = false, vol = 0.5 },
+}
+local function soundFor(rec, def)
+	rec.snd = rec.snd or {}
+	local s = rec.snd[def.key]
+	if s ~= nil then
+		return s or nil
+	end
+	local id = Sounds[def.id]
+	local part = nil
+	for _, want in ipairs(def.anim) do
+		for _, e in ipairs(rec.parts) do
+			if e.a == want and e.p.Parent then
+				part = e.p
+				break
+			end
+		end
+		if part then
+			break
+		end
+	end
+	if not (id and part) then
+		rec.snd[def.key] = false
+		return nil
+	end
+	s = Instance.new("Sound")
+	s.Name = "FactorySfx_" .. def.key
+	s.SoundId = id
+	s.Looped = def.loop
+	s.Volume = def.vol
+	s.RollOffMode = Enum.RollOffMode.InverseTapered
+	s.RollOffMinDistance = 8
+	s.RollOffMaxDistance = SOUND_MAX
+	s.Parent = part
+	rec.snd[def.key] = s
+	return s
+end
+local function oneShot(s, def)
+	local c = s:Clone()
+	c.Looped = false
+	c.Volume = def.vol
+	c.PlaybackSpeed = 0.95 + math.random() * 0.1
+	c.Parent = s.Parent
+	c:Play()
+	task.delay(4, function()
+		c:Destroy()
+	end)
+end
+local function factorySounds(rec, on, now)
+	for _, def in ipairs(FSOUNDS) do
+		local s = soundFor(rec, def)
+		if s then
+			if def.loop then
+				if on and not s.IsPlaying then
+					s:Play()
+				elseif not on and s.IsPlaying then
+					s:Stop()
+				end
+			elseif on then
+				-- ③ 프레스가 바닥에 닿는 순간 (움직임 press: 1 - |sin(now*2.2)|가 1이 되는 때) · ⑤ 상자 뚜껑이 닫히는 순간 (6초마다)
+				local beat = def.key == "press" and math.floor(now * 2.2 / math.pi + 0.5) or math.floor((now - 5.2) / 6)
+				local last = rec["beat_" .. def.key]
+				if last and beat ~= last then
+					oneShot(s, def)
+				end
+				rec["beat_" .. def.key] = beat
+			else
+				rec["beat_" .. def.key] = nil
+			end
+		end
+	end
+end
+
 RunService.Heartbeat:Connect(function()
 	local now = workspace:GetServerTimeNow()
 	local cam = workspace.CurrentCamera
@@ -415,6 +499,8 @@ RunService.Heartbeat:Connect(function()
 				end
 			end
 		end
+		-- 공정별 소리 (① 설탕 ② 솥 ③ 프레스 ④ 환풍기 ⑤ 상자): 돌 때만, 공장 가까이(SOUND_NEAR)일 때만
+		factorySounds(rec, running and (rec.building:GetPivot().Position - camPos).Magnitude < SOUND_NEAR, now)
 		-- 움직임
 		local blink = (math.floor(now * 2) % 2) == 0
 		for _, e in ipairs(rec.parts) do
