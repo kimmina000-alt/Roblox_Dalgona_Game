@@ -696,9 +696,11 @@ local function streetProps()
 	end
 	-- 골목 끝 꾸미기 가게 앞 (길 가장자리)
 	for _, sx in ipairs({ -1, 1 }) do
-		prop("PotBasin", CFrame.new(sx * (END_X0 + 8), 0.2, ROAD_Z0 + 2), potFallback)
+		-- 동쪽 남쪽 길가 = 골목 슈퍼 앞 (차양·밖 소품이 길로 약 2.3 나옴, 문 앞 비움) → 대야·자전거는 슈퍼 칸 밖으로
+		local mw = sx == 1 and (marketDims() + 2) or 0
+		prop("PotBasin", CFrame.new(sx * (END_X0 + 8 + mw), 0.2, ROAD_Z0 + 2 + (sx == 1 and 1.5 or 0)), potFallback)
 		prop("Mailbox", CFrame.new(sx * (END_X0 + 22), 0.2, ROAD_Z1 - 2) * CFrame.Angles(0, math.pi, 0), mailboxFallback)
-		prop("Bicycle", CFrame.new(sx * (END_X0 + 34), 0.2, ROAD_Z0 + 2.5), bikeFallback)
+		prop("Bicycle", CFrame.new(sx * (END_X0 + (sx == 1 and math.max(34, mw + 3) or 34)), 0.2, ROAD_Z0 + 2.5 + (sx == 1 and 1.5 or 0)), bikeFallback)
 		prop("Pyeongsang", CFrame.new(sx * (END_X0 + 20), 0.2, ROAD_ZC + 7), benchFallback) -- 골목 끝 길가 평상 (가게 사이 틈은 좁아져서 이쪽으로)
 	end
 end
