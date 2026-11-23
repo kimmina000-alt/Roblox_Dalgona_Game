@@ -218,7 +218,7 @@ local function renderShapes(d)
 		end
 		-- Excellent 리본 — 왼쪽 위
 		if rec.excellent then
-			local rib = UI.text({ Text = "Excellent", FontFace = UI.F.round, TextSize = 11, TextColor3 = C.white, BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(110, 190, 80), TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(4, 4), Size = UDim2.fromOffset(64, 16), ZIndex = 16, Parent = card })
+			local rib = UI.text({ Text = "Excellent", TextSize = 12, TextColor3 = C.white, BackgroundTransparency = 0, BackgroundColor3 = Color3.fromRGB(110, 190, 80), TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(4, 4), Size = UDim2.fromOffset(64, 16), ZIndex = 16, Parent = card })
 			UI.corner(8).Parent = rib
 		end
 		-- 완벽 뽑기 도장 — 가운데 아래, 빨간 둥근 도장
