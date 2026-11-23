@@ -229,7 +229,8 @@ end
 -- ── 공장 공정 알바생 (D30): 고용한 공정의 미니미가 그 공정 동작을 되풀이. 멀거나(STAFF_DIST) 쉬면 멈춘 자세 ──
 -- 미니미 = FactoryLot.Staff.Staff_<key> (서버 FactoryDisplay), 일하는지 = Factory<i> 속성 StaffOn_<key>
 local STAFF_DIST = 60
-local STAFF_SHOW = 55 -- 공장 건물 가운데에서 이 안이면 공정 알바가 보임 (공장 안·문 앞)
+local STAFF_SHOW = 20 -- 공장 건물 상자에서 이만큼 안이면 공정 알바가 보임 (공장 안·문 앞)
+local staffBox = setmetatable({}, { __mode = "k" }) -- [Building] = { cf, half }
 local JOINTS = { R = { "RightUpperArm", "RightShoulder" }, L = { "LeftUpperArm", "LeftShoulder" }, W = { "UpperTorso", "Waist" }, N = { "Head", "Neck" } }
 local MOTION = {
 	-- 공정마다 팔·허리·고개 각도(라디안)를 시간 t로: 설탕 붓기 · 솥 젓기 · 레버 당기기 · 들여다보기 · 상자 접기
@@ -284,9 +285,20 @@ local function animateStaff(fac, now, camPos)
 	if not folder then
 		return
 	end
-	-- 공장 공정 알바 5명은 공장 안·앞에서만 보임 (D43, 2026-11-24): 공장 건물 가운데에서 STAFF_SHOW보다 멀면 내 화면에서 숨김
+	-- 공장 공정 알바 5명은 공장 안·앞에서만 보임 (D43, 2026-11-24): 카메라가 공장 건물 상자에서 STAFF_SHOW 안이면 보임
+	-- (건물 피벗은 건물 가운데가 아니라 멀리 있을 수 있어서 상자로 잼. 상자는 한 번만 재서 기억)
 	local b = lot:FindFirstChild("Building")
-	local show = b ~= nil and (b:GetPivot().Position - camPos).Magnitude < STAFF_SHOW
+	local show = false
+	if b then
+		local box = staffBox[b]
+		if not box then
+			local cf, size = b:GetBoundingBox()
+			box = { cf = cf, half = size / 2 }
+			staffBox[b] = box
+		end
+		local lp = box.cf:PointToObjectSpace(camPos)
+		show = math.abs(lp.X) < box.half.X + STAFF_SHOW and math.abs(lp.Z) < box.half.Z + STAFF_SHOW and math.abs(lp.Y) < box.half.Y + STAFF_SHOW * 2
+	end
 	for _, m in ipairs(folder:GetChildren()) do
 		if m:GetAttribute("Shown") ~= show then
 			m:SetAttribute("Shown", show)
