@@ -29,15 +29,16 @@ G.DefaultData = {
 	nextItemId = 1, -- 달고나 번호 (들고 다니기·진열 칸을 찾는 데 씀)
 	unlockedShapes = { "Circle", "Square", "Triangle", "Bone" }, -- Common (레벨이 오르면 GrowthService가 더함)
 	upgrades = { stove = 0, presser = 0, table = 0 }, -- 화로·누르개·작업대 장비 Lv (Phase 4)
-	-- 알바생 (D34): { shape = 화로에서 만들 도안 id, skill = 모자(자리만), post = 배치한 제작대 "stove" | 기계 id | nil(대기) }
+	-- 알바생 (D34·D43): { shape = 화로에서 만들 도안 id, skill = 모자(자리만), post = 역할 key (G.HelperPosts) | nil(대기) }
 	partTimers = {},
 	stoveUps = {}, -- 화로 알바 교육 (D40): [key] = true (G.StoveTraining)
+	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
 	machine = { shapes = {}, t = 0, ts = {} }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, ts[기계 id] = 이번 판 진행 초 (D32 기계 여러 대, t는 예전 값 → 처음 읽을 때 ts로 옮김)
 	-- 가게 뒤 공장 (D11, 5단계): on = 생산 켬, shape·qty·mode = 제어대 설정, lines = 라인별 진행 중인 판 { s, n, m, t, sec } 또는 false,
 	-- ups = 제어대 업그레이드 단계 [key] = 0..
-	-- staff[공정 key] = true: 고용한 공정 알바생 (D30)
-	factory = { unlocked = false, on = false, shape = "", qty = 20, mode = "normal", lines = {}, ups = {}, staff = {} },
+	-- 공정 알바생(D30)은 D43부터 partTimers의 역할 f_<공정 key>
+	factory = { unlocked = false, on = false, shape = "", qty = 20, mode = "normal", lines = {}, ups = {} },
 	-- 가게 (D21): state = "stall"(야외 노점) | "rented"(월세) | "owned"(매입). rentTimer = 지난 월세 뒤 접속한 초, closed = 월세 못 내 문 닫힘
 	shop = { state = "stall", rentTimer = 0, closed = false },
 	stats = { made = 0, sold = 0, coinsEarned = 0, helperMade = 0, wagesPaid = 0 },
@@ -175,16 +176,29 @@ G.StoveTraining = {
 	{ key = "burner2", name = "두 번째 화구", level = 5, cost = 800, text = "내가 만드는 동안에도 화로 알바가 쉬지 않음" },
 	{ key = "expert", name = "전문 교육", level = 8, cost = 1800, text = "화로 알바 30초, Good~Excellent" },
 }
--- 알바생 배치 (D34): 제작대마다 한 명, 최대 4명 (화로 1 + 기계 3). 고용비는 몇 번째로 뽑느냐에 따라
-G.HireCost = { 500, 2000, 5000, 10000 }
-G.HelperMax = 4
--- 배치할 수 있는 제작대 (순서 = 화면 순서). stage = 설비 단계 (기계는 그 단계를 가져야 배치 가능)
+-- 알바생 역할 (D34 → D43, 2026-11-24): 고용한 뒤 역할을 고름. 역할마다 한 명, 최대 11명 (제작대 4 + 진열 + 계산 + 공장 공정 5).
+-- 고용비는 몇 번째로 뽑느냐에 따라 (역할과 상관없음), 역할은 언제든 공짜로 바꿈
+G.HireCost = { 500, 1500, 3000, 5000, 7500, 10000, 10000, 10000, 10000, 10000, 10000 }
+G.HelperMax = 11
+-- 역할 (순서 = 화면 순서). kind: station(제작대) | display(진열) | cashier(계산) | factory(공장 공정, factoryKey = G.Factory.staff.stations key)
+-- 열리는 때: level(가게를 임대한 뒤), stage(그 기계를 산 뒤), factory(공장을 산 뒤). wage = 30초당 급여 (일할 때만)
 G.HelperPosts = {
-	{ key = "stove", name = "연탄 화로", stage = 1 },
-	{ key = "steel", name = "철제 판매기", stage = 2 },
-	{ key = "pink", name = "분홍 자판기", stage = 3 },
-	{ key = "line", name = "연속 생산 설비", stage = 4 },
+	{ key = "stove", name = "연탄 화로", kind = "station", stage = 1, level = 3, wage = 3 },
+	{ key = "steel", name = "철제 판매기", kind = "station", stage = 2, wage = 3 },
+	{ key = "pink", name = "분홍 자판기", kind = "station", stage = 3, wage = 3 },
+	{ key = "line", name = "연속 생산 설비", kind = "station", stage = 4, wage = 3 },
+	{ key = "display", name = "진열", kind = "display", level = 5, wage = 2 },
+	{ key = "cashier", name = "계산", kind = "cashier", level = 6, wage = 2 },
+	{ key = "f_sugar", name = "공장 ① 설탕 넣기", kind = "factory", factoryKey = "sugar", wage = 6 },
+	{ key = "f_boil", name = "공장 ② 끓이기", kind = "factory", factoryKey = "boil", wage = 6 },
+	{ key = "f_press", name = "공장 ③ 붓기·찍기", kind = "factory", factoryKey = "press", wage = 6 },
+	{ key = "f_inspect", name = "공장 ④ 식히기·검사", kind = "factory", factoryKey = "inspect", wage = 6 },
+	{ key = "f_pack", name = "공장 ⑤ 포장", kind = "factory", factoryKey = "pack", wage = 6 },
 }
+-- 진열 알바 (D33): 보관함 → 진열대 빈 칸, 4초에 1개. 옮길 게 없으면 쉼(급여 없음). 손 제작품도 옮길지 = 데이터 displayHand (기본 켬)
+G.DisplayHelper = { seconds = 4 }
+-- 계산 알바 (D43): 손님이 고르는 시간 절반 → 손님 수요 +10%, 모든 판매 팁 +5%. 자리 비운 동안은 안 함
+G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 G.Helper = {
 	seconds = 40, -- 1판 (기본 알바생)
 	wagePer30s = 3, -- 일하는 동안만
@@ -198,7 +212,7 @@ G.Helper = {
 	expertSeconds = 30,
 	expertQMin = 70,
 	expertQMax = 94,
-	machineWagePer30s = 3, -- 기계에 배치한 알바생 급여 (기계가 도는 동안만, 한 판 끝날 때 냄)
+	machineWagePer30s = 3, -- 기계에 배치한 알바생 급여 (기계가 도는 동안만, 한 판 끝날 때 냄) = G.HelperPosts 기계 wage
 	-- 외형 = 주인 아바타 미니미 (D19, 2026-11-20)
 	minime = {
 		scale = 0.6, -- 키
@@ -445,7 +459,11 @@ function G.salesDemandFor(d)
 	if not G.shopOpen(d) then
 		return G.salesDemand(1, 1)
 	end
-	return G.salesDemand(d.machineStage or 1, d.level or 1)
+	local gap, lo, hi = G.salesDemand(d.machineStage or 1, d.level or 1)
+	if G.helperAt(d, "cashier") then
+		gap /= G.Cashier.demandMult -- 계산 알바 (D43): 손님 수요 +10%
+	end
+	return gap, lo, hi
 end
 
 -- 알바생 배치 (D34)
@@ -458,10 +476,24 @@ function G.helperPost(key)
 	return nil
 end
 
--- 그 제작대를 가졌나 (화로는 늘, 기계는 그 단계까지 샀으면)
+-- 그 역할이 열렸나 (D43): 기계는 산 뒤, 공장 공정은 공장을 산 뒤, 화로·진열·계산은 가게를 임대하고 그 레벨부터
 function G.hasPost(d, key)
 	local p = G.helperPost(key)
-	return p ~= nil and (p.stage <= 1 or (d.machineStage or 1) >= p.stage)
+	if not p then
+		return false
+	end
+	if p.kind == "factory" then
+		return d.factory ~= nil and d.factory.unlocked == true
+	end
+	if p.stage and p.stage >= 2 then
+		return (d.machineStage or 1) >= p.stage
+	end
+	return d.shop ~= nil and d.shop.state ~= "stall" and (d.level or 1) >= (p.level or 1)
+end
+
+-- 공장 공정 key에 알바생이 있나 (D30 → D43)
+function G.factoryStaffed(d, factoryKey)
+	return G.helperAt(d, "f_" .. factoryKey) ~= nil
 end
 
 -- 그 제작대에 배치된 알바생 번호 (없으면 nil)

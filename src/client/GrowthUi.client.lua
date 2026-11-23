@@ -200,12 +200,13 @@ local function render()
 				act("train", t.key)
 			end)
 	end
-	-- 알바생 배치 (D34): 최대 4명, 제작대마다 한 명. "자리 바꾸기" = 가진 제작대 → 대기 순으로 돌림 (그 자리 알바와 서로 바뀜)
+	-- 알바생 역할 (D34 → D43): 최대 11명, 역할마다 한 명. "역할 바꾸기" = 열린 역할 → 대기 순으로 돌림 (그 역할 알바와 서로 바뀜)
+	-- (역할 고르기 화면은 UI 세션이 따로 만들 예정: Remotes.GrowthAction("helperPost", 번호, 역할 key | ""))
 	local nHelp = #gr.helpers
 	local maxHelp = gr.helperMax or G.HelperMax
 	local hireCost = gr.hireCost
 	order += 1
-	row(page, order, string.format("알바생 %d / %d명", nHelp, maxHelp), string.format("화로·기계마다 한 명 · 급여 30초당 %d · 기계는 알바가 있어야 돌아요", G.Helper.wagePer30s),
+	row(page, order, string.format("알바생 %d / %d명", nHelp, maxHelp), "역할마다 한 명 (제작대·진열·계산·공장) · 기계는 알바가 있어야 돌아요",
 		(not shopOpen and lockText) or (nHelp >= maxHelp and "최대") or (hireCost and (hireCost .. " 코인")) or "최대",
 		shopOpen and nHelp < maxHelp and hireCost ~= nil and state.coins >= hireCost, function()
 			act("buy", "hire")
@@ -216,7 +217,7 @@ local function render()
 		local post = h.post and G.helperPost(h.post)
 		order += 1
 		local status = not post and "대기 중 (자리 없음)" or (h.status == "work" and "일하는 중" or ("쉬는 중: " .. tostring(h.status)))
-		row(page, order, string.format("  알바생 %d · %s", i, post and post.name or "대기"), status, "자리 바꾸기", #posts > 0, function()
+		row(page, order, string.format("  알바생 %d · %s", i, post and post.name or "대기"), status, "역할 바꾸기", #posts > 0, function()
 			-- 다음 자리: 가진 제작대 순서대로, 마지막 다음은 대기
 			local keys = {}
 			for _, p in ipairs(posts) do
@@ -226,6 +227,13 @@ local function render()
 			local idx = table.find(keys, h.post or "") or #keys
 			act("helperPost", i, keys[idx % #keys + 1])
 		end)
+		if h.post == "display" then
+			order += 1
+			local on = gr.displayHand ~= false
+			row(page, order, "    손으로 만든 것도 진열", on and "켬: 손 제작품을 먼저 옮겨요" or "끔: 손 제작품은 직접 놓아요", on and "끄기" or "켜기", true, function()
+				act("displayHand", not on)
+			end)
+		end
 		if h.post == "stove" then
 			local e = ShapeCatalog.get(h.shape)
 			order += 1

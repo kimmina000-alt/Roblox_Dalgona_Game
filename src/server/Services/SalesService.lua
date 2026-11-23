@@ -807,8 +807,11 @@ local function spawnCustomer(index)
 		-- 진열대를 보며 고름
 		local shelfP = local2world(plot, shelfL.X, shelfL.Z)
 		model:PivotTo(CFrame.lookAt(standP, Vector3.new(shelfP.X, standP.Y, shelfP.Z)))
-		say(model, LINES[math.random(#LINES)], SALES.browseSeconds + 0.4)
-		task.wait(SALES.browseSeconds)
+		-- 계산 알바가 있으면 고르는 시간 절반 (D43)
+		local od = owner and Data.get(owner)
+		local browse = SALES.browseSeconds * ((od and G.helperAt(od, "cashier")) and G.Cashier.browseMult or 1)
+		say(model, LINES[math.random(#LINES)], browse + 0.4)
+		task.wait(browse)
 		if not model.Parent then
 			return
 		end

@@ -87,7 +87,7 @@ PlayerDataService.MIGRATIONS = {
 		end
 	end,
 	[10] = function(data)
-		-- v9 → v10 (2026-11-24 D34·D39·D40): 국자 확장을 없애고 화로 알바 교육으로, 알바생은 제작대에 배치.
+		-- v9 → v10 (2026-11-24 D34·D39·D40·D43): 국자 확장을 없애고 화로 알바 교육으로, 알바생은 제작대에 배치.
 		--  - 산 국자는 같은 단계 교육으로 (값·레벨이 같음): 국자 2 → 숙련 교육, 3 → + 두 번째 화구, 4 → + 전문 교육
 		--  - 있던 알바생: 1번째 → 화로, 다음부터 가진 기계(철제 → 분홍 → 연속) 순서, 남으면 대기
 		local ladles = math.floor(tonumber(data.ladles) or 1)
@@ -116,6 +116,17 @@ PlayerDataService.MIGRATIONS = {
 					h.post = posts[i]
 				end
 			end
+		end
+		-- D43 (같은 날): 공장 공정 알바생(D30 factory.staff[key])도 알바생 목록으로, 역할 f_<key>. 최대 11명 안
+		local f = type(data.factory) == "table" and data.factory or nil
+		if f and type(f.staff) == "table" then
+			data.partTimers = type(data.partTimers) == "table" and data.partTimers or {}
+			for _, key in ipairs({ "sugar", "boil", "press", "inspect", "pack" }) do
+				if f.staff[key] and #data.partTimers < 11 then
+					table.insert(data.partTimers, { skill = 0, post = "f_" .. key })
+				end
+			end
+			f.staff = nil
 		end
 	end,
 }

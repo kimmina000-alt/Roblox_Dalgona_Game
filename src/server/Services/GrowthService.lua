@@ -6,6 +6,8 @@
 --  - 알바생 배치 (D34, 2026-11-24): 최대 4명 (고용 G.HireCost), 제작대(화로·2·3·4단계 기계)마다 한 명, 언제든 공짜로 옮김.
 --    화로 알바: 40초에 1개 (Normal~Good), 재료는 안 쓰고 다 만들 때 급여(30초당 3). 내가 손으로 만드는 동안은 쉼
 --    (두 번째 화구를 사면 안 쉼). 기계 알바: 그 기계가 돌게 함 (급여는 MachineService가 한 판마다)
+--  - D43 (2026-11-24): 역할 = 제작대 4 + 진열(보관함 → 진열대, 4초에 1개) + 계산(수요 +10%·팁 +5%, SalesService·Economy가 봄)
+--    + 공장 공정 5 (FactoryService가 hired로 봄, 미니미는 FactoryDisplay). 최대 11명, 고용비는 몇 번째로 뽑느냐
 --  - 화로 알바 교육 (D39·D40): 국자 확장 대신 숙련 교육(Lv3)·두 번째 화구(Lv5)·전문 교육(Lv8)
 --  - 일일 목표 3개: UTC 날짜마다 새로 뽑음, 다 하면 EXP 15 + 코인
 
@@ -248,7 +250,7 @@ local function actionBuy(player, d, kind)
 			end
 		end
 		table.insert(d.partTimers, { shape = cheapestHelperShape(d), skill = 0, post = post })
-		local where = post and G.helperPost(post).name or "대기 (빈 제작대 없음)"
+		local where = post and G.helperPost(post).name or "대기 (열린 빈 역할 없음)"
 		return true, string.format("알바생 %d번 고용! → %s", n + 1, where)
 	end
 	return false, "모르는 항목"
@@ -298,7 +300,7 @@ local function actionSetPost(d, index, key)
 		return false, "잘못된 요청"
 	end
 	if not G.hasPost(d, key) then
-		return false, p.name .. "을(를) 아직 안 샀어요"
+		return false, p.name .. " 역할은 아직 안 열렸어요"
 	end
 	if h.post == key then
 		return true, string.format("알바생 %d번: %s", index, p.name)
@@ -344,6 +346,9 @@ function GrowthService.action(player, what, a, b)
 	Data.update(player, function(dd)
 		if what == "buy" and type(a) == "string" then
 			ok, msg = actionBuy(player, dd, a)
+		elseif what == "displayHand" and type(a) == "boolean" then
+			dd.displayHand = a
+			ok, msg = true, a and "진열 알바가 손으로 만든 것도 옮겨요" or "손으로 만든 것은 직접 놓아요"
 		elseif what == "train" and type(a) == "string" then
 			ok, msg = actionTrain(dd, a)
 		elseif what == "helperPost" and type(a) == "number" and type(b) == "string" then
@@ -375,7 +380,7 @@ function GrowthService.action(player, what, a, b)
 	if ok and (what == "machineShape" or a == "machine" or what == "helperPost" or a == "hire") then
 		Machine.changed(player)
 	end
-	if ok and (a == "factory" or string.sub(what, 1, 7) == "factory") then
+	if ok and (a == "factory" or string.sub(what, 1, 7) == "factory" or what == "helperPost" or a == "hire") then
 		Factory.changed(player)
 	end
 	return { ok = ok, reason = not ok and msg or nil, msg = ok and msg or nil }
@@ -421,6 +426,27 @@ local function helperFoot(plot, post, i)
 			local pos = Vector3.new(side.X, y, side.Z)
 			local c = Vector3.new(l.X, y, l.Z)
 			return plot.cframe * CFrame.lookAt(pos, c)
+		end
+	end
+	if p and (p.kind == "display" or p.kind == "cashier") then
+		-- 진열 = 유리 진열장 뒤, 계산 = 앞 카운터 뒤 (가게 안쪽 +Z에서 앞 -Z를 봄). 틀에 HelperSpotDisplay·HelperSpotCashier를 넣으면 그 자리
+		local y = G.Plots.size.Y
+		local mark = plot.model:FindFirstChild(p.kind == "display" and "HelperSpotDisplay" or "HelperSpotCashier", true)
+		if mark and mark:IsA("BasePart") then
+			local l = plot.cframe:ToObjectSpace(mark.CFrame)
+			local look = l.LookVector
+			local pos = Vector3.new(l.X, y, l.Z)
+			return plot.cframe * CFrame.lookAt(pos, pos + Vector3.new(look.X, 0, look.Z))
+		end
+		local role = p.kind == "display" and "유리 진열장" or "앞 카운터 (나무)"
+		for _, part in ipairs(plot.model:GetDescendants()) do
+			if part:IsA("BasePart") and part:GetAttribute("Role") == role then
+				local l = plot.cframe:ToObjectSpace(part.CFrame)
+				local sz = part.Size
+				local halfZ = (math.abs(l.RightVector.Z) * sz.X + math.abs(l.UpVector.Z) * sz.Y + math.abs(l.LookVector.Z) * sz.Z) / 2
+				local pos = Vector3.new(l.X, y, l.Z + halfZ + 1.3)
+				return plot.cframe * CFrame.lookAt(pos, pos - Vector3.zAxis)
+			end
 		end
 	end
 	if post == "stove" then
@@ -487,7 +513,7 @@ local function helperModel(player, plot, i, cf)
 end
 
 -- 제작 세션 연출 약속 (D34): 미니미 속성 StationKey = "hand" | "m2" | "m3" | "m4" (맡은 제작대, 대기면 없음), Working = 일하는 중
-local STATION_KEY = { stove = "hand", steel = "m2", pink = "m3", line = "m4" }
+local STATION_KEY = { stove = "hand", steel = "m2", pink = "m3", line = "m4", display = "display", cashier = "cashier" }
 
 local function setWorking(st)
 	local m = st.model
@@ -519,7 +545,117 @@ local function rollHelperQuality(qMin, qMax)
 end
 
 -- 알바생 1명 1초 진행 (D34: 배치한 제작대에 따라)
+-- 진열 알바 (D33): 옮길 달고나 하나 고르기 (먼저 만든 것부터, 손 제작품 켜면 손 제작품 먼저, 들고 있는 것은 빼고)
+local function displayPick(player, d)
+	local maxSlots = G.shelfSlots(d)
+	local used = {}
+	for _, it in ipairs(d.stock) do
+		if it.sl then
+			used[it.sl] = true
+		end
+	end
+	local slot = nil
+	for k = 1, maxSlots do
+		if not used[k] then
+			slot = k
+			break
+		end
+	end
+	if not slot then
+		return nil, nil, "진열대 가득"
+	end
+	local carrying = player:GetAttribute("Carrying")
+	local hand, auto = nil, nil
+	for _, it in ipairs(d.stock) do
+		if not it.sl and it.id ~= carrying then
+			if it.a then
+				auto = auto or it
+			elseif d.displayHand ~= false then
+				hand = hand or it
+			end
+		end
+	end
+	local item = hand or auto
+	if not item then
+		return nil, nil, "옮길 것 없음"
+	end
+	return item, slot, nil
+end
+
+-- 급여를 일한 시간만큼 쌓다가 1코인 이상이면 냄 (진열·계산 알바: 30초당 p.wage)
+local function payWage(player, st, p, sec)
+	st.owed = (st.owed or 0) + sec / 30 * p.wage
+	if st.owed >= p.wage then
+		local pay = math.floor(st.owed)
+		st.owed -= pay
+		Data.update(player, function(dd)
+			dd.coins -= pay
+			dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + pay
+		end)
+	end
+end
+
+local function stepRole(player, d, i, h, st, dt, p)
+	if p.kind == "factory" then
+		st.status = "work" -- 공장 공정 (FactoryService가 일·급여를 셈, 미니미는 FactoryDisplay)
+		return
+	end
+	if not G.shopOpen(d) then
+		st.status = "가게 문 닫힘"
+		setHelperText(st, string.format("알바생 %d · 쉬는 중 (가게 문 닫힘)", i))
+		return
+	end
+	if d.coins < p.wage then
+		st.status = "급여 부족"
+		setHelperText(st, string.format("알바생 %d · 쉬는 중 (급여 부족)", i))
+		return
+	end
+	if p.kind == "cashier" then
+		st.status = "work"
+		setHelperText(st, string.format("알바생 %d · 계산", i))
+		payWage(player, st, p, dt)
+		return
+	end
+	-- 진열
+	local item, _, why = displayPick(player, d)
+	if not item then
+		st.status = why
+		st.t = 0
+		setHelperText(st, string.format("알바생 %d · 쉬는 중 (%s)", i, why))
+		return
+	end
+	st.status = "work"
+	st.t += dt
+	setHelperText(st, string.format("알바생 %d · 진열 중", i))
+	if st.t < G.DisplayHelper.seconds then
+		return
+	end
+	st.t = 0
+	local placed = nil
+	Data.update(player, function(dd)
+		local it, slot = displayPick(player, dd)
+		if not it then
+			return false
+		end
+		it.sl = slot
+		it.pp = nil
+		placed = slot
+	end)
+	if placed then
+		payWage(player, st, p, G.DisplayHelper.seconds)
+		if st.model and st.model.Parent then
+			st.model:SetAttribute("DeliverSlot", placed)
+			st.model:SetAttribute("DeliverAt", workspace:GetServerTimeNow())
+		end
+	end
+end
+
 local function stepHelper(player, d, i, h, st, dt)
+	local role = h.post and G.helperPost(h.post)
+	if role and role.kind ~= "station" and G.hasPost(d, h.post) then
+		stepRole(player, d, i, h, st, dt, role)
+		return
+	end
 	if h.post ~= "stove" then
 		-- 기계 알바: 기계가 돌게 함 (만들기·급여는 MachineService). 대기: 쉼
 		local p = h.post and G.helperPost(h.post)
@@ -653,7 +789,12 @@ local function syncHelpers(player, d)
 			st.model = nil
 			st.t = 0
 		end
-		if plot and not st.building and (not st.model or not st.model.Parent) then
+		local role = h.post and G.helperPost(h.post)
+		local inShop = not (role and role.kind == "factory") -- 공장 공정 미니미는 FactoryDisplay가 공장 방에 (D43)
+		if not inShop then
+			st.post = h.post
+		end
+		if plot and inShop and not st.building and (not st.model or not st.model.Parent) then
 			-- 주인 아바타 미니미 (D19). 만드는 데 시간이 걸려서 따로 돌리고, 실패하면 부품 인형
 			st.building = true
 			local post = h.post
@@ -732,7 +873,7 @@ local function growthSnapshot(player, d, snap)
 			local list = {}
 			for _, p in ipairs(G.HelperPosts) do
 				if G.hasPost(d, p.key) then
-					table.insert(list, { key = p.key, name = p.name, helper = G.helperAt(d, p.key) })
+					table.insert(list, { key = p.key, name = p.name, kind = p.kind, wage = p.wage, helper = G.helperAt(d, p.key) })
 				end
 			end
 			return list
@@ -740,6 +881,7 @@ local function growthSnapshot(player, d, snap)
 		hireCost = G.HireCost[#d.partTimers + 1],
 		helperMax = G.HelperMax,
 		stoveUps = table.clone(d.stoveUps or {}),
+		displayHand = d.displayHand ~= false,
 		daily = d.daily.goals,
 		collection = collection,
 		unlocked = table.clone(d.unlockedShapes),

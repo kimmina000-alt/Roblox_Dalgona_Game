@@ -332,6 +332,10 @@ function EconomyService.sell(player, n)
 			sold += 1
 			table.insert(items, item)
 		end
+		-- 계산 알바 (D43): 모든 판매 팁 +5%
+		if G.helperAt(d, "cashier") and G.shopOpen(d) then
+			coins = math.floor(coins * (1 + G.Cashier.tip) + 0.5)
+		end
 		d.coins += coins
 		d.stats.sold = (d.stats.sold or 0) + sold
 		d.stats.coinsEarned = (d.stats.coinsEarned or 0) + coins
