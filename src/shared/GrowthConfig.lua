@@ -327,7 +327,7 @@ G.Customers = {
 	bands = { 4, 9, 14, 19, math.huge }, -- Lv1~4 / 5~9 / 10~14 / 15~19 / 20~
 	types = {
 		{ id = "Pongpong", name = "퐁퐁이", kind = "kid", weights = { 30, 22, 16, 12, 10 } },
-		{ id = "Mochi", name = "모찌", kind = "kid", weights = { 25, 20, 16, 13, 11 } },
+		{ id = "Mochi", name = "설기", kind = "kid", weights = { 25, 20, 16, 13, 11 } },
 		{ id = "Dotori", name = "도토리", kind = "kid", weights = { 20, 18, 16, 14, 12 } },
 		{ id = "Godeungeo", name = "고등어 아저씨", kind = "regular", weights = { 15, 16, 16, 16, 15 } },
 		{ id = "Kkuldanji", name = "꿀단지", kind = "regular", weights = { 10, 14, 16, 17, 17 } },

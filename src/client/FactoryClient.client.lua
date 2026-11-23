@@ -738,7 +738,7 @@ gui.Enabled = false
 local fitRoot = UI.root(gui)
 local fitWin = UI.fitter(fitRoot)
 local win, body = UI.window({ Name = "Window", Title = "공장 제어대", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(800, 360), ZIndex = 10, Visible = true, Parent = fitRoot })
-fitWin(win, 800, 385)
+fitWin(win, 800, 385, true) -- 화면 비율 창 (2026-11-24)
 body.Size = UDim2.new(1, -28, 1, -34 - 14 - 26)
 local closeBtn = win.Close
 -- 버튼 꾸미기 (TextButton 그대로: .Text·.BackgroundColor3를 바꾸는 코드가 그대로 동작)
@@ -786,7 +786,7 @@ end)
 local prod = pages[1]
 UI.text({ Size = UDim2.new(0.55, -8, 0, 20), TextSize = 18, TextColor3 = UI.C.cream, Outline = UI.C.woodDark, Text = "① 생산할 도안", ZIndex = 12, Parent = prod })
 local grid = new("ScrollingFrame", { Position = UDim2.fromOffset(0, 24), Size = UDim2.new(0.55, -8, 1, -24), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6, ScrollBarImageColor3 = UI.C.cream, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 12, Parent = prod })
-new("UIGridLayout", { CellSize = UDim2.fromOffset(102, 112), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid })
+UI.fillGrid(new("UIGridLayout", { CellSize = UDim2.fromOffset(102, 112), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid }), 102, 112 / 102) -- 줄 너비에 꽉 차게
 local right = UI.card({ AnchorPoint = Vector2.new(1, 0), Position = UDim2.fromScale(1, 0), Size = UDim2.new(0.45, -4, 1, 0), ZIndex = 12, Parent = prod })
 new("UIPadding", { PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 10), PaddingTop = UDim.new(0, 8), Parent = right })
 local function rtext(y, h, size, bold, text)
@@ -885,6 +885,9 @@ local function act(what, a)
 	elseif type(res) == "table" and res.msg then
 		msgL.TextColor3 = GREEN
 		msgL.Text = tostring(res.msg)
+	end
+	if ok and type(res) == "table" and res.ok and (what == "factoryUp" or what == "factoryHire") then
+		UI.coinSound() -- 공장 업그레이드·공정 알바 고용
 	end
 end
 
