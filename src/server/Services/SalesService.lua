@@ -1103,9 +1103,6 @@ function SalesService.init(dataService, economyService, plotService)
 		folder.Parent = plot.model
 		shop.folder = folder
 		refreshShelf(i) -- 빈 가게 모습 (진열 가구 숨김)
-		pcall(function()
-			require(script.Parent:WaitForChild("ShopLights")).build(plot) -- 천장 조명 (2026-11-24)
-		end)
 	end
 
 	Players.PlayerAdded:Connect(watchCarry)
