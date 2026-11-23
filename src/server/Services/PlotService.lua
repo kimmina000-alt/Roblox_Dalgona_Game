@@ -409,7 +409,7 @@ local function placeWorkstation(i, first)
 		end
 	end
 	for _, h in ipairs(first and {} or plot.model:GetChildren()) do
-		if h:IsA("Model") and h.Name:match("^Helper%d+$") then
+		if h:IsA("Model") and (h.Name:match("^Helper%d+$") or h.Name:match("^Helper_idle")) then -- 화로 알바·대기 알바 (D34)
 			h:PivotTo(delta * h:GetPivot())
 		end
 	end

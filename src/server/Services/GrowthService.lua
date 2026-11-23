@@ -3,9 +3,12 @@
 --  - 도안: 레벨로 등급별 해금 (G.UnlockLevel). Master는 도감 조건 (G.MasterUnlock, D6)
 --  - 도감: 손으로 만든 것만 도안별 최고 등급·개수 (자동 생산은 안 셈)
 --  - 장비: 화로·누르개·작업대 (Lv2부터). 효과는 ProductionService.hooks.mods + G.stockMax
---  - 국자: 2~4번째 국자 (Lv3·5·8). 국자 2번째부터 알바생 1명씩 고용 가능
---  - 알바생: 접속 중에만, 40초에 1개 (Normal~Good), 재료·젓가락을 쓰고, 다 만들 때 급여(30초당 3)를 냄.
---    재료·보관함·코인이 모자라면 쉼. 부지 손 작업대 자리 옆에 작은 인형 + 진행 표시
+--  - 알바생 배치 (D34, 2026-11-24): 최대 4명 (고용 G.HireCost), 제작대(화로·2·3·4단계 기계)마다 한 명, 언제든 공짜로 옮김.
+--    화로 알바: 40초에 1개 (Normal~Good), 재료는 안 쓰고 다 만들 때 급여(30초당 3). 내가 손으로 만드는 동안은 쉼
+--    (두 번째 화구를 사면 안 쉼). 기계 알바: 그 기계가 돌게 함 (급여는 MachineService가 한 판마다)
+--  - D43 (2026-11-24): 역할 = 제작대 4 + 진열(보관함 → 진열대, 4초에 1개) + 계산(수요 +10%·팁 +5%, SalesService·Economy가 봄)
+--    + 공장 공정 5 (FactoryService가 hired로 봄, 미니미는 FactoryDisplay). 최대 11명, 고용비는 몇 번째로 뽑느냐
+--  - 화로 알바 교육 (D39·D40): 국자 확장 대신 숙련 교육(Lv3)·두 번째 화구(Lv5)·전문 교육(Lv8)
 --  - 일일 목표 3개: UTC 날짜마다 새로 뽑음, 다 하면 EXP 15 + 코인
 
 local Players = game:GetService("Players")
@@ -20,6 +23,7 @@ local Machine = require(script.Parent:WaitForChild("MachineService")) -- 기계 
 local Factory = require(script.Parent:WaitForChild("FactoryService")) -- 5단계 공장
 local Offline = require(script.Parent:WaitForChild("OfflineService")) -- 오프라인 생산 정산 (D29)
 local Tutorial = require(script.Parent:WaitForChild("TutorialService")) -- 첫 60초 안내 (21번)
+local Production = require(script.Parent:WaitForChild("ProductionService")) -- 손으로 만드는 중인가 (D34)
 
 local GrowthService = {}
 
@@ -227,38 +231,86 @@ local function actionBuy(player, d, kind)
 		return Machine.buy(d)
 	elseif kind == "factory" then
 		return Factory.buy(d)
-	elseif kind == "ladle" then
-		local nextN = d.ladles + 1
-		local spec = G.Ladles[nextN]
-		if not spec then
-			return false, "국자는 4개까지예요"
-		end
-		if d.level < spec.level then
-			return false, string.format("Lv%d부터 살 수 있어요", spec.level)
-		end
-		if d.coins < spec.cost then
-			return false, "코인이 모자라요"
-		end
-		d.coins -= spec.cost
-		d.ladles = nextN
-		return true, string.format("국자 %d개! 알바생을 고용할 수 있어요", nextN)
 	elseif kind == "hire" then
 		local n = #d.partTimers
-		if n >= d.ladles - 1 then
-			return false, "알바생 자리가 없어요 (국자를 더 사요)"
+		if n >= G.HelperMax then
+			return false, string.format("알바생은 %d명까지예요", G.HelperMax)
 		end
 		local cost = G.HireCost[n + 1]
-		if not cost then
-			return false, "더 고용할 수 없어요"
-		end
 		if d.coins < cost then
-			return false, "코인이 모자라요"
+			return false, string.format("%d코인이 필요해요", cost)
 		end
 		d.coins -= cost
-		table.insert(d.partTimers, { shape = cheapestHelperShape(d), skill = 0 })
-		return true, string.format("알바생 %d번 고용!", n + 1)
+		-- 빈 제작대가 있으면 바로 그 자리 (화로 → 기계 순)
+		local post = nil
+		for _, p in ipairs(G.HelperPosts) do
+			if G.hasPost(d, p.key) and not G.helperAt(d, p.key) then
+				post = p.key
+				break
+			end
+		end
+		table.insert(d.partTimers, { shape = cheapestHelperShape(d), skill = 0, post = post })
+		local where = post and G.helperPost(post).name or "대기 (열린 빈 역할 없음)"
+		return true, string.format("알바생 %d번 고용! → %s", n + 1, where)
 	end
 	return false, "모르는 항목"
+end
+
+-- 화로 알바 교육 (D40)
+local function actionTrain(d, key)
+	local spec = nil
+	for _, t in ipairs(G.StoveTraining) do
+		if t.key == key then
+			spec = t
+		end
+	end
+	if not spec then
+		return false, "잘못된 요청"
+	end
+	if not G.shopOpen(d) then
+		return false, stallLockReason(d)
+	end
+	d.stoveUps = d.stoveUps or {}
+	if d.stoveUps[key] then
+		return false, "이미 배웠어요"
+	end
+	if d.level < spec.level then
+		return false, string.format("Lv%d부터 살 수 있어요", spec.level)
+	end
+	if d.coins < spec.cost then
+		return false, string.format("%d코인이 필요해요", spec.cost)
+	end
+	d.coins -= spec.cost
+	d.stoveUps[key] = true
+	return true, string.format("%s! %s", spec.name, spec.text)
+end
+
+-- 알바생 index를 제작대 key로 (""면 대기). 그 자리에 다른 알바생이 있으면 서로 바꿈 (D34: 언제든 공짜로)
+local function actionSetPost(d, index, key)
+	local h = d.partTimers[index]
+	if not h then
+		return false, "잘못된 요청"
+	end
+	if key == "" then
+		h.post = nil
+		return true, string.format("알바생 %d번: 대기", index)
+	end
+	local p = G.helperPost(key)
+	if not p then
+		return false, "잘못된 요청"
+	end
+	if not G.hasPost(d, key) then
+		return false, p.name .. " 역할은 아직 안 열렸어요"
+	end
+	if h.post == key then
+		return true, string.format("알바생 %d번: %s", index, p.name)
+	end
+	local other = G.helperAt(d, key)
+	if other then
+		d.partTimers[other].post = h.post -- 자리 바꾸기
+	end
+	h.post = key
+	return true, string.format("알바생 %d번 → %s", index, p.name)
 end
 
 local function actionSetShape(d, index, shapeId)
@@ -294,6 +346,13 @@ function GrowthService.action(player, what, a, b)
 	Data.update(player, function(dd)
 		if what == "buy" and type(a) == "string" then
 			ok, msg = actionBuy(player, dd, a)
+		elseif what == "displayHand" and type(a) == "boolean" then
+			dd.displayHand = a
+			ok, msg = true, a and "진열 알바가 손으로 만든 것도 옮겨요" or "손으로 만든 것은 직접 놓아요"
+		elseif what == "train" and type(a) == "string" then
+			ok, msg = actionTrain(dd, a)
+		elseif what == "helperPost" and type(a) == "number" and type(b) == "string" then
+			ok, msg = actionSetPost(dd, math.floor(a), b)
 		elseif what == "helperShape" and type(a) == "number" and type(b) == "string" then
 			ok, msg = actionSetShape(dd, math.floor(a), b)
 		elseif what == "machineShape" and type(a) == "string" then
@@ -313,15 +372,15 @@ function GrowthService.action(player, what, a, b)
 			return false
 		end
 	end)
-	if ok and helperState[player] then
+	if ok and what == "helperShape" and helperState[player] then
 		for _, st in pairs(helperState[player]) do
 			st.t = 0 -- 도안을 바꾸면 그 판은 처음부터
 		end
 	end
-	if ok and (what == "machineShape" or a == "machine") then
+	if ok and (what == "machineShape" or a == "machine" or what == "helperPost" or a == "hire") then
 		Machine.changed(player)
 	end
-	if ok and (a == "factory" or string.sub(what, 1, 7) == "factory") then
+	if ok and (a == "factory" or string.sub(what, 1, 7) == "factory" or what == "helperPost" or a == "hire") then
 		Factory.changed(player)
 	end
 	return { ok = ok, reason = not ok and msg or nil, msg = ok and msg or nil }
@@ -329,8 +388,8 @@ end
 
 ---------------------------------------------------------------- 알바생 생산
 
--- 알바생이 설 자리: 그 부지 작업대의 화로 뒤쪽 (손님·주인 쪽 +Z를 봄). 작업대가 없으면 작업대 자리 앞
-local function helperFoot(plot, i)
+-- 화로 옆 자리 k (1 = 화로 알바, 국자 HelperLadle2와 짝). 그 부지 작업대의 화로 뒤쪽 (손님·주인 쪽 +Z를 봄)
+local function stoveFoot(plot, k)
 	local ws = plot.model:FindFirstChild("Workstation")
 	local brazier = ws and ws:FindFirstChild("Brazier")
 	local top = ws and ws:FindFirstChild("TableTop")
@@ -340,18 +399,74 @@ local function helperFoot(plot, i)
 		local lb = plot.cframe:PointToObjectSpace(brazier:GetPivot().Position)
 		local lt = plot.cframe:PointToObjectSpace(top.Position)
 		local z = lt.Z + top.Size.Z / 2 + G.Plots.minimeBehind
-		local x = lb.X - (i - 2) * G.Plots.minimeGap
+		local x = lb.X - (k - 2) * G.Plots.minimeGap
 		return plot.cframe * CFrame.lookAt(Vector3.new(x, y, z), Vector3.new(x, y, z - 1))
 	end
 	local spot = G.Plots.handStation.pos
-	return plot.cframe * CFrame.new(spot.X - 8 + (i - 1) * 5, y, spot.Z - 2.5)
+	return plot.cframe * CFrame.new(spot.X - 8 + (k - 1) * 5, y, spot.Z - 2.5)
+end
+
+-- 알바생이 설 자리 (D34): 화로 알바는 화로 옆, 기계 알바는 그 기계 옆, 대기는 화로 옆 빈자리.
+-- 기계 옆 자리는 가게 틀(PlotLayout)에 HelperSpot<단계> 부품을 넣으면 그 자리 (없으면 기계 자리 오른쪽)
+local function helperFoot(plot, post, i)
+	local p = post and G.helperPost(post)
+	if p and (p.stage or 0) >= 2 then
+		local y = G.Plots.size.Y
+		local mark = plot.model:FindFirstChild("HelperSpot" .. p.stage, true)
+		if mark and mark:IsA("BasePart") then
+			local l = plot.cframe:ToObjectSpace(mark.CFrame)
+			local look = l.LookVector
+			local pos = Vector3.new(l.X, y, l.Z)
+			return plot.cframe * CFrame.lookAt(pos, pos + Vector3.new(look.X, 0, look.Z))
+		end
+		local slot = plot.model:FindFirstChild("MachineSlot" .. p.stage)
+		if slot and slot:IsA("BasePart") then
+			local l = plot.cframe:ToObjectSpace(slot.CFrame)
+			local side = l * Vector3.new(slot.Size.X / 2 + 1.2, 0, 0)
+			local pos = Vector3.new(side.X, y, side.Z)
+			local c = Vector3.new(l.X, y, l.Z)
+			return plot.cframe * CFrame.lookAt(pos, c)
+		end
+	end
+	if p and (p.kind == "display" or p.kind == "cashier") then
+		-- 진열 = 유리 진열장 뒤, 계산 = 앞 카운터 뒤 (가게 안쪽 +Z에서 앞 -Z를 봄). 틀에 HelperSpotDisplay·HelperSpotCashier를 넣으면 그 자리
+		local y = G.Plots.size.Y
+		local mark = plot.model:FindFirstChild(p.kind == "display" and "HelperSpotDisplay" or "HelperSpotCashier", true)
+		if mark and mark:IsA("BasePart") then
+			local l = plot.cframe:ToObjectSpace(mark.CFrame)
+			local look = l.LookVector
+			local pos = Vector3.new(l.X, y, l.Z)
+			return plot.cframe * CFrame.lookAt(pos, pos + Vector3.new(look.X, 0, look.Z))
+		end
+		local role = p.kind == "display" and "유리 진열장" or "앞 카운터 (나무)"
+		for _, part in ipairs(plot.model:GetDescendants()) do
+			if part:IsA("BasePart") and part:GetAttribute("Role") == role then
+				local l = plot.cframe:ToObjectSpace(part.CFrame)
+				local sz = part.Size
+				local halfZ = (math.abs(l.RightVector.Z) * sz.X + math.abs(l.UpVector.Z) * sz.Y + math.abs(l.LookVector.Z) * sz.Z) / 2
+				local pos = Vector3.new(l.X, y, l.Z + halfZ + 1.3)
+				return plot.cframe * CFrame.lookAt(pos, pos - Vector3.zAxis)
+			end
+		end
+	end
+	if post == "stove" then
+		return stoveFoot(plot, 1)
+	end
+	return stoveFoot(plot, 1 + i) -- 대기
+end
+
+-- 모델 이름: 화로 알바 = Helper1 (클라이언트 HelperLadles가 국자 2와 짝짓는 이름), 나머지 = Helper_<자리>
+local function helperName(post, i)
+	if post == "stove" then
+		return "Helper1"
+	end
+	return "Helper_" .. (post or ("idle" .. i))
 end
 
 -- 미니미를 못 만들 때 쓰는 부품 인형
-local function helperModel(player, plot, i)
+local function helperModel(player, plot, i, cf)
 	local m = Instance.new("Model")
 	m.Name = "Helper" .. i
-	local cf = helperFoot(plot, i)
 	local function p(name, size, off, color, shape)
 		local x = Instance.new("Part")
 		x.Name = name
@@ -397,7 +512,21 @@ local function helperModel(player, plot, i)
 	return m
 end
 
+-- 제작 세션 연출 약속 (D34): 미니미 속성 StationKey = "hand" | "m2" | "m3" | "m4" (맡은 제작대, 대기면 없음), Working = 일하는 중
+local STATION_KEY = { stove = "hand", steel = "m2", pink = "m3", line = "m4", display = "display", cashier = "cashier" }
+
+local function setWorking(st)
+	local m = st.model
+	if m and m.Parent then
+		local w = st.status == "work"
+		if m:GetAttribute("Working") ~= w then
+			m:SetAttribute("Working", w)
+		end
+	end
+end
+
 local function setHelperText(st, text)
+	setWorking(st)
 	local head = st.model and st.model:FindFirstChild("Head")
 	local bb = head and head:FindFirstChild("Status")
 	if bb and bb.TextLabel.Text ~= text then
@@ -405,8 +534,8 @@ local function setHelperText(st, text)
 	end
 end
 
-local function rollHelperQuality()
-	local q = math.random(G.Helper.qMin, G.Helper.qMax)
+local function rollHelperQuality(qMin, qMax)
+	local q = math.random(qMin or G.Helper.qMin, qMax or G.Helper.qMax)
 	for _, g in ipairs(Config.Grades) do
 		if q >= g.min then
 			return q, g.name, g.mult
@@ -415,28 +544,149 @@ local function rollHelperQuality()
 	return q, "Normal", 0.8
 end
 
--- 알바생 1명 1초 진행. 반환: 바뀐 상태 글(또는 nil)
+-- 알바생 1명 1초 진행 (D34: 배치한 제작대에 따라)
+-- 진열 알바 (D33): 옮길 달고나 하나 고르기 (먼저 만든 것부터, 손 제작품 켜면 손 제작품 먼저, 들고 있는 것은 빼고)
+local function displayPick(player, d)
+	local maxSlots = G.shelfSlots(d)
+	local used = {}
+	for _, it in ipairs(d.stock) do
+		if it.sl then
+			used[it.sl] = true
+		end
+	end
+	local slot = nil
+	for k = 1, maxSlots do
+		if not used[k] then
+			slot = k
+			break
+		end
+	end
+	if not slot then
+		return nil, nil, "진열대 가득"
+	end
+	local carrying = player:GetAttribute("Carrying")
+	local hand, auto = nil, nil
+	for _, it in ipairs(d.stock) do
+		if not it.sl and it.id ~= carrying then
+			if it.a then
+				auto = auto or it
+			elseif d.displayHand ~= false then
+				hand = hand or it
+			end
+		end
+	end
+	local item = hand or auto
+	if not item then
+		return nil, nil, "옮길 것 없음"
+	end
+	return item, slot, nil
+end
+
+-- 급여를 일한 시간만큼 쌓다가 1코인 이상이면 냄 (진열·계산 알바: 30초당 p.wage)
+local function payWage(player, st, p, sec)
+	st.owed = (st.owed or 0) + sec / 30 * p.wage
+	if st.owed >= p.wage then
+		local pay = math.floor(st.owed)
+		st.owed -= pay
+		Data.update(player, function(dd)
+			dd.coins -= pay
+			dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + pay
+		end)
+	end
+end
+
+local function stepRole(player, d, i, h, st, dt, p)
+	if p.kind == "factory" then
+		st.status = "work" -- 공장 공정 (FactoryService가 일·급여를 셈, 미니미는 FactoryDisplay)
+		return
+	end
+	if not G.shopOpen(d) then
+		st.status = "가게 문 닫힘"
+		setHelperText(st, string.format("알바생 %d · 쉬는 중 (가게 문 닫힘)", i))
+		return
+	end
+	if d.coins < p.wage then
+		st.status = "급여 부족"
+		setHelperText(st, string.format("알바생 %d · 쉬는 중 (급여 부족)", i))
+		return
+	end
+	if p.kind == "cashier" then
+		st.status = "work"
+		setHelperText(st, string.format("알바생 %d · 계산", i))
+		payWage(player, st, p, dt)
+		return
+	end
+	-- 진열
+	local item, _, why = displayPick(player, d)
+	if not item then
+		st.status = why
+		st.t = 0
+		setHelperText(st, string.format("알바생 %d · 쉬는 중 (%s)", i, why))
+		return
+	end
+	st.status = "work"
+	st.t += dt
+	setHelperText(st, string.format("알바생 %d · 진열 중", i))
+	if st.t < G.DisplayHelper.seconds then
+		return
+	end
+	st.t = 0
+	local placed = nil
+	Data.update(player, function(dd)
+		local it, slot = displayPick(player, dd)
+		if not it then
+			return false
+		end
+		it.sl = slot
+		it.pp = nil
+		placed = slot
+	end)
+	if placed then
+		payWage(player, st, p, G.DisplayHelper.seconds)
+		if st.model and st.model.Parent then
+			st.model:SetAttribute("DeliverSlot", placed)
+			st.model:SetAttribute("DeliverAt", workspace:GetServerTimeNow())
+		end
+	end
+end
+
 local function stepHelper(player, d, i, h, st, dt)
+	local role = h.post and G.helperPost(h.post)
+	if role and role.kind ~= "station" and G.hasPost(d, h.post) then
+		stepRole(player, d, i, h, st, dt, role)
+		return
+	end
+	if h.post ~= "stove" then
+		-- 기계 알바: 기계가 돌게 함 (만들기·급여는 MachineService). 대기: 쉼
+		local p = h.post and G.helperPost(h.post)
+		if not p or not G.hasPost(d, h.post) then
+			st.status = "대기"
+			setHelperText(st, string.format("알바생 %d · 쉬는 중 (자리 없음)", i))
+			return
+		end
+		local ms = Machine.statusOf(player, p.stage) or "work"
+		st.status = ms
+		if ms == "work" then
+			setHelperText(st, string.format("알바생 %d · %s", i, p.name))
+		else
+			setHelperText(st, string.format("알바생 %d · 쉬는 중 (%s)", i, ms))
+		end
+		return
+	end
 	local shape = ShapeCatalog.get(h.shape) or ShapeCatalog.get(cheapestHelperShape(d))
-	local seconds = G.Helper.skillSeconds[h.skill or 0] or G.Helper.seconds
+	local seconds, qMin, qMax = G.stoveHelperSpec(d)
 	local wage = math.floor(seconds / 30 * G.Helper.wagePer30s + 0.5)
 	-- 쉬는 이유 확인
 	-- 알바생은 재료(설탕·소다·젓가락 등)를 안 씀 (2026-11-21 사용자: "알바생은 재료 안 쓰게 해"). 급여만 냄
-	local need = {}
 	local why = nil
 	if not G.shopOpen(d) then
 		why = "가게 문 닫힘" -- 월세 밀림 (D21)
-	elseif #d.stock >= G.stockMax(d) then
+	elseif Production.isMaking(player) and not (d.stoveUps and d.stoveUps.burner2) then
+		why = "사장님이 만드는 중" -- D34 (두 번째 화구가 있으면 안 쉼, D40)
+	elseif G.stockRoom(d) <= 0 then
 		why = "보관함 가득"
 	elseif d.coins < wage then
 		why = "급여 부족"
-	else
-		for _, ing in ipairs(G.Ingredients) do
-			if (need[ing.id] or 0) > (d.ingredients[ing.id] or 0) then
-				why = ing.name .. " 부족"
-				break
-			end
-		end
 	end
 	if why then
 		st.status = why
@@ -454,13 +704,10 @@ local function stepHelper(player, d, i, h, st, dt)
 	local ups, newShapes = {}, {}
 	local deliverSlot = nil
 	Data.update(player, function(dd)
-		for id, n in pairs(need) do
-			dd.ingredients[id] = math.max(0, (dd.ingredients[id] or 0) - n)
-		end
 		dd.coins -= wage
 		dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + wage
 		dd.stats.helperMade = (dd.stats.helperMade or 0) + 1
-		local q, grade, mult = rollHelperQuality()
+		local q, grade, mult = rollHelperQuality(qMin, qMax)
 		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
 		deliverSlot = Economy.stockProduced(dd, item, "helper") -- 빈 칸이면 진열, 아니면 보관함 (D26)
@@ -481,19 +728,20 @@ local function stepHelper(player, d, i, h, st, dt)
 	print(string.format("[Helper] %s #%d made %s (-%d wage) shelf=%s", player.Name, i, shape.id, wage, tostring(deliverSlot)))
 end
 
--- 오프라인 정산 (D29): 알바생 i가 dt초 일함 (데이터만 바꿈, 온라인 stepHelper와 같은 규칙). 반환 = 아직 일할 수 있는가
+-- 오프라인 정산 (D29·D34): 화로에 배치한 알바생만 직접 만듦 (기계 알바는 MachineService.offlineTick이 기계째 셈).
+-- 반환 = 아직 일할 수 있는가
 local function offlineHelper(dd, i, st, dt, rep)
 	local h = dd.partTimers[i]
-	if not h then
+	if not h or h.post ~= "stove" then
 		return false
 	end
 	local shape = ShapeCatalog.get(h.shape) or ShapeCatalog.get(cheapestHelperShape(dd))
-	local seconds = G.Helper.skillSeconds[h.skill or 0] or G.Helper.seconds
+	local seconds, qMin, qMax = G.stoveHelperSpec(dd)
 	local wage = math.floor(seconds / 30 * G.Helper.wagePer30s + 0.5)
 	local why = nil
 	if not G.shopOpen(dd) then
 		why = "가게 문 닫힘"
-	elseif #dd.stock >= G.stockMax(dd) then
+	elseif G.stockRoom(dd) <= 0 then
 		why = "보관함 가득"
 	elseif dd.coins < wage then
 		why = "급여 부족"
@@ -510,7 +758,7 @@ local function offlineHelper(dd, i, st, dt, rep)
 	dd.coins -= wage
 	dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + wage
 	dd.stats.helperMade = (dd.stats.helperMade or 0) + 1
-	local q, grade, mult = rollHelperQuality()
+	local q, grade, mult = rollHelperQuality(qMin, qMax)
 	local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 	item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
 	Economy.stockProduced(dd, item, "helper")
@@ -530,28 +778,60 @@ local function syncHelpers(player, d)
 		states = {}
 		helperState[player] = states
 	end
-	for i, _ in ipairs(d.partTimers) do
+	for i, h in ipairs(d.partTimers) do
 		if not states[i] then
 			states[i] = { t = 0, status = "work" }
 		end
 		local st = states[i]
-		if plot and not st.building and (not st.model or not st.model.Parent) then
+		-- 자리를 옮겼으면 미니미를 새 자리에 다시 (D34)
+		if st.model and st.post ~= h.post then
+			st.model:Destroy()
+			st.model = nil
+			st.t = 0
+		end
+		local role = h.post and G.helperPost(h.post)
+		local inShop = not (role and role.kind == "factory") -- 공장 공정 미니미는 FactoryDisplay가 공장 방에 (D43)
+		if not inShop then
+			st.post = h.post
+		end
+		if plot and inShop and not st.building and (not st.model or not st.model.Parent) then
 			-- 주인 아바타 미니미 (D19). 만드는 데 시간이 걸려서 따로 돌리고, 실패하면 부품 인형
 			st.building = true
-			local h = d.partTimers[i]
+			local post = h.post
+			st.post = post
 			task.spawn(function()
-				local foot = helperFoot(plot, i)
-				local m = Minime.build(player, plot.model, foot, i, h and h.skill or 0)
-				if not player.Parent or helperState[player] ~= states then
+				local okFoot, foot = pcall(helperFoot, plot, post, i)
+				if not okFoot then
+					warn("[Helper] stand spot failed", post, foot)
+					foot = stoveFoot(plot, 1 + i)
+				end
+				local m = Minime.build(player, plot.model, foot, i, h.skill or 0)
+				local now = Data.get(player) or d
+				if not player.Parent or helperState[player] ~= states or (now.partTimers[i] or {}).post ~= post then
 					if m then
 						m:Destroy()
 					end
+					st.building = false
+					if player.Parent and helperState[player] == states then
+						syncHelpers(player, Data.get(player) or d) -- 그 사이 또 옮김
+					end
 					return
 				end
-				st.model = m or helperModel(player, plot, i)
+				m = m or helperModel(player, plot, i, foot)
+				m.Name = helperName(post, i)
+				m:SetAttribute("Post", post or "")
+				m:SetAttribute("StationKey", post and STATION_KEY[post] or nil)
+				m:SetAttribute("Working", false)
+				st.model = m
 				st.building = false
 			end)
 		end
+	end
+	-- 화로 위 알바생 국자: 화로 알바가 있으면 1개 (D39, Making/HelperLadles가 Helper1과 짝지어 그림)
+	local ws = Plots.workstation and Plots.workstation(player)
+	local ladles = G.helperAt(d, "stove") and 2 or 1
+	if ws and ws:GetAttribute("LadleCount") ~= ladles then
+		ws:SetAttribute("LadleCount", ladles)
 	end
 end
 
@@ -574,7 +854,7 @@ local function growthSnapshot(player, d, snap)
 	local states = helperState[player] or {}
 	for i, h in ipairs(d.partTimers) do
 		local st = states[i]
-		table.insert(helpers, { shape = h.shape, status = st and st.status or "work", skill = h.skill or 0 })
+		table.insert(helpers, { shape = h.shape, status = st and st.status or "work", skill = h.skill or 0, post = h.post })
 	end
 	local ups = {}
 	for _, kind in ipairs(G.UpgradeOrder) do
@@ -591,8 +871,21 @@ local function growthSnapshot(player, d, snap)
 	snap.growth = {
 		shop = { state = d.shop.state, closed = d.shop.closed == true, rentLeft = rentLeft },
 		upgrades = ups,
-		ladles = d.ladles,
 		helpers = helpers,
+		-- D34 배치: 가진 제작대 목록, 다음 고용비 (없으면 최대 인원), D40 화로 알바 교육
+		posts = (function()
+			local list = {}
+			for _, p in ipairs(G.HelperPosts) do
+				if G.hasPost(d, p.key) then
+					table.insert(list, { key = p.key, name = p.name, kind = p.kind, wage = p.wage, helper = G.helperAt(d, p.key) })
+				end
+			end
+			return list
+		end)(),
+		hireCost = G.HireCost[#d.partTimers + 1],
+		helperMax = G.HelperMax,
+		stoveUps = table.clone(d.stoveUps or {}),
+		displayHand = d.displayHand ~= false,
 		daily = d.daily.goals,
 		collection = collection,
 		unlocked = table.clone(d.unlockedShapes),
@@ -742,11 +1035,6 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 		local _, plotIndex = Plots.get(player)
 		if plotIndex and Plots.setShopState then
 			Plots.setShopState(plotIndex, d.shop.state, d.shop.closed, player.DisplayName)
-		end
-		-- 가게 작업대 화로 위 국자 수 = 산 국자 수 (Making/HelperLadles가 그림)
-		local ws = Plots.workstation and Plots.workstation(player)
-		if ws and ws:GetAttribute("LadleCount") ~= d.ladles then
-			ws:SetAttribute("LadleCount", d.ladles)
 		end
 		syncHelpers(player, d)
 	end)

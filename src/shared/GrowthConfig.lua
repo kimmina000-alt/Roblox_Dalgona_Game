@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 9 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
+G.SchemaVersion = 11 -- v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -29,14 +29,16 @@ G.DefaultData = {
 	nextItemId = 1, -- 달고나 번호 (들고 다니기·진열 칸을 찾는 데 씀)
 	unlockedShapes = { "Circle", "Square", "Triangle", "Bone" }, -- Common (레벨이 오르면 GrowthService가 더함)
 	upgrades = { stove = 0, presser = 0, table = 0 }, -- 화로·누르개·작업대 장비 Lv (Phase 4)
-	ladles = 1, -- 국자 수 1~4 (SHOP_GROWTH_PLAN 2장)
-	partTimers = {}, -- 알바생 { { shape = 만들 도안 id, skill = 숙련(자리만) } } 국자 2번째부터 1명씩
+	-- 알바생 (D34·D43): { shape = 화로에서 만들 도안 id, skill = 모자(자리만), post = 역할 key (G.HelperPosts) | nil(대기) }
+	partTimers = {},
+	stoveUps = {}, -- 화로 알바 교육 (D40): [key] = true (G.StoveTraining)
+	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
 	machine = { shapes = {}, t = 0, ts = {} }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, ts[기계 id] = 이번 판 진행 초 (D32 기계 여러 대, t는 예전 값 → 처음 읽을 때 ts로 옮김)
 	-- 가게 뒤 공장 (D11, 5단계): on = 생산 켬, shape·qty·mode = 제어대 설정, lines = 라인별 진행 중인 판 { s, n, m, t, sec } 또는 false,
 	-- ups = 제어대 업그레이드 단계 [key] = 0..
-	-- staff[공정 key] = true: 고용한 공정 알바생 (D30)
-	factory = { unlocked = false, on = false, shape = "", qty = 20, mode = "normal", lines = {}, ups = {}, staff = {} },
+	-- 공정 알바생(D30)은 D43부터 partTimers의 역할 f_<공정 key>
+	factory = { unlocked = false, on = false, shape = "", qty = 20, mode = "normal", lines = {}, ups = {} },
 	-- 가게 (D21): state = "stall"(야외 노점) | "rented"(월세) | "owned"(매입). rentTimer = 지난 월세 뒤 접속한 초, closed = 월세 못 내 문 닫힘
 	shop = { state = "stall", rentTimer = 0, closed = false },
 	stats = { made = 0, sold = 0, coinsEarned = 0, helperMade = 0, wagesPaid = 0 },
@@ -92,7 +94,7 @@ G.ChopsticksPerRound = 1
 G.ChopsticksPerHelperRound = 0 -- 알바생은 젓가락을 안 씀 (사용자 결정 2026-11-21: 젓가락은 손 제작 1판에 1쌍만)
 G.ChopsticksPerMachineRound = 0 -- 2~5단계 기계·공장은 안 씀 (공장은 운영비 +1)
 
-G.StockMax = 30 -- 들고 있을 수 있는 달고나 수 (작업대 업그레이드마다 +10, G.stockMax)
+G.StockMax = 50 -- 보관함 기본 칸 (D42, 2026-11-24: 30 → 50). 진열대 칸은 따로 (G.stockMax·G.storedCount)
 G.EnforceUnlocks = true -- 해금 안 된 도안은 서버가 거절 (Phase 4, 2026-11-20 켬)
 
 ---------------------------------------------------------------- 레벨 (GDD 6장)
@@ -153,27 +155,90 @@ G.Upgrades = {
 G.UpgradeOrder = { "stove", "presser", "table" }
 G.StoveBandPerLevel = 0.08 -- 적정 온도 구간 폭 ×(1 + 0.08×(Lv-1)), DEVELOPMENT_PLAN 3장 14번
 G.PresserBandPerLevel = 0.08
-G.TableStockPerLevel = 10
+G.TableStockPerLevel = 25 -- 작업대 Lv2~4마다 +25 (D42: +10 → +25, 최대 125)
+G.MachineStock = { [2] = 50, [3] = 75, [4] = 125 } -- 기계를 사면 딸린 보관 선반 (D42, 단계마다 더함 → 4단계까지 +250)
+G.FactoryBinStock = 250 -- 공장 받는 상자 (D42, 공장을 사면)
 
 -- data.upgrades는 0부터 (0 = Lv1). 장비 Lv = 값 + 1
+-- 보관함 용량 (D42): 기본 50 + 작업대 +25/Lv + 기계 보관 선반 + 공장 받는 상자, 창고면 ×2. stockBonus = 옛 데이터 보장분 (v10)
 function G.stockMax(data)
 	local t = data and data.upgrades and data.upgrades.table or 0
 	local n = G.StockMax + t * G.TableStockPerLevel
-	-- 공장 대형 완제품 창고: 보관량 2배
+	local stage = data and data.machineStage or 1
+	for s, k in pairs(G.MachineStock) do
+		if stage >= s then
+			n += k
+		end
+	end
 	local f = data and data.factory
+	if f and f.unlocked then
+		n += G.FactoryBinStock
+	end
+	-- 공장 대형 완제품 창고: 보관량 2배
 	if f and f.ups and (f.ups.warehouse or 0) > 0 then
 		n *= G.Factory.warehouseMult
+	end
+	return n + (data and tonumber(data.stockBonus) or 0)
+end
+
+-- 보관함에 있는 수 (진열대에 놓인 것은 안 셈, D42)
+function G.storedCount(d)
+	local n = 0
+	for _, it in ipairs(d.stock) do
+		if not it.sl then
+			n += 1
+		end
 	end
 	return n
 end
 
+-- 보관함 남은 칸 (손으로 만든 것·뽑기 덤처럼 보관함으로만 가는 것)
+function G.storageRoom(d)
+	return G.stockMax(d) - G.storedCount(d)
+end
+
+-- 자동 생산이 넣을 수 있는 수 = 보관함 남은 칸 + 진열대 빈 칸 (자동 생산은 빈 칸부터 채움, D26)
+function G.stockRoom(d)
+	local used = 0
+	local slots = G.shelfSlots(d)
+	for _, it in ipairs(d.stock) do
+		if it.sl and it.sl <= slots then
+			used += 1
+		end
+	end
+	return math.max(0, G.storageRoom(d)) + math.max(0, slots - used)
+end
+
 ---------------------------------------------------------------- 국자·알바생 (SHOP_GROWTH_PLAN 2장, D10)
-G.Ladles = { -- 2번째 국자부터: 해금 레벨, 값
-	[2] = { level = 3, cost = 300 },
-	[3] = { level = 5, cost = 800 },
-	[4] = { level = 8, cost = 1800 },
+-- 국자 확장은 없앰 (D39, 2026-11-24). 같은 레벨에 화로 알바 키우기 (D40): 화로에 배치한 알바생에게만 효과
+G.StoveTraining = {
+	{ key = "skilled", name = "숙련 교육", level = 3, cost = 300, text = "화로 알바 40초 → 35초" },
+	{ key = "burner2", name = "두 번째 화구", level = 5, cost = 800, text = "내가 만드는 동안에도 화로 알바가 쉬지 않음" },
+	{ key = "expert", name = "전문 교육", level = 8, cost = 1800, text = "화로 알바 30초, Good~Excellent" },
 }
-G.HireCost = { 500, 1000, 2000 } -- 알바생 1·2·3번째
+-- 알바생 역할 (D34 → D43, 2026-11-24): 고용한 뒤 역할을 고름. 역할마다 한 명, 최대 11명 (제작대 4 + 진열 + 계산 + 공장 공정 5).
+-- 고용비는 몇 번째로 뽑느냐에 따라 (역할과 상관없음), 역할은 언제든 공짜로 바꿈
+G.HireCost = { 500, 1500, 3000, 5000, 7500, 10000, 10000, 10000, 10000, 10000, 10000 }
+G.HelperMax = 11
+-- 역할 (순서 = 화면 순서). kind: station(제작대) | display(진열) | cashier(계산) | factory(공장 공정, factoryKey = G.Factory.staff.stations key)
+-- 열리는 때: level(가게를 임대한 뒤), stage(그 기계를 산 뒤), factory(공장을 산 뒤). wage = 30초당 급여 (일할 때만)
+G.HelperPosts = {
+	{ key = "stove", name = "연탄 화로", kind = "station", stage = 1, level = 3, wage = 3 },
+	{ key = "steel", name = "철제 판매기", kind = "station", stage = 2, wage = 3 },
+	{ key = "pink", name = "분홍 자판기", kind = "station", stage = 3, wage = 3 },
+	{ key = "line", name = "연속 생산 설비", kind = "station", stage = 4, wage = 3 },
+	{ key = "display", name = "진열", kind = "display", level = 5, wage = 2 },
+	{ key = "cashier", name = "계산", kind = "cashier", level = 6, wage = 2 },
+	{ key = "f_sugar", name = "공장 ① 설탕 넣기", kind = "factory", factoryKey = "sugar", wage = 6 },
+	{ key = "f_boil", name = "공장 ② 끓이기", kind = "factory", factoryKey = "boil", wage = 6 },
+	{ key = "f_press", name = "공장 ③ 붓기·찍기", kind = "factory", factoryKey = "press", wage = 6 },
+	{ key = "f_inspect", name = "공장 ④ 식히기·검사", kind = "factory", factoryKey = "inspect", wage = 6 },
+	{ key = "f_pack", name = "공장 ⑤ 포장", kind = "factory", factoryKey = "pack", wage = 6 },
+}
+-- 진열 알바 (D33): 보관함 → 진열대 빈 칸, 4초에 1개. 옮길 게 없으면 쉼(급여 없음). 손 제작품도 옮길지 = 데이터 displayHand (기본 켬)
+G.DisplayHelper = { seconds = 4 }
+-- 계산 알바 (D43): 손님이 고르는 시간 절반 → 손님 수요 +10%, 모든 판매 팁 +5%. 자리 비운 동안은 안 함
+G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 G.Helper = {
 	seconds = 40, -- 1판 (기본 알바생)
 	wagePer30s = 3, -- 일하는 동안만
@@ -181,8 +246,13 @@ G.Helper = {
 	qMax = 84,
 	maxGrade = "Legendary", -- 자동 생산은 Legendary까지 (D13)
 	chopsticks = 0, -- 젓가락 안 씀 (G.ChopsticksPerHelperRound, 2026-11-21)
-	-- 숙련 업그레이드: 아직 미정 (자리만). skill 1·2 → 35초·30초 등
-	skillSeconds = { [0] = 40 },
+	skillSeconds = { [0] = 40 }, -- (옛 값) 화로 속도는 아래 stoveSeconds
+	-- 화로 알바 교육 (D40): 숙련 35초, 전문 30초 + 품질 Good~Excellent
+	skilledSeconds = 35,
+	expertSeconds = 30,
+	expertQMin = 70,
+	expertQMax = 94,
+	machineWagePer30s = 3, -- 기계에 배치한 알바생 급여 (기계가 도는 동안만, 한 판 끝날 때 냄) = G.HelperPosts 기계 wage
 	-- 외형 = 주인 아바타 미니미 (D19, 2026-11-20)
 	minime = {
 		scale = 0.6, -- 키
@@ -251,7 +321,7 @@ G.Shop = {
 	stallSlots = 5, -- 노점(또는 문 닫힘) 쟁반 진열 칸
 	autoShelveHelpers = true, -- 알바생이 만든 것은 빈 칸에 저절로 진열 (가게 직원이라). 손으로 만든 것은 들고 가서 놓음
 	-- 노점·문 닫힘에서 막히는 것: 국자 확장, 알바생 고용, 작업대 업그레이드 (화로·누르개는 됨)
-	lockedWhenStall = { ladle = true, hire = true, table = true, machine = true },
+	lockedWhenStall = { train = true, hire = true, table = true, machine = true },
 }
 
 ---------------------------------------------------------------- 기계 2~4단계 (20번, SHOP_GROWTH_PLAN 1·3~5장, D9·D10)
@@ -363,12 +433,12 @@ G.Sales = {
 	maxCustomers = 3, -- 가게당 동시 손님
 	-- 손님 수요 (GDD 5-1장 D12, 기획 세션 2026-11-20: 수요 ≈ 생산의 80%, 시뮬레이션 전 기획안)
 	-- { 방문 간격(초), 1명당 최소, 최대 }
-	-- 1단계(연탄 화로)는 국자 수로 (생산 = 손 1.5 + 알바생 1명당 1.5개/분의 약 80%, 국자 1개만 첫 판매 재미로 조금 높게)
-	demandByLadles = {
-		{ 30, 1, 1 }, -- 분당 2
-		{ 20, 1, 1 }, -- 분당 3
-		{ 24, 1, 2 }, -- 분당 3.75
-		{ 18, 1, 2 }, -- 분당 5
+	-- 1단계(연탄 화로)는 레벨 구간으로 (D39, 2026-11-24: 국자 수 대신). { 이 레벨까지, 방문 간격, 최소, 최대 }
+	demandByLevel = {
+		{ 2, 30, 1, 1 }, -- Lv1~2 노점: 분당 2
+		{ 4, 24, 1, 1 }, -- Lv3~4 가게: 분당 2.5
+		{ 7, 20, 1, 1 }, -- Lv5~7 (두 번째 화구): 분당 3
+		{ math.huge, 24, 1, 2 }, -- Lv8~ (전문 교육): 분당 3.75
 	},
 	-- 2~5단계: 기계·공장
 	-- 2026-11-23 D32 (기계 2·3·4단계 모두 같이 돎): 수요 ≈ 생산의 80%로 올림 (기획 GDD 5-1, 사용자 승인). 분당 9 / 13.3 / 20 / 30
@@ -407,23 +477,85 @@ G.Sales = {
 	},
 }
 
--- 설비 단계·국자 수 → 방문 간격(초, testSpeed 반영), 1명당 최소·최대 개수
-function G.salesDemand(stage, ladles)
+-- 설비 단계·레벨 → 방문 간격(초, testSpeed 반영), 1명당 최소·최대 개수
+function G.salesDemand(stage, level)
 	local row
 	if (stage or 1) <= 1 then
-		row = G.Sales.demandByLadles[math.clamp(ladles or 1, 1, #G.Sales.demandByLadles)]
+		local lv = level or 1
+		for _, r in ipairs(G.Sales.demandByLevel) do
+			if lv <= r[1] then
+				row = { r[2], r[3], r[4] }
+				break
+			end
+		end
 	else
 		row = G.Sales.demandByStage[math.min(stage, 5)]
 	end
 	return row[1] / math.max(G.Sales.testSpeed, 0.01), row[2], row[3]
 end
 
--- 플레이어 데이터로 손님 수요: 가게 문이 닫혀 있으면(노점) 국자 1개 수요, 기계도 가게 안에서만 (D21)
+-- 플레이어 데이터로 손님 수요: 가게 문이 닫혀 있으면(노점) 노점 수요, 기계도 가게 안에서만 (D21)
 function G.salesDemandFor(d)
 	if not G.shopOpen(d) then
 		return G.salesDemand(1, 1)
 	end
-	return G.salesDemand(d.machineStage or 1, d.ladles or 1)
+	local gap, lo, hi = G.salesDemand(d.machineStage or 1, d.level or 1)
+	if G.helperAt(d, "cashier") then
+		gap /= G.Cashier.demandMult -- 계산 알바 (D43): 손님 수요 +10%
+	end
+	return gap, lo, hi
+end
+
+-- 알바생 배치 (D34)
+function G.helperPost(key)
+	for _, p in ipairs(G.HelperPosts) do
+		if p.key == key then
+			return p
+		end
+	end
+	return nil
+end
+
+-- 그 역할이 열렸나 (D43): 기계는 산 뒤, 공장 공정은 공장을 산 뒤, 화로·진열·계산은 가게를 임대하고 그 레벨부터
+function G.hasPost(d, key)
+	local p = G.helperPost(key)
+	if not p then
+		return false
+	end
+	if p.kind == "factory" then
+		return d.factory ~= nil and d.factory.unlocked == true
+	end
+	if p.stage and p.stage >= 2 then
+		return (d.machineStage or 1) >= p.stage
+	end
+	return d.shop ~= nil and d.shop.state ~= "stall" and (d.level or 1) >= (p.level or 1)
+end
+
+-- 공장 공정 key에 알바생이 있나 (D30 → D43)
+function G.factoryStaffed(d, factoryKey)
+	return G.helperAt(d, "f_" .. factoryKey) ~= nil
+end
+
+-- 그 제작대에 배치된 알바생 번호 (없으면 nil)
+function G.helperAt(d, key)
+	for i, h in ipairs(d.partTimers or {}) do
+		if h.post == key then
+			return i
+		end
+	end
+	return nil
+end
+
+-- 화로 알바 한 판 초·품질 (D40)
+function G.stoveHelperSpec(d)
+	local ups = d.stoveUps or {}
+	local H = G.Helper
+	if ups.expert then
+		return H.expertSeconds, H.expertQMin, H.expertQMax
+	elseif ups.skilled then
+		return H.skilledSeconds, H.qMin, H.qMax
+	end
+	return H.seconds, H.qMin, H.qMax
 end
 
 ---------------------------------------------------------------- 오프라인 생산 (D29, 2026-11-22 사용자 결정, 수치는 임시)
@@ -432,6 +564,7 @@ G.Offline = {
 	maxHours = 8, -- 최대 이만큼만 셈
 	minSeconds = 60, -- 이보다 짧게 나갔다 오면 정산 안 함
 	step = 1, -- 시뮬레이션 간격(초)
+	speed = 0.5, -- 자리 비운 동안은 절반 속도로 만듦 (D42, 2026-11-24: D29 고침)
 	reportDelay = 4, -- 들어온 뒤 요약 팝업을 보내기까지 (화면 준비)
 	-- 판매 없음, 월세 없음. 나갈 때 가게 문이 닫혀 있었으면 알바생·기계·공장 모두 멈춘 채
 }

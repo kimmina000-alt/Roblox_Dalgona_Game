@@ -51,7 +51,7 @@ local function snapshot(player, data)
 			end
 			return t
 		end)(),
-		stock = #data.stock,
+		stock = G.storedCount(data), -- 보관함 (진열대 칸은 따로, D42)
 		stockMax = G.stockMax(data),
 		plot = player:GetAttribute("PlotIndex"),
 		saving = Data.canSave(player),
@@ -282,7 +282,7 @@ function EconomyService.canMake(player, shape)
 	if G.EnforceUnlocks and not table.find(data.unlockedShapes, shape.id) then
 		return false, "아직 안 열린 도안이에요"
 	end
-	if #data.stock >= G.stockMax(data) then
+	if G.storageRoom(data) <= 0 then
 		return false, string.format("달고나 보관함이 가득 찼어요 (%d개)", G.stockMax(data))
 	end
 	local need = G.recipe(shape.grade)
@@ -331,6 +331,10 @@ function EconomyService.sell(player, n)
 			coins += p
 			sold += 1
 			table.insert(items, item)
+		end
+		-- 계산 알바 (D43): 모든 판매 팁 +5%
+		if G.helperAt(d, "cashier") and G.shopOpen(d) then
+			coins = math.floor(coins * (1 + G.Cashier.tip) + 0.5)
 		end
 		d.coins += coins
 		d.stats.sold = (d.stats.sold or 0) + sold
@@ -413,7 +417,7 @@ function EconomyService.onPpopgi(player, shape, res)
 	if res.done and (res.extra or 0) > 0 then
 		Data.update(player, function(d)
 			for _ = 1, res.extra do
-				if #d.stock >= G.stockMax(d) then
+				if G.storageRoom(d) <= 0 then
 					break
 				end
 				local copy = table.clone(item)
@@ -446,7 +450,7 @@ function EconomyService.onMade(player, shape, result)
 		for id, n in pairs(need) do
 			d.ingredients[id] = math.max(0, (d.ingredients[id] or 0) - n)
 		end
-		if #d.stock < G.stockMax(d) then
+		if G.storageRoom(d) > 0 then
 			local item = {
 				id = EconomyService.newItemId(d),
 				s = shape.id,

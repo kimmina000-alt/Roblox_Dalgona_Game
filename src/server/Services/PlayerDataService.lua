@@ -86,6 +86,65 @@ PlayerDataService.MIGRATIONS = {
 			data.tutorialDone = true
 		end
 	end,
+	[10] = function(data)
+		-- v9 → v10 (2026-11-24 D34·D39·D40): 국자 확장을 없애고 화로 알바 교육으로, 알바생은 제작대에 배치.
+		--  - 산 국자는 같은 단계 교육으로 (값·레벨이 같음): 국자 2 → 숙련 교육, 3 → + 두 번째 화구, 4 → + 전문 교육
+		--  - 있던 알바생: 1번째 → 화로, 다음부터 가진 기계(철제 → 분홍 → 연속) 순서, 남으면 대기
+		local ladles = math.floor(tonumber(data.ladles) or 1)
+		data.ladles = nil
+		local ups = type(data.stoveUps) == "table" and data.stoveUps or {}
+		if ladles >= 2 then
+			ups.skilled = true
+		end
+		if ladles >= 3 then
+			ups.burner2 = true
+		end
+		if ladles >= 4 then
+			ups.expert = true
+		end
+		data.stoveUps = ups
+		if type(data.partTimers) == "table" then
+			local stage = math.floor(tonumber(data.machineStage) or 1)
+			local posts = { "stove" }
+			for _, p in ipairs({ { "steel", 2 }, { "pink", 3 }, { "line", 4 } }) do
+				if stage >= p[2] then
+					table.insert(posts, p[1])
+				end
+			end
+			for i, h in ipairs(data.partTimers) do
+				if type(h) == "table" then
+					h.post = posts[i]
+				end
+			end
+		end
+	end,
+	[11] = function(data)
+		-- v10 → v11 (2026-11-24 D43·D42): v10을 먼저 받은 시험 데이터도 거치게 따로 둠
+		-- D43: 공장 공정 알바생(D30 factory.staff[key])도 알바생 목록으로, 역할 f_<key>. 최대 11명 안
+		local f = type(data.factory) == "table" and data.factory or nil
+		if f and type(f.staff) == "table" then
+			data.partTimers = type(data.partTimers) == "table" and data.partTimers or {}
+			for _, key in ipairs({ "sugar", "boil", "press", "inspect", "pack" }) do
+				if f.staff[key] and #data.partTimers < 11 then
+					table.insert(data.partTimers, { skill = 0, post = "f_" .. key })
+				end
+			end
+			f.staff = nil
+		end
+		-- D42: 진열대 칸은 보관함과 따로, 용량이 커짐. 그래도 지금 가진 수보다 줄면 안 되니 모자란 만큼 stockBonus로 보장
+		if type(data.stock) == "table" and #data.stock > 0 then
+			local ok, cap = pcall(G.stockMax, data)
+			local stored = 0
+			for _, it in ipairs(data.stock) do
+				if type(it) == "table" and not it.sl then
+					stored += 1
+				end
+			end
+			if ok and type(cap) == "number" and stored > cap then
+				data.stockBonus = stored - cap
+			end
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

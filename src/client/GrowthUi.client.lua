@@ -1,4 +1,4 @@
--- 성장 창 (Phase 4, 2026-11-20): HUD 아래 "성장" 버튼 → [가게] 장비·국자·알바생 / [목표] 일일 목표 3개 / [도감]
+-- 성장 창 (Phase 4, 2026-11-20): HUD 아래 "성장" 버튼 → [가게] 장비·화로 알바 교육·알바생 배치(D34) / [목표] 일일 목표 3개 / [도감]
 -- [도감] 탭은 2026-11-24부터 새 도감 화면(CollectionUi)을 여는 버튼 (사용자 요청: 옛 목록과 겹쳐서)
 -- 서버 상태는 Remotes.PlayerState의 growth 칸 (GrowthService). 구매·도안 지정은 Remotes.GrowthAction.
 -- 제작 화면(MakingScreen)이 켜져 있으면 숨긴다.
@@ -203,37 +203,64 @@ local function render()
 			act("buy", kind)
 		end)
 	end
-	local nextL = G.Ladles[gr.ladles + 1]
-	order += 1
-	row(page, order, string.format("국자 %d / 4개", gr.ladles), "국자 2번째부터 알바생 1명씩",
-		not nextL and "최고 단계" or (not shopOpen and lockText) or (state.level < nextL.level and ("Lv" .. nextL.level .. "부터")) or (nextL.cost .. " 코인"),
-		nextL ~= nil and shopOpen and state.level >= nextL.level and state.coins >= nextL.cost, function()
-			act("buy", "ladle")
-		end)
+	-- 화로 알바 교육 (D39·D40, 2026-11-24): 국자 확장 대신
+	local trained = gr.stoveUps or {}
+	for _, t in ipairs(G.StoveTraining) do
+		order += 1
+		local have = trained[t.key] == true
+		row(page, order, string.format("🔥 %s%s", t.name, have and " ✓" or ""), t.text,
+			have and "배움" or (not shopOpen and lockText) or (state.level < t.level and ("Lv" .. t.level .. "부터")) or (t.cost .. " 코인"),
+			not have and shopOpen and state.level >= t.level and state.coins >= t.cost, function()
+				act("train", t.key)
+			end)
+	end
+	-- 알바생 역할 (D34 → D43): 최대 11명, 역할마다 한 명. "역할 바꾸기" = 열린 역할 → 대기 순으로 돌림 (그 역할 알바와 서로 바뀜)
+	-- (역할 고르기 화면은 UI 세션이 따로 만들 예정: Remotes.GrowthAction("helperPost", 번호, 역할 key | ""))
 	local nHelp = #gr.helpers
-	local hireCost = G.HireCost[nHelp + 1]
-	local seats = gr.ladles - 1
+	local maxHelp = gr.helperMax or G.HelperMax
+	local hireCost = gr.hireCost
 	order += 1
-	row(page, order, string.format("알바생 %d / %d명", nHelp, seats), string.format("%d초에 1개 · 급여 30초당 %d", G.Helper.seconds, G.Helper.wagePer30s),
-		(not shopOpen and lockText) or (nHelp >= seats and "자리 없음") or (hireCost and (hireCost .. " 코인")) or "최대",
-		shopOpen and nHelp < seats and hireCost ~= nil and state.coins >= hireCost, function()
+	row(page, order, string.format("알바생 %d / %d명", nHelp, maxHelp), "역할마다 한 명 (제작대·진열·계산·공장) · 기계는 알바가 있어야 돌아요",
+		(not shopOpen and lockText) or (nHelp >= maxHelp and "최대") or (hireCost and (hireCost .. " 코인")) or "최대",
+		shopOpen and nHelp < maxHelp and hireCost ~= nil and state.coins >= hireCost, function()
 			act("buy", "hire")
 		end)
+	local posts = gr.posts or {}
 	local choices = helperShapes(gr.unlocked)
 	for i, h in ipairs(gr.helpers) do
-		local e = ShapeCatalog.get(h.shape)
+		local post = h.post and G.helperPost(h.post)
 		order += 1
-		local status = h.status == "work" and "일하는 중" or ("쉬는 중: " .. tostring(h.status))
-		row(page, order, string.format("  알바생 %d · %s", i, e and e.name or h.shape), status, "도안 바꾸기", #choices > 1, function()
-			local idx = 1
-			for k, c in ipairs(choices) do
-				if c.id == h.shape then
-					idx = k
-				end
+		local status = not post and "대기 중 (자리 없음)" or (h.status == "work" and "일하는 중" or ("쉬는 중: " .. tostring(h.status)))
+		row(page, order, string.format("  알바생 %d · %s", i, post and post.name or "대기"), status, "역할 바꾸기", #posts > 0, function()
+			-- 다음 자리: 가진 제작대 순서대로, 마지막 다음은 대기
+			local keys = {}
+			for _, p in ipairs(posts) do
+				table.insert(keys, p.key)
 			end
-			local nextShape = choices[idx % #choices + 1]
-			act("helperShape", i, nextShape.id)
+			table.insert(keys, "")
+			local idx = table.find(keys, h.post or "") or #keys
+			act("helperPost", i, keys[idx % #keys + 1])
 		end)
+		if h.post == "display" then
+			order += 1
+			local on = gr.displayHand ~= false
+			row(page, order, "    손으로 만든 것도 진열", on and "켬: 손 제작품을 먼저 옮겨요" or "끔: 손 제작품은 직접 놓아요", on and "끄기" or "켜기", true, function()
+				act("displayHand", not on)
+			end)
+		end
+		if h.post == "stove" then
+			local e = ShapeCatalog.get(h.shape)
+			order += 1
+			row(page, order, string.format("    화로 도안 · %s", e and e.name or h.shape), "화로 알바가 만들 도안", "도안 바꾸기", #choices > 1, function()
+				local idx = 1
+				for k, c in ipairs(choices) do
+					if c.id == h.shape then
+						idx = k
+					end
+				end
+				act("helperShape", i, choices[idx % #choices + 1].id)
+			end)
+		end
 	end
 	-- 기계 2~4단계 (20번): 가게 뒤 기계 1자리, 단계대로 교체
 	local mc = gr.machine

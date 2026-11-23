@@ -80,8 +80,19 @@ end
 
 local STAFF = F.staff
 
+-- D43 (2026-11-24): 공정 알바생은 가게 알바생 목록(partTimers)의 역할 f_<key>
 local function hired(d, key)
-	return d.factory.staff ~= nil and d.factory.staff[key] == true
+	return G.factoryStaffed(d, key)
+end
+
+local function staffSet(d)
+	local on = {}
+	for _, st in ipairs(STAFF.stations) do
+		if hired(d, st.key) then
+			on[st.key] = true
+		end
+	end
+	return on
 end
 
 -- 1명 급여 (그 판 시간만큼)
@@ -91,7 +102,7 @@ end
 
 -- 한 판에 드는 것 (재료·코인). on = 이번 판에 일하는 공정 { key = true } (없으면 고용한 공정 모두로 미리 보기)
 local function jobCost(d, shape, qty, on)
-	on = on or d.factory.staff or {}
+	on = on or staffSet(d)
 	local sugar = (G.recipe(shape.grade).sugar or 1) * qty
 	if on.sugar then
 		sugar -= math.floor(sugar * STAFF.sugarSave) -- ① 설탕 넣기
@@ -430,6 +441,8 @@ for _, st in ipairs(STAFF.stations) do
 	STATION[st.key] = st
 end
 
+-- D43: 공장 화면의 "고용"은 알바생 목록에서 대기 중인 알바생을 그 공정으로 보내고, 없으면 새로 뽑아 보냄
+-- (고용비는 몇 번째로 뽑느냐, G.HireCost). "내보내기"는 그 알바생을 대기로 (역할은 성장 창에서 다시 고름)
 function FactoryService.hire(d, key)
 	local st = STATION[key]
 	if not st then
@@ -438,25 +451,36 @@ function FactoryService.hire(d, key)
 	if not d.factory.unlocked then
 		return false, "공장이 없어요"
 	end
-	d.factory.staff = d.factory.staff or {}
-	if d.factory.staff[key] then
+	if hired(d, key) then
 		return false, st.name .. " 알바생은 이미 있어요"
 	end
-	if d.coins < STAFF.hireCost then
-		return false, string.format("%d코인이 필요해요", STAFF.hireCost)
+	for _, h in ipairs(d.partTimers) do
+		if h.post == nil then
+			h.post = "f_" .. key
+			return true, string.format("대기 중이던 알바생 → %s (%s)", st.name, st.desc)
+		end
 	end
-	d.coins -= STAFF.hireCost
-	d.factory.staff[key] = true
+	local n = #d.partTimers
+	if n >= G.HelperMax then
+		return false, string.format("알바생은 %d명까지예요 (성장 창에서 역할을 바꿔요)", G.HelperMax)
+	end
+	local cost = G.HireCost[n + 1]
+	if d.coins < cost then
+		return false, string.format("%d코인이 필요해요", cost)
+	end
+	d.coins -= cost
+	table.insert(d.partTimers, { skill = 0, post = "f_" .. key })
 	return true, string.format("%s 알바생 고용! (%s)", st.name, st.desc)
 end
 
 function FactoryService.fire(d, key)
 	local st = STATION[key]
-	if not st or not d.factory.staff or not d.factory.staff[key] then
+	local i = st and G.helperAt(d, "f_" .. key)
+	if not i then
 		return false, "그 공정에 알바생이 없어요"
 	end
-	d.factory.staff[key] = nil
-	return true, st.name .. " 알바생을 내보냈어요"
+	d.partTimers[i].post = nil
+	return true, st.name .. " 알바생을 대기로 옮겼어요 (성장 창에서 다른 역할로)"
 end
 
 -- 바꾼 뒤 (Data.update 밖)
@@ -527,7 +551,7 @@ function FactoryService.snapshot(player, d)
 		shapes = allowedShapes(d),
 		preview = preview,
 		staff = staff,
-		staffHireCost = STAFF.hireCost,
+		staffHireCost = G.HireCost[#d.partTimers + 1] or STAFF.hireCost, -- D43: 몇 번째로 뽑느냐
 		price = F.price,
 		level = F.level,
 	}
@@ -553,7 +577,7 @@ local function beginJob(dd, k)
 			pending += job.n
 		end
 	end
-	if #dd.stock + pending + f.qty > G.stockMax(dd) then
+	if pending + f.qty > G.stockRoom(dd) then
 		return "보관함 가득"
 	end
 	local _, baseCoins = jobCost(dd, shape, f.qty, {})
