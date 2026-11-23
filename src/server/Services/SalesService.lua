@@ -821,13 +821,14 @@ local function spawnCustomer(index)
 			sold, coins, items = Economy.sell(owner, reservedN)
 		end
 		if sold > 0 then
-			say(model, string.format("%d개 살게요! +%d", sold, coins), 2)
-			startEating(model, items and items[1] or nil)
-			-- 알림창 대신 손님 위에 "+n코인" 글씨 (2026-11-24 사용자, 클라이언트 SaleFloatClient)
+			-- 알림창 대신 손님 위에 "+n코인" 글씨 (2026-11-24 사용자, 클라이언트 SaleFloatClient).
+			-- 먹기 시작하면 손에 붙는 달고나가 잠깐 다른 곳에 있어 상자가 틀어지므로 그 전에 잼
 			if saleFloat then
 				local cf, size = model:GetBoundingBox()
 				saleFloat:FireClient(owner, cf.Position + Vector3.new(0, size.Y / 2 + 0.6, 0), coins)
 			end
+			say(model, string.format("%d개 살게요! +%d", sold, coins), 2)
+			startEating(model, items and items[1] or nil)
 			print(string.format("[Sales] %s Plot%d sold %d (+%d)", owner.Name, index, sold, coins))
 		else
 			say(model, "다 팔렸네...", 2)
