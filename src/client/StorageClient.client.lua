@@ -76,7 +76,7 @@ local function build(group)
 		if ing then
 			local card = UI.card({ Name = id, LayoutOrder = i, ZIndex = 13, Parent = grid })
 			local iconBox = new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = C.tan, ZIndex = 14, Parent = card }, { UI.corner(12), UI.stroke(C.line, 2) })
-			UI.text({ Text = ing.icon, TextSize = 32, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.fromScale(1, 1), ZIndex = 15, Parent = iconBox })
+			UI.ingredientIcon(ing, iconBox, 32, 15)
 			UI.text({ Text = ing.name, Position = UDim2.fromOffset(4, 66), Size = UDim2.new(1, -8, 0, 22), TextSize = 19, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 14, Parent = card })
 			haveText[id] = UI.text({ Text = "", Position = UDim2.fromOffset(4, 88), Size = UDim2.new(1, -8, 0, 18), TextSize = 14, FontFace = UI.F.bold, TextColor3 = C.soft, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 14, Parent = card })
 			-- 묶음 버튼 3개 (위에서 아래로 ×1 / ×5 / ×10)

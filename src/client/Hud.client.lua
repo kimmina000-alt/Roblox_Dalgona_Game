@@ -64,11 +64,17 @@ local ingBar = new("Frame", {
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
 })
 local ingText = {}
+local function ingPrefix(ing) -- 연탄은 이모지 대신 그린 아이콘을 앞에 따로 둠
+	return ing.id == "coal" and "" or (ing.icon .. " ")
+end
 for i, ing in ipairs(G.Ingredients) do
+	if ing.id == "coal" then
+		UI.coal(ingBar, 20, 2).LayoutOrder = i * 2 - 1
+	end
 	ingText[ing.id] = label({
 		Name = ing.id,
-		LayoutOrder = i,
-		Text = ing.icon .. " 0",
+		LayoutOrder = i * 2,
+		Text = ingPrefix(ing) .. "0",
 		FontFace = UI.F.round,
 		TextSize = 18,
 		TextColor3 = C.white,
@@ -165,7 +171,7 @@ local busy = false
 for i, ing in ipairs(G.Ingredients) do
 	local row = UI.card({ Name = ing.id, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 72), ZIndex = 13, Parent = grid })
 	local iconBox = new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = C.tan, ZIndex = 14, Parent = row }, { UI.corner(12), UI.stroke(C.line, 2) })
-	label({ Text = ing.icon, TextSize = 32, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.fromScale(1, 1), ZIndex = 15, Parent = iconBox })
+	UI.ingredientIcon(ing, iconBox, 32, 15)
 	label({ Text = ing.name, Position = UDim2.fromOffset(72, 10), Size = UDim2.new(1, -560, 0, 26), TextSize = 21, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 14, Parent = row })
 	haveText[ing.id] = label({ Text = "보유 0", Position = UDim2.fromOffset(72, 38), Size = UDim2.new(1, -560, 0, 20), TextSize = 16, FontFace = UI.F.bold, TextColor3 = C.soft, ZIndex = 14, Parent = row })
 	-- 오른쪽에 묶음 버튼 3개 (폰에서 누르기 쉽게 넓게: 150 × 56)
@@ -294,7 +300,7 @@ local function apply(s)
 	end
 	for _, ing in ipairs(G.Ingredients) do
 		local n = s.ingredients and s.ingredients[ing.id] or 0
-		ingText[ing.id].Text = ing.icon .. " " .. n
+		ingText[ing.id].Text = ingPrefix(ing) .. n
 		ingText[ing.id].TextColor3 = n > 0 and C.white or Color3.fromRGB(255, 120, 110)
 		haveText[ing.id].Text = "보유 " .. n
 		haveText[ing.id].TextColor3 = n > 0 and C.soft or C.bad
