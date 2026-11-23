@@ -215,6 +215,10 @@ local function openPicker(i)
 		end)
 	end
 	for _, p in ipairs(G.HelperPosts) do
+		-- D46 (2026-11-24): 화로 알바 역할은 없어지고 2단계 기계 알바로 합쳐짐 → 화로 카드는 안 보임 (설정에서 빠져도 그대로 동작)
+		if p.key == "stove" and not open.stove then
+			continue
+		end
 		local o = open[p.key]
 		local icon = POST_ICON[p.key] or (p.kind == "factory" and "⚙️") or "👤"
 		local sub = string.format("급여 30초당 %d", (o and o.wage) or p.wage or 0)
@@ -304,7 +308,7 @@ local function render()
 				act("train", t.key)
 			end)
 	end
-	-- 알바생 역할 (D34 → D43): 최대 11명, 역할마다 한 명. "역할 고르기" = 역할 카드 창에서 골라 배치 (그 역할 알바와 서로 바뀜)
+	-- 알바생 역할 (D34 → D43 → D46): 최대 인원은 서버 helperMax (D46 = 10명), 역할마다 한 명. "역할 고르기" = 역할 카드 창에서 골라 배치 (그 역할 알바와 서로 바뀜)
 	-- "역할 고르기" → 위 openPicker 창 (UI 세션, 2026-11-24)
 	local nHelp = #gr.helpers
 	local maxHelp = gr.helperMax or G.HelperMax
