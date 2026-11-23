@@ -144,7 +144,7 @@ local function act(what, a, b)
 	end)
 	busy = false
 	if ok and type(res) == "table" and res.ok then
-		if what == "buy" or what == "train" then
+		if what == "buy" or what == "train" or what == "factoryUp" or what == "factorySkill" then
 			UI.coinSound() -- 코인을 쓰는 것 (해금·업그레이드·알바 고용·교육)
 		end
 		setMsg(res.msg or "완료!", true)
@@ -432,19 +432,21 @@ local function render()
 					act("factoryUp", u.key)
 				end)
 		end
-		-- 공장 손재주 (D49): 공정마다 3단계. 서버(구매 Remote)는 저장·부지 세션이 정함 → G.Factory.skill이 생기면 [올리기]가 켜짐
-		local SK = F.skill
-		local costs = SK and SK.costs or { 3000, 7000, 15000 }
-		local skill = fc.skill or {}
+		-- 공장 손재주 (D49): 공정마다 3단계. 서버 feat/octopus-setgi-1124: fc.staff[i].skill (0~3), skillCost (다음 값, 최고면 nil),
+		-- fc.skillCosts = { 3000, 7000, 15000 }, 사기 = GrowthAction("factorySkill", 공정 key) (한 번에 한 단계)
+		local FX = { "판정 폭 +30%", "판정 폭 +60% + 공정 도움", "성공 기준 80 → 60점 + 공정 도움" }
+		local serverReady = fc.skillCosts ~= nil
 		note(page, nextOrder(), "🖐 공장 손재주 (공정 미니게임이 쉬워져요)")
-		for _, st in ipairs(F.staff.stations) do
-			local lv = skill[st.key] or 0
-			local cost = costs[lv + 1]
-			local nextFx = SK and SK.text and SK.text[st.key] and SK.text[st.key][lv + 1]
-				or ({ "판정 폭 +30%", "판정 폭 +60% + 도움", "성공 기준 80 → 60점" })[lv + 1]
-			row(page, nextOrder(), string.format("  %s · %d / 3단계", st.name, lv), cost and ("다음: " .. tostring(nextFx)) or "최고 단계",
-				not cost and "최고 단계" or (not SK and "준비 중") or ("올리기 · " .. cost), SK ~= nil and cost ~= nil and state.coins >= cost, function()
-					act("factorySkill", st.key)
+		for _, s in ipairs(fc.staff or {}) do
+			local lv = s.skill or 0
+			local cost = s.skillCost
+			if cost == nil and not serverReady then
+				cost = ({ 3000, 7000, 15000 })[lv + 1] -- 서버가 없을 때 보이는 값만
+			end
+			local maxed = lv >= 3
+			row(page, nextOrder(), string.format("  %s · %d / 3단계", s.name, lv), maxed and "최고 단계" or ("다음: " .. FX[lv + 1]),
+				maxed and "최고 단계" or (not serverReady and "준비 중") or ("올리기 · " .. tostring(cost)), serverReady and not maxed and cost ~= nil and state.coins >= cost, function()
+					act("factorySkill", s.key)
 				end)
 		end
 		-- 공정 5자리 현황: 알바 / 내가 하기 (D45) / 비어 있음

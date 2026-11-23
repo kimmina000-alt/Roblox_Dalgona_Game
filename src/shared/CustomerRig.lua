@@ -38,7 +38,7 @@ return {
 			},
 		},
 		Mochi = {
-			label = "설기", -- D52 (옛 모찌)
+			label = "설기",
 			height = 4.109,
 			mouth = Vector3.new(-0.000, 2.218, -0.668),
 			hand = Vector3.new(0.599, 1.000, -0.020),
