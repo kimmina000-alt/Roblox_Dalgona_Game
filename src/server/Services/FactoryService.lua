@@ -790,7 +790,7 @@ function FactoryService.selfStop(player, why)
 	selfPending[player] = nil
 	signalSelf(player, nil)
 	if selfEvent then
-		selfEvent:FireClient(player, { kind = "end", key = key, reason = why })
+		selfEvent:FireClient(player, "end", key, why)
 	end
 	if why then
 		Economy.notify(player, "공장 일 끝: " .. why)
@@ -841,7 +841,7 @@ function FactoryService.selfStart(player, key)
 	selfByData[d] = key
 	signalSelf(player, key)
 	if selfEvent then
-		selfEvent:FireClient(player, { kind = "start", key = key })
+		selfEvent:FireClient(player, "start", key)
 	end
 	Economy.push(player)
 	return true, string.format("%s 직접 하는 중! 판마다 짧은 미니게임을 잘하면 그 판이 더 좋아져요", st.name)
@@ -858,11 +858,12 @@ local function askMinigame(player, k)
 	local SW = F.selfWork
 	selfPending[player] = { id = job.mg, line = k, key = job.self, untilT = os.clock() + SW.answerWindow }
 	if selfEvent then
-		selfEvent:FireClient(player, { kind = "minigame", key = job.self, id = job.mg, seconds = SW.minigameSeconds, line = k })
+		selfEvent:FireClient(player, "mini", job.self, job.mg, SW.minigameSeconds) -- 제작 세션 FactoryMini (station, token, limit)
 	end
 end
 
--- 미니게임 결과 (Remotes.FactorySelfResult:InvokeServer(id, 잘했나)). 잘했으면 그 판 효과를 키움
+-- 미니게임 결과: Remotes.FactorySelf:FireServer("miniResult", token, 잘했나) (또는 FactorySelfResult:InvokeServer(token, 잘했나)).
+-- 신호 (서버 → 내 클라, Remotes.FactorySelf): ("start", key) / ("mini", key, token, 초) / ("end", key, 이유). 잘했으면 그 판 효과를 키움
 local function onResult(player, id, good)
 	local p = selfPending[player]
 	if not p or type(id) ~= "string" or id ~= p.id or os.clock() > p.untilT then
@@ -980,6 +981,12 @@ function FactoryService.init(dataService, economyService, plotService, growthHoo
 		resultFn.Parent = remotes
 	end
 	resultFn.OnServerInvoke = onResult
+	-- 제작 세션 미니게임은 같은 RemoteEvent로 돌려보냄: FireServer("miniResult", token, ok)
+	selfEvent.OnServerEvent:Connect(function(player, what, token, good)
+		if what == "miniResult" then
+			onResult(player, token, good == true)
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(p)
 		status[p] = nil
 		local d = Data.get(p)
