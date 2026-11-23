@@ -120,4 +120,5 @@ ProductionService.init({
 	StartProduction = remotes.StartProduction,
 	SubmitProduction = remotes.SubmitProduction,
 	SubmitPpopgi = remotes.SubmitPpopgi,
+	MakingState = remotes.MakingState, -- 만드는 중 신호 → 플레이어 속성 Making (다른 사람 화면에서 칭호 숨김)
 })
