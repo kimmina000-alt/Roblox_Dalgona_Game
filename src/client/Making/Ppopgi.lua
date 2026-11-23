@@ -202,6 +202,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 			ui:setSkip(false)
 			ui:setMeter(false)
 			ui:setPpPad(false)
+			ui:setGauge(false)
 			return nil
 		end
 		t += dt
@@ -271,6 +272,9 @@ function Ppopgi.run(ctx, dal, shapeId)
 				end
 				local cov = Rules.coverage(run)
 				ui:setMeter(true, cov / Rules.DONE, 0.999, 1, string.format("%d%%", math.floor(math.min(cov / Rules.DONE, 1) * 100)), "뽑기")
+				-- 긁는 빠르기 게이지 (2026-11-24 사용자 "뽑기할 때 속도 빠른지 느린지 게이지바"): 녹이기 젓기와 같은 왼쪽 세로 막대.
+				-- 초록 = 안전(run.safe 아래), 위 빨강 = 너무 빠름(금이 감). 아주 느린 아래 칸은 "느림"이라도 안전
+				ui:setGauge(true, (state and state.on) and state.speed or 0, run.safe * 0.25, run.safe)
 				ui:say("바늘로 점선을 따라 긁어요", string.format("금 %d/%d · 천천히 긁을수록 안전해요", run.cracks, Rules.BREAK))
 				if cov >= Rules.DONE then
 					ended = "done"
@@ -285,6 +289,7 @@ function Ppopgi.run(ctx, dal, shapeId)
 	ui:setSkip(false)
 	ui:setMeter(false)
 	ui:setPpPad(false)
+	ui:setGauge(false)
 	local res = Rules.result(run)
 	shaft:Destroy()
 	head:Destroy()

@@ -44,7 +44,7 @@ function Melt.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
 	-- 국자를 들어 올려도 화면 가운데에 (사용자 요청 2026-11-19). 아래 게이지에 덜 가리게 아주 살짝 위
 	CameraRig.track(function()
-		return S.Bowl.Position + Vector3.new(0, 0, 0.3)
+		return S.Bowl.Position - Stir.screenUp() * 0.3
 	end)
 	local cfg = Config.Melt
 	local rec = { t0 = ctx.now(), green = 0, tempOk = 0, scorch = 0, burn = 0, burnt = false, samples = {} }

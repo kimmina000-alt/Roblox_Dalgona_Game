@@ -7,6 +7,7 @@ local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local Scoring = require(Shared:WaitForChild("Scoring"))
 local Fx = require(script.Parent.Parent:WaitForChild("Fx"))
 local Sfx = require(script.Parent.Parent:WaitForChild("Sfx"))
+local Stir = require(script.Parent.Parent:WaitForChild("Stir")) -- Stir.screenUp: 화면 위쪽 방향
 
 local Sugar = {}
 
@@ -123,7 +124,7 @@ local function gripSpoonCFrame(geo, restRot, head, tilt, P)
 	local w = o - head
 	local b = w:Dot(u)
 	local disc = b * b - (w:Dot(w) - geo.len * geo.len)
-	local hand = disc > 0 and (o + u * (-b - math.sqrt(disc))) or (head + Vector3.new(0, 0.6, SPOON_GRIP))
+	local hand = disc > 0 and (o + u * (-b - math.sqrt(disc))) or (head + Vector3.new(0, 0.6, 0) - Stir.screenUp() * SPOON_GRIP)
 	local hd = (hand - head).Unit
 	local hr = restRot:VectorToWorldSpace(geo.handleLocal)
 	local ax = hr:Cross(hd)
@@ -278,7 +279,7 @@ function Sugar.run(ctx)
 		local pouring = false
 		if grabbing then
 			-- 손잡이를 잡고 끌기: 손가락 = 손잡이, 숟가락 머리는 화면 위쪽(-Z)으로 떨어진 곳 (손가락이 국자를 안 가림)
-			local w = P.toPlane(carryY) - Vector3.new(0, 0, SPOON_GRIP)
+			local w = P.toPlane(carryY) + Stir.screenUp() * SPOON_GRIP
 			local flat = Vector3.new(ladle.X - w.X, 0, ladle.Z - w.Z)
 			local d = flat.Magnitude
 			-- 기울이기 (사용자 요청 2026-11-18: 국자까지 가기 전에 다 흘림 → 끌 때는 수평으로 들고 감).

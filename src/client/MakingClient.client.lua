@@ -591,6 +591,17 @@ function startMaking(restart)
 	station.Prompt.Enabled = false
 	setFullSize(true)
 	setUnturned(true)
+	-- 작업대는 연결된 뒤에도 서버가 옮길 수 있음 (노점 HandStationSpot ↔ 가게 안 HandStationInside, 두 자리 방향이 다를 수 있음).
+	-- 연결 때 잰 자리·방향을 그대로 쓰면 제작 화면이 돌아가 보임 (2026-11-24 "밖에서 본 손제작대랑 화면이랑 둘 다 거꾸로")
+	-- → 만들기를 시작할 때마다 지금 자리로 다시 잼
+	-- 다시 재기 전에 지난 판 모습(탄 국자 내용물, 고른 젓가락 등)을 먼저 되돌림: 안 그러면 탄 모습을 원래 모습으로 잼
+	-- (2026-11-24 "태워서 다시 도전하면 탄 국자랑 오른쪽에 검은색")
+	if not unturned and station.model.Parent then
+		station:reset(true)
+		station = Station.new(station.model)
+		station.Prompt.Enabled = false
+		CameraRig.init(station.model:GetPivot(), station.model)
+	end
 	setParasolHidden(true)
 	setControls(false)
 	setCharacterHidden(true)
