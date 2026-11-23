@@ -219,14 +219,18 @@ function Station:clearFx()
 	end
 end
 
-function Station:reset()
+-- keepPlaces = true: 도구 자리는 그대로 두고 모습(국자 내용물·설탕 더미·효과·고른 젓가락)만 되돌림.
+-- 작업대가 옮겨진 뒤 다시 잴 때 씀 (옛 자리로 도구를 끌어오지 않게)
+function Station:reset(keepPlaces)
 	self:clearFx()
-	for name, cf in pairs(self.rest) do
-		if name ~= "Chopsticks" then
-			self[name]:PivotTo(cf)
+	if not keepPlaces then
+		for name, cf in pairs(self.rest) do
+			if name ~= "Chopsticks" then
+				self[name]:PivotTo(cf)
+			end
 		end
+		self:restChopsticks()
 	end
-	self:restChopsticks()
 	local c = self.Contents
 	local r = self.contentsRest
 	c.Size = r.Size

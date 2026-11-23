@@ -78,9 +78,21 @@ local HANDLE_LEN = 2.75
 
 -- 끝이 닿을 높이 y → (끝 위치, 손잡이 끝 위치). 손잡이 끝은 손가락 시선 위에서 끝과 HANDLE_LEN 떨어진 점
 -- → 화면에서 손가락이 정확히 젓가락 손잡이 끝을 잡고 있음
+-- 화면 위쪽 방향 (테이블 평면 위, 단위 벡터). 예전에는 만드는 동안 작업대를 원래 방향으로 되돌려 놓아서 세계 -Z가 화면 위였음.
+-- 2026-11-23부터 작업대를 돌린 채 카메라가 따라가므로 세계 축 대신 카메라 위쪽을 씀 (2026-11-24 "숟가락 거꾸로", "젓가락 위가 기준점")
+function Stir.screenUp()
+	local up = workspace.CurrentCamera.CFrame.UpVector
+	local flat = Vector3.new(up.X, 0, up.Z)
+	if flat.Magnitude < 1e-3 then
+		local lv = workspace.CurrentCamera.CFrame.LookVector
+		flat = Vector3.new(lv.X, 0, lv.Z)
+	end
+	return flat.Magnitude > 1e-3 and flat.Unit or Vector3.new(0, 0, -1)
+end
+
 function Stir.grip(y)
 	local f = Pointer.toPlane(y)
-	local tip = f - Vector3.new(0, 0, Stir.GRIP)
+	local tip = f + Stir.screenUp() * Stir.GRIP
 	return tip, Stir.handleFor(tip)
 end
 
@@ -93,7 +105,7 @@ function Stir.handleFor(tip)
 	local b = w:Dot(u)
 	local disc = b * b - (w:Dot(w) - HANDLE_LEN * HANDLE_LEN)
 	if disc <= 0 then
-		return tip + Vector3.new(0, 1.0, Stir.GRIP)
+		return tip + Vector3.new(0, 1.0, 0) - Stir.screenUp() * Stir.GRIP
 	end
 	return o + u * (-b - math.sqrt(disc)) -- 카메라 쪽 교점
 end
