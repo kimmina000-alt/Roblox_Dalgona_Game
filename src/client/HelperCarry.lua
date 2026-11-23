@@ -233,7 +233,7 @@ local function displaySignal(m, plot, now)
 		return { state = "" }
 	end
 	if age < dur then
-		return { state = "go", from = home, to = to, t0 = at, dur = dur, shape = m:GetAttribute("DeliverShape") or "circle" }
+		return { state = "go", from = home, to = to, t0 = at, dur = dur, shape = m:GetAttribute("DeliverShape") or "Circle" }
 	end
 	return { state = "back", from = to, to = home, t0 = at + dur, dur = dur, shape = "" }
 end

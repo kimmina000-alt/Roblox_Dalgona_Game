@@ -57,6 +57,19 @@ local function lineActive(fac, k)
 end
 
 local BELT_N = 7 -- 컨베이어 위에 돌려 쓰는 달고나 수 (D36: 6~8)
+-- 공장 달고나 도안 (2026-11-25 사용자 "공장 기계 공정에 나오는 달고나랑 결과물에 달고나 그림 도안 선택한 걸로"):
+-- 라인 1이 만드는 도안 → 없으면(쉬는 중 "") 제어대에서 고른 도안 Shape → 둘 다 없으면 동그라미
+local function facShape(fac)
+	local s = fac:GetAttribute("Line1Shape")
+	if type(s) ~= "string" or s == "" then
+		s = fac:GetAttribute("Shape")
+	end
+	if type(s) ~= "string" or s == "" then
+		s = "Circle"
+	end
+	return s
+end
+local OUT_PILE = { { -0.24, -0.2, 0 }, { 0.22, -0.16, 0 }, { -0.16, 0.22, 0 }, { 0.24, 0.2, 0 }, { 0.02, 0.0, 1 }, { -0.04, 0.04, 2 } } -- 결과물 상자 속 달고나 (x·z 비율, 층)
 local function beltFolder()
 	local f = workspace:FindFirstChild("FactoryBeltFx")
 	if not f then
@@ -161,10 +174,14 @@ local function setup(fac, force)
 			l:Destroy()
 		end
 	end
+	for _, l in ipairs(old and old.outLooks or {}) do
+		l:Destroy()
+	end
 	if b:GetAttribute("BeltStart") and b:GetAttribute("BeltEnd") then
 		rec.beltLooks = {}
+		rec.beltShape = facShape(fac)
 		for i = 1, BELT_N do
-			local look = DalgonaLook.build({ s = fac:GetAttribute("Line1Shape") or "Circle", g = "Good" }, 0.9)
+			local look = DalgonaLook.build({ s = rec.beltShape, g = "Good" }, 0.9)
 			look.Name = "BeltDalgona" .. i
 			-- 공장 부지 밖 폴더에 둠: 부지 안에 넣으면 부품이 들어올 때마다 공장을 다시 훑는 감시(onAdded)가 되풀이됨
 			look.Parent = beltFolder()
@@ -211,7 +228,7 @@ local function playMade(rec)
 	for _ in string.gmatch(fac:GetAttribute("MadeSlots") or "", "%d+") do
 		slots += 1
 	end
-	local shape = fac:GetAttribute("Line1Shape") or fac:GetAttribute("Shape")
+	local shape = facShape(fac)
 	local start = outlet.Position + Vector3.new(0, 0.8, 0)
 	for i = 1, math.min(count, 8) do
 		task.spawn(function()
@@ -555,12 +572,51 @@ local function factorySounds(rec, on, now)
 	end
 end
 
+-- 결과물 상자(Fac_Output): 3D 모델에 별 달고나가 박혀 있음 → 내 화면에서 숨기고 그 자리에 고른 도안 달고나를 쌓음
+local function outputPile(rec, shape)
+	local out = rec.outPart
+	if out == nil then
+		local f = rec.building:FindFirstChild("Fac_Output", true)
+		if f and not f:IsA("BasePart") then
+			f = f:FindFirstChildWhichIsA("BasePart", true)
+		end
+		out = f or false
+		rec.outPart = out
+	end
+	if not out or not out.Parent then
+		return
+	end
+	if rec.outShape == shape and rec.outLooks and rec.outLooks[1] and rec.outLooks[1].Parent then
+		return
+	end
+	rec.outShape = shape
+	for _, l in ipairs(rec.outLooks or {}) do
+		l:Destroy()
+	end
+	rec.outLooks = {}
+	out.Transparency = 1 -- 박힌 별 달고나 (서버 부품, 내 화면에서만 바뀜)
+	local cf, size = out.CFrame, out.Size
+	local d = math.clamp(math.min(size.X, size.Z) * 0.42, 0.6, 1.6)
+	local bottom = out.Position.Y - size.Y / 2
+	for i, o in ipairs(OUT_PILE) do
+		local look = DalgonaLook.build({ s = shape, g = "Good" }, d)
+		look.Name = "OutputDalgona" .. i
+		local p = cf:PointToWorldSpace(Vector3.new(o[1] * size.X, 0, o[2] * size.Z))
+		look:PivotTo(CFrame.new(p.X, bottom + 0.06 + o[3] * 0.1, p.Z) * CFrame.Angles(0, i * 1.3, 0))
+		look.Parent = beltFolder()
+		table.insert(rec.outLooks, look)
+	end
+end
+
 RunService.Heartbeat:Connect(function()
 	local now = workspace:GetServerTimeNow()
 	local cam = workspace.CurrentCamera
 	local camPos = cam and cam.CFrame.Position or Vector3.zero
 	for fac, rec in pairs(factories) do
 		if not rec.building.Parent then
+			for _, l in ipairs(rec.outLooks or {}) do
+				l:Destroy()
+			end
 			for _, l in ipairs(rec.beltLooks or {}) do
 				l:Destroy()
 			end
@@ -721,6 +777,19 @@ RunService.Heartbeat:Connect(function()
 			end
 		end
 		-- 컨베이어 위 달고나 BELT_N개: 시작 → 끝으로 흘러가고 되풀이 (멈추면 그 자리에 섬)
+		-- 고른 도안이 바뀌면 벨트·결과물 달고나를 그 모양으로 다시 만듦
+		local want = facShape(fac)
+		if rec.beltLooks and rec.beltShape ~= want then
+			rec.beltShape = want
+			for i, old in ipairs(rec.beltLooks) do
+				local look = DalgonaLook.build({ s = want, g = "Good" }, 0.9)
+				look.Name = old.Name
+				look.Parent = old.Parent
+				old:Destroy()
+				rec.beltLooks[i] = look
+			end
+		end
+		outputPile(rec, want)
 		if rec.beltLooks then
 			local bp = rec.building:GetPivot()
 			local s0, s1 = rec.building:GetAttribute("BeltStart"), rec.building:GetAttribute("BeltEnd")
@@ -733,7 +802,10 @@ RunService.Heartbeat:Connect(function()
 				for i, look in ipairs(rec.beltLooks) do
 					local k = ((rec.beltT or 0) + (i - 1) / BELT_N) % 1
 					local pos = a0:Lerp(a1, k)
-					look:PivotTo(CFrame.new(pos) * CFrame.Angles(math.rad(90), 0, 0))
+					-- 눕힘 (DalgonaLook 기본 = 그림 면이 위). 예전엔 90° 세워서 옆모습(지붕 모양)만 보였음. 막대는 벨트 옆쪽으로
+					local side = Vector3.yAxis:Cross(a1 - a0)
+					side = side.Magnitude > 1e-3 and side.Unit or Vector3.zAxis
+					look:PivotTo(CFrame.lookAt(pos, pos - side))
 				end
 			end
 		end
