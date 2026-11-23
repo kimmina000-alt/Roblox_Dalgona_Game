@@ -142,6 +142,96 @@ end
 
 local state = nil
 
+---------------------------------------------------------------- 알바 역할 고르기 창 (D43, 2026-11-24)
+-- 알바생 줄의 "역할 고르기" → 열린 역할 카드 + 대기 카드 중 하나를 누르면 Remotes.GrowthAction("helperPost", 번호, key | "")
+-- (그 역할에 다른 알바가 있으면 서버가 서로 바꿔 줌). 아직 안 열린 역할은 흐리게 + 여는 조건.
+local POST_ICON = { stove = "🔥", steel = "🥫", pink = "🍬", line = "🏭", display = "🧺", cashier = "💰" }
+local picker, pickerBody = UI.window({ Name = "RolePicker", Title = "알바 역할 고르기", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(780, 340), ZIndex = 30, Parent = root })
+fit(picker, 780, 365)
+local pickerGrid = new("ScrollingFrame", {
+	Position = UDim2.fromOffset(10, 44),
+	Size = UDim2.new(1, -20, 1, -52),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	ScrollBarThickness = 6,
+	ScrollBarImageColor3 = C.cream,
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	CanvasSize = UDim2.new(),
+	ZIndex = 32,
+	Parent = pickerBody,
+}, {
+	new("UIGridLayout", { CellSize = UDim2.fromOffset(170, 124), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+	new("UIPadding", { PaddingRight = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6) }),
+})
+local pickerInfo = label({ Text = "", Position = UDim2.fromOffset(14, 8), Size = UDim2.new(1, -28, 0, 28), TextSize = 19, TextColor3 = C.cream, Outline = C.woodDark, ZIndex = 32, Parent = pickerBody })
+local pickerFor = nil -- 지금 고르는 알바 번호
+
+local function openPicker(i)
+	pickerFor = i
+	picker.Visible = true
+	for _, c in ipairs(pickerGrid:GetChildren()) do
+		if c:IsA("GuiObject") then
+			c:Destroy()
+		end
+	end
+	local gr = state and state.growth
+	if not gr then
+		return
+	end
+	local h = gr.helpers and gr.helpers[i] or {}
+	local cur = h.post
+	local curPost = cur and G.helperPost(cur)
+	pickerInfo.Text = string.format("알바생 %d · 지금: %s", i, curPost and curPost.name or "대기")
+	-- 열린 역할: 서버가 준 posts (helper = 그 역할 알바 번호)
+	local open = {}
+	for _, p in ipairs(gr.posts or {}) do
+		open[p.key] = p
+	end
+	local order = 0
+	local function card(key, name, icon, sub, holder, enabled, chosen)
+		order += 1
+		local c = UI.card({ LayoutOrder = order, BackgroundColor3 = enabled and C.cream or C.tan, ZIndex = 33, Parent = pickerGrid })
+		local st = c:FindFirstChildOfClass("UIStroke")
+		if chosen then
+			st.Color = C.good
+			st.Thickness = 4
+		end
+		local ring = new("Frame", { Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(46, 46), BackgroundColor3 = enabled and C.tan or Color3.fromRGB(210, 196, 172), ZIndex = 34, Parent = c }, { UI.corner("round"), UI.stroke(C.woodDark, 2.5) })
+		label({ Text = icon, TextSize = 26, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.fromScale(1, 1), ZIndex = 35, Parent = ring })
+		label({ Text = name, Position = UDim2.fromOffset(62, 8), Size = UDim2.new(1, -68, 0, 40), TextSize = 17, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = enabled and C.ink or C.soft, ZIndex = 34, Parent = c })
+		label({ Text = sub, Position = UDim2.fromOffset(10, 60), Size = UDim2.new(1, -20, 0, 18), TextSize = 13, FontFace = UI.F.bold, TextColor3 = C.soft, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 34, Parent = c })
+		if chosen then
+			label({ Text = "✓ 지금 역할", Position = UDim2.fromOffset(10, 86), Size = UDim2.new(1, -20, 0, 28), TextSize = 17, TextColor3 = C.good, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 34, Parent = c })
+			return
+		end
+		if not enabled then
+			label({ Text = holder, Position = UDim2.fromOffset(10, 86), Size = UDim2.new(1, -20, 0, 28), TextSize = 14, TextColor3 = C.soft, TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, ZIndex = 34, Parent = c })
+			return
+		end
+		local b = UI.button({ Text = holder, Color = holder == "비어 있음" and C.green or C.yellow, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -8), Size = UDim2.new(1, -16, 0, 40), TextSize = 16, ZIndex = 34, Parent = c })
+		b.Activated:Connect(function()
+			picker.Visible = false
+			act("helperPost", pickerFor, key)
+		end)
+	end
+	for _, p in ipairs(G.HelperPosts) do
+		local o = open[p.key]
+		local icon = POST_ICON[p.key] or (p.kind == "factory" and "⚙️") or "👤"
+		local sub = string.format("급여 30초당 %d", (o and o.wage) or p.wage or 0)
+		if o then
+			local holder = o.helper and o.helper ~= pickerFor and string.format("알바생 %d와 바꾸기", o.helper) or "비어 있음"
+			card(p.key, p.name, icon, sub, holder, true, cur == p.key)
+		else
+			local cond = (p.kind == "factory" and "공장을 열면") or (p.stage and string.format("%d단계 설비가 있으면", p.stage)) or (p.level and string.format("Lv%d부터", p.level)) or "아직 안 열림"
+			card(p.key, p.name, icon, sub, "🔒 " .. cond, false, false)
+		end
+	end
+	card("", "대기", "💤", "일 안 함 · 급여 없음", "대기로 두기", true, cur == nil)
+end
+picker.Close.Activated:Connect(function()
+	picker.Visible = false
+end)
+
 local function helperShapes(unlocked)
 	local list = {}
 	local maxIndex = 0
@@ -214,8 +304,8 @@ local function render()
 				act("train", t.key)
 			end)
 	end
-	-- 알바생 역할 (D34 → D43): 최대 11명, 역할마다 한 명. "역할 바꾸기" = 열린 역할 → 대기 순으로 돌림 (그 역할 알바와 서로 바뀜)
-	-- (역할 고르기 화면은 UI 세션이 따로 만들 예정: Remotes.GrowthAction("helperPost", 번호, 역할 key | ""))
+	-- 알바생 역할 (D34 → D43): 최대 11명, 역할마다 한 명. "역할 고르기" = 역할 카드 창에서 골라 배치 (그 역할 알바와 서로 바뀜)
+	-- "역할 고르기" → 위 openPicker 창 (UI 세션, 2026-11-24)
 	local nHelp = #gr.helpers
 	local maxHelp = gr.helperMax or G.HelperMax
 	local hireCost = gr.hireCost
@@ -231,15 +321,8 @@ local function render()
 		local post = h.post and G.helperPost(h.post)
 		order += 1
 		local status = not post and "대기 중 (자리 없음)" or (h.status == "work" and "일하는 중" or ("쉬는 중: " .. tostring(h.status)))
-		row(page, order, string.format("  알바생 %d · %s", i, post and post.name or "대기"), status, "역할 바꾸기", #posts > 0, function()
-			-- 다음 자리: 가진 제작대 순서대로, 마지막 다음은 대기
-			local keys = {}
-			for _, p in ipairs(posts) do
-				table.insert(keys, p.key)
-			end
-			table.insert(keys, "")
-			local idx = table.find(keys, h.post or "") or #keys
-			act("helperPost", i, keys[idx % #keys + 1])
+		row(page, order, string.format("  알바생 %d · %s", i, post and post.name or "대기"), status, "역할 고르기", #posts > 0, function()
+			openPicker(i)
 		end)
 		if h.post == "display" then
 			order += 1
@@ -319,6 +402,7 @@ openBtn.Activated:Connect(function()
 end)
 closeBtn.Activated:Connect(function()
 	win.Visible = false
+	picker.Visible = false
 end)
 
 Remotes:WaitForChild("PlayerState").OnClientEvent:Connect(function(s)
@@ -341,6 +425,7 @@ local function watchMaking(screen)
 		openBtn.Visible = not screen.Enabled
 		if screen.Enabled then
 			win.Visible = false
+			picker.Visible = false
 		end
 	end
 	screen:GetPropertyChangedSignal("Enabled"):Connect(sync)
