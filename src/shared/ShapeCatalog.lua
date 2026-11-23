@@ -21,11 +21,13 @@ local PRICE = {
 	Heart = 18, Star = 22, Umbrella = 28,
 	Flower = 35, Fish = 40, Bird = 45,
 	Butterfly = 55, Airplane = 65, Cross = 60,
-	Sword = 80, Sailboat = 95, Octopus = 110,
-	Palace = 160, Tiger = 180, Dinosaur = 220,
+	Sword = 80, Sailboat = 95,
+	Palace = 160, Tiger = 180, Dinosaur = 220, Octopus = 250, -- 문어: 공룡 다음 Mythic (D51, 2026-11-24)
 	Spider = 300, Sierpinski = 340, Snowflake = 380, Lotus = 420,
 }
-local GRADE_OVERRIDE = { Bone = "Common" } -- 사용자 추가 도안
+local GRADE_OVERRIDE = { Bone = "Common", Octopus = "Mythic" } -- 뼈다귀 = 사용자 추가 도안, 문어 = Legendary → Mythic (D51)
+-- 같은 등급 안 순서: CutterShapes 순서 대신 이 도안 바로 뒤 (D51: 문어는 공룡 다음)
+local ORDER_AFTER = { Octopus = "Dinosaur" }
 
 Catalog.default = "Star"
 
@@ -49,6 +51,12 @@ for order, s in ipairs(CutterShapes) do
 	}
 	table.insert(Catalog.list, entry)
 	Catalog.byId[s.id] = entry
+end
+for id, after in pairs(ORDER_AFTER) do
+	local e, a = Catalog.byId[id], Catalog.byId[after]
+	if e and a then
+		e.order = a.order + 0.5
+	end
 end
 table.sort(Catalog.list, function(a, b)
 	if a.gradeIndex ~= b.gradeIndex then
