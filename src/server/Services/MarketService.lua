@@ -1,5 +1,5 @@
 -- 골목 슈퍼마켓 (D54, 2026-11-25 확정, GDD 15장, 판매 세션). 수치는 GrowthConfig.Market
---   장보기: 슈퍼 계산대 앞(부품 속성 MarketCounter = true, 3D 세션이 슈퍼 안에 넣음)에서 지금 재료 상점 창 그대로
+--   장보기: 슈퍼 계산대 앞(Workspace.Alley.AlleyMarket.MarketCounter, 또는 아무 부품에 속성 MarketCounter = true)에서 지금 재료 상점 창 그대로
 --           (Remotes.BuyIngredient(id, 묶음 1/5/10), EconomyService.buy). 돈은 바로 내고 산 것은 손에 든 장바구니 봉지로
 --   봉지: 접속 중에만 있는 값. 내 가게 안에 들어가면 냉장고(설탕·소다)·서랍장(나머지)으로 자동 정리 + 알림.
 --         나가거나 접속을 끊으면(PlayerRemoving) 그대로 냉장고로 넣어 줌 (잃어버리지 않게)
@@ -35,6 +35,14 @@ local function findCounter()
 		return counter
 	end
 	counter = nil
+	-- 제작 세션 골목 슈퍼 자리 (feat/alley-market-1125): Workspace.Alley.AlleyMarket.MarketCounter
+	local alley = workspace:FindFirstChild("Alley")
+	local market = alley and alley:FindFirstChild("AlleyMarket")
+	local c = market and market:FindFirstChild("MarketCounter", true)
+	if c and c:IsA("BasePart") then
+		counter = c
+		return counter
+	end
 	if os.clock() - lastScan < 10 then
 		return nil -- 없을 때는 10초마다만 다시 찾음 (부품 전체를 훑으니)
 	end
