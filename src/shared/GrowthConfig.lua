@@ -284,6 +284,27 @@ G.CarryHelpers = {
 	pickSeconds = 0.6, -- 집기·놓기
 	minWalk = 1.5, -- 가까워도 이만큼은 걸음 (초)
 }
+-- 기계·가구 버튼(ProximityPrompt)이 뜨는 거리 (2026-11-24 사용자 "가구 더 가까이 가야 뜨게"): 작업대·2~4단계 기계·공장 제어대·공정 내가 하기·냉장고·서랍장
+G.PromptDistance = 6
+-- 골목·가게 둘레 (2026-11-24 사용자, 판매 세션)
+G.ShopWorld = {
+	-- 카메라: 멀리서 마을 전체를 내려다보지 못하게 (클라 ShopWorld). 제작 화면(Scriptable)에는 안 씀
+	cameraMaxZoom = 34, -- 캐릭터에서 카메라까지 최대 거리
+	cameraMaxHeight = 20, -- 캐릭터 머리 위로 카메라가 올라갈 수 있는 최대 높이 (가게 지붕 약 16~29보다 낮게 → 지붕 너머로 마을이 안 보임)
+	-- 가게와 가게 사이 틈 담벼락 (서버 AlleyBuilder): 길 앞선에서 recess만큼 틈 안쪽에 세움 (틈 앞 화분·연탄은 길 쪽에 남음)
+	gapWall = { recess = 10, height = 12, buildingHalf = 21.1 }, -- buildingHalf = 가게 3D 벽 반폭 (PlotLayout.ShopModel 벽 x ±21.1)
+	-- 가게 안 출입: 내 가게, 그리고 남의 가게 중 열린 곳(월세 내고 연 가게·산 가게)만. 가게 앞선(부지 로컬 z) 안쪽을 막음
+	gate = { z = -17.6, halfWidth = 21.2, depth = 60, height = 14 },
+}
+-- 가게 안 약한 조명 (2026-11-24 사용자: 예전 천장 등은 너무 밝아 화면이 안 보였음 → 아주 약하게, 전구 모양 없이 빛만)
+-- strength 하나로 세기를 바꿈 (0 = 끔, 0.3 = 아주 약함, 1 = 예전 밝기쯤). 자리는 가게 기준 로컬 { x, z } (-Z = 골목 쪽)
+G.ShopLight = {
+	strength = 0.3,
+	color = Color3.fromRGB(255, 200, 140), -- 따뜻한 주황빛
+	range = 16,
+	y = 9, -- 가게 바닥 위 높이
+	spots = { { -10, -8 }, { 10, -8 }, { -10, 4 }, { 10, 4 } },
+}
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 
 -- 손님 7종 (D37·GDD 14장, 2026-11-24): 레벨 구간마다 오는 비율, 종류마다 고르는 것·개수·팁. 손님 모델 id = CustomerRig.order

@@ -981,6 +981,14 @@ function FactoryService.init(dataService, economyService, plotService, growthHoo
 		resultFn.Parent = remotes
 	end
 	resultFn.OnServerInvoke = onResult
+	-- 공정 기계 앞 "내가 하기" 버튼 (FactoryDisplay, 2026-11-24): 제어대 버튼과 같은 동작 (같은 공정 다시 = 그만)
+	require(script.Parent:WaitForChild("FactoryDisplay")).onSelfPrompt = function(player, key)
+		local ok, msg = FactoryService.selfStart(player, key)
+		if msg then
+			Economy.notify(player, msg)
+		end
+		return ok
+	end
 	-- 제작 세션 미니게임은 같은 RemoteEvent로 돌려보냄: FireServer("miniResult", token, ok)
 	selfEvent.OnServerEvent:Connect(function(player, what, token, good)
 		if what == "miniResult" then

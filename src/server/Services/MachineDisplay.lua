@@ -12,6 +12,7 @@
 --   새 슬롯이 있으면 옛 MachineSlot(가장 높은 단계 하나)은 그리지 않음
 
 local ServerStorage = game:GetService("ServerStorage")
+local PROMPT_DISTANCE = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("GrowthConfig")).PromptDistance or 6 -- 기계·가구 버튼이 뜨는 거리 (2026-11-24)
 
 local FactoryBuilder = require(script.Parent:WaitForChild("FactoryBuilder"))
 
@@ -229,7 +230,7 @@ local function addPrompt(attachTo, objectText, actionText)
 	pr.ActionText = actionText
 	pr.KeyboardKeyCode = Enum.KeyCode.F
 	pr.HoldDuration = 0
-	pr.MaxActivationDistance = 11
+	pr.MaxActivationDistance = PROMPT_DISTANCE
 	pr.RequiresLineOfSight = false
 	pr.Parent = att
 	return pr

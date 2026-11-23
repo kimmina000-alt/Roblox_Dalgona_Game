@@ -4,6 +4,7 @@
 -- 클라이언트 스크립트는 아래 이름으로 부품을 찾는다. 이름을 바꾸면 Making/Station.lua도 같이 바꾼다.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local PROMPT_DISTANCE = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("GrowthConfig")).PromptDistance or 6 -- 기계·가구 버튼이 뜨는 거리 (2026-11-24)
 local CutterRig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CutterRig"))
 
 local Builder = {}
@@ -88,7 +89,7 @@ local function buildTable(ws)
 	prompt.ObjectText = "작업대"
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 14
+	prompt.MaxActivationDistance = PROMPT_DISTANCE
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = att
 end

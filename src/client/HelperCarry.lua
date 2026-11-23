@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local DalgonaLook = require(Shared:WaitForChild("DalgonaLook"))
 local GrowthConfig = require(Shared:WaitForChild("GrowthConfig"))
+local WalkPath = require(Shared:WaitForChild("WalkPath"))
 
 local HelperCarry = {}
 
@@ -151,12 +152,34 @@ local function step(m, now, sig)
 	if state == "back" then
 		a, b = stand, home
 	end
+	-- 벽을 돌아가는 길 (서버 HelperPath → 속성 WalkPath = 처음 자리 → 칸 앞, 2026-11-24). 첫 점은 내 화면의 처음 자리, 높이는 처음 자리 높이
+	local raw = m:GetAttribute("WalkPath")
+	if rec.routeRaw ~= raw or rec.routeKey ~= key then
+		rec.routeRaw, rec.routeKey, rec.route = raw, key, nil
+		local src = WalkPath.decode(raw)
+		if src then
+			local pts = { home }
+			for j = 2, #src.points do
+				local q = src.points[j]
+				table.insert(pts, Vector3.new(q.X, y, q.Z))
+			end
+			rec.route = WalkPath.decode(WalkPath.encode(pts))
+		end
+	end
+	local route = rec.route
 	local walk = math.max(0.1, dur - PICK)
 	local t = math.clamp(now - t0, 0, dur)
 	local k = math.clamp(t / walk, 0, 1)
 	local e = k < 1 and k or 1
 	local pos = a:Lerp(b, e)
 	local dir = b - a
+	if route then
+		local d2
+		pos, d2 = WalkPath.sample(route, state == "go" and e or 1 - e)
+		if d2 then
+			dir = state == "go" and d2 or -d2
+		end
+	end
 	local face = dir.Magnitude > 1e-3 and dir.Unit or rec.home.LookVector
 	if state == "go" and k >= 1 then
 		face = Vector3.new(shelf.X - pos.X, 0, shelf.Z - pos.Z)
