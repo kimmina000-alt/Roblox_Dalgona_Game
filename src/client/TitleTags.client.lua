@@ -1,5 +1,7 @@
 -- 머리 위 칭호 (D38, 2026-11-24): 플레이어 속성 Title(서버 CollectionService가 넣음, "" = 없음)을
 -- 이름 위에 작은 리본 판으로 띄움. 나와 다른 플레이어 모두. 이 화면에서만 만드는 BillboardGui.
+-- 만드는 동안은 숨김 (2026-11-24 사용자 요청): 플레이어 속성 Making = true (서버 제작 세션이 넣음, 다른 사람 화면에도),
+-- 내 칭호는 내 제작 화면(PlayerGui.MakingScreen)이 켜져 있을 때도 바로 숨김.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -7,7 +9,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UI = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiStyle"))
 local C = UI.C
 
-local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+local me = Players.LocalPlayer
+local playerGui = me:WaitForChild("PlayerGui")
+local myMaking = false -- 내 제작 화면이 켜져 있나
 local holder = Instance.new("Folder")
 holder.Name = "TitleTags"
 holder.Parent = playerGui
@@ -60,14 +64,18 @@ local function refresh(player)
 	local char = player.Character
 	local head = char and char:FindFirstChild("Head")
 	local has = type(title) == "string" and title ~= ""
+	local making = player:GetAttribute("Making") == true or (player == me and myMaking)
 	bb.Plate.Label.Text = has and ("🏅 " .. title) or ""
 	bb.Adornee = head
-	bb.Enabled = has and head ~= nil
+	bb.Enabled = has and head ~= nil and not making
 end
 
 local function watch(player)
 	tags[player] = build(player)
 	player:GetAttributeChangedSignal("Title"):Connect(function()
+		refresh(player)
+	end)
+	player:GetAttributeChangedSignal("Making"):Connect(function()
 		refresh(player)
 	end)
 	player.CharacterAdded:Connect(function(char)
@@ -87,3 +95,23 @@ Players.PlayerRemoving:Connect(function(p)
 		tags[p] = nil
 	end
 end)
+
+-- 내 제작 화면
+local function watchMaking(screen)
+	local function sync()
+		myMaking = screen.Enabled
+		refresh(me)
+	end
+	screen:GetPropertyChangedSignal("Enabled"):Connect(sync)
+	sync()
+end
+local making = playerGui:FindFirstChild("MakingScreen")
+if making then
+	watchMaking(making)
+else
+	playerGui.ChildAdded:Connect(function(c)
+		if c.Name == "MakingScreen" and c:IsA("ScreenGui") then
+			watchMaking(c)
+		end
+	end)
+end
