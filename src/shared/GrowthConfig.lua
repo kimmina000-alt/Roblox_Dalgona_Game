@@ -322,7 +322,7 @@ G.ShopLight = {
 G.ShopCloth = {
 	white = Color3.fromRGB(252, 250, 244),
 	floral = Color3.fromRGB(226, 238, 222), -- 참고 사진처럼 연한 민트·크림 바탕 (무늬는 texture)
-	texture = nil,
+	texture = "rbxassetid://131309504197388", -- 3D 세션 tools/floral_tile.py (512×512 반복 꽃무늬, 크림·민트 + 파란 꽃)
 	tile = 2,
 }
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
