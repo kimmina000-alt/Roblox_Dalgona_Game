@@ -275,7 +275,10 @@ function EconomyService.buy(player, ingredientId, packs)
 	if not ing then
 		return { ok = false, reason = "모르는 재료" }
 	end
-	packs = math.clamp(math.floor(tonumber(packs) or 1), 1, 10)
+	packs = math.floor(tonumber(packs) or 1)
+	if not table.find(G.BuyPacks, packs) then
+		return { ok = false, reason = "잘못된 수량" } -- 1·5·10팩만 (2026-11-24)
+	end
 	local now = os.clock()
 	if lastBuy[player] and now - lastBuy[player] < G.ShopCooldown then
 		return { ok = false, reason = "천천히!" }
@@ -288,16 +291,16 @@ function EconomyService.buy(player, ingredientId, packs)
 	local cost = ing.price * packs
 	local have = data.ingredients[ing.id] or 0
 	if have + ing.pack * packs > G.IngredientMax then
-		return { ok = false, reason = ing.name .. " 보관함이 가득 찼어요" }
+		return { ok = false, reason = string.format("%s은(는) %d개까지 보관해요 (지금 %d개)", ing.name, G.IngredientMax, have) }
 	end
 	if data.coins < cost then
-		return { ok = false, reason = "코인이 모자라요" }
+		return { ok = false, reason = string.format("코인이 모자라요 (%d코인 필요)", cost) }
 	end
 	Data.update(player, function(d)
 		d.coins -= cost
 		d.ingredients[ing.id] = (d.ingredients[ing.id] or 0) + ing.pack * packs
 	end)
-	return { ok = true }
+	return { ok = true, amount = ing.pack * packs, cost = cost }
 end
 
 -- 제작 시작 전 확인. 반환: ok, 이유(한국어, 화면에 띄움)
