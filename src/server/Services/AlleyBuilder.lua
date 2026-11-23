@@ -340,7 +340,9 @@ end
 --   MarketSpot (앞벽 가운데 바닥, 앞 = LookVector = 길 쪽), MarketDoor (문 바깥 = 모델 Mk_Pt_Door),
 --   MarketCounter (계산대 앞 플레이어 자리 = Mk_Pt_Customer, 장보기 안내), MarketOwner (계산대 뒤 주인 = Mk_Pt_Owner)
 --   모델 속성 Market = true
-local MARKET_W, MARKET_D = 26, 22 -- 폭(길 따라) · 깊이. 꾸미기 가게(14)보다 깊어서 그 칸만 뒤 담벼락을 22까지 뺌 (gapWalls)
+-- 폭·깊이는 모델에서 잼 (3D 세션 모델이 두 번 바뀜: 26×22 → 32×13.4). 모델이 없으면 임시 건물 크기. 깊이가 꾸미기 가게(14)보다
+-- 깊으면 그 칸만 뒤 담벼락을 그만큼 뺌 (gapWalls)
+local MARKET_W, MARKET_D = 26, SHOP_DEPTH
 local DOOR_W, DOOR_H = 6, 8
 local function marketShell(m, x0, w)
 	local d, h = MARKET_D, 12
@@ -420,11 +422,42 @@ local function shopkeeper(m)
 	return npc
 end
 
+local function marketSource()
+	local sa = ServerStorage:FindFirstChild("Assets")
+	local src = sa and (sa:FindFirstChild("AlleyMarket") or sa:FindFirstChild("Market"))
+	return src and src:IsA("Model") and src or nil
+end
+-- 모델의 바닥 앞 가운데 (MarketSpot → Mk_Pt_Door(문 바깥 1.5) → 상자 앞면) 와 바닥 높이
+local function marketFront(c)
+	local bcf, bsize = c:GetBoundingBox()
+	local shell = findPart(c, "Mk_Shell")
+	local floorY = shell and (shell.Position.Y - shell.Size.Y / 2) or (bcf.Position.Y - bsize.Y / 2)
+	local spot = findPart(c, "MarketSpot")
+	if spot then
+		return Vector3.new(spot.Position.X, spot.Position.Y - spot.Size.Y / 2, spot.Position.Z), bcf, bsize
+	end
+	local door = findPart(c, "Mk_Pt_Door")
+	if door then
+		return Vector3.new(door.Position.X, floorY, door.Position.Z + 1.5), bcf, bsize
+	end
+	return Vector3.new(bcf.Position.X, floorY, bcf.Position.Z - bsize.Z / 2), bcf, bsize
+end
+-- 슈퍼 칸 폭·깊이 (endShops·gapWalls가 씀)
+local function marketDims()
+	local src = marketSource()
+	if not src then
+		return MARKET_W, MARKET_D
+	end
+	local at, bcf, bsize = marketFront(src)
+	local w = math.max(bsize.X, 10)
+	local d = math.max((bcf.Position.Z + bsize.Z / 2) - at.Z, 4)
+	return w, d
+end
+
 local function marketSpot(x0, w, target)
 	local m = model("AlleyMarket")
 	m:SetAttribute("Market", true)
-	local sa = ServerStorage:FindFirstChild("Assets")
-	local src = sa and (sa:FindFirstChild("Market") or sa:FindFirstChild("AlleyMarket"))
+	local src = marketSource()
 	local cx = x0 + w / 2
 	local base = CFrame.new(cx, 0, CANON_Z) -- 기준 자리 (앞벽 바깥면 가운데 바닥, 앞 = -Z)
 	local mark = function(name, cf, size)
@@ -433,21 +466,24 @@ local function marketSpot(x0, w, target)
 	if src and src:IsA("Model") then
 		local c = src:Clone()
 		c.Name = "Building"
-		-- 기준: 문 바깥 표시(Mk_Pt_Door, 앞벽에서 1.5 앞)와 바닥. 없으면 모델 상자 (앞 = 상자 -Z 면)
-		local door = findPart(c, "Mk_Pt_Door")
-		local shell = findPart(c, "Mk_Shell")
-		local bcf, bsize = c:GetBoundingBox()
-		local floorY = shell and (shell.Position.Y - shell.Size.Y / 2) or (bcf.Position.Y - bsize.Y / 2)
-		local at = door and Vector3.new(door.Position.X, floorY, door.Position.Z + 1.5) or Vector3.new(bcf.Position.X, floorY, bcf.Position.Z - bsize.Z / 2)
+		-- 기준: 모델의 바닥 앞 가운데 (marketFront) → 칸의 앞선 가운데
+		local at = marketFront(c)
 		c:PivotTo(CFrame.new(base.Position - at) * c:GetPivot())
 		c.Parent = m
-		-- 모델 표시 → 공용 이름 (서버·UI는 이 이름만 봄)
+		-- 모델 표시 → 공용 이름 (서버·UI는 AlleyMarket 바로 아래 이 이름만 봄). 모델 안 같은 이름 → Mk_Pt_* 순
 		local pts = { MarketDoor = "Mk_Pt_Door", MarketCounter = "Mk_Pt_Customer", MarketOwner = "Mk_Pt_Owner", MarketRegister = "Mk_Pt_Register", MarketDelivery = "Mk_Pt_Delivery" }
 		for mine, theirs in pairs(pts) do
-			local p = findPart(c, theirs)
+			local p = findPart(c, mine) or findPart(c, theirs)
 			if p then
 				mark(mine, p.CFrame)
 			end
+		end
+		-- 주인 자리 표시가 없으면: 계산대에서 가까운 옆벽 쪽으로 1.8 (계산대 뒤), 가게 가운데를 봄
+		if not m:FindFirstChild("MarketOwner") and m:FindFirstChild("MarketCounter") then
+			local cp = m.MarketCounter.Position
+			local sideX = cp.X >= base.Position.X and 1 or -1
+			local op = cp + Vector3.new(sideX * 1.8, 0, 0)
+			mark("MarketOwner", CFrame.lookAt(op, Vector3.new(cp.X, op.Y, cp.Z)))
 		end
 		-- 진열 물건(Mk_Goods, 삼각형 많음)은 클라이언트가 멀면 숨기도록 표시
 		local goods = findPart(c, "Mk_Goods")
@@ -455,7 +491,7 @@ local function marketSpot(x0, w, target)
 			goods:SetAttribute("FarHide", 80)
 		end
 	else
-		marketShell(m, cx, w)
+		marketShell(m, cx, MARKET_W)
 		mark("MarketDoor", base * CFrame.new(0, 0.1, -1.5))
 		mark("MarketCounter", CFrame.new(cx + w / 2 - 6.5, 1.1, CANON_Z + 5)) -- 계산대 앞 (가게 안쪽, 임시 바닥 윗면 1)
 		mark("MarketOwner", CFrame.new(cx + w / 2 - 2, 1.1, CANON_Z + 5))
@@ -482,8 +518,9 @@ local function endShops()
 			local x = END_X0
 			if sx == 1 and side == "S" then
 				-- 동쪽 끝 남쪽 첫 칸 = 골목 슈퍼 (D54)
-				marketSpot(0, MARKET_W, CFrame.new(sx * (x + MARKET_W / 2), 0, frontZ) * rot)
-				x += MARKET_W + 2
+				local mw = marketDims()
+				marketSpot(0, mw, CFrame.new(sx * (x + mw / 2), 0, frontZ) * rot)
+				x += mw + 2
 			end
 			while true do
 				local def = SHOPS[((idx - 1) % #SHOPS) + 1]
@@ -731,11 +768,13 @@ local function gapWalls()
 		local backZ = front + inward * (SHOP_DEPTH + 0.8)
 		if side == "S" then
 			-- 동쪽 남쪽 첫 칸 = 골목 슈퍼 (깊이 MARKET_D): 그 칸 뒤는 더 깊게 막고, 양옆을 이어 막음
-			local mz = front + inward * (MARKET_D + 0.8)
-			local mx1 = END_X0 + MARKET_W + 1
+			local mw, md = marketDims()
+			md = math.max(md, SHOP_DEPTH)
+			local mz = front + inward * (md + 0.8)
+			local mx1 = END_X0 + mw + 1
 			wall(END_X0 - 0.6, mx1, mz)
 			wall(mx1, HALF + 2, backZ)
-			for _, x in ipairs({ END_X0 - 0.6, mx1 }) do
+			for _, x in ipairs(math.abs(mz - backZ) > 0.5 and { END_X0 - 0.6, mx1 } or {}) do
 				local len = math.abs(mz - backZ)
 				part(m, "GapWall", Vector3.new(1.2, W.height, len), CFrame.new(x, W.height / 2, (mz + backZ) / 2), C.brick, Enum.Material.Brick)
 			end
