@@ -4,11 +4,11 @@
 --  - 도감: 손으로 만든 것만 도안별 최고 등급·개수 (자동 생산은 안 셈)
 --  - 장비: 화로·누르개·작업대 (Lv2부터). 효과는 ProductionService.hooks.mods + G.stockMax
 --  - 알바생 배치 (D34, 2026-11-24): 최대 4명 (고용 G.HireCost), 제작대(화로·2·3·4단계 기계)마다 한 명, 언제든 공짜로 옮김.
---    화로 알바: 40초에 1개 (Normal~Good), 재료는 안 쓰고 다 만들 때 급여(30초당 3). 내가 손으로 만드는 동안은 쉼
---    (두 번째 화구를 사면 안 쉼). 기계 알바: 그 기계가 돌게 함 (급여는 MachineService가 한 판마다)
+--    화로 알바: 40초에 1개 (Normal~Good), 재료는 안 쓰고 다 만들 때 급여(30초당 3). 화구 ②에서 일해서 내가 화구 ①로 손 제작해도 안 쉼
+--    (2026-11-24 화구 2개 기본). 기계 알바: 그 기계가 돌게 함 (급여는 MachineService가 한 판마다)
 --  - D43 (2026-11-24): 역할 = 제작대 4 + 진열(보관함 → 진열대, 4초에 1개) + 계산(수요 +10%·팁 +5%, SalesService·Economy가 봄)
 --    + 공장 공정 5 (FactoryService가 hired로 봄, 미니미는 FactoryDisplay). 최대 11명, 고용비는 몇 번째로 뽑느냐
---  - 화로 알바 교육 (D39·D40): 국자 확장 대신 숙련 교육(Lv3)·두 번째 화구(Lv5)·전문 교육(Lv8)
+--  - 화로 알바 교육 (D39·D40): 국자 확장 대신 숙련 교육(Lv3)·연탄 덮개(Lv5, 2026-11-24 두 번째 화구에서 바뀜)·전문 교육(Lv8)
 --  - 일일 목표 3개: UTC 날짜마다 새로 뽑음, 다 하면 EXP 15 + 코인
 
 local Players = game:GetService("Players")
@@ -572,7 +572,7 @@ end
 -- 알바생 1명 1초 진행 (D34: 배치한 제작대에 따라)
 -- 화로 알바 연탄 (D44): 두 번째 화구(D40)가 있으면 그 화구 연탄(coalLeft2), 없으면 내 화로 연탄(coalLeft)을 같이 씀
 local function helperCoalKey(d)
-	return (d.stoveUps and d.stoveUps.burner2) and "coalLeft2" or "coalLeft"
+	return "coalLeft2" -- 화로 알바는 화구 ② (2026-11-24: 화구 2개 기본, ①은 내 손 작업대)
 end
 
 -- 지금 화구에 연탄이 있거나 갈아 넣을 연탄이 있나
@@ -587,7 +587,7 @@ local function helperBurnCoal(dd)
 		dd.ingredients.coal -= 1
 		dd[key] = 1
 	end
-	dd[key] = math.max(0, (tonumber(dd[key]) or 1) - G.CoalPerMake)
+	dd[key] = math.max(0, (tonumber(dd[key]) or 1) - G.coalPerMake(dd))
 end
 
 -- 진열 알바 (D33): 옮길 달고나 하나 고르기 (먼저 만든 것부터, 손 제작품 켜면 손 제작품 먼저, 들고 있는 것은 빼고)
@@ -829,8 +829,6 @@ local function stepHelper(player, d, i, h, st, dt)
 	local why = nil
 	if not G.shopOpen(d) then
 		why = "가게 문 닫힘" -- 월세 밀림 (D21)
-	elseif Production.isMaking(player) and not (d.stoveUps and d.stoveUps.burner2) then
-		why = "사장님이 만드는 중" -- D34 (두 번째 화구가 있으면 안 쉼, D40)
 	elseif G.stockRoom(d) <= 0 then
 		why = "보관함 가득"
 	elseif d.coins < wage then

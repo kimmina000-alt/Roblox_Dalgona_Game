@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 12 -- v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
+G.SchemaVersion = 13 -- v13 (2026-11-24): 두 번째 화구 → 연탄 덮개 / v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -32,7 +32,7 @@ G.DefaultData = {
 	-- 알바생 (D34·D43): { shape = 화로에서 만들 도안 id, skill = 모자(자리만), post = 역할 key (G.HelperPosts) | nil(대기) }
 	partTimers = {},
 	stoveUps = {}, -- 화로 알바 교육 (D40): [key] = true (G.StoveTraining)
-	-- 화로 연탄 남은 양 (D44, 0~1, 한 판 0.1). coalLeft = 내 화로(화로 알바도 같이 씀), coalLeft2 = 두 번째 화구(D40, 화로 알바가 따로 씀)
+	-- 화로 연탄 남은 양 (D44, 0~1). coalLeft = 화구 ① 내 손 작업대, coalLeft2 = 화구 ② 화로 알바 자리 (2026-11-24: 화구 2개 기본)
 	coalLeft = 1,
 	coalLeft2 = 1,
 	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
@@ -104,6 +104,11 @@ end
 G.ChopsticksPerRound = 1
 G.ChopsticksPerHelperRound = 0 -- 알바생은 젓가락을 안 씀 (사용자 결정 2026-11-21: 젓가락은 손 제작 1판에 1쌍만)
 G.CoalPerMake = 0.1 -- 화로 한 판에 타는 연탄 (D44, 1장 = 10판). 손 제작·화로 알바만, 기계·공장은 안 씀
+G.CoalPerMakeCovered = 1 / 15 -- 연탄 덮개(Lv5, 2026-11-24)를 사면 1장 = 15판
+
+function G.coalPerMake(d)
+	return (d and d.stoveUps and d.stoveUps.coalCover) and G.CoalPerMakeCovered or G.CoalPerMake
+end
 G.ChopsticksPerMachineRound = 0 -- 2~5단계 기계·공장은 안 씀 (공장은 운영비 +1)
 
 G.StockMax = 50 -- 보관함 기본 칸 (D42, 2026-11-24: 30 → 50). 진열대 칸은 따로 (G.stockMax·G.storedCount)
@@ -225,7 +230,8 @@ end
 -- 국자 확장은 없앰 (D39, 2026-11-24). 같은 레벨에 화로 알바 키우기 (D40): 화로에 배치한 알바생에게만 효과
 G.StoveTraining = {
 	{ key = "skilled", name = "숙련 교육", level = 3, cost = 300, text = "화로 알바 40초 → 35초" },
-	{ key = "burner2", name = "두 번째 화구", level = 5, cost = 800, text = "내가 만드는 동안에도 화로 알바가 쉬지 않음" },
+	-- 2026-11-24 사용자: 화구는 가게 임대(Lv3)부터 2개 기본 (① 내 손 작업대, ② 화로 알바 자리). Lv5 "두 번째 화구"는 "연탄 덮개"로 바뀜
+	{ key = "coalCover", name = "연탄 덮개", level = 5, cost = 800, text = "연탄 1장으로 10판 → 15판" },
 	{ key = "expert", name = "전문 교육", level = 8, cost = 1800, text = "화로 알바 30초, Good~Excellent" },
 }
 -- 알바생 역할 (D34 → D43, 2026-11-24): 고용한 뒤 역할을 고름. 역할마다 한 명, 최대 11명 (제작대 4 + 진열 + 계산 + 공장 공정 5).

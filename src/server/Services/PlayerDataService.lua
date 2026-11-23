@@ -153,6 +153,13 @@ PlayerDataService.MIGRATIONS = {
 			data.ingredients.coal = math.max(tonumber(data.ingredients.coal) or 0, 2)
 		end
 	end,
+	[13] = function(data)
+		-- v12 → v13 (2026-11-24 사용자): 화구 2개가 기본이 되고 Lv5 "두 번째 화구"는 "연탄 덮개"로. 산 사람은 연탄 덮개를 가진 것으로
+		if type(data.stoveUps) == "table" and data.stoveUps.burner2 then
+			data.stoveUps.burner2 = nil
+			data.stoveUps.coalCover = true
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

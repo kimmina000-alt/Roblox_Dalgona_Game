@@ -309,10 +309,6 @@ function EconomyService.canMake(player, shape)
 	if G.EnforceUnlocks and not table.find(data.unlockedShapes, shape.id) then
 		return false, "아직 안 열린 도안이에요"
 	end
-	-- 알바가 맡은 제작대는 직접 못 씀 (2026-11-24 사용자 "알바생이 있을 때는 기계 못 쓰게. 알바 빼고 사용", 모든 기계·화로)
-	if G.helperAt(data, "stove") then
-		return false, "화로 알바가 이 작업대에서 일하는 중이에요 · 성장 > 알바생에서 화로 알바를 빼면 직접 만들 수 있어요"
-	end
 	-- 공장 공정을 직접 하는 동안은 손 제작 못 함 (D45, 내 몸은 하나)
 	if (player:GetAttribute("FactorySelf") or "") ~= "" then
 		return false, "공장에서 일하는 중이에요 (공장 방을 나가거나 그만두면 만들 수 있어요)"
@@ -427,7 +423,7 @@ end
 function EconomyService.coalBurn(player, amount)
 	local left = 0
 	Data.update(player, function(d)
-		d.coalLeft = math.max(0, (tonumber(d.coalLeft) or 1) - amount)
+		d.coalLeft = math.max(0, (tonumber(d.coalLeft) or 1) - G.coalPerMake(d)) -- 연탄 덮개면 1/15 (amount는 예전 값)
 		left = d.coalLeft
 	end)
 	return left
