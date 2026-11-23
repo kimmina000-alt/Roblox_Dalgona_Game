@@ -165,6 +165,7 @@ def arc_tube(p, pts, r, rgb, seg=8):
 
 
 FONT = r"C:\Windows\Fonts\malgunbd.ttf"
+HIDDEN = {"MarketSpot", "MarketDoor", "MarketCounter", "OrderSeat"}  # 투명 판정 부품 (미리 보기에서 숨김)
 
 
 def text(p, s, c, size, depth, rgb, m=I4):
@@ -284,6 +285,8 @@ def preview(out, base, objs, cams, glass_suffix=(), lamp_suffix=(), ground=True,
     gb.inputs["Alpha"].default_value = 0.22
     glass.surface_render_method = "BLENDED"
     for o in objs:
+        if "_Pt_" in o.name or o.name in HIDDEN:   # 자리 표시·판정용 부품은 게임에서 투명 → 미리 보기에서도 숨김
+            o.hide_render = True
         if any(o.name.endswith(s) for s in lamp_suffix):
             o.data.materials[0] = emit
         if any(o.name.endswith(s) for s in glass_suffix):

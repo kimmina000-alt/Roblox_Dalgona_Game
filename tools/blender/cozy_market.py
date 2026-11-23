@@ -95,9 +95,9 @@ def briquette(p, c, h=0.55, r=0.42):
 
 # ───────────────────────── 슈퍼 ─────────────────────────
 def build_market():
-    W, D, H, T = 26.0, 22.0, 12.5, 0.6         # 바깥 폭·깊이·벽 높이·벽 두께
+    W, D, H, T = 32.0, 13.4, 12.5, 0.6         # 바깥 폭·깊이·벽 높이·벽 두께 (연출 세션 골목 자리: 폭 36·깊이 14 이하, 11-25)
     FLOOR = 0.25                               # 바닥 윗면 높이 (길에서 한 번 낮은 턱)
-    DOOR_W, DOOR_H = 6.0, 8.0
+    DOOR_W, DOOR_H = 7.0, 8.0
     WIN_Z0, WIN_Z1 = 2.2, 8.4
     hw = W / 2
 
@@ -203,8 +203,8 @@ def build_market():
     gds = part("Mk_Goods", "진열 물건 전부 (과자·깡통·병·설탕 포대·소다 상자·젓가락 묶음·포장지·빵끈·연탄·우유·음료) — 충돌 끔")
     IX0, IX1 = -hw + T, hw - T                      # 안쪽 x
     # 진열대 섬 2개 (길이 방향 = 앞뒤)
-    for gx in (-5.7, 0.8):
-        GY0, GY1, GD = 6.0, 15.0, 2.0
+    for gx in (-8.5, -2.5):
+        GY0, GY1, GD = 3.8, 8.2, 2.0
         gy = (GY0 + GY1) / 2
         box(fix, (gx, gy, 0.45), (GD, GY1 - GY0, 0.5), WOOD_D, bev=0.08, seg=1)                     # 받침
         box(fix, (gx, gy, 2.6), (0.18, GY1 - GY0, 4.2), CREAM_D, bev=0.04, seg=1)                   # 가운데 판
@@ -239,37 +239,37 @@ def build_market():
         flat_shape(fix, (gx + 0.09, gy, 5.05), star_pts(0.25), 0.02, WHITE, m=rot(y=90))
     # 왼쪽 벽 선반 (4단): 재료 코너 — 설탕 포대·소다 상자·젓가락·포장지·빵끈
     LX = IX0 + 0.65
-    box(fix, (LX, 10.0, 3.0), (0.12, 12.0, 5.6), CREAM_D, bev=0.03, seg=1)
+    box(fix, (LX, 7.0, 3.0), (0.12, 8.0, 5.6), CREAM_D, bev=0.03, seg=1)
     for z in (0.6, 2.0, 3.4, 4.8):
-        box(fix, (IX0 + 0.7, 10.0, z), (1.3, 12.0, 0.12), WOOD_L, bev=0.03, seg=1)
-    for k in range(6):
-        sugar_sack(gds, (IX0 + 0.75, 4.8 + k * 1.9, 0.66 + 0.65), 0.95)                 # 1단: 설탕 포대
-    for k in range(8):
-        soda_box(gds, (IX0 + 0.8, 4.6 + k * 1.4, 2.06 + 0.45), 0.9)                       # 2단: 소다 상자
-    for k in range(10):                                                                   # 3단: 나무젓가락 묶음 + 포장지 두루마리
-        y = 4.5 + k * 1.15
+        box(fix, (IX0 + 0.7, 7.0, z), (1.3, 8.0, 0.12), WOOD_L, bev=0.03, seg=1)
+    for k in range(4):
+        sugar_sack(gds, (IX0 + 0.75, 4.0 + k * 1.9, 0.66 + 0.65), 0.95)                 # 1단: 설탕 포대
+    for k in range(5):
+        soda_box(gds, (IX0 + 0.8, 3.6 + k * 1.4, 2.06 + 0.45), 0.9)                       # 2단: 소다 상자
+    for k in range(7):                                                                    # 3단: 나무젓가락 묶음 + 포장지 두루마리
+        y = 3.4 + k * 1.15
         if k % 2 == 0:
             for j in range(5):
                 cyl(gds, (IX0 + 0.55 + (j % 3) * 0.16, y + (j // 3) * 0.16, 3.46), (IX0 + 0.55 + (j % 3) * 0.16, y + (j // 3) * 0.16, 4.3), 0.06, 0.06, WOOD_L, seg=5)
             box(gds, (IX0 + 0.7, y + 0.1, 3.8), (0.6, 0.45, 0.2), PINK, bev=0.02, seg=1)
         else:
             cyl(gds, (IX0 + 0.75, y - 0.35, 3.75), (IX0 + 0.75, y + 0.35, 3.75), 0.28, 0.28, (WHITE if k % 4 == 1 else SKY), seg=8)
-    for k in range(9):                                                                    # 4단: 빵끈 묶음 (작은 고리)
-        y = 4.6 + k * 1.3
+    for k in range(6):                                                                    # 4단: 빵끈 묶음 (작은 고리)
+        y = 3.6 + k * 1.3
         cyl(gds, (IX0 + 0.7, y, 4.86), (IX0 + 0.7, y, 5.0), 0.38, 0.38, rng.choice((RED, BUTTER, LEAF, SKY)), seg=10)
         cyl(gds, (IX0 + 0.7, y, 4.86), (IX0 + 0.7, y, 5.01), 0.22, 0.22, CREAM, seg=10)
     # 뒷벽 선반 (왼쪽 절반): 과자·음료 + 아래 연탄
     BY = D - T - 0.65
-    box(fix, (-5.5, BY + 0.5, 3.0), (13.0, 0.12, 5.6), CREAM_D, bev=0.03, seg=1)
+    box(fix, (-7.0, BY + 0.5, 3.0), (16.0, 0.12, 5.6), CREAM_D, bev=0.03, seg=1)
     for z in (0.6, 2.0, 3.4, 4.8):
-        box(fix, (-5.5, BY, z), (13.0, 1.3, 0.12), WOOD_L, bev=0.03, seg=1)
+        box(fix, (-7.0, BY, z), (16.0, 1.3, 0.12), WOOD_L, bev=0.03, seg=1)
     for z in (2.06, 3.46, 4.86):
-        goods(gds, -12.0, 1.0, BY, z, 1.2)
-    for k in range(5):                                                                    # 1단: 연탄 더미
+        goods(gds, -15.0, 1.0, BY, z, 1.2)
+    for k in range(6):                                                                    # 1단: 연탄 더미
         for j in range(3):
-            briquette(gds, (-11.4 + k * 2.6 + (j % 2) * 0.9, BY - 0.15 + (j // 2) * 0.0, 0.66 + (j // 2) * 0.56))
+            briquette(gds, (-14.4 + k * 2.6 + (j % 2) * 0.9, BY - 0.15 + (j // 2) * 0.0, 0.66 + (j // 2) * 0.56))
     # 냉장 진열장 (뒷벽 오른쪽): 몸통 + 유리문 3 + 안 선반 + 우유·음료 + 위 등
-    FX0, FX1, FD, FH = 2.2, IX1 - 0.2, 2.2, 7.6
+    FX0, FX1, FD, FH = 3.0, IX1 - 0.2, 2.2, 7.6
     fx = (FX0 + FX1) / 2
     fy = D - T - FD / 2
     FW = FX1 - FX0
@@ -305,11 +305,11 @@ def build_market():
                 x += 0.48
     lamps = part("Mk_Lamps", "천장 형광등 3줄 + 냉장고 안 등 (Neon 또는 SurfaceLight 붙이기)")
     box(lamps, (fx, fy - 0.2, FH - 1.05), (FX1 - FX0 - 0.6, 0.15, 0.1), LAMP, bev=0, seg=1)
-    for y in (6.0, 11.0, 16.0):
+    for y in (4.0, 9.5):
         box(fix, (-1.5, y, H - 0.32), (7.4, 0.7, 0.18), WHITE, bev=0.05, seg=1)
         box(lamps, (-1.5, y, H - 0.46), (7.0, 0.4, 0.12), LAMP, bev=0.04, seg=1)
     # 계산대 (오른쪽 앞, 길이 = 앞뒤), 주인은 계산대와 오른쪽 벽 사이에 서서 -X(가게 안)를 봄
-    CX, CY0, CY1, CH, CDp = 7.6, 2.6, 9.4, 3.1, 1.6
+    CX, CY0, CY1, CH, CDp = 10.4, 2.0, 7.4, 3.1, 1.6   # 문 들어가 오른쪽 안 (연출 세션 부탁)
     cy = (CY0 + CY1) / 2
     box(fix, (CX, cy, CH / 2), (CDp, CY1 - CY0, CH), WOOD, bev=0.15, seg=2)
     box(fix, (CX, cy, CH + 0.08), (CDp + 0.3, CY1 - CY0 + 0.3, 0.16), CREAM, bev=0.07, seg=2)
@@ -372,6 +372,7 @@ def build_market():
 
     # 자리 표시 (코드가 Attachment로 쓰고 부품은 숨김)
     marks = {
+        "MarketSpot": ((0, -0.2, 0.05), "바닥 앞선 가운데 (앞 = -Z), AlleyBuilder가 씀"),
         "Mk_Pt_Door": ((0, -1.5, FLOOR + 0.05), "문 바깥 가운데 (길 안내 화살표 끝·들어가는 곳)"),
         "Mk_Pt_Owner": ((IX1 - 1.4, cy, FLOOR + 0.05), "주인 NPC 서는 곳 (계산대 뒤, 앞 = Roblox +X 쪽 = 가게 안)"),
         "Mk_Pt_Customer": ((CX - CDp / 2 - 1.2, cy, FLOOR + 0.05), "플레이어가 계산대 앞에 서는 곳 (ProximityPrompt '장보기')"),
@@ -381,12 +382,16 @@ def build_market():
     for nm, (c, note) in marks.items():
         mp = part(nm, note + " — 투명·충돌 끔")
         box(mp, c, (0.4, 0.4, 0.1), PINK, bev=0, seg=1)
+    md = part("MarketDoor", "문 구멍 (투명·충돌 끔, AlleyBuilder가 씀)")
+    box(md, (0, T / 2, FLOOR + (DOOR_H - FLOOR) / 2), (DOOR_W - 0.4, T, DOOR_H - FLOOR - 0.1), SKY, bev=0, seg=1)
+    mc = part("MarketCounter", "계산대 윗면 판 (투명·충돌 끔, 속성 MarketCounter = true: 둘레 14칸 안에서 장보기)")
+    box(mc, (CX, cy, CH + 0.2), (CDp, CY1 - CY0, 0.1), SKY, bev=0, seg=1)
 
     info = dict(W=W, D=D, H=H)
     cams = {
         "front": ((-22, -30, 13), (0, 4, 6), 30),
-        "inside": ((-10.5, 2.2, 9.5), (4, 16, 1.5), 22),
-        "counter": ((-3, 3.5, 7), (9, 8, 2.5), 28),
+        "inside": ((-13.5, 1.4, 9.5), (4, 10, 1.0), 20),
+        "counter": ((-1, 1.6, 7), (12, 5, 2.5), 28),
     }
     return info, cams
 
@@ -448,8 +453,8 @@ def build_chair():
     box(p, (0, Dp / 2 - 0.12, SH + 1.3), (W, 0.16, 0.6), WOOD, bev=0.07, seg=2)
     flat_shape(p, (0, Dp / 2 - 0.21, SH + 1.3), star_pts(0.22), 0.02, BUTTER, m=rot(x=90))
     box(p, (0, Dp / 2 - 0.12, SH + 0.55), (W - 0.3, 0.1, 0.12), WOOD_L, bev=0.03, seg=1)
-    mp = part("Chair_Pt_Seat", "손님 Root를 놓을 곳 (방석 앞쪽 가운데 바닥 높이 아님: 엉덩이 = 방석 윗면) — 투명·충돌 끔")
-    box(mp, (0, -0.1, SH + 0.06), (0.3, 0.3, 0.05), MINT_B, bev=0, seg=1)
+    mp = part("OrderSeat", "앉는 판 (판매 세션 규칙: 이 부품 윗면 = 방석 윗면 0.96에 손님이 앉고 LookVector(-Z) 쪽을 봄) — 투명·충돌 끔")
+    box(mp, (0, -0.02, SH + 0.01), (W - 0.2, Dp - 0.2, 0.1), MINT_B, bev=0, seg=1)
     cams = {"chair": ((3.2, -4.2, 2.6), (0, 0, 0.9), 40)}
     return dict(), cams
 
