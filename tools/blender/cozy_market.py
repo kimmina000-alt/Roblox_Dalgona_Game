@@ -372,7 +372,6 @@ def build_market():
 
     # 자리 표시 (코드가 Attachment로 쓰고 부품은 숨김)
     marks = {
-        "MarketSpot": ((0, -0.2, 0.05), "바닥 앞선 가운데 (앞 = -Z), AlleyBuilder가 씀"),
         "Mk_Pt_Door": ((0, -1.5, FLOOR + 0.05), "문 바깥 가운데 (길 안내 화살표 끝·들어가는 곳)"),
         "Mk_Pt_Owner": ((IX1 - 1.4, cy, FLOOR + 0.05), "주인 NPC 서는 곳 (계산대 뒤, 앞 = Roblox +X 쪽 = 가게 안)"),
         "Mk_Pt_Customer": ((CX - CDp / 2 - 1.2, cy, FLOOR + 0.05), "플레이어가 계산대 앞에 서는 곳 (ProximityPrompt '장보기')"),
@@ -382,10 +381,7 @@ def build_market():
     for nm, (c, note) in marks.items():
         mp = part(nm, note + " — 투명·충돌 끔")
         box(mp, c, (0.4, 0.4, 0.1), PINK, bev=0, seg=1)
-    md = part("MarketDoor", "문 구멍 (투명·충돌 끔, AlleyBuilder가 씀)")
-    box(md, (0, T / 2, FLOOR + (DOOR_H - FLOOR) / 2), (DOOR_W - 0.4, T, DOOR_H - FLOOR - 0.1), SKY, bev=0, seg=1)
-    mc = part("MarketCounter", "계산대 윗면 판 (투명·충돌 끔, 속성 MarketCounter = true: 둘레 14칸 안에서 장보기)")
-    box(mc, (CX, cy, CH + 0.2), (CDp, CY1 - CY0, 0.1), SKY, bev=0, seg=1)
+    # MarketDoor·MarketCounter 등은 골목 코드(AlleyBuilder, feat/alley-market-1125)가 위 Mk_Pt_*에서 만들어 씀 (이름이 겹치지 않게 여기서는 안 만듦)
 
     info = dict(W=W, D=D, H=H)
     cams = {
