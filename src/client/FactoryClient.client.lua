@@ -495,6 +495,12 @@ local function soundFor(rec, def)
 		rec.snd[def.key] = false
 		return nil
 	end
+	-- 공장을 다시 훑으면(setup) rec가 새로 생김 → 부품에 이미 붙인 소리는 다시 씀 (2026-11-24 시험: 6초에 10개씩 쌓임)
+	local old = part:FindFirstChild("FactorySfx_" .. def.key)
+	if old and old:IsA("Sound") then
+		rec.snd[def.key] = old
+		return old
+	end
 	s = Instance.new("Sound")
 	s.Name = "FactorySfx_" .. def.key
 	s.SoundId = id
@@ -609,7 +615,11 @@ RunService.Heartbeat:Connect(function()
 			end
 		end
 		-- 공정별 소리 (① 설탕 ② 솥 ③ 프레스 ④ 환풍기 ⑤ 상자): 돌 때만, 공장 가까이(SOUND_NEAR)일 때만
-		factorySounds(rec, running and (rec.building:GetPivot().Position - camPos).Magnitude < SOUND_NEAR, now)
+		-- 거리는 건물 상자 가운데로 잼 (건물 피벗은 건물에서 멀리 있을 수 있음: 그래서 가까이 있어도 소리가 안 났음)
+		if not rec.center then
+			rec.center = (rec.building:GetBoundingBox()).Position
+		end
+		factorySounds(rec, running and (rec.center - camPos).Magnitude < SOUND_NEAR, now)
 		-- 움직임
 		local blink = (math.floor(now * 2) % 2) == 0
 		for _, e in ipairs(rec.parts) do
