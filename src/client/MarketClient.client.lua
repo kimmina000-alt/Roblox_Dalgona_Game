@@ -2,7 +2,9 @@
 --   [슈퍼 가기] (Hud) → 바닥에 길 안내 점 (내 화면에서만, PathfindingService). 슈퍼 입구에 닿거나 다시 누르면 꺼짐.
 --   슈퍼 계산대의 ProximityPrompt(속성 Market = true) → Hud 상점 창을 "market"으로 엶 (지금 상점 창 그대로, 10/50/100).
 --   계산대에서 멀어지면 장보기 창을 닫음.
--- 목표: workspace 안 이름 "MarketEntrance"인 Part 또는 속성 MarketEntrance = true인 Part (3D·서버 세션이 놓음).
+-- 자리 (제작 세션 feat/alley-market-1125, AlleyBuilder): Workspace.Alley.AlleyMarket 안
+--   MarketDoor = 문 가운데 (길 안내 목표), MarketSpot = 바닥 앞 가운데 (문이 없으면 이것), MarketCounter = 계산대.
+--   계산대에 [장보기] 프롬프트가 없으면 이 화면이 내 화면에만 붙임.
 -- 다른 스크립트에서: MarketClient.Guide:Fire(true 켜기 / false 끄기 / nil 바꾸기)
 
 local Players = game:GetService("Players")
@@ -29,17 +31,14 @@ local function toast(text)
 	end
 end
 
+local function market()
+	local alley = workspace:FindFirstChild("Alley")
+	return alley and alley:FindFirstChild("AlleyMarket")
+end
 local function findTarget()
-	local named = workspace:FindFirstChild("MarketEntrance", true)
-	if named and named:IsA("BasePart") then
-		return named
-	end
-	for _, d in ipairs(workspace:GetDescendants()) do
-		if d:IsA("BasePart") and d:GetAttribute("MarketEntrance") == true then
-			return d
-		end
-	end
-	return nil
+	local m = market()
+	local p = m and (m:FindFirstChild("MarketDoor", true) or m:FindFirstChild("MarketSpot", true))
+	return p and p:IsA("BasePart") and p or nil
 end
 
 ---------------------------------------------------------------- 길 안내 점
@@ -161,8 +160,15 @@ end)
 
 ---------------------------------------------------------------- 계산대 [장보기]
 local counter = nil -- 지금 연 계산대 (멀어지면 창 닫기)
+local function isMarketPrompt(prompt)
+	if prompt:GetAttribute("Market") == true then
+		return true
+	end
+	local m = market()
+	return m ~= nil and prompt:IsDescendantOf(m) and prompt.Parent and prompt.Parent.Name == "MarketCounter"
+end
 ProximityPromptService.PromptTriggered:Connect(function(prompt, who)
-	if who ~= me or prompt:GetAttribute("Market") ~= true then
+	if who ~= me or not isMarketPrompt(prompt) then
 		return
 	end
 	local h = hud()
@@ -190,5 +196,25 @@ task.spawn(function()
 				counter = nil
 			end
 		end
+	end
+end)
+
+-- 계산대에 [장보기] 프롬프트가 없으면 내 화면에만 붙임 (스트리밍으로 늦게 들어와도)
+task.spawn(function()
+	while true do
+		local m = market()
+		local counter = m and m:FindFirstChild("MarketCounter", true)
+		if counter and counter:IsA("BasePart") and not counter:FindFirstChildWhichIsA("ProximityPrompt") then
+			local pp = Instance.new("ProximityPrompt")
+			pp.Name = "ShopPrompt"
+			pp.ActionText = "장보기"
+			pp.ObjectText = "골목 슈퍼"
+			pp.HoldDuration = 0
+			pp.MaxActivationDistance = 10
+			pp.RequiresLineOfSight = false
+			pp:SetAttribute("Market", true)
+			pp.Parent = counter
+		end
+		task.wait(3)
 	end
 end)
