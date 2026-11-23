@@ -7,12 +7,14 @@
 #   ④ 반죽 노즐대(노즐 3개, 전구) → ⑤ 찍는 프레스(줄무늬 옆판, 별 도장 누름 머리) → ⑥ 둥근 식힘 덮개(둥근 창)
 #   ⑦ 미끄럼판 + 나무 상자(다 된 달고나) / ⑧ 앞 조작대(계기 3개, 도안 버튼 6개, 시작·정지, 레버)
 #
-# 부품(MeshPart): Fac_Body, Fac_Hopper(유리), Fac_Sugar, Fac_Kettle(구리), Fac_Belt, Fac_Press(오르내림),
+# 부품(MeshPart): Fac_Body_<sugar|boil|belt|press|inspect|pack>(공정별 몸, 2026-11-23 나눔), Fac_Nozzle, Fac_Drop, Fac_Stirrer, Fac_Lever,
+#   Fac_Lamp_<공정>(공정 불빛), Fac_Hopper(유리), Fac_Sugar, Fac_Kettle(구리), Fac_Belt, Fac_Press(오르내림),
 #   Fac_Lights(Neon), Fac_BeltDalgona(벨트 위), Fac_Chute(나오는 곳), Fac_Output(상자 속), Fac_Fan(환풍기),
 #   Fac_Console(조작대), Fac_StartButton, Fac_StopButton, Fac_Stand_<공정>(알바생 자리 표시, 투명). 게임(FactoryDisplay ANIM)이 이름으로 움직임을 붙임
 #
 # 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/cozy_factory.py -- <출력 폴더(절대 경로)>
-# 결과: dalgona_cozy_factory.glb, cozy_factory_preview.png, cozy_factory_preview2.png(프레스 내린 모습), cozy_factory_parts.txt
+# 결과: dalgona_cozy_factory.glb, cozy_factory_preview.png, cozy_factory_preview2.png(프레스 내린 모습),
+#       cozy_factory_parts.png(공정별 색으로 나눔 보기), cozy_factory_parts.txt
 # 크기 = 게임 stud. 원점 = 바닥 (컨베이어 가운데 근처). 좌표 변환 Blender (x, y, z) → Roblox (-x, z, y).
 
 import math
@@ -102,9 +104,11 @@ class Part:
                 f[self.col] = idx
 
 
-P = {n: Part(n) for n in ("Fac_Body", "Fac_Hopper", "Fac_Sugar", "Fac_Kettle", "Fac_Belt", "Fac_Press", "Fac_Fan",
+PROC = ("sugar", "boil", "press", "inspect", "pack")  # D30 공정 5곳 (FactoryDisplay STATIONS key와 같음)
+P = {n: Part(n) for n in ("Fac_Body_sugar", "Fac_Body_boil", "Fac_Body_belt", "Fac_Body_press", "Fac_Body_inspect", "Fac_Body_pack",
+                         "Fac_Nozzle", "Fac_Drop", "Fac_Stirrer", "Fac_Lever", "Fac_Hopper", "Fac_Sugar", "Fac_Kettle", "Fac_Belt", "Fac_Press", "Fac_Fan",
                          "Fac_Lights", "Fac_BeltDalgona", "Fac_Chute", "Fac_Output", "Fac_Console", "Fac_StartButton", "Fac_StopButton",
-                         "Fac_Stand_sugar", "Fac_Stand_boil", "Fac_Stand_press", "Fac_Stand_inspect", "Fac_Stand_pack")}
+                         *("Fac_Stand_" + k for k in PROC), *("Fac_Lamp_" + k for k in PROC))}
 
 
 def V(v):
@@ -196,7 +200,7 @@ MINT_BTN = (150, 204, 176)
 SKY_BTN = (150, 190, 226)
 LEMON_BTN = (246, 214, 120)
 
-body = P["Fac_Body"]
+body = P["Fac_Body_sugar"]  # 공정마다 아래에서 바꿈 (post()도 지금 body에 붙임)
 BZ = 2.4  # 컨베이어 윗면 높이
 BX0, BX1 = -2.4, 5.6  # 컨베이어 왼쪽·오른쪽 끝
 BWID = 1.9
@@ -228,6 +232,7 @@ ball(body, (hx + 1.4, 0, 2.85), 0.13, BRASS, seg=(10, 6))
 
 # ② 구리 솥: 크림 받침(나무 테) + 큰 구리 솥 + 놋쇠 띠 + 둥근 계기 + 김 나는 뚜껑
 kx = -3.6
+body = P["Fac_Body_boil"]
 box(body, (kx, 0, 0.6), (2.5, 2.5, 1.2), CREAM_D, bev=0.18)
 box(body, (kx, 0, 1.24), (2.7, 2.7, 0.14), WOOD_D, bev=0.05)
 for sx in (-1, 1):
@@ -236,7 +241,14 @@ kt = P["Fac_Kettle"]
 kc = Vector((kx, 0, 1.3))
 lathe(kt, [(0, 0), (0.9, 0), (1.12, 0.2), (1.2, 0.6), (1.2, 1.55), (1.26, 1.62), (1.18, 1.66), (1.1, 1.6), (0, 1.6)], COPPER, seg=24, c=kc)
 lathe(kt, [(1.16, 1.62), (0.8, 1.98), (0.3, 2.12), (0, 2.14)], COPPER_D, seg=24, c=kc)
-ball(kt, kc + Vector((0, 0, 2.2)), (0.14, 0.14, 0.1), WOOD_D, seg=(10, 6))
+# 젓개 (Fac_Stirrer, Anim stir): 뚜껑 위 놋쇠 축 + 양쪽 나무 손잡이. 좌우 대칭이라 MeshPart 가운데 = 돌림 축 (Roblox Y축으로 돌림)
+st = P["Fac_Stirrer"]
+cyl(st, kc + Vector((0, 0, 2.05)), kc + Vector((0, 0, 2.55)), 0.07, 0.07, BRASS, seg=10)
+cyl(st, kc + Vector((-0.55, 0, 2.5)), kc + Vector((0.55, 0, 2.5)), 0.05, 0.05, BRASS, seg=8)
+for sx in (-1, 1):
+    cyl(st, kc + Vector((sx * 0.55, 0, 2.5)), kc + Vector((sx * 0.55, 0, 2.78)), 0.08, 0.07, WOOD_D, seg=10)
+    ball(st, kc + Vector((sx * 0.55, 0, 2.8)), 0.09, WOOD_D, seg=(10, 6))
+ball(st, kc + Vector((0, 0, 2.58)), 0.11, BRASS, seg=(10, 6))
 ring_z = (0.55, 1.25)
 for z in ring_z:
     lathe(kt, [(1.21, z - 0.06), (1.25, z - 0.03), (1.25, z + 0.03), (1.21, z + 0.06)], BRASS, seg=24, c=kc)
@@ -249,7 +261,8 @@ for a, b in (((kx + 1.1, 0, 2.2), (-1.6, 0, 2.2)), ((-1.6, 0, 2.2), (-1.6, 0, 4.
 for q in ((-1.6, 0, 2.2), (-1.6, 0, 4.3)):
     ball(body, q, 0.14, BRASS, seg=(10, 6))
 
-# ③ 컨베이어: 크림 틀 + 나무 옆판 + 벨트 + 다리 + 끝 롤러
+# ③ 컨베이어: 크림 틀 + 나무 옆판 + 벨트 + 다리 + 끝 롤러 (여러 공정이 같이 쓰는 몸 → Fac_Body_belt)
+body = P["Fac_Body_belt"]
 L = BX1 - BX0
 cx = (BX0 + BX1) / 2
 box(body, (cx, 0, BZ - 0.25), (L, BWID, 0.4), CREAM, bev=0.12)
@@ -264,12 +277,14 @@ for x in (BX0 + 0.15, BX1 - 0.15):
 
 # ④ 반죽 노즐대: 나무 문 모양 틀 + 크림 판 + 놋쇠 노즐 3개 + 꼭대기 전구 2개
 nx = -1.2
+body = P["Fac_Body_press"]  # ③ 붓기·찍기 = 노즐대 + 프레스
 for sy in (-1, 1):
     box(body, (nx, sy * 1.15, (BZ + 2.3) / 2), (0.32, 0.32, BZ + 2.3), WOOD_D, bev=0.08)
 box(body, (nx, 0, BZ + 2.1), (0.7, 2.7, 0.6), CREAM, bev=0.16)
 box(body, (nx, 0, BZ + 2.45), (0.8, 2.8, 0.14), WOOD_D, bev=0.05)
 for sy in (-0.55, 0, 0.55):
-    cyl(body, (nx, sy, BZ + 1.8), (nx, sy, BZ + 0.75), 0.13, 0.05, BRASS, seg=10)
+    cyl(P["Fac_Nozzle"], (nx, sy, BZ + 1.8), (nx, sy, BZ + 0.75), 0.13, 0.05, BRASS, seg=10)  # Anim nozzle: 붓는 순간 살짝 내려옴
+    ball(P["Fac_Drop"], (nx, sy, BZ + 0.55), (0.09, 0.09, 0.13), DALGONA, seg=(10, 6))  # Anim drip: 노즐 끝 → 벨트로 떨어짐
 for sy in (-1, 1):
     cyl(body, (nx, sy * 1.15, BZ + 2.52), (nx, sy * 1.15, BZ + 2.7), 0.06, 0.06, BRASS, seg=8)
     ball(P["Fac_Lights"], (nx, sy * 1.15, BZ + 2.85), 0.16, BULB, seg=(12, 8))
@@ -292,6 +307,7 @@ for sy in (-0.4, 0.4):  # 아래에 별 도장
 
 # ⑥ 식히는 덮개: 둥근 크림 덮개 + 둥근 창 2개(놋쇠 테) + 위 환풍구
 cx6 = 4.25
+body = P["Fac_Body_inspect"]
 box(body, (cx6, 0, BZ + 0.75), (2.0, 2.2, 1.4), CREAM, bev=0.5, seg=4)
 box(body, (cx6, 0, BZ + 0.06), (2.1, 2.3, 0.12), WOOD_D, bev=0.04)
 for dx in (-0.45, 0.45):
@@ -311,6 +327,7 @@ box(ch, (BX1 + 0.55, 0, BZ - 0.55), (1.3, 1.2, 0.1), WOOD_L, bev=0.03, m=rot(y=3
 for sy in (-1, 1):
     box(ch, (BX1 + 0.55, sy * 0.62, BZ - 0.45), (1.3, 0.06, 0.25), WOOD_D, bev=0.02, seg=2, m=rot(y=35))
 ox = BX1 + 1.45
+body = P["Fac_Body_pack"]
 box(body, (ox, 0, 0.55), (1.6, 1.6, 1.1), WOOD, bev=0.1)
 box(body, (ox, 0, 1.08), (1.4, 1.4, 0.06), WOOD_D, bev=0.02)
 for sy in (-1, 1):
@@ -346,14 +363,26 @@ q = Vector((dx0 + 1.45, dy0 - 0.1, 1.15))
 box(con, q, (0.5, 0.8, 0.3), WOOD_D, bev=0.06)
 ball(P["Fac_StartButton"], q + Vector((0, -0.18, 0.2)), (0.14, 0.14, 0.08), MINT_BTN, seg=(12, 6))  # 시작 (돌 때 켜짐)
 ball(P["Fac_StopButton"], q + Vector((0, 0.18, 0.2)), (0.14, 0.14, 0.08), RED_BTN, seg=(12, 6))  # 정지 (멈추면 깜빡)
-cyl(con, (dx0 - 1.35, dy0, 1.0), (dx0 - 1.35, dy0 - 0.25, 1.55), 0.05, 0.04, BRASS, seg=8)  # 레버
-ball(con, (dx0 - 1.35, dy0 - 0.27, 1.6), 0.1, RED_BTN, seg=(10, 6))
+# 레버 (Fac_Lever, Anim lever): 시작할 때 앞으로 당김. 경첩 = 아래 끝 (Roblox 좌표는 parts.txt LEVER_HINGE)
+LEVER_HINGE = Vector((dx0 - 1.35, dy0, 1.0))
+box(con, LEVER_HINGE + Vector((0, 0, -0.04)), (0.22, 0.3, 0.12), WOOD_D, bev=0.04)
+cyl(P["Fac_Lever"], LEVER_HINGE, LEVER_HINGE + Vector((0, -0.25, 0.55)), 0.05, 0.04, BRASS, seg=8)
+ball(P["Fac_Lever"], LEVER_HINGE + Vector((0, -0.27, 0.6)), 0.1, RED_BTN, seg=(10, 6))
 
 # ⑨ 공정 알바생이 설 자리 표시 (게임에서 안 보이게 함). 바닥에 놓인 얇은 원판, 라인 앞 통로.
 #    FactoryDisplay가 이 부품 바닥 가운데에 미니미를 세우고, 부품 -LookVector(= 기계 안쪽, Roblox +Z) 쪽을 보게 함.
 STANDS = {"sugar": (hx, -1.75), "boil": (kx, -1.95), "press": (px + 0.75, -1.65), "inspect": (cx6, -1.75), "pack": (ox, -1.5)}
 for key, (x, y) in STANDS.items():
     cyl(P["Fac_Stand_" + key], (x, y, 0.0), (x, y, 0.02), 0.4, 0.4, MINT_BTN, seg=8)
+
+# ⑩ 공정 불빛 Fac_Lamp_<공정> (Anim stationLamp): 공정마다 앞쪽에 작은 등. 알바생을 고용하면 켜짐(Neon), 안 하면 어둡게.
+#    놋쇠 받침은 그 공정 몸에, 유리 알만 이 부품.
+LAMPS = {"sugar": (hx, -0.95, 3.75, "Fac_Body_sugar"), "boil": (kx - 0.95, -1.38, 1.45, "Fac_Body_boil"),
+         "press": (px, -1.62, BZ + 2.95, "Fac_Body_press"), "inspect": (cx6 + 0.8, -1.2, BZ + 1.45, "Fac_Body_inspect"),
+         "pack": (ox + 0.6, -0.85, 1.25, "Fac_Body_pack")}
+for key, (x, y, z, owner) in LAMPS.items():
+    cyl(P[owner], (x, y, z - 0.12), (x, y, z - 0.02), 0.13, 0.11, BRASS, seg=10)
+    ball(P["Fac_Lamp_" + key], (x, y, z + 0.08), 0.12, BULB, seg=(10, 6))
 
 # ───────────── 오브젝트 + 팔레트 재질 ─────────────
 IMG = palette_image()
@@ -368,7 +397,18 @@ tex.interpolation = "Closest"
 nt.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
 
 NOTES = {
-    "Fac_Body": "나무·크림 몸, 설탕 탑 틀, 관, 노즐대, 프레스 틀, 식힘 덮개, 상자, 조작대 (SmoothPlastic 또는 Wood)",
+    "Fac_Body_sugar": "① 설탕 넣기 몸: 설탕 탑 나무 다리·띠·뚜껑·놋쇠 관 (Wood)",
+    "Fac_Body_boil": "② 끓이기 몸: 솥 크림 받침·불 문·계기·놋쇠 관 (SmoothPlastic)",
+    "Fac_Body_belt": "컨베이어 틀·옆판·다리·롤러 (공정 공용, SmoothPlastic)",
+    "Fac_Body_press": "③ 붓기·찍기 몸: 노즐대 틀·전구 받침·프레스 기둥·줄무늬 옆판·지붕·실린더 (Wood)",
+    "Fac_Body_inspect": "④ 식히기·검사 몸: 둥근 식힘 덮개·창 테·환풍구 테 (SmoothPlastic)",
+    "Fac_Body_pack": "⑤ 포장 몸: 나무 상자 (Wood)",
+    "Fac_Nozzle": "노즐 3개 (Anim nozzle: 붓는 순간 Roblox Y로 0.1 내려왔다 올라감)",
+    "Fac_Drop": "노즐 끝 반죽 방울 3개 (Anim drip: Roblox Y로 0.4 떨어지며 작아지고 사라짐, 다시 노즐 끝에서 생김)",
+    "Fac_Stirrer": "솥 뚜껑 위 젓개 (Anim stir: 가운데 = 돌림 축, Roblox Y축으로 천천히 돎)",
+    "Fac_Lever": "조작대 레버 (Anim lever: 시작할 때 경첩 LEVER_HINGE 기준 Roblox X축으로 약 40° 앞으로 당김)",
+    **{"Fac_Lamp_" + k: f"공정 불빛 {n} (Anim stationLamp: 그 공정 알바생 고용 = Neon, 아니면 어둡게)" for k, n in
+       zip(PROC, ("① 설탕 넣기", "② 끓이기", "③ 붓기·찍기", "④ 식히기·검사", "⑤ 포장"))},
     "Fac_Hopper": "유리 설탕 통 (Glass, Transparency 0.5)",
     "Fac_Sugar": "통 속 설탕 (Anim hopper)",
     "Fac_Kettle": "구리 솥 (Anim kettle, Metal)",
@@ -416,6 +456,8 @@ for p in P.values():
     c, s = (lo + hi) / 2, hi - lo
     rows.append(f"{p.name}\ttris={tris}\tsize=({s.x:.2f}, {s.z:.2f}, {s.y:.2f})\tcenter=({-c.x:.2f}, {c.z:.2f}, {c.y:.2f})\t{NOTES[p.name]}")
 rows.append(f"# 합계 삼각형 {total}. center = 기계 원점(바닥 가운데)에서 MeshPart 가운데까지 (Roblox 좌표). 원점 = 컨베이어 아래 바닥 가운데쯤.")
+rows.append(f"# LEVER_HINGE (Roblox) = ({-LEVER_HINGE.x:.2f}, {LEVER_HINGE.z:.2f}, {LEVER_HINGE.y:.2f})")
+rows.append("# 예전 Fac_Body 하나 → Fac_Body_<공정> 6개로 나눔 (2026-11-23). 나머지 예전 이름은 그대로.")
 rows.append(f"# 컨베이어 윗면 높이 {BZ}, 벨트 Roblox X {-BX1:.2f} ~ {-BX0:.2f} (달고나는 Roblox -X 쪽으로 흐름: 노즐 → 프레스 → 식힘 → 상자)")
 with open(os.path.join(OUT, "cozy_factory_parts.txt"), "w", encoding="utf-8") as f:
     f.write("\n".join(rows) + "\n")
@@ -464,6 +506,8 @@ eb.inputs["Base Color"].default_value = (1, 0.85, 0.6, 1)
 eb.inputs["Emission Color"].default_value = (1, 0.8, 0.5, 1)
 eb.inputs["Emission Strength"].default_value = 4
 scene.objects["Fac_Lights"].data.materials[0] = emit
+for k in PROC:
+    scene.objects["Fac_Lamp_" + k].data.materials[0] = emit
 glass = bpy.data.materials.new("GlassPrev")
 glass.use_nodes = True
 gb = glass.node_tree.nodes["Principled BSDF"]
@@ -494,4 +538,31 @@ shoot((3.0, -19.0, 9.0), (0.3, 0, 2.6), "cozy_factory_preview.png")
 press = scene.objects["Fac_Press"]
 press.location.z -= 0.55
 shoot((-9.5, -10.5, 7.0), (0.5, 0, 2.8), "cozy_factory_preview2.png")
+press.location.z += 0.55
+
+# 부품 나눔 보기: 공정마다 한 색, 움직이는 부품은 진한 색
+GROUP = {"sugar": (0.95, 0.95, 0.95), "boil": (0.95, 0.55, 0.35), "press": (0.98, 0.82, 0.3), "inspect": (0.55, 0.78, 0.95),
+         "pack": (0.45, 0.72, 0.5), "belt": (0.6, 0.55, 0.52)}
+MOVING = {"Fac_Sugar": "sugar", "Fac_Hopper": "sugar", "Fac_Kettle": "boil", "Fac_Stirrer": "boil", "Fac_Nozzle": "press", "Fac_Drop": "press",
+          "Fac_Press": "press", "Fac_Fan": "inspect", "Fac_Chute": "pack", "Fac_Output": "pack", "Fac_Belt": "belt", "Fac_BeltDalgona": "belt",
+          "Fac_Lights": "press", "Fac_Console": "belt", "Fac_StartButton": "belt", "Fac_StopButton": "belt", "Fac_Lever": "belt"}
+mats = {}
+for o in scene.objects:
+    if not o.name.startswith("Fac_") or o.name.startswith("Fac_Stand_"):
+        continue
+    if o.name.startswith("Fac_Body_"):
+        g, dark = o.name[9:], False
+    elif o.name.startswith("Fac_Lamp_"):
+        g, dark = o.name[9:], True
+    else:
+        g, dark = MOVING[o.name], True
+    key = (g, dark)
+    if key not in mats:
+        m = bpy.data.materials.new(f"G_{g}_{dark}")
+        m.use_nodes = True
+        col = GROUP[g] if not dark else tuple(c * 0.55 for c in GROUP[g])
+        m.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (*col, 1)
+        mats[key] = m
+    o.data.materials[0] = mats[key]
+shoot((3.0, -19.0, 9.0), (0.3, 0, 2.6), "cozy_factory_parts.png")
 print("[cozy_factory] done")
