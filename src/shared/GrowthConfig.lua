@@ -316,6 +316,19 @@ G.ShopLight = {
 	y = 9, -- 가게 바닥 위 높이
 	spots = { { -10, -8 }, { 10, -8 }, { -10, 4 }, { 10, 4 } },
 }
+-- 골목 슈퍼마켓 (D54, 2026-11-25 확정, 서버 MarketService): 슈퍼 계산대에서 사서 봉지에 들고 가게로, Lv10 전화 배달
+G.Market = {
+	radius = 14, -- 계산대(부품 속성 MarketCounter)에서 이 거리 안에서만 장보기
+	bagMid = 60, -- 봉지 크기: 개수 합이 이보다 적으면 소, bagBig 미만이면 중, 그 이상 대
+	bagBig = 200,
+	phoneLevel = 10, -- 전화 배달 Lv
+	phoneMult = 1.1, -- 배달비 10%
+	phoneDelay = 60, -- 배달 도착 초
+	-- 봉지를 냉장고로 넣는 "내 가게 안" 판정 (부지 기준 로컬): 앞선 z -18 안쪽, 폭 ±21, 뒤 끝 60
+	shopFrontZ = -18,
+	shopBackZ = 60,
+	shopHalfWidth = 21.5,
+}
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 
 -- 손님 7종 (D37·GDD 14장, 2026-11-24): 레벨 구간마다 오는 비율, 종류마다 고르는 것·개수·팁. 손님 모델 id = CustomerRig.order
