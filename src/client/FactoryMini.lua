@@ -100,8 +100,20 @@ local function showResult(card, ok)
 	UI.stroke(UI.C.woodDark, 2).Parent = banner
 end
 
--- 미니게임 한 번. limit초 안에 끝남. 잘했으면 true
-function FactoryMini.play(station, limit)
+-- 공장 손재주 (D49, 2026-11-24 확정): 공정마다 1~3단계. 단계가 오르면 판정이 넓어지고(width, 서버가 정함 ×1 / ×1.3 / ×1.6)
+-- 도움 연출이 붙음 (게임 모듈마다 api.level로 봄). 단계·폭은 서버가 "mini" 신호 5번째 값 { level, width }로 보냄.
+-- 없으면 플레이어 속성 FactorySkill_<공정>(1~3), 그것도 없으면 1단계
+local WIDTH = { 1, 1.3, 1.6 }
+local function skillFor(station, opts)
+	local level = type(opts) == "table" and tonumber(opts.level) or nil
+	level = level or tonumber(player:GetAttribute("FactorySkill_" .. tostring(station)))
+	level = math.clamp(math.floor(level or 1), 1, 3)
+	local width = type(opts) == "table" and tonumber(opts.width) or WIDTH[level]
+	return level, width
+end
+
+-- 미니게임 한 번. limit초 안에 끝남. 돌려줌: 잘했나(boolean), 점수(0~100, 3단계 성공 기준은 서버가 봄)
+function FactoryMini.play(station, limit, opts)
 	local info = GAMES[station]
 	if not info or playing then
 		return false
@@ -121,8 +133,11 @@ function FactoryMini.play(station, limit)
 	Pointer.enabled = true
 	Pointer.down = false
 	local t0 = os.clock()
+	local level, width = skillFor(station, opts)
 	local api = {
 		pointer = Pointer,
+		level = level, -- 손재주 단계 1~3 (도움 연출)
+		width = width, -- 판정 폭 배수 (1 / 1.3 / 1.6)
 		limit = limit,
 		-- 게임 칸 안 좌표 (0~1, 0~1). 칸 밖이면 범위를 넘는 값
 		uv = function(pos)
@@ -143,11 +158,12 @@ function FactoryMini.play(station, limit)
 	local barConn = RunService.RenderStepped:Connect(function()
 		bar.Size = UDim2.fromScale(api.left() / limit, 1)
 	end)
-	local okRun, ok = pcall(game_.run, area, api)
+	local okRun, ok, score = pcall(game_.run, area, api)
 	if not okRun then
 		warn("[FactoryMini]", station, ok)
-		ok = false
+		ok, score = false, 0
 	end
+	score = math.clamp(math.floor(tonumber(score) or (ok == true and 100 or 0)), 0, 100)
 	barConn:Disconnect()
 	Pointer.enabled = false
 	Pointer.down = false
@@ -155,7 +171,7 @@ function FactoryMini.play(station, limit)
 	task.wait(1.0)
 	gui:Destroy()
 	playing = false
-	return ok == true
+	return ok == true, score
 end
 
 -- ── 내가 맡은 공정: 내 캐릭터가 그 자리(Fac_Stand_<key>)로 걸어가서 그 공정 옷을 입음 (서버는 캐릭터를 옮기지 않음) ──
@@ -277,7 +293,7 @@ end
 -- 서버 연결 (Remote가 아직 없으면 생길 때까지 기다리지 않고 지켜봄)
 -- 신호 (저장·부지 세션 FactoryService): ("start", key) / ("mini", key, token, 초) / ("end", key, 이유)
 local function hookRemote(re)
-	re.OnClientEvent:Connect(function(kind, station, token, limit)
+	re.OnClientEvent:Connect(function(kind, station, token, limit, opts)
 		if kind == "start" then
 			onStart(station)
 			return
@@ -288,8 +304,8 @@ local function hookRemote(re)
 			return
 		end
 		task.spawn(function()
-			local ok = FactoryMini.play(station, limit)
-			re:FireServer(FactoryMini.REMOTE.result, token, ok)
+			local ok, score = FactoryMini.play(station, limit, opts)
+			re:FireServer(FactoryMini.REMOTE.result, token, ok, score) -- 점수는 4번째 (D49 3단계 성공 기준 60은 서버)
 		end)
 	end)
 	-- 캐릭터가 다시 생기면 (죽음·다시 들어옴) 맡은 공정이 남아 있으면 옷만 다시 입힘
@@ -321,8 +337,8 @@ function FactoryMini.start()
 	if RunService:IsStudio() then
 		local test = Instance.new("BindableEvent")
 		test.Name = "FactoryMiniTest"
-		test.Event:Connect(function(station)
-			task.spawn(FactoryMini.play, station)
+		test.Event:Connect(function(station, level)
+			task.spawn(FactoryMini.play, station, nil, level and { level = level } or nil) -- 시험: FactoryMiniTest:Fire("sugar", 3)
 		end)
 		test.Parent = script.Parent
 	end
