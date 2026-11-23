@@ -195,6 +195,22 @@ PlayerDataService.MIGRATIONS = {
 			end
 		end
 	end,
+	[15] = function(data)
+		-- v14 → v15 (2026-11-24 D38 도감 보상): 이미 한 기록은 "보상 받음"으로 표시만 (지난 것까지 한꺼번에 코인을 주지 않음).
+		-- 칭호는 서버가 다음 Perfect 때 다시 셈. 손님 도감·칭호는 빈 것으로 시작 (reconcile)
+		if type(data.collection) == "table" then
+			for _, c in pairs(data.collection) do
+				if type(c) == "table" then
+					if c.best == "Excellent" or c.best == "Perfect" then
+						c.ex = true
+					end
+					if c.best == "Perfect" then
+						c.pf = true
+					end
+				end
+			end
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

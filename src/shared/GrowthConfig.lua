@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 14 -- v14 (2026-11-24 D46 재수정): 화로 알바 → 2단계 기계 자리, coalLeft2 없앰, 숙련 교육 환불·전문 교육 → 기계 알바 교육 / v13 (2026-11-24): 두 번째 화구 → 연탄 덮개 / v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
+G.SchemaVersion = 15 -- v15 (2026-11-24 D38): 도감 보상 표시·손님 도감·칭호 / v14 (2026-11-24 D46 재수정): 화로 알바 → 2단계 기계 자리, coalLeft2 없앰, 숙련 교육 환불·전문 교육 → 기계 알바 교육 / v13 (2026-11-24): 두 번째 화구 → 연탄 덮개 / v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -35,6 +35,9 @@ G.DefaultData = {
 	-- 화로 연탄 남은 양 (D44, 0~1). coalLeft = 화구 ① 내 손 작업대, coalLeft2 = 화구 ② 화로 알바 자리 (2026-11-24: 화구 2개 기본)
 	coalLeft = 1,
 	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
+	custDex = {}, -- 손님 도감 (D38): [손님 id] = { sold = 판 수, h = 받은 하트 보상 0~3 }
+	titles = { owned = {} }, -- 칭호 (D38): owned = 얻은 이름들, equipped = 단 칭호
+	signGold = false, -- 간판 금테 (D38: 도안 23종 모두 Perfect)
 	custFav = {}, -- 단골 손님이 좋아하는 도안 (D37): [손님 id] = 도안 id (처음 올 때 열린 도안 중 무작위로 정함)
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
 	machine = { shapes = {}, t = 0, ts = {} }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, ts[기계 id] = 이번 판 진행 초 (D32 기계 여러 대, t는 예전 값 → 처음 읽을 때 ts로 옮김)
@@ -164,6 +167,20 @@ G.MasterUnlock = {
 	{ id = "Lotus", mythicPerfect = 3 },
 }
 G.GradeRank = { Burnt = 0, Fail = 0, Poor = 1, Normal = 2, Good = 3, Excellent = 4, Perfect = 5 }
+
+-- 도감 보상 (D38, 2026-11-24 확정. 꾸미기 보상은 뺌). 서버 CollectionService
+G.Collection = {
+	firstMadeExp = 20, -- 처음 만듦
+	excellentMult = 5, -- 처음 Excellent: 코인 = 도안 가격 × 5
+	perfectMult = 10, -- 처음 Perfect: 코인 = 가격 × 10 + 금별
+	ppopgiExp = 30, -- 완벽 뽑기: EXP 30 + 도장
+	masterTitle = "달고나 장인", -- 23종 모두 Perfect (+ 간판 금테)
+	meetCoins = 30, -- 손님 처음 만남
+	hearts = { 10, 50, 150 }, -- 하트 1·2·3 (판 수)
+	heart1Exp = 50,
+	heart2Coins = 300, -- + 좋아하는 도안 공개
+	streetTitle = "골목 인기 가게", -- 손님 7종 모두 하트 3
+}
 
 ---------------------------------------------------------------- 장비 업그레이드 (SYSTEMS_SPECIFICATION 7장, Lv2에 열림)
 G.UpgradeUnlockLevel = 2

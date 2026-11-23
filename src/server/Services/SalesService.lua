@@ -21,6 +21,7 @@ local SalesService = {}
 local Data, Economy, Plots = nil, nil, nil
 local shops = {} -- [plotIndex] = { shelf, slots = {}, customers = {}, reserved, nextVisit, owner }
 local saleFloat = nil -- Remotes.SaleFloat (주인 화면에 "+n코인" 글씨)
+local Collection = nil -- CollectionService (도감, 처음 쓸 때 가져옴)
 local walkers = {} -- 움직이는 손님 { model, path, seg, t, onArrive }
 
 local DALGONA = Color3.fromRGB(214, 150, 70)
@@ -897,6 +898,8 @@ local function spawnCustomer(index)
 	-- 손님 종류 (D37): 레벨 구간 비율로 뽑고, 종류마다 사려는 개수
 	local od = Data.get(owner)
 	local ctype = G.rollCustomer(od and od.level or 1)
+	Collection = Collection or require(script.Parent:WaitForChild("CollectionService"))
+	task.spawn(Collection.onCustomerMet, owner, ctype.id) -- 손님 도감: 처음 만나면 30코인 (D38)
 	local kind = G.Customers.kinds[ctype.kind]
 	local want = math.random(kind.min, kind.max)
 	local n = math.min(want, available)
@@ -949,6 +952,7 @@ local function spawnCustomer(index)
 				saleFloat:FireClient(owner, cf.Position + Vector3.new(0, size.Y / 2 + 0.6, 0), coins)
 			end
 			say(model, string.format("%d개 살게요! +%d", sold, coins), 2)
+			task.spawn(Collection.onCustomerSold, owner, ctype.id, sold) -- 손님 도감 하트 (D38)
 			startEating(model, items and items[1] or nil)
 			print(string.format("[Sales] %s Plot%d sold %d (+%d)", owner.Name, index, sold, coins))
 		else
