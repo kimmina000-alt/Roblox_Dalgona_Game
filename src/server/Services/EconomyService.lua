@@ -162,7 +162,7 @@ function EconomyService.carrying(player)
 end
 
 -- 진열대 slot 칸에 놓기: 들고 있는 것, 없으면 보관함에서 먼저 만든 것. 반환 ok, 글
-function EconomyService.place(player, slot)
+function EconomyService.place(player, slot, extra) -- extra: 놓을 때 달고나에 더 적을 값 (예: 걸이판 자리 pp)
 	local data = Data.get(player)
 	if not data then
 		return false, "불러오는 중이에요"
@@ -193,6 +193,12 @@ function EconomyService.place(player, slot)
 	end
 	Data.update(player, function()
 		target.sl = slot
+		target.pp = nil
+		if type(extra) == "table" then
+			for k, v in pairs(extra) do
+				target[k] = v
+			end
+		end
 	end)
 	if fromHand then
 		setCarrying(player, nil)
