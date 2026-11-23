@@ -5,7 +5,9 @@
 -- 꾸밈 움직임이라 각 플레이어 화면에서만 그림 (서버 부담 없음)
 
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workstations = require(script.Parent:WaitForChild("Workstations"))
+local WalkPath = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("WalkPath"))
 
 local Helper = {}
 
@@ -163,6 +165,7 @@ local function smooth(t)
 	t = math.clamp(t, 0, 1)
 	return t * t * (3 - 2 * t)
 end
+local routeCache = setmetatable({}, { __mode = "k" }) -- [미니미] = { raw, at, route } (한 번 나간 길은 다시 안 만듦)
 local function deliverPose(ws, mini, torso, joint, home, footDrop)
 	local at, k = mini:GetAttribute("DeliverAt"), mini:GetAttribute("DeliverSlot")
 	if type(at) ~= "number" or type(k) ~= "number" then
@@ -184,7 +187,28 @@ local function deliverPose(ws, mini, torso, joint, home, footDrop)
 	local homeG = Vector3.new(home.X, floorY + footDrop, home.Z)
 	local toHome = Vector3.new(homeG.X - sp.X, 0, homeG.Z - sp.Z)
 	local stand = Vector3.new(sp.X, floorY + footDrop, sp.Z) + (toHome.Magnitude > 0.1 and toHome.Unit or Vector3.zAxis) * 1.3
-	local walkT = math.clamp((stand - homeG).Magnitude / WALK_SPEED, 0.8, 4)
+	-- 벽을 돌아가는 길 (서버 HelperPath → 속성 WalkPath, 2026-11-24). 첫 점은 내 화면의 처음 자리, 높이는 발 높이로
+	local route = nil
+	local raw = mini:GetAttribute("WalkPath")
+	local rc = routeCache[mini]
+	if rc and rc.raw == raw and rc.at == at then
+		route = rc.route
+	else
+		local src = WalkPath.decode(raw)
+		if src then
+			local pts = { homeG }
+			for j = 2, #src.points do
+				local q = src.points[j]
+				table.insert(pts, Vector3.new(q.X, floorY + footDrop, q.Z))
+			end
+			route = WalkPath.decode(WalkPath.encode(pts))
+		end
+		routeCache[mini] = { raw = raw, at = at, route = route }
+	end
+	if route then
+		stand = route.points[#route.points]
+	end
+	local walkT = route and math.clamp(route.length / WALK_SPEED, 0.8, 10) or math.clamp((stand - homeG).Magnitude / WALK_SPEED, 0.8, 4)
 	local backAt = walkT + PLACE_T
 	if age >= backAt + walkT then
 		if disc then
@@ -194,8 +218,14 @@ local function deliverPose(ws, mini, torso, joint, home, footDrop)
 	end
 	local p, face, reach
 	if age < walkT then
-		p = homeG:Lerp(stand, smooth(age / walkT))
-		face = stand
+		if route then
+			local dir
+			p, dir = WalkPath.sample(route, smooth(age / walkT))
+			face = p + (dir or Vector3.zAxis)
+		else
+			p = homeG:Lerp(stand, smooth(age / walkT))
+			face = stand
+		end
 		-- 걸음: 살짝 통통 튀며
 		p += Vector3.new(0, math.abs(math.sin(age * 12)) * 0.12, 0)
 	elseif age < backAt then
@@ -203,8 +233,14 @@ local function deliverPose(ws, mini, torso, joint, home, footDrop)
 		face = Vector3.new(sp.X, stand.Y, sp.Z)
 		reach = true
 	else
-		p = stand:Lerp(homeG, smooth((age - backAt) / walkT))
-		face = homeG
+		if route then
+			local dir
+			p, dir = WalkPath.sample(route, 1 - smooth((age - backAt) / walkT))
+			face = p - (dir or Vector3.zAxis)
+		else
+			p = stand:Lerp(homeG, smooth((age - backAt) / walkT))
+			face = homeG
+		end
 		p += Vector3.new(0, math.abs(math.sin(age * 12)) * 0.12, 0)
 	end
 	local look = Vector3.new(face.X - p.X, 0, face.Z - p.Z)

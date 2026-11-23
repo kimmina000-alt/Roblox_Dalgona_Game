@@ -544,6 +544,50 @@ local function ends()
 	end
 end
 
+---------------------------------------------------------------- 가게 사이 틈 담벼락 (2026-11-24 사용자: 골목 길 테두리를 따라 막음)
+
+-- 길 앞선(z = S_FRONT / N_FRONT)에서 틈 안쪽으로 recess만큼 들어간 자리에 담: 가게 사이 틈 2곳, 끝 가게와 꾸미기 가게 사이,
+-- 꾸미기 가게 줄 뒤(그 사이 좁은 틈으로 뒤로 가지 못하게, 골목 끝 담과 이어짐). 가게 3D 자체 벽이 나머지를 막음
+local function gapWalls()
+	local W = GrowthConfig.ShopWorld and GrowthConfig.ShopWorld.gapWall
+	if not W then
+		return
+	end
+	local m = model("GapWalls")
+	local BH = W.buildingHalf
+	local xs = {}
+	for k = 0, PER_ROW - 1 do
+		table.insert(xs, (k - (PER_ROW - 1) / 2) * P.spacing)
+	end
+	-- 틈 구간 [x0, x1] (가게 벽 사이)
+	local gaps = {}
+	for k = 1, #xs - 1 do
+		table.insert(gaps, { xs[k] + BH, xs[k + 1] - BH })
+	end
+	table.insert(gaps, { xs[#xs] + BH, END_X0 })
+	table.insert(gaps, { -END_X0, xs[1] - BH })
+	local function wall(x0, x1, z)
+		local len = x1 - x0 + 0.6 -- 양 끝이 벽에 살짝 묻힘
+		if len < 0.5 then
+			return
+		end
+		local cx = (x0 + x1) / 2
+		part(m, "GapWall", Vector3.new(len, W.height, 1.2), CFrame.new(cx, W.height / 2, z), C.brick, Enum.Material.Brick)
+		part(m, "GapWallCap", Vector3.new(len + 0.3, 0.4, 1.6), CFrame.new(cx, W.height + 0.2, z), C.concrete, Enum.Material.Concrete)
+	end
+	for _, side in ipairs({ "S", "N" }) do
+		local front = side == "S" and ROAD_Z0 or ROAD_Z1
+		local inward = side == "S" and -1 or 1 -- 길에서 멀어지는 쪽
+		for _, g in ipairs(gaps) do
+			wall(g[1], g[2], front + inward * W.recess)
+		end
+		-- 꾸미기 가게 줄 뒤 (양 끝)
+		local backZ = front + inward * (SHOP_DEPTH + 0.8)
+		wall(END_X0 - 0.6, HALF + 2, backZ)
+		wall(-(HALF + 2), -(END_X0 - 0.6), backZ)
+	end
+end
+
 ---------------------------------------------------------------- 하늘·조명 (따뜻한 오후 낮, 사용자 2026-11-23)
 
 function A.lighting()
@@ -589,6 +633,7 @@ function A.build()
 	poles()
 	streetProps()
 	ends()
+	gapWalls()
 	folder.Parent = workspace
 	-- 처음 나타나는 자리: 골목 서쪽 끝 길 위 (들어오면 PlotService가 내 가게 앞으로 옮김). 예전 (0,0,0)은 북쪽 가게 안
 	local spawn = workspace:FindFirstChildOfClass("SpawnLocation")

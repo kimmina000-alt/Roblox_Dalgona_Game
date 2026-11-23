@@ -67,6 +67,16 @@ local ANIM = {
 -- 공정 키 (알바생 D30 / 공정 표시등 / 빈 작업복 걸이)
 local STATION_KEYS = { "sugar", "boil", "press", "inspect", "pack" }
 local CONSOLE = { Line_ConsolePanel_Node = true, Fac_Console_Node = true } -- 제어대 ProximityPrompt를 붙일 부품
+-- 공장 공정 (알바생 자리·공정 옷·기계 앞 "내가 하기")
+local STATIONS = {
+	-- 공장 모델 기준 자리 (x = 라인 따라, z = 앞 통로 STAND_Z, 라인을 보고 섬). 옷 색
+	{ key = "sugar", n = 1, name = "설탕 넣기", x = 18.5, color = Color3.fromRGB(250, 250, 250) },
+	{ key = "boil", n = 2, name = "끓이기", x = 10.5, color = Color3.fromRGB(220, 70, 70) },
+	{ key = "press", n = 3, name = "붓기·찍기", x = 1.5, color = Color3.fromRGB(255, 205, 60) },
+	{ key = "inspect", n = 4, name = "식히기·검사", x = -9, color = Color3.fromRGB(140, 200, 240) },
+	{ key = "pack", n = 5, name = "포장", x = -16, color = Color3.fromRGB(80, 130, 220) },
+}
+local STAND_Z = -3.2
 
 local function part(parent, name, size, cf, color, material, props)
 	local p = Instance.new("Part")
@@ -283,6 +293,35 @@ local function buildBuilding(lot)
 		pr.RequiresLineOfSight = false
 		pr.Parent = att
 	end
+	-- 공정 기계 앞 "내가 하기" (2026-11-24 사용자): 공정마다 알바생 자리(Fac_Stand_<key>)에 버튼. 누르면 제어대 [내가 하기]와 같은 서버 동작
+	-- (Display.onSelfPrompt = FactoryService가 넣음). 주인이 아니면·알바생이 있으면 클라이언트 ShopWorld가 내 화면에서 숨김
+	for _, st in ipairs(STATIONS) do
+		local mark = b:FindFirstChild("Fac_Stand_" .. st.key, true)
+		if mark and not mark:IsA("BasePart") then
+			mark = mark:FindFirstChildWhichIsA("BasePart", true)
+		end
+		local pos = mark and (mark.Position + Vector3.new(0, 2.5, 0)) or (b:GetPivot() * CFrame.new(st.x, 2.5, STAND_Z)).Position
+		local holder = part(b, "SelfSpot_" .. st.key, Vector3.new(0.2, 0.2, 0.2), CFrame.new(pos), Color3.new(1, 1, 1), nil, { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+		local pr = Instance.new("ProximityPrompt")
+		pr.Name = "SelfPrompt"
+		pr:SetAttribute("StationKey", st.key)
+		pr.ObjectText = st.n .. " " .. st.name
+		pr.ActionText = "내가 하기"
+		pr.KeyboardKeyCode = Enum.KeyCode.E
+		pr.HoldDuration = 0
+		pr.MaxActivationDistance = 7
+		pr.RequiresLineOfSight = false
+		pr.Parent = holder
+		pr.Triggered:Connect(function(player)
+			local plot = lot.Parent
+			if not (plot and plot:GetAttribute("OwnerUserId") == player.UserId) then
+				return
+			end
+			if Display.onSelfPrompt then
+				Display.onSelfPrompt(player, st.key)
+			end
+		end)
+	end
 	b.Parent = lot
 	local sign = lot:FindFirstChild("LotSign")
 	if sign then
@@ -370,17 +409,8 @@ end
 -- 모습: FactoryLot.Staff.Staff_<key> (Minime.build 복제 + 공정 옷). 한 가게 미니미 최대 8명 (가게 알바생 포함)
 local Minime = require(script.Parent:WaitForChild("Minime"))
 local Players = game:GetService("Players")
-local STATIONS = {
-	-- 공장 모델 기준 자리 (x = 라인 따라, z = 앞 통로 STAND_Z, 라인을 보고 섬). 옷 색
-	{ key = "sugar", n = 1, name = "설탕 넣기", x = 18.5, color = Color3.fromRGB(250, 250, 250) },
-	{ key = "boil", n = 2, name = "끓이기", x = 10.5, color = Color3.fromRGB(220, 70, 70) },
-	{ key = "press", n = 3, name = "붓기·찍기", x = 1.5, color = Color3.fromRGB(255, 205, 60) },
-	{ key = "inspect", n = 4, name = "식히기·검사", x = -9, color = Color3.fromRGB(140, 200, 240) },
-	{ key = "pack", n = 5, name = "포장", x = -16, color = Color3.fromRGB(80, 130, 220) },
-}
 Display.STATIONS = STATIONS
 local MAX_MINIME = 8
-local STAND_Z = -3.2
 
 local function weldPart(model, name, size, cf, color, target, props)
 	local q = Instance.new("Part")

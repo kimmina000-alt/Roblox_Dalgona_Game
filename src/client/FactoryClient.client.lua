@@ -128,7 +128,18 @@ local function setup(fac, force)
 	-- 제어대 위 상태판: FACTORY · 상태 · 라인별 진행
 	local console = rec.prompt and rec.prompt.Parent
 	if console then
-		local bb = new("BillboardGui", { Name = "FactoryStatus", Size = UDim2.fromOffset(230, 78), StudsOffset = Vector3.new(0, 4.2, 0), MaxDistance = 90, LightInfluence = 0, Parent = console })
+		-- 기계 위로 (2026-11-24 사용자: 기계와 겹침): 제어대 둘레 8칸 안 가장 높은 기계 윗면 + 3 (벽·지붕처럼 큰 부품은 뺌)
+		local at = console:IsA("Attachment") and console.WorldPosition or rec.prompt.Parent.Position
+		local top = at.Y + 4.2
+		for _, d in ipairs(b:GetDescendants()) do
+			if d:IsA("BasePart") and d.Transparency < 1 and d.Size.X < 16 and d.Size.Z < 16 and d.Size.Y < 14 then
+				local flat = Vector3.new(d.Position.X - at.X, 0, d.Position.Z - at.Z)
+				if flat.Magnitude < 8 then
+					top = math.max(top, d.Position.Y + d.Size.Y / 2 + 3)
+				end
+			end
+		end
+		local bb = new("BillboardGui", { Name = "FactoryStatus", Size = UDim2.fromOffset(230, 78), StudsOffset = Vector3.new(0, top - at.Y, 0), MaxDistance = 90, LightInfluence = 0, Parent = console })
 		rec.board = bb
 		local box = new("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(40, 44, 60), BackgroundTransparency = 0.1, Parent = bb })
 		corner(box, 10)

@@ -26,6 +26,7 @@ local Tutorial = require(script.Parent:WaitForChild("TutorialService")) -- 첫 6
 local Production = require(script.Parent:WaitForChild("ProductionService")) -- 손으로 만드는 중인가 (D34)
 local Collection = require(script.Parent:WaitForChild("CollectionService")) -- 도감 보상·칭호 (D38)
 local WorkstationBuilder = require(script.Parent:WaitForChild("WorkstationBuilder")) -- 화로 연탄 모습 (D44)
+local HelperPath = require(script.Parent:WaitForChild("HelperPath")) -- 알바생이 벽을 돌아 걷는 길 (2026-11-24)
 
 local GrowthService = {}
 
@@ -649,6 +650,24 @@ local function payWage(player, st, p, sec)
 	end
 end
 
+local Sales = nil -- SalesService (칸 자리), 처음 쓸 때 가져옴
+
+-- 미니미가 그 칸으로 들고 가는 연출 신호 (클라 HelperLadles): 벽을 돌아가는 길(WalkPath)을 먼저 찾고 DeliverSlot·DeliverAt
+local function signalDeliver(player, m, slot)
+	task.spawn(function()
+		Sales = Sales or require(script.Parent:WaitForChild("SalesService"))
+		local from = m:GetPivot().Position
+		local to = Sales.slotPosition(player, slot)
+		local path = to and HelperPath.wait(from, to) or false
+		if not m.Parent then
+			return
+		end
+		m:SetAttribute("WalkPath", path or "")
+		m:SetAttribute("DeliverSlot", slot)
+		m:SetAttribute("DeliverAt", workspace:GetServerTimeNow())
+	end)
+end
+
 local function stepRole(player, d, i, h, st, dt, p)
 	if p.kind == "factory" then
 		st.status = "work" -- 공장 공정 (FactoryService가 일·급여를 셈, 미니미는 FactoryDisplay)
@@ -698,8 +717,7 @@ local function stepRole(player, d, i, h, st, dt, p)
 	if placed then
 		payWage(player, st, p, G.DisplayHelper.seconds)
 		if st.model and st.model.Parent then
-			st.model:SetAttribute("DeliverSlot", placed)
-			st.model:SetAttribute("DeliverAt", workspace:GetServerTimeNow())
+			signalDeliver(player, st.model, placed)
 		end
 	end
 end
@@ -707,7 +725,6 @@ end
 -- 들고 가서 진열 (2026-11-24, G.CarryHelpers): 4단계 기계 알바·공장 포장 알바가 그 기계·공장이 만든 달고나(item.src)를 하나씩
 -- 들고 빈 진열 칸으로 걸어가 놓음. 걷는 동안 칸 예약 (Economy.reserveSlot). 연출 신호 = 그 알바 미니미 속성
 --   CarryState("go" | "back" | ""), CarryShape(도안 id), CarrySlot(칸), CarryFrom·CarryTo(Vector3), CarryStart(서버 시각), CarryDur(초)
-local Sales = nil -- SalesService (칸 자리), 처음 쓸 때 가져옴
 local function carryModel(player, h, st)
 	if h.post == "f_pack" then
 		local plot = Plots.get(player)
@@ -730,6 +747,7 @@ local function setCarry(m, state, info)
 		m:SetAttribute("CarryTo", info.to)
 		m:SetAttribute("CarryStart", workspace:GetServerTimeNow())
 		m:SetAttribute("CarryDur", info.dur)
+		m:SetAttribute("WalkPath", info.path or "") -- 처음 자리 → 칸 앞 경유점 (shared/WalkPath), 없으면 곧게
 	end
 end
 
@@ -773,7 +791,7 @@ local function stepCarry(player, d, h, st, dt)
 			end)
 			Economy.releaseSlot(Data.get(player) or d, c.slot)
 			c.phase, c.t = "back", 0
-			setCarry(m, "back", { shape = placed and "" or c.shape, slot = c.slot, from = c.to, to = c.from, dur = c.dur })
+			setCarry(m, "back", { shape = placed and "" or c.shape, slot = c.slot, from = c.to, to = c.from, dur = c.dur, path = c.path }) -- 길은 가던 길 그대로 (클라가 거꾸로 걸음)
 		else
 			st.carry = nil
 			setCarry(m, "", nil)
@@ -804,9 +822,15 @@ local function stepCarry(player, d, h, st, dt)
 	Sales = Sales or require(script.Parent:WaitForChild("SalesService"))
 	local from = m:GetPivot().Position
 	local to = Sales.slotPosition(player, slot) or from
-	local dur = math.max(CH.minWalk, (Vector3.new(to.X, from.Y, to.Z) - from).Magnitude / CH.speed) + CH.pickSeconds
-	st.carry = { phase = "go", t = 0, dur = dur, id = item.id, slot = slot, shape = item.s, from = from, to = to }
-	setCarry(m, "go", { shape = item.s, slot = slot, from = from, to = to, dur = dur })
+	-- 벽을 돌아가는 길 (HelperPath, 2026-11-24). 아직 찾는 중이면 이번엔 쉼 (다음에 같은 칸이면 바로 나옴)
+	local path = HelperPath.get(from, to)
+	if path == nil then
+		Economy.releaseSlot(d, slot)
+		return
+	end
+	local dur = math.max(CH.minWalk, HelperPath.length(path, from, to) / CH.speed) + CH.pickSeconds
+	st.carry = { phase = "go", t = 0, dur = dur, id = item.id, slot = slot, shape = item.s, from = from, to = to, path = path or "" }
+	setCarry(m, "go", { shape = item.s, slot = slot, from = from, to = to, dur = dur, path = path or "" })
 end
 
 local function stepHelper(player, d, i, h, st, dt)
@@ -882,8 +906,7 @@ local function stepHelper(player, d, i, h, st, dt)
 	end
 	-- 미니미가 그 칸으로 들고 가는 연출 신호 (클라이언트 HelperLadles가 그림, 칸 = DisplayShelf.Slot<n>)
 	if deliverSlot and st.model and st.model.Parent then
-		st.model:SetAttribute("DeliverSlot", deliverSlot)
-		st.model:SetAttribute("DeliverAt", workspace:GetServerTimeNow())
+		signalDeliver(player, st.model, deliverSlot)
 	end
 	print(string.format("[Helper] %s #%d made %s (-%d wage) shelf=%s", player.Name, i, shape.id, wage, tostring(deliverSlot)))
 end
