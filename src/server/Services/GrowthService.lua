@@ -786,7 +786,9 @@ local function stepCarry(player, d, h, st, dt)
 	local carrying = player:GetAttribute("Carrying")
 	local item = nil
 	for _, it in ipairs(d.stock) do
-		if not it.sl and it.src == src and it.id ~= carrying then
+		-- 옛 공장 달고나(src 없음, f = true)도 포장 알바가 옮김 (2026-11-24 묶음 시험)
+		local mine = it.src == src or (src == "factory" and it.src == nil and it.f == true)
+		if not it.sl and mine and it.id ~= carrying then
 			item = it
 			break
 		end
