@@ -24,6 +24,7 @@ local Factory = require(script.Parent:WaitForChild("FactoryService")) -- 5단계
 local Offline = require(script.Parent:WaitForChild("OfflineService")) -- 오프라인 생산 정산 (D29)
 local Tutorial = require(script.Parent:WaitForChild("TutorialService")) -- 첫 60초 안내 (21번)
 local Production = require(script.Parent:WaitForChild("ProductionService")) -- 손으로 만드는 중인가 (D34)
+local Collection = require(script.Parent:WaitForChild("CollectionService")) -- 도감 보상·칭호 (D38)
 local WorkstationBuilder = require(script.Parent:WaitForChild("WorkstationBuilder")) -- 화로 연탄 모습 (D44)
 
 local GrowthService = {}
@@ -1078,6 +1079,7 @@ local function growthSnapshot(player, d, snap)
 	if d.shop.state == "rented" and not d.shop.closed then
 		rentLeft = math.max(0, math.floor(G.Shop.rentEvery - (d.shop.rentTimer or 0)))
 	end
+	snap.collection = Collection.snapshot(d) -- 도감 화면 (D38, CollectionUi)
 	snap.growth = {
 		shop = { state = d.shop.state, closed = d.shop.closed == true, rentLeft = rentLeft },
 		upgrades = ups,
@@ -1116,30 +1118,20 @@ function GrowthService.mods(player)
 end
 
 local function onHandMade(player, shape, result)
-	local newEntry, newShapes = nil, {}
+	local newShapes = {}
 	local finished, ups = {}, {}
+	local notes, newTitles, gold = {}, {}, false
 	Data.update(player, function(d)
-		-- 도감 (손으로 만든 것만, 민짜 달고나는 안 셈 — D20)
-		local c = d.collection[shape.id]
+		-- 도감 (D38: 손으로 만든 것만, 민짜 달고나는 안 셈 — D20). 보상·칭호는 CollectionService
 		local rank = G.GradeRank[result.grade] or 0
-		if result.plain then
-			c = false
-		end
-		if c == false then
-			-- 민짜: 도감 건너뜀
-		elseif not c then
-			d.collection[shape.id] = { best = result.grade, n = 1 }
-			newEntry = "도감 등록: " .. shape.name .. " (" .. result.grade .. ")"
-		else
-			c.n += 1
-			if rank > (G.GradeRank[c.best] or 0) then
-				c.best = result.grade
-				newEntry = "도감 갱신: " .. shape.name .. " → " .. result.grade
-			end
-		end
+		local cUps
+		notes, cUps, newTitles, gold = Collection.onMade(d, shape, result)
 		-- 일일 목표
 		local f1, u1 = progressDaily(d, "make", 1)
 		finished, ups = f1, u1
+		for _, u in ipairs(cUps) do
+			table.insert(ups, u)
+		end
 		if rank >= G.GradeRank.Good then
 			local f2, u2 = progressDaily(d, "good", 1)
 			for _, x in ipairs(f2) do
@@ -1151,9 +1143,7 @@ local function onHandMade(player, shape, result)
 		end
 		newShapes = refreshUnlocks(d) -- Master (도감 조건)
 	end)
-	if newEntry then
-		Economy.notify(player, newEntry)
-	end
+	Collection.after(player, notes, newTitles, gold)
 	for _, text in ipairs(finished) do
 		Economy.notify(player, string.format("일일 목표 완료! %s (+%d EXP, +%d 코인)", text, G.ExpDailyGoal, G.Daily.rewardCoins))
 	end
@@ -1179,29 +1169,7 @@ end
 function GrowthService.init(dataService, economyService, plotService, remotes)
 	Data, Economy, Plots = dataService, economyService, plotService
 	Economy.extendSnapshot = growthSnapshot
-	-- 뽑기(15번) 연결: 처음으로 완벽하게 뽑으면 도감에 표시 (collection[id].pp = true). 처음이면 true → 결과창 "도감 등록!"
-	Economy.onPerfectPpopgi = function(player, shape)
-		local first = false
-		if type(shape) ~= "table" or type(shape.id) ~= "string" then
-			return false
-		end
-		Data.update(player, function(d)
-			local c = d.collection[shape.id]
-			if not c then
-				c = { best = "Poor", n = 0 }
-				d.collection[shape.id] = c
-			end
-			if c.pp then
-				return false
-			end
-			c.pp = true
-			first = true
-		end)
-		if first then
-			Economy.notify(player, "도감 등록: " .. (shape.name or shape.id) .. " 완벽 뽑기!")
-		end
-		return first
-	end
+	Collection.init(Data, Economy, Plots, remotes) -- 도감 보상·칭호 (D38), 뽑기 도장도 여기서 (Economy.onPerfectPpopgi)
 	Economy.on("handMade", onHandMade)
 	Economy.on("levelUp", onLevelUp)
 	Economy.on("sold", function(player, n, coins)
