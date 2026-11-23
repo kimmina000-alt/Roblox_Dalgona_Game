@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local G = require(Shared:WaitForChild("GrowthConfig"))
+local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 
 local EconomyService = {}
 
@@ -311,16 +312,38 @@ end
 -- 진열대에서 n개 팔기 (앞쪽 = 먼저 만든 것부터). 한 번에 꺼내고 지우므로 같은 달고나가 두 번 팔리지 않음.
 -- 반환: 판 개수, 받은 코인
 -- 반환: 판 개수, 코인, 판 달고나 목록 (손님이 들고 가는 모양용)
-function EconomyService.sell(player, n)
+-- ctype = 손님 종류 (G.Customers.types 항목, D37). 없으면 예전처럼 먼저 만든 것부터
+function EconomyService.sell(player, n, ctype)
 	local sold, coins = 0, 0
 	local items = {}
+	local tips = 0
 	Data.update(player, function(d)
 		-- 진열대에 놓인 것만, 먼저 만든 것부터 (2026-11-21 진열대에 직접 놓기)
 		local list = EconomyService.shelved(d)
+		local tipFor = function()
+			return 0
+		end
+		if ctype then
+			local fav = nil
+			if ctype.kind == "regular" then
+				d.custFav = type(d.custFav) == "table" and d.custFav or {}
+				fav = d.custFav[ctype.id]
+				if not fav and #d.unlockedShapes > 0 then
+					fav = d.unlockedShapes[math.random(#d.unlockedShapes)] -- 처음 오면 좋아하는 도안을 정함 (D37)
+					d.custFav[ctype.id] = fav
+				end
+			end
+			list, tipFor = G.customerPick(list, ctype, fav, function(id)
+				local e = ShapeCatalog.get(id)
+				return e and e.grade or "Common"
+			end)
+		end
 		n = math.min(n, #list)
 		if n <= 0 then
 			return false
 		end
+		-- 계산 알바 (D43): 모든 판매 팁 +5% (손님 팁과 더함)
+		local cashier = (G.helperAt(d, "cashier") and G.shopOpen(d)) and G.Cashier.tip or 0
 		for k = 1, n do
 			local item = list[k]
 			local i = table.find(d.stock, item)
@@ -328,13 +351,11 @@ function EconomyService.sell(player, n)
 				table.remove(d.stock, i)
 			end
 			local p = math.max(0, math.floor(tonumber(item.p) or 0))
-			coins += p
+			local withTip = math.floor(p * (1 + tipFor(item) + cashier) + 0.5)
+			tips += withTip - p
+			coins += withTip
 			sold += 1
 			table.insert(items, item)
-		end
-		-- 계산 알바 (D43): 모든 판매 팁 +5%
-		if G.helperAt(d, "cashier") and G.shopOpen(d) then
-			coins = math.floor(coins * (1 + G.Cashier.tip) + 0.5)
 		end
 		d.coins += coins
 		d.stats.sold = (d.stats.sold or 0) + sold
@@ -343,7 +364,7 @@ function EconomyService.sell(player, n)
 	if sold > 0 then
 		fire("sold", player, sold, coins)
 	end
-	return sold, coins, items
+	return sold, coins, items, tips
 end
 
 -- 방금 만든 달고나 포장: 포장지 1 + 빵끈 1을 쓰고 판매가 ×1.1. 반환 { ok, reason, price }

@@ -33,6 +33,7 @@ G.DefaultData = {
 	partTimers = {},
 	stoveUps = {}, -- 화로 알바 교육 (D40): [key] = true (G.StoveTraining)
 	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
+	custFav = {}, -- 단골 손님이 좋아하는 도안 (D37): [손님 id] = 도안 id (처음 올 때 열린 도안 중 무작위로 정함)
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
 	machine = { shapes = {}, t = 0, ts = {} }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, ts[기계 id] = 이번 판 진행 초 (D32 기계 여러 대, t는 예전 값 → 처음 읽을 때 ts로 옮김)
 	-- 가게 뒤 공장 (D11, 5단계): on = 생산 켬, shape·qty·mode = 제어대 설정, lines = 라인별 진행 중인 판 { s, n, m, t, sec } 또는 false,
@@ -239,6 +240,139 @@ G.HelperPosts = {
 G.DisplayHelper = { seconds = 4 }
 -- 계산 알바 (D43): 손님이 고르는 시간 절반 → 손님 수요 +10%, 모든 판매 팁 +5%. 자리 비운 동안은 안 함
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
+
+-- 손님 7종 (D37·GDD 14장, 2026-11-24): 레벨 구간마다 오는 비율, 종류마다 고르는 것·개수·팁. 손님 모델 id = CustomerRig.order
+--  kid = 진열대에서 가장 싼 것 1개 / regular = 좋아하는 도안(custFav)부터 1~2개, 좋아하는 걸 사면 그 달고나 팁 +10%
+--  tourist = Rare 이상 먼저 2~3개 / vip = Legendary 이상·Perfect·포장한 것만 2~3개, 팁 +20%, 없으면 그냥 감
+-- 손님 수·사는 개수 합계(5-1 수요)는 그대로: 방문 간격을 (이 레벨 손님 평균 개수 ÷ 수요 표 평균 개수)만큼 늘려 맞춤.
+-- 팁은 계산 알바(+5%)와 더함 (곱하지 않음)
+G.Customers = {
+	bands = { 4, 9, 14, 19, math.huge }, -- Lv1~4 / 5~9 / 10~14 / 15~19 / 20~
+	types = {
+		{ id = "Pongpong", name = "퐁퐁이", kind = "kid", weights = { 30, 22, 16, 12, 10 } },
+		{ id = "Mochi", name = "모찌", kind = "kid", weights = { 25, 20, 16, 13, 11 } },
+		{ id = "Dotori", name = "도토리", kind = "kid", weights = { 20, 18, 16, 14, 12 } },
+		{ id = "Godeungeo", name = "고등어 아저씨", kind = "regular", weights = { 15, 16, 16, 16, 15 } },
+		{ id = "Kkuldanji", name = "꿀단지", kind = "regular", weights = { 10, 14, 16, 17, 17 } },
+		{ id = "Ppogeuli", name = "뽀글이", kind = "tourist", weights = { 0, 8, 14, 18, 20 } },
+		{ id = "Owl", name = "부엉이", kind = "vip", weights = { 0, 2, 6, 10, 15 } },
+	},
+	kinds = {
+		kid = { min = 1, max = 1 },
+		regular = { min = 1, max = 2, favTip = 0.10 },
+		tourist = { min = 2, max = 3, minGrade = "Rare" },
+		vip = { min = 2, max = 3, tip = 0.20, minGrade = "Legendary" },
+	},
+}
+
+local GRADE_ORDER = { Common = 1, Uncommon = 2, Rare = 3, Epic = 4, Legendary = 5, Mythic = 6, Master = 7 }
+
+local function bandOf(level)
+	for i, top in ipairs(G.Customers.bands) do
+		if (level or 1) <= top then
+			return i
+		end
+	end
+	return #G.Customers.bands
+end
+
+-- 이 레벨에서 올 손님 하나 고르기 (rand = 0~1, 없으면 math.random)
+function G.rollCustomer(level, rand)
+	local b = bandOf(level)
+	local total = 0
+	for _, t in ipairs(G.Customers.types) do
+		total += t.weights[b]
+	end
+	local r = (rand or math.random()) * total
+	for _, t in ipairs(G.Customers.types) do
+		r -= t.weights[b]
+		if r < 0 then
+			return t
+		end
+	end
+	return G.Customers.types[1]
+end
+
+-- 이 레벨 손님 1명이 평균 몇 개 사려는가 (방문 간격 맞추기)
+function G.customerMeanBuy(level)
+	local b = bandOf(level)
+	local total, sum = 0, 0
+	for _, t in ipairs(G.Customers.types) do
+		local k = G.Customers.kinds[t.kind]
+		total += t.weights[b]
+		sum += t.weights[b] * (k.min + k.max) / 2
+	end
+	return total > 0 and sum / total or 1
+end
+
+function G.customerType(id)
+	for _, t in ipairs(G.Customers.types) do
+		if t.id == id then
+			return t
+		end
+	end
+	return nil
+end
+
+-- 진열대 달고나 list에서 손님 t가 살 순서 (vip는 원하는 것만). 반환: 순서대로 고른 목록, 달고나마다 손님 팁 비율 함수
+-- item: s = 도안 id, g = 품질 등급, p = 판매가, pk = 포장, gr = 도안 등급(없으면 shapeGrade(s)로 찾음)
+function G.customerPick(list, t, favShape, shapeGrade)
+	local kind = G.Customers.kinds[t.kind]
+	local function grade(it)
+		return GRADE_ORDER[shapeGrade and shapeGrade(it.s) or "Common"] or 1
+	end
+	local function price(it)
+		return tonumber(it.p) or 0
+	end
+	local out = {}
+	if t.kind == "kid" then
+		for _, it in ipairs(list) do
+			table.insert(out, it)
+		end
+		table.sort(out, function(a, b)
+			return price(a) < price(b)
+		end)
+	elseif t.kind == "regular" then
+		for _, it in ipairs(list) do
+			if favShape and it.s == favShape then
+				table.insert(out, it)
+			end
+		end
+		for _, it in ipairs(list) do
+			if not (favShape and it.s == favShape) then
+				table.insert(out, it)
+			end
+		end
+	elseif t.kind == "tourist" then
+		local need = GRADE_ORDER[kind.minGrade]
+		for _, it in ipairs(list) do
+			if grade(it) >= need then
+				table.insert(out, it)
+			end
+		end
+		for _, it in ipairs(list) do
+			if grade(it) < need then
+				table.insert(out, it)
+			end
+		end
+	else -- vip: 원하는 것만
+		local need = GRADE_ORDER[kind.minGrade]
+		for _, it in ipairs(list) do
+			if grade(it) >= need or it.g == "Perfect" or it.pk then
+				table.insert(out, it)
+			end
+		end
+	end
+	local function tipFor(it)
+		if t.kind == "vip" then
+			return kind.tip
+		elseif t.kind == "regular" and favShape and it.s == favShape then
+			return kind.favTip
+		end
+		return 0
+	end
+	return out, tipFor
+end
 G.Helper = {
 	seconds = 40, -- 1판 (기본 알바생)
 	wagePer30s = 3, -- 일하는 동안만
