@@ -883,9 +883,9 @@ selfStop.Activated:Connect(function()
 	end
 end)
 showSelf = function(f)
-	local key, name = nil, nil
+	local key, name = f and f.self or nil, nil -- growth.factory.self (공정 key) 또는 staff[i].self
 	for _, s in ipairs(f and f.staff or {}) do
-		if s.self then
+		if s.self or (key and s.key == key) then
 			key, name = s.key, s.name
 		end
 	end
