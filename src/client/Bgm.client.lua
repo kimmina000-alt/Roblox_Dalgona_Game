@@ -2,9 +2,9 @@
 -- 제작 화면(PlayerGui.MakingScreen 켜짐, 또는 내 속성 Making = true) 동안은 조금 줄이고, 나오면 원래대로.
 -- 값(소리 id·볼륨)은 UiStyle의 UI.Bgm 한 곳.
 -- 켜기/끄기 (2026-11-25 사용자 "배경음 끄기 버튼 추가"): HUD 오른쪽 위 메뉴에 🎵 버튼 (Hud의 Root.Menu, 성장·도감 다음).
---   누르면 내 속성 BgmOff를 바로 바꾸고 서버에 Remotes.GrowthAction("bgm", 켜기 true/false)로 저장 부탁.
---   서버(저장·부지 세션)는 d.settings.bgmOff로 저장하고 들어올 때 player 속성 BgmOff를 넣음 → 다시 들어와도 기억.
---   서버가 아직 없으면 이번 접속 동안만 기억.
+--   누르면 내 속성 BgmOff를 바로 바꾸고 서버에 Remotes.GrowthAction("bgmOff", 끄기 true/false)로 저장
+--   (서버 feat/helpers-cloth-bgm-1125: 데이터 bgmOff, 속성 BgmOff = true 끔 / nil 켬 → 다시 들어와도 기억).
+--   서버가 거절하면("천천히!" 등) 원래대로 되돌림.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -86,13 +86,17 @@ task.spawn(function()
 			return
 		end
 		busy = true
-		local on = me:GetAttribute("BgmOff") == true -- 지금 꺼져 있으면 켬
-		me:SetAttribute("BgmOff", not on) -- 내 화면에서 바로
+		local wasOff = me:GetAttribute("BgmOff") == true
+		local off = not wasOff
+		me:SetAttribute("BgmOff", off or nil) -- 내 화면에서 바로
 		local action = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("GrowthAction")
 		if action then
-			pcall(function()
-				action:InvokeServer("bgm", on)
+			local ok, res = pcall(function()
+				return action:InvokeServer("bgmOff", off)
 			end)
+			if not (ok and type(res) == "table" and res.ok) then
+				me:SetAttribute("BgmOff", wasOff or nil) -- 서버가 거절하면 되돌림
+			end
 		end
 		busy = false
 	end)
