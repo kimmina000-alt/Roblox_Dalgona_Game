@@ -378,6 +378,48 @@ local function findPart(root, name)
 	end
 	return x
 end
+-- 너구리 사장님 (2026-11-25, NPC 세션 tools/blender/shopkeeper.py · Shared.ShopkeeperRig): 계산대 안쪽 MarketOwner 자리에 서서
+-- 계산대 앞(MarketCounter)을 봄. 메시 = ServerStorage.Assets.Shopkeeper_Raccoon 안 Raccoon_<부품>. 없으면 아무것도 안 놓음.
+-- 부품마다 속성 Joint·Center(리그 값)·모델 속성 Root(CFrame) → 클라이언트 ShopkeeperClient가 손 흔들기·고개 끄덕·인사를 그림
+local Rig = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShopkeeperRig"))
+local function shopkeeper(m)
+	local sa = ServerStorage:FindFirstChild("Assets")
+	local src = sa and sa:FindFirstChild("Shopkeeper_Raccoon")
+	local owner, counter = m:FindFirstChild("MarketOwner"), m:FindFirstChild("MarketCounter")
+	if not (src and owner) then
+		return nil
+	end
+	local feet = owner.Position - Vector3.new(0, owner.Size.Y / 2, 0)
+	local face = counter and Vector3.new(counter.Position.X, feet.Y, counter.Position.Z) or (feet + owner.CFrame.LookVector)
+	if (face - feet).Magnitude < 0.1 then
+		face = feet + owner.CFrame.LookVector
+	end
+	local root = CFrame.lookAt(feet, face) -- 앞 = -Z (리그와 같음)
+	local npc = model("Shopkeeper", m)
+	npc:SetAttribute("Root", root)
+	npc:SetAttribute("Shopkeeper", true)
+	for name, pr in pairs(Rig.parts) do
+		local mesh = src:FindFirstChild("Raccoon_" .. name, true)
+		if mesh and mesh:IsA("BasePart") then
+			local c = mesh:Clone()
+			c.Name = name
+			c.Anchored = true
+			c.CanCollide = false
+			c.CanQuery = false
+			c.CanTouch = false
+			c.CFrame = root * CFrame.new(pr.center)
+			c:SetAttribute("Joint", pr.joint)
+			c:SetAttribute("Center", pr.center)
+			c.Parent = npc
+		end
+	end
+	if #npc:GetChildren() == 0 then
+		npc:Destroy()
+		return nil
+	end
+	return npc
+end
+
 local function marketSpot(x0, w, target)
 	local m = model("AlleyMarket")
 	m:SetAttribute("Market", true)
@@ -415,12 +457,18 @@ local function marketSpot(x0, w, target)
 	else
 		marketShell(m, cx, w)
 		mark("MarketDoor", base * CFrame.new(0, 0.1, -1.5))
-		mark("MarketCounter", CFrame.new(cx + w / 2 - 6.5, 0.1, CANON_Z + 5)) -- 계산대 앞 (가게 안쪽)
-		mark("MarketOwner", CFrame.new(cx + w / 2 - 2, 0.1, CANON_Z + 5))
+		mark("MarketCounter", CFrame.new(cx + w / 2 - 6.5, 1.1, CANON_Z + 5)) -- 계산대 앞 (가게 안쪽, 임시 바닥 윗면 1)
+		mark("MarketOwner", CFrame.new(cx + w / 2 - 2, 1.1, CANON_Z + 5))
 	end
 	mark("MarketSpot", base * CFrame.new(0, 0.1, 0))
+	shopkeeper(m)
 	-- MarketSpot 앞(LookVector)이 길 쪽: 기준 자리에서 앞 = -Z
-	m:PivotTo(target * base:Inverse() * m:GetPivot())
+	local T = target * base:Inverse()
+	m:PivotTo(T * m:GetPivot())
+	local npc = m:FindFirstChild("Shopkeeper")
+	if npc then
+		npc:SetAttribute("Root", T * npc:GetAttribute("Root")) -- 옮긴 자리 기준으로 (클라이언트 동작 기준)
+	end
 	return m
 end
 
