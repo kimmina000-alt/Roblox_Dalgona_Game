@@ -599,11 +599,19 @@ local function helperPose(m, pose)
 			end
 			motor.C0 = pose and pose[key] and base * pose[key] or base
 		elseif motor and motor:IsA("AnimationConstraint") then
-			motor.Transform = pose and pose[key] or CFrame.identity
+			-- 새 아바타 관절은 앞뒤(X) 회전 방향이 Motor6D와 반대 → X만 뒤집음 (2026-11-24: 손이 몸 뒤로 가던 것)
+			local cf = pose and pose[key]
+			if cf then
+				local rx, ry, rz = cf:ToEulerAnglesXYZ()
+				cf = CFrame.Angles(-rx, ry, rz)
+			end
+			motor.Transform = cf or CFrame.identity
 		end
 	end
 end
-RunService.Heartbeat:Connect(function()
+-- PreSimulation(애니메이션 다음, 물리 전)에 넣어야 함: 미니미 Animator가 매 프레임 관절 Transform을 지우므로
+-- Heartbeat에서 넣으면 화면에 안 나옴 (2026-11-24 Studio에서 확인)
+RunService.PreSimulation:Connect(function()
 	local folder = workspace:FindFirstChild("ShopPlots")
 	local cam = workspace.CurrentCamera
 	if not (folder and cam) then

@@ -264,8 +264,14 @@ local function setPose(m, pose)
 			end
 			motor.C0 = pose and pose[key] and base * pose[key] or base
 		elseif motor and motor:IsA("AnimationConstraint") then
-			-- 새 아바타 관절(AnimationConstraint): 자세는 Transform으로
-			motor.Transform = pose and pose[key] or CFrame.identity
+			-- 새 아바타 관절(AnimationConstraint): 자세는 Transform으로. 앞뒤(X) 회전 방향이 Motor6D와 반대라 X만 뒤집음
+			-- (2026-11-24 가게 알바에서 손이 몸 뒤로 가는 것을 확인)
+			local cf = pose and pose[key]
+			if cf then
+				local rx, ry, rz = cf:ToEulerAnglesXYZ()
+				cf = CFrame.Angles(-rx, ry, rz)
+			end
+			motor.Transform = cf or CFrame.identity
 		end
 	end
 end
@@ -323,6 +329,18 @@ local function animateStaff(fac, now, camPos)
 end
 
 -- ── 매 프레임: 움직임 · 표시등 · 상태판 ──
+-- 공정 알바 자세는 PreSimulation(애니메이션 다음, 물리 전)에: 미니미 Animator가 매 프레임 관절 Transform을 지우므로
+-- Heartbeat에서 넣으면 화면에 안 나옴 (2026-11-24 가게 알바에서 확인)
+RunService.PreSimulation:Connect(function()
+	local cam = workspace.CurrentCamera
+	local camPos = cam and cam.CFrame.Position or Vector3.zero
+	local now = workspace:GetServerTimeNow()
+	for fac, rec in pairs(factories) do
+		if rec.building.Parent then
+			animateStaff(fac, now, camPos)
+		end
+	end
+end)
 RunService.Heartbeat:Connect(function()
 	local now = workspace:GetServerTimeNow()
 	local cam = workspace.CurrentCamera
@@ -348,7 +366,6 @@ RunService.Heartbeat:Connect(function()
 				playMade(rec)
 			end
 		end
-		animateStaff(fac, now, camPos)
 		if (rec.building:GetPivot().Position - camPos).Magnitude > 160 then
 			continue
 		end
