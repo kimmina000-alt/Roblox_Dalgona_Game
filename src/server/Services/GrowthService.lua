@@ -4,11 +4,11 @@
 --  - 도감: 손으로 만든 것만 도안별 최고 등급·개수 (자동 생산은 안 셈)
 --  - 장비: 화로·누르개·작업대 (Lv2부터). 효과는 ProductionService.hooks.mods + G.stockMax
 --  - 알바생 배치 (D34, 2026-11-24): 최대 4명 (고용 G.HireCost), 제작대(화로·2·3·4단계 기계)마다 한 명, 언제든 공짜로 옮김.
---    화로 알바: 40초에 1개 (Normal~Good), 재료는 안 쓰고 다 만들 때 급여(30초당 3). 내가 손으로 만드는 동안은 쉼
---    (두 번째 화구를 사면 안 쉼). 기계 알바: 그 기계가 돌게 함 (급여는 MachineService가 한 판마다)
+--    화로 알바: 40초에 1개 (Normal~Good), 재료는 안 쓰고 다 만들 때 급여(30초당 3). 화구 ②에서 일해서 내가 화구 ①로 손 제작해도 안 쉼
+--    (2026-11-24 화구 2개 기본). 기계 알바: 그 기계가 돌게 함 (급여는 MachineService가 한 판마다)
 --  - D43 (2026-11-24): 역할 = 제작대 4 + 진열(보관함 → 진열대, 4초에 1개) + 계산(수요 +10%·팁 +5%, SalesService·Economy가 봄)
 --    + 공장 공정 5 (FactoryService가 hired로 봄, 미니미는 FactoryDisplay). 최대 11명, 고용비는 몇 번째로 뽑느냐
---  - 화로 알바 교육 (D39·D40): 국자 확장 대신 숙련 교육(Lv3)·두 번째 화구(Lv5)·전문 교육(Lv8)
+--  - 화로 알바 교육 (D39·D40): 국자 확장 대신 숙련 교육(Lv3)·연탄 덮개(Lv5, 2026-11-24 두 번째 화구에서 바뀜)·전문 교육(Lv8)
 --  - 일일 목표 3개: UTC 날짜마다 새로 뽑음, 다 하면 EXP 15 + 코인
 
 local Players = game:GetService("Players")
@@ -343,6 +343,11 @@ function GrowthService.action(player, what, a, b)
 	if not d then
 		return { ok = false, reason = "불러오는 중이에요" }
 	end
+	-- 공장 공정 내가 직접 (D45): 위치·세션을 봐야 해서 Data.update 밖에서
+	if what == "factorySelf" and type(a) == "string" then
+		local ok2, msg2 = Factory.selfStart(player, a)
+		return { ok = ok2, reason = not ok2 and msg2 or nil, msg = ok2 and msg2 or nil }
+	end
 	local ok, msg = false, "잘못된 요청"
 	Data.update(player, function(dd)
 		if what == "buy" and type(a) == "string" then
@@ -470,6 +475,14 @@ local function helperFoot(plot, post, i)
 		end
 	end
 	if post == "stove" then
+		-- 화구 ② 옆 (2026-11-24 화구 2개 기본): 화구 ② 뒤쪽(주인 쪽)에 서서 화구를 봄
+		local ws = plot.model:FindFirstChild("Workstation")
+		local b2 = ws and ws:FindFirstChild("Brazier2")
+		if b2 then
+			local l = plot.cframe:PointToObjectSpace(b2:GetPivot().Position)
+			local pos = Vector3.new(l.X, G.Plots.size.Y, l.Z + G.Plots.minimeBehind + 1)
+			return plot.cframe * CFrame.lookAt(pos, Vector3.new(l.X, G.Plots.size.Y, l.Z))
+		end
 		return stoveFoot(plot, 1)
 	end
 	return stoveFoot(plot, 1 + i) -- 대기
@@ -567,7 +580,7 @@ end
 -- 알바생 1명 1초 진행 (D34: 배치한 제작대에 따라)
 -- 화로 알바 연탄 (D44): 두 번째 화구(D40)가 있으면 그 화구 연탄(coalLeft2), 없으면 내 화로 연탄(coalLeft)을 같이 씀
 local function helperCoalKey(d)
-	return (d.stoveUps and d.stoveUps.burner2) and "coalLeft2" or "coalLeft"
+	return "coalLeft2" -- 화로 알바는 화구 ② (2026-11-24: 화구 2개 기본, ①은 내 손 작업대)
 end
 
 -- 지금 화구에 연탄이 있거나 갈아 넣을 연탄이 있나
@@ -582,7 +595,7 @@ local function helperBurnCoal(dd)
 		dd.ingredients.coal -= 1
 		dd[key] = 1
 	end
-	dd[key] = math.max(0, (tonumber(dd[key]) or 1) - G.CoalPerMake)
+	dd[key] = math.max(0, (tonumber(dd[key]) or 1) - G.coalPerMake(dd))
 end
 
 -- 진열 알바 (D33): 옮길 달고나 하나 고르기 (먼저 만든 것부터, 손 제작품 켜면 손 제작품 먼저, 들고 있는 것은 빼고)
@@ -824,8 +837,6 @@ local function stepHelper(player, d, i, h, st, dt)
 	local why = nil
 	if not G.shopOpen(d) then
 		why = "가게 문 닫힘" -- 월세 밀림 (D21)
-	elseif Production.isMaking(player) and not (d.stoveUps and d.stoveUps.burner2) then
-		why = "사장님이 만드는 중" -- D34 (두 번째 화구가 있으면 안 쉼, D40)
 	elseif G.stockRoom(d) <= 0 then
 		why = "보관함 가득"
 	elseif d.coins < wage then
@@ -985,6 +996,45 @@ local function syncHelpers(player, d)
 	local ladles = G.helperAt(d, "stove") and 2 or 1
 	if ws and ws:GetAttribute("LadleCount") ~= ladles then
 		ws:SetAttribute("LadleCount", ladles)
+	end
+	-- 화구 ② (2026-11-24 사용자: 가게 임대 Lv3부터 화구 2개, ①은 내 손 작업대, ②는 화로 알바 자리).
+	-- 서버가 화로(Brazier)를 복제해 작업대 밖(테이블 오른쪽 끝 너머)에 둠. 자리는 작업대 틀 속성 Burner2Rel(작업대 기준 CFrame)로 바꿀 수 있음.
+	-- 작업대 속성 Burner2 = 놓은 자리(작업대 기준), CoalLeft2 = 화구 ② 연탄 (제작 세션 HelperLadles·화면이 봄)
+	if ws then
+		local want = G.Burner2Brazier and G.shopOpen(d) and (d.level or 1) >= G.Shop.rentLevel
+		local b2 = ws:FindFirstChild("Brazier2")
+		if want and not b2 then
+			local b1 = ws:FindFirstChild("Brazier")
+			local top = ws:FindFirstChild("TableTop")
+			if b1 and top then
+				b2 = b1:Clone()
+				b2.Name = "Brazier2"
+				local rel = ws:GetAttribute("Burner2Rel")
+				local cf
+				if typeof(rel) == "CFrame" then
+					cf = ws:GetPivot() * rel
+				else
+					cf = b1:GetPivot() + top.CFrame.RightVector * (top.Size.X / 2 + 2.6)
+				end
+				b2:PivotTo(cf)
+				b2.Parent = ws
+				ws:SetAttribute("Burner2", ws:GetPivot():ToObjectSpace(cf))
+				-- 이미 서 있던 화로 알바는 화구 ② 옆으로
+				local h1 = plot and plot.model:FindFirstChild("Helper1")
+				if h1 then
+					h1:PivotTo(helperFoot(plot, "stove", 1))
+				end
+			end
+		elseif not want and b2 then
+			b2:Destroy()
+			ws:SetAttribute("Burner2", nil)
+		end
+		if ws:FindFirstChild("Brazier2") then
+			local c2 = tonumber(d.coalLeft2) or 1
+			if math.abs((ws:GetAttribute("CoalLeft2") or -1) - c2) > 0.001 then
+				WorkstationBuilder.setCoal2(ws, c2)
+			end
+		end
 	end
 	-- 화로 연탄 모습 = 저장된 남은 양 (D44, 화로 알바가 태운 것·자리 비운 동안 쓴 것도)
 	local coal = tonumber(d.coalLeft) or 1
@@ -1161,7 +1211,7 @@ function GrowthService.init(dataService, economyService, plotService, remotes)
 	end)
 	remotes.GrowthAction.OnServerInvoke = GrowthService.action
 	Machine.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
-	Factory.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks })
+	Factory.init(Data, Economy, Plots, { refreshUnlocks = refreshUnlocks, isMaking = Production.isMaking })
 	Tutorial.init(Data, Economy, remotes)
 	Offline.init(Data, Economy, { helper = offlineHelper, machine = Machine.offlineTick, factory = Factory.offlineTick, refreshUnlocks = refreshUnlocks })
 

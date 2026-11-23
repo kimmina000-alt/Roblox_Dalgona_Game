@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 12 -- v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
+G.SchemaVersion = 14 -- v14 (2026-11-24 D46 재수정): 화로 알바 → 2단계 기계 자리, coalLeft2 없앰, 숙련 교육 환불·전문 교육 → 기계 알바 교육 / v13 (2026-11-24): 두 번째 화구 → 연탄 덮개 / v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -32,9 +32,8 @@ G.DefaultData = {
 	-- 알바생 (D34·D43): { shape = 화로에서 만들 도안 id, skill = 모자(자리만), post = 역할 key (G.HelperPosts) | nil(대기) }
 	partTimers = {},
 	stoveUps = {}, -- 화로 알바 교육 (D40): [key] = true (G.StoveTraining)
-	-- 화로 연탄 남은 양 (D44, 0~1, 한 판 0.1). coalLeft = 내 화로(화로 알바도 같이 씀), coalLeft2 = 두 번째 화구(D40, 화로 알바가 따로 씀)
+	-- 화로 연탄 남은 양 (D44, 0~1). coalLeft = 화구 ① 내 손 작업대, coalLeft2 = 화구 ② 화로 알바 자리 (2026-11-24: 화구 2개 기본)
 	coalLeft = 1,
-	coalLeft2 = 1,
 	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
 	custFav = {}, -- 단골 손님이 좋아하는 도안 (D37): [손님 id] = 도안 id (처음 올 때 열린 도안 중 무작위로 정함)
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
@@ -104,6 +103,13 @@ end
 G.ChopsticksPerRound = 1
 G.ChopsticksPerHelperRound = 0 -- 알바생은 젓가락을 안 씀 (사용자 결정 2026-11-21: 젓가락은 손 제작 1판에 1쌍만)
 G.CoalPerMake = 0.1 -- 화로 한 판에 타는 연탄 (D44, 1장 = 10판). 손 제작·화로 알바만, 기계·공장은 안 씀
+-- 화구 ②를 연탄 화로 복제로 만들지 (2026-11-24 보류: 사용자 "2단계 기계가 화구 두 개니까 그걸 활용" → PM 확인 전까지 끔)
+G.Burner2Brazier = false
+G.CoalPerMakeCovered = 1 / 15 -- 연탄 덮개(Lv5, 2026-11-24)를 사면 1장 = 15판
+
+function G.coalPerMake(d)
+	return (d and d.stoveUps and d.stoveUps.coalCover) and G.CoalPerMakeCovered or G.CoalPerMake
+end
 G.ChopsticksPerMachineRound = 0 -- 2~5단계 기계·공장은 안 씀 (공장은 운영비 +1)
 
 G.StockMax = 50 -- 보관함 기본 칸 (D42, 2026-11-24: 30 → 50). 진열대 칸은 따로 (G.stockMax·G.storedCount)
@@ -223,19 +229,20 @@ end
 
 ---------------------------------------------------------------- 국자·알바생 (SHOP_GROWTH_PLAN 2장, D10)
 -- 국자 확장은 없앰 (D39, 2026-11-24). 같은 레벨에 화로 알바 키우기 (D40): 화로에 배치한 알바생에게만 효과
+-- D46 재수정 (2026-11-24 사용자 "2단계 기계가 화구 두 개니까 그걸 활용하자 연탄 화로를 늘리지 말고"):
+-- 화로 알바는 없고 2단계 기계(국자 2개)가 Lv5에 열림. 보상 = Lv3 연탄 덮개, Lv8 기계 알바 교육 (이름은 옛 G.StoveTraining 그대로)
 G.StoveTraining = {
-	{ key = "skilled", name = "숙련 교육", level = 3, cost = 300, text = "화로 알바 40초 → 35초" },
-	{ key = "burner2", name = "두 번째 화구", level = 5, cost = 800, text = "내가 만드는 동안에도 화로 알바가 쉬지 않음" },
-	{ key = "expert", name = "전문 교육", level = 8, cost = 1800, text = "화로 알바 30초, Good~Excellent" },
+	{ key = "coalCover", name = "연탄 덮개", level = 3, cost = 800, text = "연탄 1장으로 10판 → 15판" },
+	{ key = "machineTrain", name = "기계 알바 교육", level = 8, cost = 1800, text = "기계로 만든 달고나 품질 Good~Excellent" },
 }
+G.MachineTrainQ = { 70, 94 } -- 기계 알바 교육 뒤 기계 품질 범위 (Good~Excellent)
 -- 알바생 역할 (D34 → D43, 2026-11-24): 고용한 뒤 역할을 고름. 역할마다 한 명, 최대 11명 (제작대 4 + 진열 + 계산 + 공장 공정 5).
 -- 고용비는 몇 번째로 뽑느냐에 따라 (역할과 상관없음), 역할은 언제든 공짜로 바꿈
-G.HireCost = { 500, 1500, 3000, 5000, 7500, 10000, 10000, 10000, 10000, 10000, 10000 }
-G.HelperMax = 11
+G.HireCost = { 500, 1500, 3000, 5000, 7500, 10000, 10000, 10000, 10000, 10000 }
+G.HelperMax = 10 -- D46: 화로 알바가 2단계 기계 알바로 합쳐져 제작대 3 + 진열 + 계산 + 공장 5
 -- 역할 (순서 = 화면 순서). kind: station(제작대) | display(진열) | cashier(계산) | factory(공장 공정, factoryKey = G.Factory.staff.stations key)
 -- 열리는 때: level(가게를 임대한 뒤), stage(그 기계를 산 뒤), factory(공장을 산 뒤). wage = 30초당 급여 (일할 때만)
 G.HelperPosts = {
-	{ key = "stove", name = "연탄 화로", kind = "station", stage = 1, level = 3, wage = 3 },
 	{ key = "steel", name = "철제 판매기", kind = "station", stage = 2, wage = 3 },
 	{ key = "pink", name = "분홍 자판기", kind = "station", stage = 3, wage = 3 },
 	{ key = "line", name = "연속 생산 설비", kind = "station", stage = 4, wage = 3 },
@@ -257,6 +264,15 @@ G.CarryHelpers = {
 	speed = 7, -- 걷는 빠르기 (스터드/초)
 	pickSeconds = 0.6, -- 집기·놓기
 	minWalk = 1.5, -- 가까워도 이만큼은 걸음 (초)
+}
+-- 가게 천장 조명 (2026-11-24 사용자 "가게 천장에 조명 설치"): 가게 기준 로컬 자리 (-Z = 골목 쪽), 천장 아래 매다는 전등
+G.ShopLights = {
+	spots = { { -12, -12 }, { 0, -12 }, { 12, -12 }, { -12, 2 }, { 0, 2 }, { 12, 2 } }, -- { x, z }
+	ceilingY = 16.6, -- 앞 지붕 아랫면 (가게 바닥 기준)
+	cord = 1.6, -- 전선 길이
+	color = Color3.fromRGB(255, 214, 160), -- 따뜻한 빛
+	range = 20,
+	brightness = 1.3,
 }
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 
@@ -480,7 +496,7 @@ G.Shop = {
 ---------------------------------------------------------------- 기계 2~4단계 (20번, SHOP_GROWTH_PLAN 1·3~5장, D9·D10)
 -- 가게 뒤 기계 1자리에서 단계대로 교체. 한 판 = batch개 / seconds초 (시간당 4 → 6 → 10개/분)
 G.Machines = {
-	[2] = { id = "steel", name = "철제 판매기", level = 10, price = 15000, batch = 2, seconds = 30 },
+	[2] = { id = "steel", name = "철제 판매기", level = 5, price = 5000, batch = 2, seconds = 30 }, -- D46: Lv10·15,000 → Lv5·5,000
 	[3] = { id = "pink", name = "분홍 자판기", level = 15, price = 45000, batch = 5, seconds = 50 },
 	[4] = { id = "line", name = "연속 생산 설비", level = 20, price = 120000, batch = 10, seconds = 60 },
 }
@@ -535,6 +551,18 @@ G.Factory = {
 			{ key = "pack", name = "포장", desc = "자동 포장: 포장지 1개씩, 판매가 ×1.1", outfit = "파란 앞치마 + 빵끈" },
 		},
 	},
+	-- 알바 없는 공정은 내가 직접 (D45, 2026-11-24 확정): 서 있으면 알바와 같은 효과(급여 없음), 판마다 짧은 미니게임을 잘하면 그 판만 더 좋게.
+	-- 한 번에 한 공정, 공장 방(부지)을 나가거나 그 자리에 알바를 고용하면 끝, 오프라인 효과 없음, 그동안 손 제작 못 함
+	selfWork = {
+		exp = 2, -- 미니게임 잘한 판마다
+		minigameSeconds = 5, -- 클라이언트 미니게임 길이 (3~5초)
+		answerWindow = 30, -- 판이 시작되고 이 안에 결과를 보내야 셈
+		sugarSave = 0.20, -- ① 잘한 판: 설탕 -20% (알바 -10%)
+		boilUpChance = 0.25, -- ② 품질 한 칸 위 25% (알바 15%)
+		pressTime = 0.85, -- ③ 시간 -15% (알바 -10%)
+		inspectNoPoor = true, -- ④ Poor 없음 (알바 절반)
+		packTip = 0.05, -- ⑤ 자동 포장 ×1.1 + 그 판 판매가 +5%
+	},
 	-- 공장 부지 (D11, 2026-11-22 바뀜): 가게 건물 뒤에 바로 붙은 울타리 부지 (폭 28 × 깊이 44), 뒷문으로 걸어 들어감.
 	-- 부지·공장 3D는 제작 세션이 만듦 (Plot<i>.FactoryLot.Ground = 영역). 없을 때는 아래 값(부지 기준 로컬)으로 판정
 	lot = { pos = Vector3.new(0, 0, 40), size = Vector3.new(28, 0, 44), guardHeight = 40 },
@@ -582,7 +610,7 @@ end
 
 ---------------------------------------------------------------- 판매: 진열대 + 손님 NPC (Phase 3, D12)
 G.Sales = {
-	shelfSlots = 11, -- 진열대 칸 (2026-11-24 작은 탁자 3 추가로 10 → 11) (보관함 앞쪽 10개가 진열됨, 먼저 만든 것부터 팔림)
+	shelfSlots = 61, -- 진열 칸 (2026-11-24 격자: 유리 진열장 4 + 걸이판 6×5 + 작은 탁자 3×3 ×3) (보관함 앞쪽 10개가 진열됨, 먼저 만든 것부터 팔림)
 	maxCustomers = 3, -- 가게당 동시 손님
 	-- 손님 수요 (GDD 5-1장 D12, 기획 세션 2026-11-20: 수요 ≈ 생산의 80%, 시뮬레이션 전 기획안)
 	-- { 방문 간격(초), 1명당 최소, 최대 }
@@ -590,8 +618,7 @@ G.Sales = {
 	demandByLevel = {
 		{ 2, 30, 1, 1 }, -- Lv1~2 노점: 분당 2
 		{ 4, 24, 1, 1 }, -- Lv3~4 가게: 분당 2.5
-		{ 7, 20, 1, 1 }, -- Lv5~7 (두 번째 화구): 분당 3
-		{ math.huge, 24, 1, 2 }, -- Lv8~ (전문 교육): 분당 3.75
+		{ math.huge, 20, 1, 2 }, -- Lv5~ (D46: 2단계 기계를 살 수 있는 때, 아직 안 샀으면): 분당 약 4.5
 	},
 	-- 2~5단계: 기계·공장
 	-- 2026-11-23 D32 (기계 2·3·4단계 모두 같이 돎): 수요 ≈ 생산의 80%로 올림 (기획 GDD 5-1, 사용자 승인). 분당 9 / 13.3 / 20 / 30

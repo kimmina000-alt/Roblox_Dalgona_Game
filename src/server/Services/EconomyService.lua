@@ -309,6 +309,10 @@ function EconomyService.canMake(player, shape)
 	if G.EnforceUnlocks and not table.find(data.unlockedShapes, shape.id) then
 		return false, "아직 안 열린 도안이에요"
 	end
+	-- 공장 공정을 직접 하는 동안은 손 제작 못 함 (D45, 내 몸은 하나)
+	if (player:GetAttribute("FactorySelf") or "") ~= "" then
+		return false, "공장에서 일하는 중이에요 (공장 방을 나가거나 그만두면 만들 수 있어요)"
+	end
 	if G.storageRoom(data) <= 0 then
 		return false, string.format("달고나 보관함이 가득 찼어요 (%d개)", G.stockMax(data))
 	end
@@ -419,7 +423,7 @@ end
 function EconomyService.coalBurn(player, amount)
 	local left = 0
 	Data.update(player, function(d)
-		d.coalLeft = math.max(0, (tonumber(d.coalLeft) or 1) - amount)
+		d.coalLeft = math.max(0, (tonumber(d.coalLeft) or 1) - G.coalPerMake(d)) -- 연탄 덮개면 1/15 (amount는 예전 값)
 		left = d.coalLeft
 	end)
 	return left

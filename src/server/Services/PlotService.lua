@@ -112,6 +112,20 @@ local function findLayoutTemplate()
 	return nil
 end
 
+-- "손 작업대 자리" 바닥 판은 게임에서 안 보이게 (2026-11-24 사용자: 빈 가게에도 삭제). 작업대 놓는 자리로만 씀
+local function hideSpotPlate(m)
+	local spot = m:FindFirstChild("HandStationSpot")
+	if spot then
+		spot.Transparency = 1
+		spot.CanCollide = false
+		for _, c in ipairs(spot:GetDescendants()) do
+			if c:IsA("SurfaceGui") or c:IsA("BillboardGui") then
+				c.Enabled = false
+			end
+		end
+	end
+end
+
 -- 틀(templateCF 기준)의 모양을 부지 plotCF로 옮김 (나중에 붙는 묶음 CHILD_LAYOUTS는 빼고)
 local function applyLayout(m, plotCF)
 	local T = layoutTemplate
@@ -494,15 +508,7 @@ local function clearWorkstation(i)
 	if ws then
 		ws:Destroy()
 	end
-	local spot = plot.model:FindFirstChild("HandStationSpot")
-	if spot then
-		spot.Transparency = 0.35
-		for _, c in ipairs(spot:GetChildren()) do
-			if c:IsA("SurfaceGui") then
-				c.Enabled = true
-			end
-		end
-	end
+	hideSpotPlate(plot.model) -- 빈 가게에도 안 보임 (2026-11-24)
 end
 
 -- 가게 모습 (D21): state = "stall" | "rented" | "owned", closed = 월세 밀림
@@ -640,6 +646,7 @@ function PlotService.init(opts)
 	end
 	for i = 1, P.count do
 		plots[i] = buildPlot(i, folder)
+		hideSpotPlate(plots[i].model)
 	end
 	-- 편집 화면에서 가게 틀(PlotLayout) 옆에 놓은 보기용 모델 (2026-11-23 사용자 "1번 가게 옆으로"):
 	-- Workspace 바로 아래 Model에 속성 FollowPlot = 가게 번호가 있으면, 틀과의 자리 관계 그대로 그 가게 옆으로 옮김

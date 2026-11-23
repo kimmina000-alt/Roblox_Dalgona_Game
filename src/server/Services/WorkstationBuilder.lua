@@ -244,10 +244,7 @@ end
 
 -- 연탄 남은 양 (1 = 새 연탄, 0 = 다 탐). 높이는 연탄 → 연탄2 높이로, 색은 검정 → 잿빛으로.
 -- 서버에서 부르면 모두에게 보인다. 작업대 속성 "CoalLeft"에도 남김.
-function Builder.setCoal(ws, left)
-	left = math.clamp(left, 0, 1)
-	ws:SetAttribute("CoalLeft", left)
-	local b = ws:FindFirstChild("Brazier")
+local function applyCoal(b, left)
 	local coal = b and b:FindFirstChild("Briquette")
 	local burnt = b and b:FindFirstChild("BriquetteBurnt")
 	if not (coal and burnt and coal:GetAttribute("FullHeight")) then
@@ -279,6 +276,19 @@ function Builder.setCoal(ws, left)
 		ember.CFrame = CFrame.new(coal.Position.X, y, coal.Position.Z) * CFrame.Angles(0, 0, math.rad(90))
 		ember.Transparency = EMBER_T + (0.85 - EMBER_T) * (1 - left)
 	end
+end
+
+function Builder.setCoal(ws, left)
+	left = math.clamp(left, 0, 1)
+	ws:SetAttribute("CoalLeft", left)
+	applyCoal(ws:FindFirstChild("Brazier"), left)
+end
+
+-- 화구 ② (2026-11-24 사용자: 가게 임대부터 화구 2개, ②는 화로 알바 자리). 작업대 속성 CoalLeft2
+function Builder.setCoal2(ws, left)
+	left = math.clamp(left, 0, 1)
+	ws:SetAttribute("CoalLeft2", left)
+	applyCoal(ws:FindFirstChild("Brazier2"), left)
 end
 
 local function buildLadle(ws)

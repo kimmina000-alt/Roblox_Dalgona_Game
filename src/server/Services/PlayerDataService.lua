@@ -153,6 +153,48 @@ PlayerDataService.MIGRATIONS = {
 			data.ingredients.coal = math.max(tonumber(data.ingredients.coal) or 0, 2)
 		end
 	end,
+	[13] = function(data)
+		-- v12 → v13 (2026-11-24 사용자): 화구 2개가 기본이 되고 Lv5 "두 번째 화구"는 "연탄 덮개"로. 산 사람은 연탄 덮개를 가진 것으로
+		if type(data.stoveUps) == "table" and data.stoveUps.burner2 then
+			data.stoveUps.burner2 = nil
+			data.stoveUps.coalCover = true
+		end
+	end,
+	[14] = function(data)
+		-- v13 → v14 (2026-11-24 D46 재수정): 화로 알바 없음 → 2단계 기계(철제 판매기) 자리로, 기계가 없거나 차 있으면 대기.
+		-- 교육: 숙련 교육(300)은 코인으로 돌려줌 (화로 속도 효과가 없어져서), 전문 교육(1,800)은 같은 값 기계 알바 교육으로. 연탄 덮개는 그대로
+		data.coalLeft2 = nil
+		if type(data.partTimers) == "table" then
+			local stage = math.floor(tonumber(data.machineStage) or 1)
+			local steelTaken = false
+			for _, h in ipairs(data.partTimers) do
+				if type(h) == "table" and h.post == "steel" then
+					steelTaken = true
+				end
+			end
+			for _, h in ipairs(data.partTimers) do
+				if type(h) == "table" and h.post == "stove" then
+					if stage >= 2 and not steelTaken then
+						h.post = "steel"
+						steelTaken = true
+					else
+						h.post = nil
+					end
+				end
+			end
+		end
+		local ups = type(data.stoveUps) == "table" and data.stoveUps or nil
+		if ups then
+			if ups.skilled then
+				ups.skilled = nil
+				data.coins = (tonumber(data.coins) or 0) + 300
+			end
+			if ups.expert then
+				ups.expert = nil
+				ups.machineTrain = true
+			end
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

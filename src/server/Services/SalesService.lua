@@ -128,12 +128,28 @@ end
 ---------------------------------------------------------------- 진열대
 
 -- 진열 가구 (가게 3D 부품 속성 Role, 2026-11-24 사용자): 칸 자리를 가구 기준으로 계산해서, 편집 화면(PlotLayout.ShopModel)에서
--- 가구를 옮기면 칸도 따라감. 1~4 유리 진열장(길에서 볼 때 왼쪽부터), 5~8 걸이판(누른 자리에 걸림, item.pp), 9 작은 탁자, 10 작은 탁자 2
+-- 가구를 옮기면 칸도 따라감. 칸 번호는 아래 GRID (격자, 2026-11-24)
 -- 2026-11-24 사용자: 작은 탁자 하나 더 (작은 탁자 3 = 11칸)
 local AREA_ROLES = { case = "유리 진열장", peg = "달고나 걸이판", table1 = "작은 탁자", table2 = "작은 탁자 2", table3 = "작은 탁자 3", counter = "앞 카운터 (나무)" }
 local SHOP_ONLY_ROLES = { "앞 카운터 (나무)", "유리 진열장", "진열장 받침 (금속)", "진열 이름표 띠" }
-local AREA_SLOTS = { case = { 1, 2, 3, 4 }, peg = { 5, 6, 7, 8 }, table1 = { 9 }, table2 = { 10 }, table3 = { 11 } }
-local TABLE_SLOT = { table1 = 9, table2 = 10, table3 = 11 }
+-- 격자 칸 (2026-11-24 사용자 "격자처럼 달고나 자리 만들어서"): 걸이판 6×5 = 30, 작은 탁자마다 3×3 = 9 (탁자 3개)
+-- 칸 번호: 1~4 유리 진열장, 5~34 걸이판(위 줄 왼쪽부터), 35~43 작은 탁자, 44~52 작은 탁자 2, 53~61 작은 탁자 3 → 모두 61 (G.Sales.shelfSlots)
+local GRID = {
+	{ key = "case", first = 1, cols = 4, rows = 1 },
+	{ key = "peg", first = 5, cols = 6, rows = 5 },
+	{ key = "table1", first = 35, cols = 3, rows = 3 },
+	{ key = "table2", first = 44, cols = 3, rows = 3 },
+	{ key = "table3", first = 53, cols = 3, rows = 3 },
+}
+local AREA_SLOTS, SLOT_AREA = {}, {} -- [area] = { 칸들 }, [칸] = { grid, k (0부터) }
+for _, g in ipairs(GRID) do
+	AREA_SLOTS[g.key] = {}
+	for k = 0, g.cols * g.rows - 1 do
+		table.insert(AREA_SLOTS[g.key], g.first + k)
+		SLOT_AREA[g.first + k] = { g = g, k = k }
+	end
+end
+local TABLE_SLOT = { table1 = true, table2 = true, table3 = true }
 SalesService.AREA_ROLES = AREA_ROLES
 
 local function findRole(model, role)
@@ -182,36 +198,39 @@ local function furnitureSlot(shop, i, item)
 		local pos = Vector3.new(c.X + col * h.X * 0.6, c.Y + h.Y + 0.02, c.Z - h.Z * 0.35 + row * h.Z * 0.7)
 		return at(pos, Vector3.new(0, 0, -1))
 	end
-	if i <= 4 and A.case then
-		local c, h = localBox(pcf, A.case)
-		local x = c.X + h.X - (i - 0.5) * (2 * h.X / 4)
+	local sa = SLOT_AREA[i]
+	local part0 = sa and A[sa.g.key]
+	if not part0 then
+		return nil
+	end
+	local g, k = sa.g, sa.k
+	local col, row = k % g.cols, k // g.cols -- 0부터
+	local c, h = localBox(pcf, part0)
+	if g.key == "case" then
+		local x = c.X + h.X - (col + 0.5) * (2 * h.X / g.cols) -- 길에서 볼 때 왼쪽부터
 		return at(Vector3.new(x, c.Y - h.Y + 0.12, c.Z), Vector3.new(0, 0, -1))
-	elseif i >= 5 and i <= 8 and A.peg then
-		local c, h = localBox(pcf, A.peg)
+	elseif g.key == "peg" then
 		local nx = c.X < 0 and 1 or -1 -- 가게 안쪽을 보는 면
-		local dy, dz = pegDefault(i - 4, h)
-		if item and type(item.pp) == "table" then
-			dy, dz = tonumber(item.pp[1]) or dy, tonumber(item.pp[2]) or dz
-		end
-		local lift = SALES.lookSize * 0.5 + SALES.lookStick[1] -- 누른 자리 = 달고나 가운데
+		local dz = -h.Z + (col + 0.5) * (2 * h.Z / g.cols)
+		local dy = h.Y - (row + 0.5) * (2 * h.Y / g.rows) -- 위 줄부터
+		local lift = SALES.lookSize * 0.5 + SALES.lookStick[1] -- 칸 가운데 = 달고나 가운데
 		return at(Vector3.new(c.X + nx * (h.X + 0.08), c.Y + dy - lift, c.Z + dz), Vector3.new(nx, 0, 0))
-	elseif i >= 9 and i <= 11 then
-		local t = (i == 9 and A.table1) or (i == 10 and A.table2) or A.table3
-		if t then
-			local c, h = localBox(pcf, t)
-			local pos = Vector3.new(c.X, c.Y + h.Y + 0.02, c.Z)
-			local dir = Vector3.new(1, 0, 0)
-			if A.counter then
-				local cc = localBox(pcf, A.counter)
-				local v = Vector3.new(cc.X - pos.X, 0, cc.Z - pos.Z)
-				if v.Magnitude > 0.1 then
-					dir = v.Unit -- 카운터를 바라봄
-				end
-			end
-			return at(pos, dir)
+	end
+	-- 작은 탁자: 윗면에 3×3, 달고나 넓은 면은 카운터 쪽
+	local dir = Vector3.new(1, 0, 0)
+	if A.counter then
+		local cc = localBox(pcf, A.counter)
+		local v = Vector3.new(cc.X - c.X, 0, cc.Z - c.Z)
+		if v.Magnitude > 0.1 then
+			dir = v.Unit
 		end
 	end
-	return nil
+	local right = Vector3.new(-dir.Z, 0, dir.X)
+	local wR = math.abs(right.X) * h.X + math.abs(right.Z) * h.Z -- 반 너비 (옆)
+	local wD = math.abs(dir.X) * h.X + math.abs(dir.Z) * h.Z -- 반 깊이 (카운터 쪽)
+	local off = right * (-wR + (col + 0.5) * (2 * wR / g.cols)) + dir * (wD - (row + 0.5) * (2 * wD / g.rows)) -- 앞줄(카운터 쪽)부터
+	local pos = Vector3.new(c.X + off.X, c.Y + h.Y + 0.02, c.Z + off.Z)
+	return at(pos, dir)
 end
 
 local function slotCFrame(shop, i, item)
@@ -344,6 +363,12 @@ local function buildShelf(shop, plot)
 			table.insert(shop.shopOnly, root)
 		end
 	end
+	-- 빈 가게면 숨기는 가게 앞 작은 탁자
+	shop.stallOnly = {}
+	if shop.areas.table1 then
+		local node = shop.areas.table1.Parent
+		table.insert(shop.stallOnly, (node and node:IsA("Model") and node ~= plot.model) and node or shop.areas.table1)
+	end
 	-- 노점 손님 자리: 가게 앞 작은 탁자 앞(골목 쪽)
 	if shop.areas.table1 then
 		local c, h = localBox(shop.plotCF, shop.areas.table1)
@@ -354,12 +379,8 @@ local function buildShelf(shop, plot)
 end
 
 -- 가게 열림/닫힘에 따라 카운터·유리 진열장 보이기 (부품마다 원래 투명도·충돌을 속성으로 기억)
-local function setShopFurniture(shop, open)
-	if shop.furnitureOpen == open then
-		return
-	end
-	shop.furnitureOpen = open
-	for _, root in ipairs(shop.shopOnly or {}) do
+local function setGroupVisible(roots, open)
+	for _, root in ipairs(roots) do
 		local list = root:IsA("BasePart") and { root } or {}
 		for _, d in ipairs(root:GetDescendants()) do
 			table.insert(list, d)
@@ -385,6 +406,17 @@ local function setShopFurniture(shop, open)
 	end
 end
 
+-- 가게 열림/닫힘·빈 가게에 따라 가구 보이기: 카운터·유리 진열장 = 가게가 열려야, 가게 앞 작은 탁자(노점 진열) = 주인이 있어야
+local function setShopFurniture(shop, open, owned)
+	local key = tostring(open) .. tostring(owned)
+	if shop.furnitureKey == key then
+		return
+	end
+	shop.furnitureKey = key
+	setGroupVisible(shop.shopOnly or {}, open)
+	setGroupVisible(shop.stallOnly or {}, owned) -- 빈 가게에는 진열대가 안 보임 (2026-11-24 사용자)
+end
+
 local function refreshShelf(index)
 	local shop = shops[index]
 	if not shop or not shop.shelf then
@@ -399,7 +431,7 @@ local function refreshShelf(index)
 	if plotM and plotM.model:GetAttribute("ShopOpen") ~= open then
 		plotM.model:SetAttribute("ShopOpen", open) -- 클라이언트 ShelfClient가 누를 가구를 고름
 	end
-	setShopFurniture(shop, open)
+	setShopFurniture(shop, open, data ~= nil)
 	if shop.stall ~= (not open) then
 		shop.stall = not open
 		for _, s in ipairs(shop.slots) do
@@ -979,7 +1011,8 @@ local function placeByTouch(player, area, hit)
 		end
 	end
 	local list = AREA_SLOTS[area]
-	if not G.shopOpen(data) then
+	local stall = not G.shopOpen(data)
+	if stall then
 		-- 노점: 가게 앞 작은 탁자만 (쟁반 5칸)
 		if area ~= "table1" then
 			return { ok = false, reason = "가게를 열어야 쓸 수 있는 자리예요" }
@@ -988,44 +1021,43 @@ local function placeByTouch(player, area, hit)
 		for k = 1, maxSlots do
 			table.insert(list, k)
 		end
-	elseif TABLE_SLOT[area] then
-		-- 누른 탁자부터, 차 있으면 다른 탁자
-		list = { TABLE_SLOT[area] }
-		for _, k in ipairs({ "table1", "table2", "table3" }) do
-			if k ~= area then
-				table.insert(list, TABLE_SLOT[k])
+	end
+	local function freeIn(l)
+		local out = {}
+		for _, i in ipairs(l) do
+			if i <= maxSlots and not used[i] and not Economy.isReserved(data, i) then -- 알바가 들고 가는 칸은 빼고
+				table.insert(out, i)
 			end
 		end
+		return out
 	end
-	local free = {}
-	for _, i in ipairs(list) do
-		if i <= maxSlots and not used[i] and not Economy.isReserved(data, i) then -- 알바가 들고 가는 칸은 빼고
-			table.insert(free, i)
+	local free = freeIn(list)
+	if #free == 0 and not stall and TABLE_SLOT[area] then
+		-- 누른 탁자가 차 있으면 다른 작은 탁자
+		for _, k in ipairs({ "table1", "table2", "table3" }) do
+			if k ~= area and #free == 0 then
+				free = freeIn(AREA_SLOTS[k])
+			end
 		end
 	end
 	if #free == 0 then
 		return { ok = false, reason = (list[1] > maxSlots) and "가게를 열어야 쓸 수 있는 자리예요" or "빈 자리가 없어요" }
 	end
+	-- 누른 곳에 가장 가까운 빈 칸 (격자, 2026-11-24)
 	local slot = free[1]
 	local extra = nil
 	local hitV = typeof(hit) == "Vector3" and hit or nil
-	if area == "case" and hitV then
-		-- 누른 곳에 가장 가까운 빈 칸
+	if hitV then
 		local best = math.huge
 		for _, i in ipairs(free) do
-			local d = (slotCFrame(shop, i).Position - hitV).Magnitude
-			if d < best then
-				best, slot = d, i
+			local ok, cf = pcall(slotCFrame, shop, i)
+			if ok and cf then
+				local dd = (cf.Position - hitV).Magnitude
+				if dd < best then
+					best, slot = dd, i
+				end
 			end
 		end
-	elseif area == "peg" and hitV and shop.areas and shop.areas.peg then
-		-- 누른 자리 (판 가운데 기준 위아래·옆, 판 안으로 줄임)
-		local c, h = localBox(shop.plotCF, shop.areas.peg)
-		local l = shop.plotCF:PointToObjectSpace(hitV)
-		local r = SALES.lookSize * 0.6
-		local dy = math.clamp(l.Y - c.Y, -h.Y + r, h.Y - r)
-		local dz = math.clamp(l.Z - c.Z, -h.Z + r, h.Z - r)
-		extra = { pp = { math.floor(dy * 100 + 0.5) / 100, math.floor(dz * 100 + 0.5) / 100 } }
 	end
 	local ok, msg = Economy.place(player, slot, extra)
 	if not ok then
@@ -1070,6 +1102,10 @@ function SalesService.init(dataService, economyService, plotService)
 		folder.Name = "Customers"
 		folder.Parent = plot.model
 		shop.folder = folder
+		refreshShelf(i) -- 빈 가게 모습 (진열 가구 숨김)
+		pcall(function()
+			require(script.Parent:WaitForChild("ShopLights")).build(plot) -- 천장 조명 (2026-11-24)
+		end)
 	end
 
 	Players.PlayerAdded:Connect(watchCarry)
@@ -1113,9 +1149,7 @@ function SalesService.init(dataService, economyService, plotService)
 					clearShop(i)
 					shop.owner = owner
 					shop.nextVisit = now + 2
-					if owner then
-						refreshShelf(i)
-					end
+					refreshShelf(i) -- 주인이 나가면 빈 가게 모습으로
 				end
 				if owner and owner.Parent and Data.get(owner) and now >= shop.nextVisit then
 					shop.nextVisit = now + interval(owner)

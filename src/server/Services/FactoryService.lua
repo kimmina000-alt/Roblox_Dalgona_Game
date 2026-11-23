@@ -16,6 +16,7 @@
 -- 조작: Remotes.GrowthAction ("buy","factory") / ("factorySet", {shape,qty,mode}) / ("factoryRun", bool) / ("factoryUp", key)
 
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -28,6 +29,11 @@ local FactoryService = {}
 local F = G.Factory
 local Data, Economy, Plots, hooks = nil, nil, nil, nil
 local spaces = {} -- [부지 번호] = Model
+-- 내가 직접 맡은 공정 (D45): [플레이어] = 공정 key, [데이터 표] = 공정 key (hired가 데이터만 보므로). 저장 안 함
+local selfBy = {}
+local selfByData = setmetatable({}, { __mode = "k" })
+local selfPending = {} -- [플레이어] = { id, line, key, until } 미니게임 결과 기다리는 판
+local selfEvent = nil -- Remotes.FactorySelf (서버 → 클라)
 local status = {} -- [player] = 상태 글
 
 local GRADE_INDEX = {}
@@ -82,7 +88,7 @@ local STAFF = F.staff
 
 -- D43 (2026-11-24): 공정 알바생은 가게 알바생 목록(partTimers)의 역할 f_<key>
 local function hired(d, key)
-	return G.factoryStaffed(d, key)
+	return G.factoryStaffed(d, key) or selfByData[d] == key -- 알바 또는 내가 직접 (D45)
 end
 
 local function staffSet(d)
@@ -98,6 +104,14 @@ end
 -- 1명 급여 (그 판 시간만큼)
 local function staffWage(sec)
 	return math.floor(sec / 30 * STAFF.wagePer30s + 0.5)
+end
+
+-- 그 공정에 급여가 드나 (내가 직접 하면 급여 없음, D45)
+local function wageFor(d, key, sec)
+	if selfByData[d] == key and not G.factoryStaffed(d, key) then
+		return 0
+	end
+	return staffWage(sec)
 end
 
 -- 한 판에 드는 것 (재료·코인). on = 이번 판에 일하는 공정 { key = true } (없으면 고용한 공정 모두로 미리 보기)
@@ -127,7 +141,7 @@ local function planStaff(d, qty, mode, baseCoins)
 	local on, wages = {}, 0
 	if hired(d, "press") then
 		local s2 = math.floor(sec * STAFF.pressTime + 0.5)
-		local w = staffWage(s2)
+		local w = wageFor(d, "press", s2)
 		if budget >= w then
 			on.press = true
 			sec = s2
@@ -138,7 +152,7 @@ local function planStaff(d, qty, mode, baseCoins)
 	for _, st in ipairs(STAFF.stations) do
 		local key = st.key
 		if key ~= "press" and hired(d, key) then
-			local w = staffWage(sec)
+			local w = wageFor(d, key, sec)
 			local ok = budget >= w
 			if key == "pack" and (d.ingredients.wrapper or 0) < qty then
 				ok = false -- 포장지가 없으면 포장 안 함
@@ -176,11 +190,13 @@ local function rollQuality(d, mode, st)
 		end
 	end
 	grade = grade or Config.Grades[#Config.Grades]
-	if st.inspect and grade.name == "Poor" and math.random() >= STAFF.inspectPoorKeep then
+	local SW = F.selfWork
+	if st.inspect and grade.name == "Poor" and ((st.boostInspect and SW.inspectNoPoor) or math.random() >= STAFF.inspectPoorKeep) then
 		grade = Config.Grades[GRADE_POS.Normal]
 		q = grade.min
 	end
-	if st.boil and math.random() < STAFF.boilUpChance and grade.name ~= "Excellent" and grade.name ~= "Perfect" then
+	local upChance = st.boostBoil and SW.boilUpChance or STAFF.boilUpChance -- 내가 잘한 판은 더 (D45)
+	if st.boil and math.random() < upChance and grade.name ~= "Excellent" and grade.name ~= "Perfect" then
 		local up = Config.Grades[GRADE_POS[grade.name] - 1]
 		if up and up.name ~= "Perfect" then
 			grade = up
@@ -523,7 +539,17 @@ function FactoryService.snapshot(player, d)
 				working = true
 			end
 		end
-		table.insert(staff, { key = st.key, name = st.name, desc = st.desc, hired = hired(d, st.key), on = working, wage = staffWage(previewSec) })
+		local helper = G.factoryStaffed(d, st.key)
+		table.insert(staff, {
+			key = st.key,
+			name = st.name,
+			desc = st.desc,
+			hired = helper, -- 알바생 (D30·D43)
+			self = selfBy[player] == st.key, -- 내가 직접 하는 중 (D45)
+			canSelf = not helper, -- [내가 하기] 버튼을 보여도 됨
+			on = working,
+			wage = staffWage(previewSec),
+		})
 	end
 	local preview = nil
 	if shape then
@@ -531,7 +557,7 @@ function FactoryService.snapshot(player, d)
 		local wages = 0
 		for _, st in ipairs(staff) do
 			if st.hired then
-				wages += st.wage
+				wages += st.wage -- 내가 하는 공정은 급여 없음
 			end
 		end
 		preview = { seconds = previewSec, sugar = need.sugar, soda = need.soda, wrapper = need.wrapper, coins = coins + wages, wages = wages }
@@ -551,6 +577,7 @@ function FactoryService.snapshot(player, d)
 		shapes = allowedShapes(d),
 		preview = preview,
 		staff = staff,
+		self = selfBy[player], -- 지금 내가 직접 하는 공정 key 또는 nil (D45)
 		staffHireCost = G.HireCost[#d.partTimers + 1] or STAFF.hireCost, -- D43: 몇 번째로 뽑느냐
 		price = F.price,
 		level = F.level,
@@ -598,6 +625,12 @@ local function beginJob(dd, k)
 	dd.stats.factorySpent = (dd.stats.factorySpent or 0) + coins
 	dd.stats.staffWages = (dd.stats.staffWages or 0) + wages
 	f.lines[k] = { s = shape.id, n = f.qty, m = f.mode, t = 0, sec = sec, pk = on.pack == true, st = { boil = on.boil, inspect = on.inspect }, on = on }
+	-- 내가 맡은 공정이 이번 판에 일하면 미니게임 한 번 (D45). sugar = 이 판 설탕 (잘하면 더 돌려줌)
+	local mine = selfByData[dd]
+	if mine and on[mine] then
+		f.lines[k].self = mine
+		f.lines[k].sugar = need.sugar or 0
+	end
 	return nil, need, coins, wages
 end
 
@@ -613,10 +646,17 @@ local function endJob(dd, k, job)
 	local n = job.n
 	local packed = job.pk == true -- 판을 시작할 때 포장지를 냈을 때만 (자동 포장)
 	local slots = {}
+	local boost = job.boost and job.self or nil -- 미니게임을 잘한 공정 (D45)
+	local st = table.clone(job.st or {})
+	st.boostBoil = boost == "boil"
+	st.boostInspect = boost == "inspect"
 	for _ = 1, n do
-		local q, grade, mult = rollQuality(dd, job.m, job.st)
+		local q, grade, mult = rollQuality(dd, job.m, st)
 		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = packed, a = true, f = true, src = "factory" }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, packed)
+		if boost == "pack" and packed then
+			item.p = math.floor(item.p * (1 + F.selfWork.packTip) + 0.5) -- ⑤ 그 판 +5%
+		end
 		local sl = Economy.stockProduced(dd, item, "factory", true)
 		if sl then
 			table.insert(slots, sl)
@@ -708,11 +748,174 @@ function FactoryService.offlineTick(dd, dt, rep)
 	return active
 end
 
+---------------------------------------------------------------- 내가 직접 (D45)
+
+-- 플레이어가 내 공장 부지(공장 방) 안에 있나
+local function inMyFactory(player)
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	local _, mine = Plots.get(player)
+	local cf, size = nil, nil
+	if mine then
+		cf, size = lotArea(mine)
+	end
+	if not (root and cf) then
+		return false
+	end
+	local off = cf:PointToObjectSpace(root.Position)
+	return math.abs(off.X) < size.X / 2 + 1 and math.abs(off.Z) < size.Z / 2 + 1 and off.Y > -5 and off.Y < F.lot.guardHeight
+end
+
+local function signalSelf(player, key)
+	local _, i = Plots.get(player)
+	local sp = i and spaces[i]
+	if sp then
+		for _, st in ipairs(STAFF.stations) do
+			setAttr(sp, "Self_" .. st.key, st.key == key) -- 공장 3D에서 내 자리 표시용 (제작 세션)
+		end
+	end
+	player:SetAttribute("FactorySelf", key or "")
+end
+
+function FactoryService.selfStop(player, why)
+	local key = selfBy[player]
+	if not key then
+		return
+	end
+	selfBy[player] = nil
+	local d = Data.get(player)
+	if d then
+		selfByData[d] = nil
+	end
+	selfPending[player] = nil
+	signalSelf(player, nil)
+	if selfEvent then
+		selfEvent:FireClient(player, "end", key, why)
+	end
+	if why then
+		Economy.notify(player, "공장 일 끝: " .. why)
+	end
+	Economy.push(player)
+end
+
+-- [내가 하기] (GrowthAction "factorySelf", key). key가 지금 하던 것이면 그만두기
+function FactoryService.selfStart(player, key)
+	if key == "" then
+		-- 그만두기 (UI: GrowthAction("factorySelf", ""))
+		if not selfBy[player] then
+			return false, "공장 일을 하고 있지 않아요"
+		end
+		FactoryService.selfStop(player, nil)
+		return true, "공장 일을 그만뒀어요"
+	end
+	local d = Data.get(player)
+	local st = nil
+	for _, s in ipairs(STAFF.stations) do
+		if s.key == key then
+			st = s
+		end
+	end
+	if not d or not st then
+		return false, "잘못된 요청"
+	end
+	if not d.factory.unlocked then
+		return false, "공장이 없어요"
+	end
+	if selfBy[player] == key then
+		FactoryService.selfStop(player, nil)
+		return true, st.name .. " 그만두기"
+	end
+	if G.factoryStaffed(d, key) then
+		return false, st.name .. "에는 알바생이 있어요"
+	end
+	if not inMyFactory(player) then
+		return false, "공장 안에서 시작해요"
+	end
+	if hooks.isMaking and hooks.isMaking(player) then
+		return false, "손으로 만드는 중이에요"
+	end
+	if selfBy[player] then
+		FactoryService.selfStop(player, nil) -- 한 번에 한 공정
+	end
+	selfBy[player] = key
+	selfByData[d] = key
+	signalSelf(player, key)
+	if selfEvent then
+		selfEvent:FireClient(player, "start", key)
+	end
+	Economy.push(player)
+	return true, string.format("%s 직접 하는 중! 판마다 짧은 미니게임을 잘하면 그 판이 더 좋아져요", st.name)
+end
+
+-- 판이 시작될 때 미니게임 요청 (그 판에 내 공정이 일할 때)
+local function askMinigame(player, k)
+	local d = Data.get(player)
+	local job = d and d.factory.lines[k]
+	if not (job and job.self and not job.mg) then
+		return
+	end
+	job.mg = HttpService:GenerateGUID(false)
+	local SW = F.selfWork
+	selfPending[player] = { id = job.mg, line = k, key = job.self, untilT = os.clock() + SW.answerWindow }
+	if selfEvent then
+		selfEvent:FireClient(player, "mini", job.self, job.mg, SW.minigameSeconds) -- 제작 세션 FactoryMini (station, token, limit)
+	end
+end
+
+-- 미니게임 결과: Remotes.FactorySelf:FireServer("miniResult", token, 잘했나) (또는 FactorySelfResult:InvokeServer(token, 잘했나)).
+-- 신호 (서버 → 내 클라, Remotes.FactorySelf): ("start", key) / ("mini", key, token, 초) / ("end", key, 이유). 잘했으면 그 판 효과를 키움
+local function onResult(player, id, good)
+	local p = selfPending[player]
+	if not p or type(id) ~= "string" or id ~= p.id or os.clock() > p.untilT then
+		return { ok = false, reason = "지난 판이에요" }
+	end
+	selfPending[player] = nil
+	if good ~= true then
+		return { ok = true, boosted = false } -- 못해도 알바와 같은 효과는 그대로
+	end
+	local SW = F.selfWork
+	local boosted, ups = false, {}
+	Data.update(player, function(dd)
+		local job = dd.factory.lines[p.line]
+		if not job or job.mg ~= id or job.boost then
+			return false
+		end
+		job.boost = true
+		boosted = true
+		if p.key == "sugar" then
+			-- 시작할 때 알바 값(-10%)만큼 덜 냈으니 차이만큼 돌려줌
+			local full = math.floor((job.sugar or 0) / (1 - STAFF.sugarSave) + 0.5)
+			local back = math.floor(full * SW.sugarSave) - math.floor(full * STAFF.sugarSave)
+			dd.ingredients.sugar = (dd.ingredients.sugar or 0) + math.max(0, back)
+		elseif p.key == "press" then
+			job.sec = math.max(job.t + 1, math.floor(job.sec * SW.pressTime / STAFF.pressTime + 0.5))
+		end
+		ups = Economy.addExp(dd, SW.exp)
+	end)
+	Economy.announceLevels(player, ups)
+	return { ok = true, boosted = boosted }
+end
+
+local function selfTick(player, d)
+	local key = selfBy[player]
+	if not key then
+		return
+	end
+	if G.factoryStaffed(d, key) then
+		FactoryService.selfStop(player, "그 자리에 알바생이 왔어요")
+	elseif not inMyFactory(player) then
+		FactoryService.selfStop(player, "공장 방을 나갔어요")
+	elseif not d.factory.unlocked then
+		FactoryService.selfStop(player, nil)
+	end
+end
+
 local function step(player, dt)
 	local d = Data.get(player)
 	if not d or not d.factory or not d.factory.unlocked then
 		return
 	end
+	selfTick(player, d)
 	local f = d.factory
 	local before = status[player]
 	-- 돌고 있는 판 진행 (가게 문이 닫히면 멈춤)
@@ -733,7 +936,11 @@ local function step(player, dt)
 	elseif f.on then
 		for k = 1, lineCount(d) do
 			if not Data.get(player).factory.lines[k] then
-				why = startJob(player, k) or why
+				local w = startJob(player, k)
+				why = w or why
+				if not w then
+					askMinigame(player, k) -- 내가 맡은 공정이면 (D45)
+				end
 			end
 		end
 	end
@@ -759,8 +966,35 @@ function FactoryService.init(dataService, economyService, plotService, growthHoo
 			publish(player, d)
 		end
 	end)
+	-- 내가 직접 (D45)
+	local remotes = game:GetService("ReplicatedStorage"):WaitForChild("Remotes")
+	selfEvent = remotes:FindFirstChild("FactorySelf")
+	if not selfEvent then
+		selfEvent = Instance.new("RemoteEvent")
+		selfEvent.Name = "FactorySelf"
+		selfEvent.Parent = remotes
+	end
+	local resultFn = remotes:FindFirstChild("FactorySelfResult")
+	if not resultFn then
+		resultFn = Instance.new("RemoteFunction")
+		resultFn.Name = "FactorySelfResult"
+		resultFn.Parent = remotes
+	end
+	resultFn.OnServerInvoke = onResult
+	-- 제작 세션 미니게임은 같은 RemoteEvent로 돌려보냄: FireServer("miniResult", token, ok)
+	selfEvent.OnServerEvent:Connect(function(player, what, token, good)
+		if what == "miniResult" then
+			onResult(player, token, good == true)
+		end
+	end)
 	Players.PlayerRemoving:Connect(function(p)
 		status[p] = nil
+		local d = Data.get(p)
+		if d then
+			selfByData[d] = nil -- 나가면 그 자리는 다시 빈 자리 (오프라인 효과 없음)
+		end
+		selfBy[p] = nil
+		selfPending[p] = nil
 		for i, sp in pairs(spaces) do
 			if sp:GetAttribute("OwnerUserId") == p.UserId then
 				clearSpace(i)
