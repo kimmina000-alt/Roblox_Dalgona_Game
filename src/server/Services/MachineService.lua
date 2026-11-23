@@ -8,6 +8,7 @@
 --  - 품질 Normal~Excellent (Perfect는 손으로만), 도안은 Legendary까지 (D13), 1개당 EXP G.ExpMachine
 --  - 다 만들면 EconomyService.stockProduced: 진열대 빈 칸 → 없으면 보관함 (D26). 보관함이 차면 멈춤
 --  - 접속 중에만 돈다 (알바생과 같음). 진행 초(machine.t)는 저장
+--  - D34 (2026-11-24): 알바생을 배치한 기계만 돈다. 알바 급여(30초당 G.Helper.machineWagePer30s)는 한 판 끝날 때 냄
 --
 -- 화면 쪽과의 약속 (제작 세션이 모델·연출·도안 고르기 UI를 맡음): 부지 모델의 MachineSlot<n>(n = 2·3·4) 파트 속성
 --   Stage(그 단계를 샀으면 n, 아니면 1), Owned, MachineId, Running, Status("work" | 멈춘 이유), Shape, CycleStart·CycleSeconds(서버 시각),
@@ -116,10 +117,21 @@ local function batchNeed(shape, n)
 	return need
 end
 
+-- 기계 알바 급여 (한 판)
+local function batchWage(m)
+	return math.floor(m.seconds / 30 * G.Helper.machineWagePer30s + 0.5)
+end
+
 -- 멈춘 이유 (없으면 nil)
 local function stopReason(d, shape, m)
 	if not G.shopOpen(d) then
 		return "가게 문 닫힘"
+	end
+	if not G.helperAt(d, m.id) then
+		return "알바 없음" -- D34
+	end
+	if d.coins < batchWage(m) then
+		return "급여 부족"
 	end
 	if not G.Factory.machineKeepsRunning and d.factory and d.factory.unlocked then
 		return "공장으로 바뀜" -- 각 단계는 이전 설비를 대체 (설정으로 고를 수 있게)
@@ -359,8 +371,11 @@ local function produce(dd, shape, m)
 		end
 	end
 	dd.stats.machineMade = (dd.stats.machineMade or 0) + n
+	local wage = batchWage(m)
+	dd.coins -= wage
+	dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + wage
 	local ups = Economy.addExp(dd, G.ExpMachine * n)
-	return n, slots, ups, used
+	return n, slots, ups, used, wage
 end
 
 local function finishBatch(player, shape, m, n)
@@ -412,8 +427,9 @@ function MachineService.offlineTick(dd, dt, rep)
 			ts[m.id] = (ts[m.id] or 0) + dt
 			if ts[m.id] >= m.seconds then
 				ts[m.id] = 0
-				local n, _, ups, used = produce(dd, shape, m)
+				local n, _, ups, used, wage = produce(dd, shape, m)
 				rep.made.machine += n
+				rep.wages += wage or 0
 				rep.exp += G.ExpMachine * n
 				for id, k in pairs(used) do
 					rep.used[id] = (rep.used[id] or 0) + k
@@ -463,6 +479,12 @@ local function step(player, dt)
 	if changedStatus then
 		Economy.push(player) -- 멈춘 이유가 바뀌면 HUD에도
 	end
+end
+
+-- 단계 n 기계의 지금 상태 ("work" | 멈춘 이유 | nil = 아직 모름). 기계 알바 머리 위 글에 씀 (D34)
+function MachineService.statusOf(player, n)
+	local st = state[player] and state[player][n]
+	return st and st.status or nil
 end
 
 function MachineService.init(dataService, economyService, plotService, growthHooks)

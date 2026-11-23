@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 9 -- v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
+G.SchemaVersion = 10 -- v10 (2026-11-24 D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -29,8 +29,9 @@ G.DefaultData = {
 	nextItemId = 1, -- 달고나 번호 (들고 다니기·진열 칸을 찾는 데 씀)
 	unlockedShapes = { "Circle", "Square", "Triangle", "Bone" }, -- Common (레벨이 오르면 GrowthService가 더함)
 	upgrades = { stove = 0, presser = 0, table = 0 }, -- 화로·누르개·작업대 장비 Lv (Phase 4)
-	ladles = 1, -- 국자 수 1~4 (SHOP_GROWTH_PLAN 2장)
-	partTimers = {}, -- 알바생 { { shape = 만들 도안 id, skill = 숙련(자리만) } } 국자 2번째부터 1명씩
+	-- 알바생 (D34): { shape = 화로에서 만들 도안 id, skill = 모자(자리만), post = 배치한 제작대 "stove" | 기계 id | nil(대기) }
+	partTimers = {},
+	stoveUps = {}, -- 화로 알바 교육 (D40): [key] = true (G.StoveTraining)
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
 	machine = { shapes = {}, t = 0, ts = {} }, -- 기계 (20번): shapes[기계 id] = 만들 도안 id, ts[기계 id] = 이번 판 진행 초 (D32 기계 여러 대, t는 예전 값 → 처음 읽을 때 ts로 옮김)
 	-- 가게 뒤 공장 (D11, 5단계): on = 생산 켬, shape·qty·mode = 제어대 설정, lines = 라인별 진행 중인 판 { s, n, m, t, sec } 또는 false,
@@ -168,12 +169,22 @@ function G.stockMax(data)
 end
 
 ---------------------------------------------------------------- 국자·알바생 (SHOP_GROWTH_PLAN 2장, D10)
-G.Ladles = { -- 2번째 국자부터: 해금 레벨, 값
-	[2] = { level = 3, cost = 300 },
-	[3] = { level = 5, cost = 800 },
-	[4] = { level = 8, cost = 1800 },
+-- 국자 확장은 없앰 (D39, 2026-11-24). 같은 레벨에 화로 알바 키우기 (D40): 화로에 배치한 알바생에게만 효과
+G.StoveTraining = {
+	{ key = "skilled", name = "숙련 교육", level = 3, cost = 300, text = "화로 알바 40초 → 35초" },
+	{ key = "burner2", name = "두 번째 화구", level = 5, cost = 800, text = "내가 만드는 동안에도 화로 알바가 쉬지 않음" },
+	{ key = "expert", name = "전문 교육", level = 8, cost = 1800, text = "화로 알바 30초, Good~Excellent" },
 }
-G.HireCost = { 500, 1000, 2000 } -- 알바생 1·2·3번째
+-- 알바생 배치 (D34): 제작대마다 한 명, 최대 4명 (화로 1 + 기계 3). 고용비는 몇 번째로 뽑느냐에 따라
+G.HireCost = { 500, 2000, 5000, 10000 }
+G.HelperMax = 4
+-- 배치할 수 있는 제작대 (순서 = 화면 순서). stage = 설비 단계 (기계는 그 단계를 가져야 배치 가능)
+G.HelperPosts = {
+	{ key = "stove", name = "연탄 화로", stage = 1 },
+	{ key = "steel", name = "철제 판매기", stage = 2 },
+	{ key = "pink", name = "분홍 자판기", stage = 3 },
+	{ key = "line", name = "연속 생산 설비", stage = 4 },
+}
 G.Helper = {
 	seconds = 40, -- 1판 (기본 알바생)
 	wagePer30s = 3, -- 일하는 동안만
@@ -181,8 +192,13 @@ G.Helper = {
 	qMax = 84,
 	maxGrade = "Legendary", -- 자동 생산은 Legendary까지 (D13)
 	chopsticks = 0, -- 젓가락 안 씀 (G.ChopsticksPerHelperRound, 2026-11-21)
-	-- 숙련 업그레이드: 아직 미정 (자리만). skill 1·2 → 35초·30초 등
-	skillSeconds = { [0] = 40 },
+	skillSeconds = { [0] = 40 }, -- (옛 값) 화로 속도는 아래 stoveSeconds
+	-- 화로 알바 교육 (D40): 숙련 35초, 전문 30초 + 품질 Good~Excellent
+	skilledSeconds = 35,
+	expertSeconds = 30,
+	expertQMin = 70,
+	expertQMax = 94,
+	machineWagePer30s = 3, -- 기계에 배치한 알바생 급여 (기계가 도는 동안만, 한 판 끝날 때 냄)
 	-- 외형 = 주인 아바타 미니미 (D19, 2026-11-20)
 	minime = {
 		scale = 0.6, -- 키
@@ -251,7 +267,7 @@ G.Shop = {
 	stallSlots = 5, -- 노점(또는 문 닫힘) 쟁반 진열 칸
 	autoShelveHelpers = true, -- 알바생이 만든 것은 빈 칸에 저절로 진열 (가게 직원이라). 손으로 만든 것은 들고 가서 놓음
 	-- 노점·문 닫힘에서 막히는 것: 국자 확장, 알바생 고용, 작업대 업그레이드 (화로·누르개는 됨)
-	lockedWhenStall = { ladle = true, hire = true, table = true, machine = true },
+	lockedWhenStall = { train = true, hire = true, table = true, machine = true },
 }
 
 ---------------------------------------------------------------- 기계 2~4단계 (20번, SHOP_GROWTH_PLAN 1·3~5장, D9·D10)
@@ -363,12 +379,12 @@ G.Sales = {
 	maxCustomers = 3, -- 가게당 동시 손님
 	-- 손님 수요 (GDD 5-1장 D12, 기획 세션 2026-11-20: 수요 ≈ 생산의 80%, 시뮬레이션 전 기획안)
 	-- { 방문 간격(초), 1명당 최소, 최대 }
-	-- 1단계(연탄 화로)는 국자 수로 (생산 = 손 1.5 + 알바생 1명당 1.5개/분의 약 80%, 국자 1개만 첫 판매 재미로 조금 높게)
-	demandByLadles = {
-		{ 30, 1, 1 }, -- 분당 2
-		{ 20, 1, 1 }, -- 분당 3
-		{ 24, 1, 2 }, -- 분당 3.75
-		{ 18, 1, 2 }, -- 분당 5
+	-- 1단계(연탄 화로)는 레벨 구간으로 (D39, 2026-11-24: 국자 수 대신). { 이 레벨까지, 방문 간격, 최소, 최대 }
+	demandByLevel = {
+		{ 2, 30, 1, 1 }, -- Lv1~2 노점: 분당 2
+		{ 4, 24, 1, 1 }, -- Lv3~4 가게: 분당 2.5
+		{ 7, 20, 1, 1 }, -- Lv5~7 (두 번째 화구): 분당 3
+		{ math.huge, 24, 1, 2 }, -- Lv8~ (전문 교육): 분당 3.75
 	},
 	-- 2~5단계: 기계·공장
 	-- 2026-11-23 D32 (기계 2·3·4단계 모두 같이 돎): 수요 ≈ 생산의 80%로 올림 (기획 GDD 5-1, 사용자 승인). 분당 9 / 13.3 / 20 / 30
@@ -407,23 +423,67 @@ G.Sales = {
 	},
 }
 
--- 설비 단계·국자 수 → 방문 간격(초, testSpeed 반영), 1명당 최소·최대 개수
-function G.salesDemand(stage, ladles)
+-- 설비 단계·레벨 → 방문 간격(초, testSpeed 반영), 1명당 최소·최대 개수
+function G.salesDemand(stage, level)
 	local row
 	if (stage or 1) <= 1 then
-		row = G.Sales.demandByLadles[math.clamp(ladles or 1, 1, #G.Sales.demandByLadles)]
+		local lv = level or 1
+		for _, r in ipairs(G.Sales.demandByLevel) do
+			if lv <= r[1] then
+				row = { r[2], r[3], r[4] }
+				break
+			end
+		end
 	else
 		row = G.Sales.demandByStage[math.min(stage, 5)]
 	end
 	return row[1] / math.max(G.Sales.testSpeed, 0.01), row[2], row[3]
 end
 
--- 플레이어 데이터로 손님 수요: 가게 문이 닫혀 있으면(노점) 국자 1개 수요, 기계도 가게 안에서만 (D21)
+-- 플레이어 데이터로 손님 수요: 가게 문이 닫혀 있으면(노점) 노점 수요, 기계도 가게 안에서만 (D21)
 function G.salesDemandFor(d)
 	if not G.shopOpen(d) then
 		return G.salesDemand(1, 1)
 	end
-	return G.salesDemand(d.machineStage or 1, d.ladles or 1)
+	return G.salesDemand(d.machineStage or 1, d.level or 1)
+end
+
+-- 알바생 배치 (D34)
+function G.helperPost(key)
+	for _, p in ipairs(G.HelperPosts) do
+		if p.key == key then
+			return p
+		end
+	end
+	return nil
+end
+
+-- 그 제작대를 가졌나 (화로는 늘, 기계는 그 단계까지 샀으면)
+function G.hasPost(d, key)
+	local p = G.helperPost(key)
+	return p ~= nil and (p.stage <= 1 or (d.machineStage or 1) >= p.stage)
+end
+
+-- 그 제작대에 배치된 알바생 번호 (없으면 nil)
+function G.helperAt(d, key)
+	for i, h in ipairs(d.partTimers or {}) do
+		if h.post == key then
+			return i
+		end
+	end
+	return nil
+end
+
+-- 화로 알바 한 판 초·품질 (D40)
+function G.stoveHelperSpec(d)
+	local ups = d.stoveUps or {}
+	local H = G.Helper
+	if ups.expert then
+		return H.expertSeconds, H.expertQMin, H.expertQMax
+	elseif ups.skilled then
+		return H.skilledSeconds, H.qMin, H.qMax
+	end
+	return H.seconds, H.qMin, H.qMax
 end
 
 ---------------------------------------------------------------- 오프라인 생산 (D29, 2026-11-22 사용자 결정, 수치는 임시)

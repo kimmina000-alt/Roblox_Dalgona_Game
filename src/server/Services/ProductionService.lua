@@ -279,6 +279,12 @@ function ProductionService.submitPpopgi(player, raw)
 	return res
 end
 
+-- 지금 손으로 만드는 중인가 (D34: 그동안 화로 알바생은 쉼). 제출 안 하고 나간 판은 최대 시간이 지나면 끝난 것으로
+function ProductionService.isMaking(player)
+	local s = sessions[player]
+	return s ~= nil and workspace:GetServerTimeNow() - s.t0 < Config.Server.maxTotal
+end
+
 function ProductionService.init(remotes)
 	remotes.StartProduction.OnServerInvoke = ProductionService.start
 	remotes.SubmitProduction.OnServerInvoke = ProductionService.submit

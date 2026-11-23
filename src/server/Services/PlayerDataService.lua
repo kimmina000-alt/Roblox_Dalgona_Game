@@ -86,6 +86,38 @@ PlayerDataService.MIGRATIONS = {
 			data.tutorialDone = true
 		end
 	end,
+	[10] = function(data)
+		-- v9 → v10 (2026-11-24 D34·D39·D40): 국자 확장을 없애고 화로 알바 교육으로, 알바생은 제작대에 배치.
+		--  - 산 국자는 같은 단계 교육으로 (값·레벨이 같음): 국자 2 → 숙련 교육, 3 → + 두 번째 화구, 4 → + 전문 교육
+		--  - 있던 알바생: 1번째 → 화로, 다음부터 가진 기계(철제 → 분홍 → 연속) 순서, 남으면 대기
+		local ladles = math.floor(tonumber(data.ladles) or 1)
+		data.ladles = nil
+		local ups = type(data.stoveUps) == "table" and data.stoveUps or {}
+		if ladles >= 2 then
+			ups.skilled = true
+		end
+		if ladles >= 3 then
+			ups.burner2 = true
+		end
+		if ladles >= 4 then
+			ups.expert = true
+		end
+		data.stoveUps = ups
+		if type(data.partTimers) == "table" then
+			local stage = math.floor(tonumber(data.machineStage) or 1)
+			local posts = { "stove" }
+			for _, p in ipairs({ { "steel", 2 }, { "pink", 3 }, { "line", 4 } }) do
+				if stage >= p[2] then
+					table.insert(posts, p[1])
+				end
+			end
+			for i, h in ipairs(data.partTimers) do
+				if type(h) == "table" then
+					h.post = posts[i]
+				end
+			end
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))
