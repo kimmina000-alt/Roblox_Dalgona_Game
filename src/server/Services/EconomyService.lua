@@ -289,7 +289,15 @@ function EconomyService.buy(player, ingredientId, packs)
 		return { ok = false, reason = "불러오는 중이에요" }
 	end
 	local cost = ing.price * packs
-	local have = data.ingredients[ing.id] or 0
+	-- 슈퍼마켓 (D54, MarketService): 슈퍼가 골목에 있으면 슈퍼 계산대 앞에서만 사고, 산 것은 봉지에 (가게에 들어가면 냉장고·서랍장으로)
+	local market = EconomyService.marketHook
+	if market then
+		local okM, why = market.check(player)
+		if not okM then
+			return { ok = false, reason = why }
+		end
+	end
+	local have = (data.ingredients[ing.id] or 0) + (market and market.pending(player, ing.id) or 0)
 	if have + ing.pack * packs > G.IngredientMax then
 		return { ok = false, reason = string.format("%s은(는) %d개까지 보관해요 (지금 %d개)", ing.name, G.IngredientMax, have) }
 	end
@@ -298,9 +306,14 @@ function EconomyService.buy(player, ingredientId, packs)
 	end
 	Data.update(player, function(d)
 		d.coins -= cost
-		d.ingredients[ing.id] = (d.ingredients[ing.id] or 0) + ing.pack * packs
+		if not market then
+			d.ingredients[ing.id] = (d.ingredients[ing.id] or 0) + ing.pack * packs
+		end
 	end)
-	return { ok = true, amount = ing.pack * packs, cost = cost }
+	if market then
+		market.toBag(player, ing.id, ing.pack * packs)
+	end
+	return { ok = true, amount = ing.pack * packs, cost = cost, bag = market ~= nil }
 end
 
 -- 제작 시작 전 확인. 반환: ok, 이유(한국어, 화면에 띄움)
