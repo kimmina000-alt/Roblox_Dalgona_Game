@@ -212,8 +212,10 @@ end
 function Station:clearFx()
 	Sfx.stopAll()
 	self.fx:ClearAllChildren()
-	for _, d in ipairs(self.Ladle:GetChildren()) do
-		if d.Name:sub(1, 2) == "Fx" then
+	-- 국자 그릇(Bowl) 안에 붙은 효과(탄 연기 FxSmokeAtt 등)까지 지움: 바로 아래만 보면 "다시 하기" 뒤에도
+	-- 탄 연기가 계속 나옴 (2026-11-24 "태워서 다시 도전하면 탄 국자")
+	for _, d in ipairs(self.Ladle:GetDescendants()) do
+		if d.Parent and d.Name:sub(1, 2) == "Fx" then
 			d:Destroy()
 		end
 	end
