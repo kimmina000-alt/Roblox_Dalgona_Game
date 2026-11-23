@@ -486,7 +486,21 @@ local function helperModel(player, plot, i, cf)
 	return m
 end
 
+-- 제작 세션 연출 약속 (D34): 미니미 속성 StationKey = "hand" | "m2" | "m3" | "m4" (맡은 제작대, 대기면 없음), Working = 일하는 중
+local STATION_KEY = { stove = "hand", steel = "m2", pink = "m3", line = "m4" }
+
+local function setWorking(st)
+	local m = st.model
+	if m and m.Parent then
+		local w = st.status == "work"
+		if m:GetAttribute("Working") ~= w then
+			m:SetAttribute("Working", w)
+		end
+	end
+end
+
 local function setHelperText(st, text)
+	setWorking(st)
 	local head = st.model and st.model:FindFirstChild("Head")
 	local bb = head and head:FindFirstChild("Status")
 	if bb and bb.TextLabel.Text ~= text then
@@ -661,6 +675,8 @@ local function syncHelpers(player, d)
 				m = m or helperModel(player, plot, i, foot)
 				m.Name = helperName(post, i)
 				m:SetAttribute("Post", post or "")
+				m:SetAttribute("StationKey", post and STATION_KEY[post] or nil)
+				m:SetAttribute("Working", false)
 				st.model = m
 				st.building = false
 			end)
