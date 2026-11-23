@@ -1,5 +1,5 @@
 -- 가게 HUD (Phase 2, 2026-11-20): 코인·레벨(EXP 막대)·재료·달고나 보관함·가게 번호 + 재료 상점 + 알림
--- 2026-11-22 새 스타일(shared/UiStyle): 왼쪽 위 레벨 동그라미+가게 이름판, 가운데 위 코인·보관함 알약, 오른쪽 위 네모 메뉴(Menu, 성장 버튼은 GrowthUi가 넣음)
+-- 2026-11-22 새 스타일(shared/UiStyle): 왼쪽 위 레벨 동그라미+가게 이름판, 그 아래 코인·보관함 알약(2026-11-24), 그 아래 재료 줄, 오른쪽 위 네모 메뉴(Menu, 성장 버튼은 GrowthUi가 넣음)
 -- 서버가 Remotes.PlayerState로 바뀔 때마다 보내 준다. 제작 화면(MakingScreen)이 켜져 있으면 숨긴다.
 
 local Players = game:GetService("Players")
@@ -18,13 +18,13 @@ local label = UI.text
 
 local gui = UI.screen("ShopHud", 5, playerGui)
 local root = UI.root(gui) -- HUD 조각은 Root 안, 상점 창은 gui 바로 아래 (튜토리얼이 ShopHud.Shop을 찾음)
-local fit, _, onScale = UI.fitter(root)
+local fit = UI.fitter(root)
 
 ---------------------------------------------------------------- 왼쪽 위: 레벨 동그라미 + 가게 이름판(EXP) + 재료 줄
 local panel = new("Frame", {
 	Name = "Status",
 	Position = UDim2.fromOffset(8, 6),
-	Size = UDim2.fromOffset(330, 166),
+	Size = UDim2.fromOffset(350, 210),
 	BackgroundTransparency = 1,
 	Parent = root,
 })
@@ -51,7 +51,7 @@ local levelText = label({ Name = "Level", Text = "1", FontFace = UI.F.round, Tex
 -- 재료 줄 (0개면 빨갛게)
 local ingBar = new("Frame", {
 	Name = "Ingredients",
-	Position = UDim2.fromOffset(6, 94), -- 레벨 동그라미·이름판과 띄움 (2026-11-23 사용자 요청)
+	Position = UDim2.fromOffset(6, 140), -- 코인·보관함 알약 아래 (2026-11-24 사용자 요청)
 	Size = UDim2.fromOffset(0, 36),
 	AutomaticSize = Enum.AutomaticSize.X,
 	BackgroundColor3 = C.pill,
@@ -77,21 +77,17 @@ for i, ing in ipairs(G.Ingredients) do
 		Parent = ingBar,
 	})
 end
-local saveWarn = label({ Name = "SaveWarn", Position = UDim2.fromOffset(10, 136), Size = UDim2.fromOffset(300, 20), TextSize = 14, TextColor3 = C.white, Outline = C.bad, Text = "⚠ 저장 안 됨 (DataStore 꺼짐)", Visible = false, Parent = panel })
+local saveWarn = label({ Name = "SaveWarn", Position = UDim2.fromOffset(10, 182), Size = UDim2.fromOffset(300, 20), TextSize = 14, TextColor3 = C.white, Outline = C.bad, Text = "⚠ 저장 안 됨 (DataStore 꺼짐)", Visible = false, Parent = panel })
 
----------------------------------------------------------------- 위: 코인 · 달고나 보관함 알약 (가게 이름판 바로 오른쪽 — 폰에서 겹치지 않게)
+---------------------------------------------------------------- 레벨 아래: 코인 · 달고나 보관함 알약 (2026-11-24 사용자 요청: 레벨 밑으로, 가운데 화면을 비움)
 local top = new("Frame", {
 	Name = "TopBar",
-	Position = UDim2.fromOffset(330, 14),
-	Size = UDim2.fromOffset(410, 48),
+	Position = UDim2.fromOffset(24, 84),
+	Size = UDim2.fromOffset(330, 44),
 	BackgroundTransparency = 1,
-	Parent = root,
-}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 30), SortOrder = Enum.SortOrder.LayoutOrder }) })
-fit(top)
-onScale(function(k)
-	top.Position = UDim2.fromOffset(8 + 340 * k, 14 * k)
-end)
-local coinPill, coinText, coinHolder = UI.pill({ Name = "Coins", LayoutOrder = 1, Size = UDim2.fromOffset(200, 40), IconColor = C.gold, Parent = top })
+	Parent = panel,
+}, { new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 28), VerticalAlignment = Enum.VerticalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }) })
+local coinPill, coinText, coinHolder = UI.pill({ Name = "Coins", LayoutOrder = 1, Size = UDim2.fromOffset(170, 40), IconColor = C.gold, Parent = top })
 coinHolder.BackgroundTransparency = 1
 coinHolder:FindFirstChildOfClass("UIStroke"):Destroy()
 coinHolder:FindFirstChildOfClass("UIGradient"):Destroy()
@@ -102,7 +98,7 @@ coinText.Size = UDim2.new(1, -70, 1, 0)
 -- + 누르면 재료 상점
 local plusBtn = UI.button({ Name = "Plus", Text = "+", Color = C.yellow, Radius = 10, TextSize = 24, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -3, 0.5, 0), Size = UDim2.fromOffset(34, 36), ZIndex = 3, Parent = coinPill })
 plusBtn.Face.Label.FontFace = UI.F.round
-local stockPill, stockText = UI.pill({ Name = "Stock", LayoutOrder = 2, Icon = "🍪", Size = UDim2.fromOffset(170, 40), IconColor = C.tan, Parent = top })
+local stockPill, stockText = UI.pill({ Name = "Stock", LayoutOrder = 2, Icon = "🍪", Size = UDim2.fromOffset(140, 40), IconColor = C.tan, Parent = top })
 
 ---------------------------------------------------------------- 오른쪽 위: 네모 메뉴 버튼 (상점, 성장은 GrowthUi가 여기 넣음)
 local menu = new("Frame", {
@@ -314,7 +310,6 @@ end)
 local function watchMaking(screen)
 	local function sync()
 		panel.Visible = not screen.Enabled
-		top.Visible = not screen.Enabled
 		menu.Visible = not screen.Enabled
 		toast.AnchorPoint = screen.Enabled and Vector2.new(0.5, 1) or Vector2.new(0.5, 0)
 		toast.Position = screen.Enabled and UDim2.new(0.5, 0, 1, -24) or UDim2.new(0.5, 0, 0, 74)
