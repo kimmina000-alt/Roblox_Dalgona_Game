@@ -63,6 +63,12 @@ G.Ingredients = {
 	{ id = "coal", name = "연탄", icon = "⚫", pack = 5, price = 25 }, -- D44 (2026-11-24): 5장 25코인, 1장 = 화로에서 10판 (G.CoalPerMake)
 }
 G.IngredientMax = 999 -- 재료마다 최대 보관량
+-- 가게 냉장고·서랍장 (2026-11-24 사용자 "냉장고랑 냉장고 옆 서랍장 기능 구현", WORK_PRIORITIES 가게 기능 ②③):
+-- 가게 3D 부품 Role을 누르면 그 칸 재료를 보여 주고 바로 삼. role = 가게 모델 부품 속성 Role
+G.StorageGroups = {
+	{ key = "fridge", role = "냉장고", title = "냉장고 · 식재료", ids = { "sugar", "soda" } },
+	{ key = "drawer", role = "서랍장", title = "서랍장 · 그 밖의 재료", ids = { "wrapper", "chopsticks", "twistTie", "coal" } },
+}
 
 -- 1개당 재료 (D4): 설탕은 도안 등급에 따라 1/2/3회분, 소다 1. 포장지·빵끈은 포장할 때만 (사용자 확정 2026-11-20)
 G.SugarByGrade = {

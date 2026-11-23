@@ -202,6 +202,18 @@ function Minime.build(player, parent, footCF, index, skill)
 	model:SetAttribute("OwnerUserId", player.UserId)
 	model.Parent = parent
 	task.wait()
+	-- 넣은 뒤 Humanoid가 크기·관절을 다시 맞춰 발 높이가 바뀜 → 발(·종아리) 아래끝을 바닥에 한 번 더 맞춤
+	-- (2026-11-24 사용자: 알바들이 땅에 박혀 있음, 발이 바닥보다 약 1.2 아래였음)
+	local low = math.huge
+	for _, p in ipairs(model:GetDescendants()) do
+		if p:IsA("BasePart") and (p.Name:find("Foot") or p.Name:find("LowerLeg")) then
+			local corner = p.CFrame:PointToWorldSpace(Vector3.new(0, -p.Size.Y / 2, 0))
+			low = math.min(low, corner.Y)
+		end
+	end
+	if low < math.huge and math.abs(footCF.Y - low) > 0.02 then
+		model:PivotTo(model:GetPivot() + Vector3.new(0, footCF.Y - low, 0))
+	end
 	-- 오른손에 작은 국자 (모델을 놓은 뒤 붙임: 그 전에 붙이면 Humanoid가 크기를 다시 맞추며 같이 줄어듦): 손잡이 끝(+Z)을 그립에, 그릇(-Z)은 앞쪽 조금 아래로
 	local hand = model:FindFirstChild("RightHand")
 	local grip = hand and hand:FindFirstChild("RightGripAttachment")
