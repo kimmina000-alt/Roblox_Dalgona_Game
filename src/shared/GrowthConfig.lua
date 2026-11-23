@@ -179,11 +179,21 @@ G.Collection = {
 	meetCoins = 30, -- 손님 처음 만남
 	hearts = { 10, 50, 150 }, -- 하트 1·2·3 (판 수)
 	heart1Exp = 50,
-	heart2Coins = 300, -- + 좋아하는 도안 공개
+	heart2Coins = 300, -- + 단골(regular) 둘: 좋아하는 도안 공개 / 나머지 5종: 아래 팁
+	heart2Tip = 0.05, -- 단골이 아닌 손님 5종: 하트 2부터 그 손님에게 팔 때 팁 +5% (계속, 11-24 기획)
 	streetTitle = "골목 인기 가게", -- 손님 7종 모두 하트 3
 }
 
 ---------------------------------------------------------------- 장비 업그레이드 (SYSTEMS_SPECIFICATION 7장, Lv2에 열림)
+-- 하트 2 팁 (단골이 아닌 손님만). d = 저장 데이터, ctype = G.Customers.types 항목
+function G.heartTip(d, ctype)
+	if not ctype or ctype.kind == "regular" then
+		return 0
+	end
+	local c = type(d.custDex) == "table" and d.custDex[ctype.id]
+	return (type(c) == "table" and (c.h or 0) >= 2) and G.Collection.heart2Tip or 0
+end
+
 G.UpgradeUnlockLevel = 2
 G.Upgrades = {
 	stove = { name = "화로", costs = { 150, 500, 1500, 5000 }, desc = "적정 온도 구간 +8%/Lv" }, -- Lv2~5 값
