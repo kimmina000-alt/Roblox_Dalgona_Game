@@ -94,7 +94,7 @@ G.ChopsticksPerRound = 1
 G.ChopsticksPerHelperRound = 0 -- 알바생은 젓가락을 안 씀 (사용자 결정 2026-11-21: 젓가락은 손 제작 1판에 1쌍만)
 G.ChopsticksPerMachineRound = 0 -- 2~5단계 기계·공장은 안 씀 (공장은 운영비 +1)
 
-G.StockMax = 30 -- 들고 있을 수 있는 달고나 수 (작업대 업그레이드마다 +10, G.stockMax)
+G.StockMax = 50 -- 보관함 기본 칸 (D42, 2026-11-24: 30 → 50). 진열대 칸은 따로 (G.stockMax·G.storedCount)
 G.EnforceUnlocks = true -- 해금 안 된 도안은 서버가 거절 (Phase 4, 2026-11-20 켬)
 
 ---------------------------------------------------------------- 레벨 (GDD 6장)
@@ -155,18 +155,58 @@ G.Upgrades = {
 G.UpgradeOrder = { "stove", "presser", "table" }
 G.StoveBandPerLevel = 0.08 -- 적정 온도 구간 폭 ×(1 + 0.08×(Lv-1)), DEVELOPMENT_PLAN 3장 14번
 G.PresserBandPerLevel = 0.08
-G.TableStockPerLevel = 10
+G.TableStockPerLevel = 25 -- 작업대 Lv2~4마다 +25 (D42: +10 → +25, 최대 125)
+G.MachineStock = { [2] = 50, [3] = 75, [4] = 125 } -- 기계를 사면 딸린 보관 선반 (D42, 단계마다 더함 → 4단계까지 +250)
+G.FactoryBinStock = 250 -- 공장 받는 상자 (D42, 공장을 사면)
 
 -- data.upgrades는 0부터 (0 = Lv1). 장비 Lv = 값 + 1
+-- 보관함 용량 (D42): 기본 50 + 작업대 +25/Lv + 기계 보관 선반 + 공장 받는 상자, 창고면 ×2. stockBonus = 옛 데이터 보장분 (v10)
 function G.stockMax(data)
 	local t = data and data.upgrades and data.upgrades.table or 0
 	local n = G.StockMax + t * G.TableStockPerLevel
-	-- 공장 대형 완제품 창고: 보관량 2배
+	local stage = data and data.machineStage or 1
+	for s, k in pairs(G.MachineStock) do
+		if stage >= s then
+			n += k
+		end
+	end
 	local f = data and data.factory
+	if f and f.unlocked then
+		n += G.FactoryBinStock
+	end
+	-- 공장 대형 완제품 창고: 보관량 2배
 	if f and f.ups and (f.ups.warehouse or 0) > 0 then
 		n *= G.Factory.warehouseMult
 	end
+	return n + (data and tonumber(data.stockBonus) or 0)
+end
+
+-- 보관함에 있는 수 (진열대에 놓인 것은 안 셈, D42)
+function G.storedCount(d)
+	local n = 0
+	for _, it in ipairs(d.stock) do
+		if not it.sl then
+			n += 1
+		end
+	end
 	return n
+end
+
+-- 보관함 남은 칸 (손으로 만든 것·뽑기 덤처럼 보관함으로만 가는 것)
+function G.storageRoom(d)
+	return G.stockMax(d) - G.storedCount(d)
+end
+
+-- 자동 생산이 넣을 수 있는 수 = 보관함 남은 칸 + 진열대 빈 칸 (자동 생산은 빈 칸부터 채움, D26)
+function G.stockRoom(d)
+	local used = 0
+	local slots = G.shelfSlots(d)
+	for _, it in ipairs(d.stock) do
+		if it.sl and it.sl <= slots then
+			used += 1
+		end
+	end
+	return math.max(0, G.storageRoom(d)) + math.max(0, slots - used)
 end
 
 ---------------------------------------------------------------- 국자·알바생 (SHOP_GROWTH_PLAN 2장, D10)
@@ -524,6 +564,7 @@ G.Offline = {
 	maxHours = 8, -- 최대 이만큼만 셈
 	minSeconds = 60, -- 이보다 짧게 나갔다 오면 정산 안 함
 	step = 1, -- 시뮬레이션 간격(초)
+	speed = 0.5, -- 자리 비운 동안은 절반 속도로 만듦 (D42, 2026-11-24: D29 고침)
 	reportDelay = 4, -- 들어온 뒤 요약 팝업을 보내기까지 (화면 준비)
 	-- 판매 없음, 월세 없음. 나갈 때 가게 문이 닫혀 있었으면 알바생·기계·공장 모두 멈춘 채
 }

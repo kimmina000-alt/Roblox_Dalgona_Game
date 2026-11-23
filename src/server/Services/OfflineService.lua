@@ -1,4 +1,5 @@
 -- 오프라인 생산 정산 (D29, 2026-11-22): 알바생·기계·공장은 자리 비운 동안에도 만든다. 손 제작은 안 됨
+-- D42 (2026-11-24): 절반 속도 (G.Offline.speed)
 -- 수치는 GrowthConfig.Offline (임시값)
 --  - 저장할 때마다 lastSeen = 지금 (PlayerDataService, 정산이 끝난 뒤부터). 들어오면 지금 - lastSeen (최대 maxHours)을 한 번에 정산
 --  - 각자 온라인과 같은 규칙으로 step초씩 시뮬레이션 (GrowthService·MachineService·FactoryService의 offline 함수).
@@ -31,16 +32,17 @@ local function simulate(dd, seconds)
 	while t < seconds do
 		local step = math.min(dt, seconds - t)
 		t += step
+		local work = step * (O.speed or 1) -- 자리 비운 동안은 절반 속도 (D42)
 		local active = false
 		for i = 1, #dd.partTimers do
-			if hooks.helper(dd, i, helperState[i], step, rep) then
+			if hooks.helper(dd, i, helperState[i], work, rep) then
 				active = true
 			end
 		end
-		if hooks.machine(dd, step, rep) then
+		if hooks.machine(dd, work, rep) then
 			active = true
 		end
-		if hooks.factory(dd, step, rep) then
+		if hooks.factory(dd, work, rep) then
 			active = true
 		end
 		if not active then

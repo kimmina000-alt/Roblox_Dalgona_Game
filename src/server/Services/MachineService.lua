@@ -139,7 +139,7 @@ local function stopReason(d, shape, m)
 	if not shape then
 		return "도안 없음"
 	end
-	if #d.stock >= G.stockMax(d) then
+	if G.stockRoom(d) <= 0 then
 		return "보관함 가득"
 	end
 	local need = batchNeed(shape, m.batch)
@@ -344,7 +344,7 @@ end
 
 -- 한 판 만들기 (데이터만 바꿈, Data.update 안이나 오프라인 정산에서 부름). 반환: 만든 수, 진열 칸 목록, 레벨업 목록, 쓴 재료
 local function produce(dd, shape, m)
-	local room = G.stockMax(dd) - #dd.stock
+	local room = G.stockRoom(dd)
 	local n = math.min(m.batch, room)
 	if n <= 0 then
 		return 0, {}, {}, {}

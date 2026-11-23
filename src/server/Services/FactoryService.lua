@@ -577,7 +577,7 @@ local function beginJob(dd, k)
 			pending += job.n
 		end
 	end
-	if #dd.stock + pending + f.qty > G.stockMax(dd) then
+	if pending + f.qty > G.stockRoom(dd) then
 		return "보관함 가득"
 	end
 	local _, baseCoins = jobCost(dd, shape, f.qty, {})

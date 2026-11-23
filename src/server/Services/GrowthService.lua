@@ -683,7 +683,7 @@ local function stepHelper(player, d, i, h, st, dt)
 		why = "가게 문 닫힘" -- 월세 밀림 (D21)
 	elseif Production.isMaking(player) and not (d.stoveUps and d.stoveUps.burner2) then
 		why = "사장님이 만드는 중" -- D34 (두 번째 화구가 있으면 안 쉼, D40)
-	elseif #d.stock >= G.stockMax(d) then
+	elseif G.stockRoom(d) <= 0 then
 		why = "보관함 가득"
 	elseif d.coins < wage then
 		why = "급여 부족"
@@ -741,7 +741,7 @@ local function offlineHelper(dd, i, st, dt, rep)
 	local why = nil
 	if not G.shopOpen(dd) then
 		why = "가게 문 닫힘"
-	elseif #dd.stock >= G.stockMax(dd) then
+	elseif G.stockRoom(dd) <= 0 then
 		why = "보관함 가득"
 	elseif dd.coins < wage then
 		why = "급여 부족"
