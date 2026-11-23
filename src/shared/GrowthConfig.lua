@@ -17,14 +17,14 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 11 -- v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
+G.SchemaVersion = 12 -- v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
 	coins = 100, -- 시작 자금 (ECONOMY_BALANCE 6장 "시작 자금 100")
 	exp = 0,
 	level = 1,
-	ingredients = { sugar = 5, soda = 5, wrapper = 5, chopsticks = 5, twistTie = 5 }, -- 첫 판을 바로 해 볼 수 있게 5회분 (사용자 확정, 2026-11-20)
+	ingredients = { sugar = 5, soda = 5, wrapper = 5, chopsticks = 5, twistTie = 5, coal = 1 }, -- 첫 판을 바로 해 볼 수 있게 5회분 (사용자 확정, 2026-11-20)
 	stock = {}, -- 만든 달고나 { id, s = 도안 id, g = 등급, q = 완성도, p = 판매가, b = 도안 가격, m = 품질 배율, pk = 포장 여부, sl = 진열대 칸(없으면 보관함) }
 	nextItemId = 1, -- 달고나 번호 (들고 다니기·진열 칸을 찾는 데 씀)
 	unlockedShapes = { "Circle", "Square", "Triangle", "Bone" }, -- Common (레벨이 오르면 GrowthService가 더함)
@@ -32,6 +32,9 @@ G.DefaultData = {
 	-- 알바생 (D34·D43): { shape = 화로에서 만들 도안 id, skill = 모자(자리만), post = 역할 key (G.HelperPosts) | nil(대기) }
 	partTimers = {},
 	stoveUps = {}, -- 화로 알바 교육 (D40): [key] = true (G.StoveTraining)
+	-- 화로 연탄 남은 양 (D44, 0~1, 한 판 0.1). coalLeft = 내 화로(화로 알바도 같이 씀), coalLeft2 = 두 번째 화구(D40, 화로 알바가 따로 씀)
+	coalLeft = 1,
+	coalLeft2 = 1,
 	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
 	custFav = {}, -- 단골 손님이 좋아하는 도안 (D37): [손님 id] = 도안 id (처음 올 때 열린 도안 중 무작위로 정함)
 	machineStage = 1, -- 설비 단계 1 연탄 화로 ~ 5 공장 (SHOP_GROWTH_PLAN 1장)
@@ -57,8 +60,15 @@ G.Ingredients = {
 	{ id = "wrapper", name = "포장지", icon = "🛍️", pack = 10, price = 10 },
 	{ id = "chopsticks", name = "나무젓가락", icon = "🥢", pack = 10, price = 5 }, -- 10쌍 5코인 (GDD 7장, 2026-11-20)
 	{ id = "twistTie", name = "빵끈", icon = "🎀", pack = 10, price = 5 }, -- 10개 5코인 (사용자 요청 2026-11-20, 임시값)
+	{ id = "coal", name = "연탄", icon = "⚫", pack = 5, price = 25 }, -- D44 (2026-11-24): 5장 25코인, 1장 = 화로에서 10판 (G.CoalPerMake)
 }
 G.IngredientMax = 999 -- 재료마다 최대 보관량
+-- 가게 냉장고·서랍장 (2026-11-24 사용자 "냉장고랑 냉장고 옆 서랍장 기능 구현", WORK_PRIORITIES 가게 기능 ②③):
+-- 가게 3D 부품 Role을 누르면 그 칸 재료를 보여 주고 바로 삼. role = 가게 모델 부품 속성 Role
+G.StorageGroups = {
+	{ key = "fridge", role = "냉장고", title = "냉장고 · 식재료", ids = { "sugar", "soda" } },
+	{ key = "drawer", role = "서랍장", title = "서랍장 · 그 밖의 재료", ids = { "wrapper", "chopsticks", "twistTie", "coal" } },
+}
 
 -- 1개당 재료 (D4): 설탕은 도안 등급에 따라 1/2/3회분, 소다 1. 포장지·빵끈은 포장할 때만 (사용자 확정 2026-11-20)
 G.SugarByGrade = {
@@ -93,6 +103,7 @@ end
 -- 나무젓가락: 한 판 시작(젓가락을 꺼낼 때)에 1쌍. "다시 하기"도 새 판이라 1쌍. 0쌍이면 시작 못 함
 G.ChopsticksPerRound = 1
 G.ChopsticksPerHelperRound = 0 -- 알바생은 젓가락을 안 씀 (사용자 결정 2026-11-21: 젓가락은 손 제작 1판에 1쌍만)
+G.CoalPerMake = 0.1 -- 화로 한 판에 타는 연탄 (D44, 1장 = 10판). 손 제작·화로 알바만, 기계·공장은 안 씀
 G.ChopsticksPerMachineRound = 0 -- 2~5단계 기계·공장은 안 씀 (공장은 운영비 +1)
 
 G.StockMax = 50 -- 보관함 기본 칸 (D42, 2026-11-24: 30 → 50). 진열대 칸은 따로 (G.stockMax·G.storedCount)

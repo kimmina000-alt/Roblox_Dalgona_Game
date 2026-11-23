@@ -275,6 +275,12 @@ local function buildShelf(shop, plot)
 		s.disc.Transparency = 1 -- 틀에서는 칸이 보이게 반투명으로 둬도, 게임에서는 놓일 때만 보임
 		s.rim.Transparency = 1
 	end
+	-- 가게 3D 진열 가구가 있으면 옛 진열대 몸통은 안 보이는 자리 표시일 뿐: 부딪히지 않게 (2026-11-24, 카운터 뒤 투명 벽)
+	if body.Parent and findRole(plot.model, AREA_ROLES.case) then
+		body.CanCollide = false
+		body.CanQuery = false
+		body.Transparency = 1
+	end
 	-- 손님: 진열대 몸통 앞(-Z) SALES.standZ - shelf.pos.Z 만큼 떨어진 곳 (부지 기준 x, z)
 	local bodyCF = body.Parent and body.CFrame or cf
 	local front = SALES.standZ - SALES.shelf.pos.Z -- 음수 = 앞

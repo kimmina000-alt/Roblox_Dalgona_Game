@@ -178,10 +178,6 @@ function ProductionService.start(player, shapeId)
 	if not ws then
 		return nil, "가게를 받으면 내 작업대에서 만들 수 있어요"
 	end
-	-- 연탄이 다 탔으면 새 연탄으로 갈아 넣음
-	if ws and (ws:GetAttribute("CoalLeft") or 1) <= 0.001 then
-		WorkstationBuilder.setCoal(ws, 1)
-	end
 	-- 고른 도안 (모르는 id면 기본 도안). 가격은 서버 목록에서만 가져온다
 	local shape = ShapeCatalog.get(type(shapeId) == "string" and shapeId or "") or ShapeCatalog.get(ShapeCatalog.default)
 	if ProductionService.hooks.canStart then
@@ -189,6 +185,12 @@ function ProductionService.start(player, shapeId)
 		if not ok then
 			return nil, why -- 재료 부족 등: 클라이언트가 이유를 보여 주고 끝냄
 		end
+	end
+	-- 연탄 (D44): 다 탔으면 보관한 연탄 1장을 갈아 넣음 (없으면 canStart가 이미 막음). 훅이 없으면 예전처럼 공짜 새 연탄
+	if ProductionService.hooks.coalStart then
+		WorkstationBuilder.setCoal(ws, ProductionService.hooks.coalStart(player))
+	elseif (ws:GetAttribute("CoalLeft") or 1) <= 0.001 then
+		WorkstationBuilder.setCoal(ws, 1)
 	end
 	local s = { id = HttpService:GenerateGUID(false), t0 = now, shape = shape }
 	sessions[player] = s
@@ -220,7 +222,11 @@ function ProductionService.submit(player, sessionId, raw)
 	-- 쓸수록 연탄이 낮아지고 잿빛이 됨 (작업대마다)
 	local ws = workstationOf(player)
 	if ws then
-		WorkstationBuilder.setCoal(ws, (ws:GetAttribute("CoalLeft") or 1) - COAL_PER_MAKE)
+		local left = (ws:GetAttribute("CoalLeft") or 1) - COAL_PER_MAKE
+		if ProductionService.hooks.coalBurn then
+			left = ProductionService.hooks.coalBurn(player, COAL_PER_MAKE) -- 저장 (D44)
+		end
+		WorkstationBuilder.setCoal(ws, left)
 	end
 	if ProductionService.hooks.onResult then
 		local ok, reward = pcall(ProductionService.hooks.onResult, player, s.shape, result)

@@ -349,6 +349,7 @@ local function poseMinime(ws, k, grip, center, resting)
 end
 
 local started = false
+local FAR = 70 -- 이보다 멀면 화로 알바 움직임을 멈춤
 -- 화로 위 알바생 국자·젓가락·내용물은 안 보이게 (2026-11-22 사용자 "연탄 화로에서 알바생 국자도 빼자", "달고나 재료는 나만").
 -- 모델은 남겨 두고 움직임만 계속 계산 → 알바생 미니미는 그 자리 기준으로 카운터 위에 서고 진열대 배달도 그대로 (사용자 선택)
 -- 광택 메시는 LocalTransparencyModifier로 다 안 사라져서 Transparency
@@ -374,6 +375,13 @@ function Helper.start()
 		for _, ws in ipairs(Workstations.all()) do
 			for _, m in ipairs(ws:GetChildren()) do
 				if m.Name:sub(1, 11) == "HelperLadle" then
+					hideLadle(m)
+					-- 멀면 움직이지 않음 (D43 "가게 안 알바는 가까이 있을 때만 움직임", 폰 성능). 자세는 마지막 그대로
+					local cam = workspace.CurrentCamera
+					local c0 = m:GetAttribute("Center")
+					if cam and typeof(c0) == "Vector3" and (c0 - cam.CFrame.Position).Magnitude > FAR then
+						continue
+					end
 					local k = tonumber(m.Name:sub(12))
 					local mini = k and minimeFor(ws, k)
 					local resting = isResting(mini)
@@ -388,7 +396,6 @@ function Helper.start()
 					if grip and k then
 						poseMinime(ws, k, grip, center, resting)
 					end
-					hideLadle(m)
 				end
 			end
 		end
