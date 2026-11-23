@@ -1,7 +1,8 @@
 -- 머리 위 칭호 (D38, 2026-11-24): 플레이어 속성 Title(서버 CollectionService가 넣음, "" = 없음)을
 -- 이름 위에 작은 리본 판으로 띄움. 나와 다른 플레이어 모두. 이 화면에서만 만드는 BillboardGui.
--- 만드는 동안은 숨김 (2026-11-24 사용자 요청): 플레이어 속성 Making = true (서버 제작 세션이 넣음, 다른 사람 화면에도),
--- 내 칭호는 내 제작 화면(PlayerGui.MakingScreen)이 켜져 있을 때도 바로 숨김.
+-- 내가 만드는 동안은 모든 칭호(내 것·다른 사람 것)를 숨김 (2026-11-24 사용자 요청):
+-- 신호 = LocalPlayer 속성 Making = true (MakingClient가 내 화면에서만 넣음, 끝나면 nil — 제작 세션 feat/making-polish-1125),
+-- 혹시 그 신호가 없어도 내 제작 화면(PlayerGui.MakingScreen)이 켜져 있으면 숨김.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,6 +18,7 @@ holder.Name = "TitleTags"
 holder.Parent = playerGui
 
 local tags = {} -- [player] = BillboardGui
+local refreshAll -- 아래에서 정함
 
 local function build(player)
 	local bb = Instance.new("BillboardGui")
@@ -64,7 +66,7 @@ local function refresh(player)
 	local char = player.Character
 	local head = char and char:FindFirstChild("Head")
 	local has = type(title) == "string" and title ~= ""
-	local making = player:GetAttribute("Making") == true or (player == me and myMaking)
+	local making = me:GetAttribute("Making") == true or myMaking
 	bb.Plate.Label.Text = has and ("🏅 " .. title) or ""
 	bb.Adornee = head
 	bb.Enabled = has and head ~= nil and not making
@@ -73,9 +75,6 @@ end
 local function watch(player)
 	tags[player] = build(player)
 	player:GetAttributeChangedSignal("Title"):Connect(function()
-		refresh(player)
-	end)
-	player:GetAttributeChangedSignal("Making"):Connect(function()
 		refresh(player)
 	end)
 	player.CharacterAdded:Connect(function(char)
@@ -96,11 +95,19 @@ Players.PlayerRemoving:Connect(function(p)
 	end
 end)
 
+-- 내가 만드는 중이면 모두 숨김
+refreshAll = function()
+	for p in pairs(tags) do
+		refresh(p)
+	end
+end
+me:GetAttributeChangedSignal("Making"):Connect(refreshAll)
+
 -- 내 제작 화면
 local function watchMaking(screen)
 	local function sync()
 		myMaking = screen.Enabled
-		refresh(me)
+		refreshAll()
 	end
 	screen:GetPropertyChangedSignal("Enabled"):Connect(sync)
 	sync()
