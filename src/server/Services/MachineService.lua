@@ -97,8 +97,12 @@ local function currentShape(d, m)
 	return list[1] and ShapeCatalog.get(list[1]) or nil
 end
 
-local function rollQuality()
-	local q = math.random(G.Machine.qMin, G.Machine.qMax)
+local function rollQuality(dd)
+	local lo, hi = G.Machine.qMin, G.Machine.qMax
+	if dd and dd.stoveUps and dd.stoveUps.machineTrain then
+		lo, hi = G.MachineTrainQ[1], G.MachineTrainQ[2] -- 기계 알바 교육 (D46, Lv8)
+	end
+	local q = math.random(lo, hi)
 	for _, g in ipairs(Config.Grades) do
 		if q >= g.min then
 			return q, g.name, g.mult
@@ -366,7 +370,7 @@ local function produce(dd, shape, m)
 	end
 	local slots = {}
 	for _ = 1, n do
-		local q, grade, mult = rollQuality()
+		local q, grade, mult = rollQuality(dd)
 		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
 		if carry then
