@@ -300,13 +300,14 @@ local function animateStaff(fac, now, camPos)
 		show = math.abs(lp.X) < box.half.X + STAFF_SHOW and math.abs(lp.Z) < box.half.Z + STAFF_SHOW and math.abs(lp.Y) < box.half.Y + STAFF_SHOW * 2
 	end
 	for _, m in ipairs(folder:GetChildren()) do
-		if m:GetAttribute("Shown") ~= show then
-			m:SetAttribute("Shown", show)
+		local want = show or m:GetAttribute("Carrying") == true -- 진열대로 걸어가는 포장 알바는 가게 안에서도 보임
+		if m:GetAttribute("Shown") ~= want then
+			m:SetAttribute("Shown", want)
 			for _, d in ipairs(m:GetDescendants()) do
 				if d:IsA("BasePart") then
-					d.LocalTransparencyModifier = show and 0 or 1
+					d.LocalTransparencyModifier = want and 0 or 1
 				elseif d:IsA("BillboardGui") then
-					d.Enabled = show
+					d.Enabled = want
 				end
 			end
 		end
@@ -317,7 +318,7 @@ local function animateStaff(fac, now, camPos)
 	for _, m in ipairs(folder:GetChildren()) do
 		local key = m:GetAttribute("StaffKey")
 		local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
-		if key and root then
+		if key and root and not m:GetAttribute("Carrying") then -- 진열대로 걸어가는 중이면 HelperCarry가 움직임
 			local on = fac:GetAttribute("StaffOn_" .. key) == true
 			local near = (root.Position - camPos).Magnitude < STAFF_DIST
 			if on and near and MOTION[key] then

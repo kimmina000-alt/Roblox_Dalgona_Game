@@ -18,6 +18,8 @@ local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local DalgonaLook = require(Shared:WaitForChild("DalgonaLook"))
+local HelperCarry = require(script.Parent:WaitForChild("HelperCarry")) -- 알바가 달고나를 들고 진열대로 걸어감 (서버 Carry* 신호)
+HelperCarry.start()
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local UI = require(Shared:WaitForChild("UiStyle")) -- 2026-11-22 새 스타일 (나무 판 창 + 크림 카드 + 사탕 버튼)
 
@@ -623,7 +625,7 @@ RunService.PreSimulation:Connect(function()
 		for _, m in ipairs(plot:GetChildren()) do
 			local key = m:IsA("Model") and m:GetAttribute("StationKey")
 			local motion = key and H_MOTION[key]
-			if motion then
+			if motion and not m:GetAttribute("Carrying") then -- 진열대로 걸어가는 중이면 HelperCarry가 움직임
 				local root = m:FindFirstChild("HumanoidRootPart") or m.PrimaryPart
 				local on = m:GetAttribute("Working") == true
 				local near = root and (root.Position - camPos).Magnitude < HELPER_DIST
