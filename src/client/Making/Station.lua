@@ -63,6 +63,15 @@ function Station.new(m)
 	local vs = m:GetAttribute("ViewScale")
 	if vs == nil or vs == 1 then
 		self.Ladle:PivotTo(self.rest.Ladle)
+		-- 보이는 누름판 메시를 판정용 원판(Disc) 가운데에 맞춤: 편집 틀에서 메시만 옆으로 밀리면 누를 때 달고나와
+		-- 비켜나 보임 (2026-11-23 "누름판이 달고나와 살짝 옆으로"). 높이는 그대로
+		local disc, pm = self.Presser:FindFirstChild("Disc"), self.Presser:FindFirstChild("Mesh")
+		if disc and pm and pm:IsA("BasePart") then
+			local off = pm.Position - disc.Position
+			if Vector3.new(off.X, 0, off.Z).Magnitude > 0.05 then
+				pm.CFrame = pm.CFrame - Vector3.new(off.X, 0, off.Z)
+			end
+		end
 	end
 	-- 소다 통 숟가락은 안 씀 (사용자 요청 2026-11-19: 소다컵에 숟가락 삭제). 모델은 남겨 두고 이 화면에서만 숨김
 	for _, p in ipairs(self.SodaSpoon:GetDescendants()) do

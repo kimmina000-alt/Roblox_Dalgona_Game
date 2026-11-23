@@ -638,6 +638,67 @@ function Ui:padAt(pos, clamp)
 	return math.clamp(u, 0, 1), math.clamp(v, 0, 1)
 end
 
+-- 뽑기 판 (2026-11-23 사용자 요청: 붓기 판처럼 뽑기에도 따로 판, 손가락이 도안을 가리지 않게). 붓기 판(PourPad)은
+-- 고정 기능이라 건드리지 않고 같은 자리·모양으로 따로 만듦. 판 안 = 화면에 보이는 달고나 둘레를 그대로 줄인 것:
+-- 점선(도안)을 작은 점으로 그리고, 판을 누르고 끌면 바늘이 달고나의 같은 자리를 긁음 (Ppopgi가 씀)
+function Ui:setPpPad(visible)
+	if not self.ppPad then
+		local pad = new("Frame", { Name = "PpopgiPad", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -24, 0.56, 0), Size = UDim2.fromOffset(self.touch and 230 or 260, self.touch and 230 or 260), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.5, ClipsDescendants = true, Visible = false, ZIndex = 5, Parent = self.root }, { corner(16) })
+		new("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.5, Thickness = 2, Parent = pad })
+		label({ Text = "여기를 누르고 따라 그려요", TextSize = 15, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.4, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -6), Size = UDim2.new(1, 0, 0, 20), ZIndex = 5, Parent = pad })
+		-- 바늘 자리
+		self.ppNeedle = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(14, 14), BackgroundColor3 = Color3.fromRGB(255, 90, 90), ZIndex = 7, Parent = pad }, { corner(7) })
+		new("UIStroke", { Color = Color3.new(1, 1, 1), Thickness = 2, Parent = self.ppNeedle })
+		self.ppDots = {}
+		self.ppPad = pad
+	end
+	self.ppPad.Visible = visible
+end
+
+-- 판 위 점선 점들 (uv 목록, 0~1)과 바늘 자리. done[i] = 이미 긁은 점
+function Ui:setPpPadDots(uvs, done, nu, nv, active)
+	local pad = self.ppPad
+	if not pad then
+		return
+	end
+	for i, uv in ipairs(uvs) do
+		local d = self.ppDots[i]
+		if not d then
+			d = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(5, 5), BorderSizePixel = 0, ZIndex = 6, Parent = pad }, { corner(3) })
+			self.ppDots[i] = d
+		end
+		d.Visible = true
+		d.Position = UDim2.fromScale(uv[1], uv[2])
+		d.BackgroundColor3 = (done and done[i]) and Color3.fromRGB(255, 200, 90) or Color3.new(1, 1, 1)
+		d.BackgroundTransparency = (done and done[i]) and 0 or 0.2
+	end
+	for i = #uvs + 1, #self.ppDots do
+		self.ppDots[i].Visible = false
+	end
+	self.ppNeedle.Visible = nu ~= nil
+	if nu then
+		self.ppNeedle.Position = UDim2.fromScale(nu, nv)
+		self.ppNeedle.Size = active and UDim2.fromOffset(18, 18) or UDim2.fromOffset(14, 14)
+	end
+end
+
+-- 화면 점 → 뽑기 판 위 (u, v) 0~1. 판 밖이면 nil (clamp면 판 끝에 붙여서 돌려줌)
+function Ui:ppPadAt(pos, clamp)
+	local pad = self.ppPad
+	if not (pad and pad.Visible) then
+		return nil
+	end
+	local p, sz = pad.AbsolutePosition, pad.AbsoluteSize
+	local u, v = (pos.X - p.X) / sz.X, (pos.Y - p.Y) / sz.Y
+	if clamp then
+		return math.clamp(u, 0, 1), math.clamp(v, 0, 1)
+	end
+	if u < -0.05 or u > 1.05 or v < -0.05 or v > 1.05 then
+		return nil
+	end
+	return math.clamp(u, 0, 1), math.clamp(v, 0, 1)
+end
+
 -- pos = 가리킬 화면 좌표 (nil이면 숨김). 화살표 끝이 pos 바로 위에 오고 위아래로 통통 튐
 function Ui:setArrow(pos, text)
 	if not pos then
