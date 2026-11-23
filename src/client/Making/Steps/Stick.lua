@@ -5,6 +5,7 @@
 
 local Sfx = require(script.Parent.Parent:WaitForChild("Sfx"))
 local Toon = require(script.Parent.Parent:WaitForChild("Toon"))
+local Stir = require(script.Parent.Parent:WaitForChild("Stir")) -- 기본 꽂는 방향 (화면 오른쪽 아래)
 
 local Stick = {}
 
@@ -166,10 +167,10 @@ function Stick.place(ctx)
 				local inner = cf.Position - cf.RightVector * (LEN / 2) * (cf.RightVector:Dot(Vector3.new(cf.Position.X - c.X, 0, cf.Position.Z - c.Z)) > 0 and 1 or -1)
 				local dir
 				if quick then
-					dir = Vector3.new(0.6, 0, 0.8).Unit
+					dir = Stir.screenDir(0.6, 0, 0.8)
 				elseif Vector3.new(inner.X - c.X, 0, inner.Z - c.Z).Magnitude < r * 0.85 then
 					dir = Vector3.new(cf.Position.X - c.X, 0, cf.Position.Z - c.Z)
-					dir = dir.Magnitude > 1e-3 and dir.Unit or Vector3.new(0.6, 0, 0.8).Unit
+					dir = dir.Magnitude > 1e-3 and dir.Unit or Stir.screenDir(0.6, 0, 0.8)
 				end
 				if dir then
 					st.stick = { dir = dir }
