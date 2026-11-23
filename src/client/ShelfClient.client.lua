@@ -38,11 +38,13 @@ local function myPlot()
 	return nil
 end
 
--- 내 가게의 진열 가구 부품 목록
+-- 내 가게의 진열 가구 부품 목록. 노점(가게 열기 전, 서버가 부지 속성 ShopOpen = false)이면 가게 앞 작은 탁자만 (쟁반 5칸, 2026-11-24)
 local function furniture(plot)
+	local stall = plot:GetAttribute("ShopOpen") == false
 	local list = {}
 	for _, d in ipairs(plot:GetDescendants()) do
-		if d:IsA("BasePart") and ROLE_AREA[d:GetAttribute("Role") or ""] then
+		local area = d:IsA("BasePart") and ROLE_AREA[d:GetAttribute("Role") or ""]
+		if area and (not stall or area == "table1") then
 			table.insert(list, d)
 		end
 	end

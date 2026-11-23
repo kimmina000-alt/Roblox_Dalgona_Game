@@ -131,6 +131,7 @@ end
 -- 가구를 옮기면 칸도 따라감. 1~4 유리 진열장(길에서 볼 때 왼쪽부터), 5~8 걸이판(누른 자리에 걸림, item.pp), 9 작은 탁자, 10 작은 탁자 2
 -- 2026-11-24 사용자: 작은 탁자 하나 더 (작은 탁자 3 = 11칸)
 local AREA_ROLES = { case = "유리 진열장", peg = "달고나 걸이판", table1 = "작은 탁자", table2 = "작은 탁자 2", table3 = "작은 탁자 3", counter = "앞 카운터 (나무)" }
+local SHOP_ONLY_ROLES = { "앞 카운터 (나무)", "유리 진열장", "진열장 받침 (금속)", "진열 이름표 띠" }
 local AREA_SLOTS = { case = { 1, 2, 3, 4 }, peg = { 5, 6, 7, 8 }, table1 = { 9 }, table2 = { 10 }, table3 = { 11 } }
 local TABLE_SLOT = { table1 = 9, table2 = 10, table3 = 11 }
 SalesService.AREA_ROLES = AREA_ROLES
@@ -172,6 +173,14 @@ local function furnitureSlot(shop, i, item)
 	end
 	local function at(pos, dir)
 		return pcf * CFrame.lookAt(pos, pos + dir)
+	end
+	-- 노점 (가게 임대 전·문 닫힘, 2026-11-24 사용자): 쟁반 5칸 = 가게 앞 작은 탁자 위, 골목(-Z)을 봄. 앞줄 3 + 뒷줄 2
+	if shop.stall and A.table1 then
+		local c, h = localBox(pcf, A.table1)
+		local row = i <= 3 and 0 or 1
+		local col = i <= 3 and (i - 2) or (i == 4 and -0.5 or 0.5)
+		local pos = Vector3.new(c.X + col * h.X * 0.6, c.Y + h.Y + 0.02, c.Z - h.Z * 0.35 + row * h.Z * 0.7)
+		return at(pos, Vector3.new(0, 0, -1))
 	end
 	if i <= 4 and A.case then
 		local c, h = localBox(pcf, A.case)
@@ -325,8 +334,55 @@ local function buildShelf(shop, plot)
 	for key, role in pairs(AREA_ROLES) do
 		shop.areas[key] = findRole(plot.model, role)
 	end
+	-- 가게를 열어야 보이는 가구 (2026-11-24 사용자: 카운터·유리 진열장은 가게 입주하면 나타남)
+	shop.shopOnly = {}
+	for _, role in ipairs(SHOP_ONLY_ROLES) do
+		local part = findRole(plot.model, role)
+		local node = part and part.Parent
+		local root = (node and node:IsA("Model") and node ~= plot.model) and node or part
+		if root then
+			table.insert(shop.shopOnly, root)
+		end
+	end
+	-- 노점 손님 자리: 가게 앞 작은 탁자 앞(골목 쪽)
+	if shop.areas.table1 then
+		local c, h = localBox(shop.plotCF, shop.areas.table1)
+		shop.stallStandLocal = Vector3.new(c.X, 0, c.Z - h.Z - 1.6)
+	end
 	m.Parent = plot.model
 	shop.shelf = m
+end
+
+-- 가게 열림/닫힘에 따라 카운터·유리 진열장 보이기 (부품마다 원래 투명도·충돌을 속성으로 기억)
+local function setShopFurniture(shop, open)
+	if shop.furnitureOpen == open then
+		return
+	end
+	shop.furnitureOpen = open
+	for _, root in ipairs(shop.shopOnly or {}) do
+		local list = root:IsA("BasePart") and { root } or {}
+		for _, d in ipairs(root:GetDescendants()) do
+			table.insert(list, d)
+		end
+		for _, d in ipairs(list) do
+			if d:IsA("BasePart") then
+				if d:GetAttribute("OpenT") == nil then
+					d:SetAttribute("OpenT", d.Transparency)
+					d:SetAttribute("OpenCollide", d.CanCollide)
+				end
+				d.Transparency = open and d:GetAttribute("OpenT") or 1
+				d.CanCollide = open and d:GetAttribute("OpenCollide") or false
+				d.CanQuery = open
+			elseif d:IsA("SurfaceGui") or d:IsA("BillboardGui") then
+				d.Enabled = open
+			elseif d:IsA("Decal") or d:IsA("Texture") then
+				if d:GetAttribute("OpenT") == nil then
+					d:SetAttribute("OpenT", d.Transparency)
+				end
+				d.Transparency = open and d:GetAttribute("OpenT") or 1
+			end
+		end
+	end
 end
 
 local function refreshShelf(index)
@@ -337,6 +393,19 @@ local function refreshShelf(index)
 	local data = shop.owner and Data.get(shop.owner)
 	local stock = data and data.stock or {}
 	local slots = data and G.shelfSlots(data) or G.Shop.stallSlots
+	-- 노점이면 쟁반 5칸을 가게 앞 작은 탁자에, 카운터·유리 진열장은 숨김 (2026-11-24)
+	local open = data ~= nil and G.shopOpen(data)
+	local plotM = Plots.plotAt(index)
+	if plotM and plotM.model:GetAttribute("ShopOpen") ~= open then
+		plotM.model:SetAttribute("ShopOpen", open) -- 클라이언트 ShelfClient가 누를 가구를 고름
+	end
+	setShopFurniture(shop, open)
+	if shop.stall ~= (not open) then
+		shop.stall = not open
+		for _, s in ipairs(shop.slots) do
+			s.lookKey = nil -- 자리가 바뀌니 다시 놓음
+		end
+	end
 	-- 칸마다 놓인 달고나 (item.sl)
 	local bySlot = {}
 	local n = 0
@@ -800,7 +869,7 @@ local function spawnCustomer(index)
 	local want = math.random(kind.min, kind.max)
 	local n = math.min(want, available)
 	shop.reserved += n
-	local stand = shop.standLocal or Vector3.new(SALES.shelf.pos.X, 0, SALES.standZ)
+	local stand = (shop.stall and shop.stallStandLocal) or shop.standLocal or Vector3.new(SALES.shelf.pos.X, 0, SALES.standZ)
 	local shelfL = shop.shelfLocal or Vector3.new(SALES.shelf.pos.X, 0, SALES.shelf.pos.Z)
 	local standL = stand + (shop.standSide or Vector3.xAxis) * ((math.random() - 0.5) * 3)
 	local sx = stand.X
@@ -910,7 +979,16 @@ local function placeByTouch(player, area, hit)
 		end
 	end
 	local list = AREA_SLOTS[area]
-	if TABLE_SLOT[area] then
+	if not G.shopOpen(data) then
+		-- 노점: 가게 앞 작은 탁자만 (쟁반 5칸)
+		if area ~= "table1" then
+			return { ok = false, reason = "가게를 열어야 쓸 수 있는 자리예요" }
+		end
+		list = {}
+		for k = 1, maxSlots do
+			table.insert(list, k)
+		end
+	elseif TABLE_SLOT[area] then
 		-- 누른 탁자부터, 차 있으면 다른 탁자
 		list = { TABLE_SLOT[area] }
 		for _, k in ipairs({ "table1", "table2", "table3" }) do
