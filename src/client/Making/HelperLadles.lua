@@ -349,7 +349,6 @@ local function poseMinime(ws, k, grip, center, resting)
 end
 
 local started = false
-local FAR = 70 -- 이보다 멀면 화로 알바 움직임을 멈춤
 -- 화로 위 알바생 국자·젓가락·내용물은 안 보이게 (2026-11-22 사용자 "연탄 화로에서 알바생 국자도 빼자", "달고나 재료는 나만").
 -- 모델은 남겨 두고 움직임만 계속 계산 → 알바생 미니미는 그 자리 기준으로 카운터 위에 서고 진열대 배달도 그대로 (사용자 선택)
 -- 광택 메시는 LocalTransparencyModifier로 다 안 사라져서 Transparency
@@ -370,32 +369,14 @@ function Helper.start()
 	end
 	started = true
 	RunService.Heartbeat:Connect(function()
-		-- 가게마다 작업대가 있음 (17b): 모든 작업대의 알바생 국자를 움직임 (다른 가게 것도 보임)
-		local now = os.clock()
+		-- 가게마다 작업대가 있음 (17b): 모든 작업대의 알바생 국자를 숨김 (다른 가게 것도)
 		for _, ws in ipairs(Workstations.all()) do
 			for _, m in ipairs(ws:GetChildren()) do
 				if m.Name:sub(1, 11) == "HelperLadle" then
+					-- 2026-11-24 확정 (PM·사용자): 화로 알바는 없애고 2단계 기계 알바(국자 2개, MachineClient H_MOTION.m2)로 합침.
+					-- 손 작업대 화로에는 알바를 그리지 않음 → 서버가 아직 알바 국자(HelperLadle2~)를 만들어도 숨기기만 하고
+					-- 국자 움직임·미니미 자세(stepOne·poseMinime)는 안 함. 되살리려면 이 줄 아래를 예전(feat/helper-view-1124)처럼
 					hideLadle(m)
-					-- 멀면 움직이지 않음 (D43 "가게 안 알바는 가까이 있을 때만 움직임", 폰 성능). 자세는 마지막 그대로
-					local cam = workspace.CurrentCamera
-					local c0 = m:GetAttribute("Center")
-					if cam and typeof(c0) == "Vector3" and (c0 - cam.CFrame.Position).Magnitude > FAR then
-						continue
-					end
-					local k = tonumber(m.Name:sub(12))
-					local mini = k and minimeFor(ws, k)
-					local resting = isResting(mini)
-					local grip, center = stepOne(m, now, resting)
-					-- 가게 안 작업대를 내 화면에서 줄여 보이면 (ViewScale, 2026-11-22) 미니미 자리도 같은 기준으로 줄임.
-					-- 국자 자리(Center)는 서버의 원래 크기 값. 숨긴 국자 모델은 그대로 둠
-					local vs, vo = ws:GetAttribute("ViewScale"), ws:GetAttribute("ViewOrigin")
-					if grip and type(vs) == "number" and vs ~= 1 and typeof(vo) == "Vector3" then
-						grip = vo + (grip - vo) * vs
-						center = vo + (center - vo) * vs
-					end
-					if grip and k then
-						poseMinime(ws, k, grip, center, resting)
-					end
 				end
 			end
 		end
