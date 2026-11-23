@@ -87,7 +87,7 @@ PlayerDataService.MIGRATIONS = {
 		end
 	end,
 	[10] = function(data)
-		-- v9 → v10 (2026-11-24 D34·D39·D40·D43·D42): 국자 확장을 없애고 화로 알바 교육으로, 알바생은 제작대에 배치.
+		-- v9 → v10 (2026-11-24 D34·D39·D40): 국자 확장을 없애고 화로 알바 교육으로, 알바생은 제작대에 배치.
 		--  - 산 국자는 같은 단계 교육으로 (값·레벨이 같음): 국자 2 → 숙련 교육, 3 → + 두 번째 화구, 4 → + 전문 교육
 		--  - 있던 알바생: 1번째 → 화로, 다음부터 가진 기계(철제 → 분홍 → 연속) 순서, 남으면 대기
 		local ladles = math.floor(tonumber(data.ladles) or 1)
@@ -117,7 +117,10 @@ PlayerDataService.MIGRATIONS = {
 				end
 			end
 		end
-		-- D43 (같은 날): 공장 공정 알바생(D30 factory.staff[key])도 알바생 목록으로, 역할 f_<key>. 최대 11명 안
+	end,
+	[11] = function(data)
+		-- v10 → v11 (2026-11-24 D43·D42): v10을 먼저 받은 시험 데이터도 거치게 따로 둠
+		-- D43: 공장 공정 알바생(D30 factory.staff[key])도 알바생 목록으로, 역할 f_<key>. 최대 11명 안
 		local f = type(data.factory) == "table" and data.factory or nil
 		if f and type(f.staff) == "table" then
 			data.partTimers = type(data.partTimers) == "table" and data.partTimers or {}
@@ -128,7 +131,7 @@ PlayerDataService.MIGRATIONS = {
 			end
 			f.staff = nil
 		end
-		-- D42 (같은 날): 진열대 칸은 보관함과 따로, 용량이 커짐. 그래도 지금 가진 수보다 줄면 안 되니 모자란 만큼 stockBonus로 보장
+		-- D42: 진열대 칸은 보관함과 따로, 용량이 커짐. 그래도 지금 가진 수보다 줄면 안 되니 모자란 만큼 stockBonus로 보장
 		if type(data.stock) == "table" and #data.stock > 0 then
 			local ok, cap = pcall(G.stockMax, data)
 			local stored = 0

@@ -410,7 +410,7 @@ end
 -- 기계 옆 자리는 가게 틀(PlotLayout)에 HelperSpot<단계> 부품을 넣으면 그 자리 (없으면 기계 자리 오른쪽)
 local function helperFoot(plot, post, i)
 	local p = post and G.helperPost(post)
-	if p and p.stage >= 2 then
+	if p and (p.stage or 0) >= 2 then
 		local y = G.Plots.size.Y
 		local mark = plot.model:FindFirstChild("HelperSpot" .. p.stage, true)
 		if mark and mark:IsA("BasePart") then
@@ -800,7 +800,11 @@ local function syncHelpers(player, d)
 			local post = h.post
 			st.post = post
 			task.spawn(function()
-				local foot = helperFoot(plot, post, i)
+				local okFoot, foot = pcall(helperFoot, plot, post, i)
+				if not okFoot then
+					warn("[Helper] stand spot failed", post, foot)
+					foot = stoveFoot(plot, 1 + i)
+				end
 				local m = Minime.build(player, plot.model, foot, i, h.skill or 0)
 				local now = Data.get(player) or d
 				if not player.Parent or helperState[player] ~= states or (now.partTimers[i] or {}).post ~= post then
