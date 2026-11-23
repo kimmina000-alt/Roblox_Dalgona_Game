@@ -159,14 +159,19 @@ local function setup(fac, force)
 		end
 	end
 	-- 경첩으로 도는 부품(레버·뚜껑·커튼): 처음 자세 기준 경첩 자리와 축 (건물 기준 좌우축 = 기계 X축)
+	-- 기계 좌우축 = 벨트가 흐르는 방향 (시작 → 끝). 레버·뚜껑은 이 축으로 돌면 앞(제어대 쪽)으로 넘어옴 (3D 세션 메모)
 	local bp = b:GetPivot()
+	local s0, s1 = b:GetAttribute("BeltStart"), b:GetAttribute("BeltEnd")
+	local flow = (s0 and s1) and ((bp * s1).Position - (bp * s0).Position) or bp.RightVector
+	flow = Vector3.new(flow.X, 0, flow.Z)
+	flow = flow.Magnitude > 1e-3 and flow.Unit or Vector3.xAxis
 	for _, e in ipairs(rec.parts) do
 		local cf, sz = e.cf, e.size or e.p.Size
 		local half = (cf - cf.Position):VectorToWorldSpace(sz / 2)
 		local ext = Vector3.new(math.abs(half.X), math.abs(half.Y), math.abs(half.Z))
 		if e.a == "lever" or e.a == "lid" then
 			e.hinge = cf.Position - Vector3.new(0, ext.Y, 0) -- 아래 끝 = 경첩
-			e.hAxis = bp.RightVector
+			e.hAxis = flow
 		elseif e.a == "curtain" then
 			e.hinge = cf.Position + Vector3.new(0, ext.Y, 0) -- 윗변 = 경첩
 			-- 커튼 폭 방향(가로로 긴 쪽)이 축 → 벨트 방향으로 흔들림
@@ -421,7 +426,7 @@ RunService.Heartbeat:Connect(function()
 					-- ③ 레버: 프레스 박자에 앞으로 ~40° 당김
 					local k = running and (1 - math.abs(math.sin(now * 2.2))) or 0
 					if e.hinge then
-						p.CFrame = hingeTurn(e.cf, e.hinge, e.hAxis, -math.rad(40) * k)
+						p.CFrame = hingeTurn(e.cf, e.hinge, e.hAxis, math.rad(40) * k)
 					end
 				elseif a == "curtain" then
 					-- ④ 비닐 커튼: 윗변 경첩으로 ±10° 흔들림
