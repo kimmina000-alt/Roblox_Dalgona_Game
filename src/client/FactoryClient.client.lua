@@ -16,7 +16,6 @@ local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local DalgonaLook = require(Shared:WaitForChild("DalgonaLook"))
-local HelperCarry = require(script.Parent:WaitForChild("HelperCarry")) -- 알바가 달고나를 들고 진열대로 걸어감
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local UI = require(Shared:WaitForChild("UiStyle")) -- 2026-11-22 새 스타일 (나무 판 창 + 왼쪽 세로 탭 + 사탕 버튼)
 
@@ -215,25 +214,6 @@ local function playMade(rec)
 			end
 			task.wait(0.4)
 			look:Destroy()
-		end)
-	end
-	-- ⑤ 포장 알바가 있으면 진열 칸에 들어간 만큼 들고 진열대까지 걸어갔다 옴 (2026-11-24, 내 화면 연출. 진열은 서버가 이미 채움)
-	local i = tonumber(fac.Name:match("%d+"))
-	local plots = workspace:FindFirstChild("ShopPlots")
-	local plot = plots and i and plots:FindFirstChild("Plot" .. i)
-	local shelf = plot and plot:FindFirstChild("DisplayShelf")
-	local packer = plot and plot:FindFirstChild("FactoryLot") and plot.FactoryLot:FindFirstChild("Staff") and plot.FactoryLot.Staff:FindFirstChild("Staff_pack")
-	if shelf and packer and slots > 0 then
-		local targets = {}
-		for n in string.gmatch(fac:GetAttribute("MadeSlots") or "", "%d+") do
-			local sp = shelf:FindFirstChild("Slot" .. n)
-			local pos = sp and (sp:IsA("BasePart") and sp.Position or (sp:IsA("Model") and sp:GetPivot().Position))
-			if pos then
-				table.insert(targets, pos + Vector3.new(0, 0.6, 0))
-			end
-		end
-		task.delay(0.9, function()
-			HelperCarry.deliver(packer, targets, shape)
 		end)
 	end
 	-- 떠오르는 글씨: 진열 n · 보관함 m

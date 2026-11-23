@@ -18,7 +18,8 @@ local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local DalgonaLook = require(Shared:WaitForChild("DalgonaLook"))
-local HelperCarry = require(script.Parent:WaitForChild("HelperCarry")) -- 알바가 달고나를 들고 진열대로 걸어감
+local HelperCarry = require(script.Parent:WaitForChild("HelperCarry")) -- 알바가 달고나를 들고 진열대로 걸어감 (서버 Carry* 신호)
+HelperCarry.start()
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local UI = require(Shared:WaitForChild("UiStyle")) -- 2026-11-22 새 스타일 (나무 판 창 + 크림 카드 + 사탕 버튼)
 
@@ -164,47 +165,6 @@ local function playMade(rec)
 				table.insert(targets, pos + Vector3.new(0, 0.6, 0))
 			end
 		end
-	end
-	-- 4단계 연속 생산 설비: 설비 알바(Helper_line)가 일하면, 나온 달고나를 들고 진열대까지 걸어가서 놓음 (2026-11-24, 내 화면 연출)
-	local carrier = nil
-	if rec.slot.Name == "MachineSlot4" and #targets > 0 then
-		local h = plot:FindFirstChild("Helper_line")
-		if h and h:GetAttribute("Working") == true and not HelperCarry.isBusy(h) then
-			carrier = h
-		end
-	end
-	if carrier then
-		local shown = math.min(count, 4)
-		for i = 1, shown do
-			task.spawn(function()
-				task.wait((i - 1) * 0.18)
-				local look = DalgonaLook.build({ s = shape, g = "Good" }, 0.8)
-				look.Parent = workspace
-				arcFly(look, start, out, 0.35, math.pi) -- 배출구에서 톡 → 알바가 집어 감
-				for _, p in ipairs(look:GetDescendants()) do
-					if p:IsA("BasePart") then
-						TweenService:Create(p, TweenInfo.new(0.2), { Transparency = 1 }):Play()
-					end
-				end
-				task.wait(0.25)
-				look:Destroy()
-			end)
-		end
-		task.delay(0.35 + shown * 0.18, function()
-			if not HelperCarry.deliver(carrier, targets, shape) then
-				-- 걸을 수 없으면 예전처럼 진열 칸으로 날아감
-				for _, to in ipairs(targets) do
-					task.spawn(function()
-						local look = DalgonaLook.build({ s = shape, g = "Good" }, 0.8)
-						look.Parent = workspace
-						arcFly(look, out, to, 0.9, math.pi * 2)
-						task.wait(0.3)
-						look:Destroy()
-					end)
-				end
-			end
-		end)
-		return
 	end
 	local shown = math.min(count, 10)
 	for i = 1, shown do
