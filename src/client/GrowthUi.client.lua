@@ -46,13 +46,12 @@ local function setMsg(text, good)
 end
 
 -- 왼쪽 세로 탭 (고른 탭은 밝은 나무 + 크림색 테두리)
--- 2026-11-24 사용자: 카테고리 탭 (가게·기계·공장 / 알바생). 어느 줄이 어느 탭인지는 render()의 page = pages.<id>로 정함
--- (기획 세션이 탭 구성을 정리해 보내면 여기 TABS와 render()의 page 줄만 바꾸면 됨). 도감 = 도감 화면 열기.
+-- D50 (2026-11-24 사용자 "성장에 가게-기계, 공장이랑 알바생 카테고리 나누기", 기획 docs/growth-tabs-1124):
+-- 가게·기계 / 알바생 / 공장 / 목표 / 도감(= 도감 화면 열기). 탭별 항목은 render() 1~4번 칸.
 local TABS = {
-	{ id = "shop", text = "🏪 가게" },
-	{ id = "machine", text = "⚙️ 기계" },
-	{ id = "factory", text = "🏭 공장" },
+	{ id = "shop", text = "🏪 가게·기계" },
 	{ id = "helpers", text = "👤 알바생" },
+	{ id = "factory", text = "🏭 공장" },
 	{ id = "goals", text = "🎯 목표" },
 	{ id = "book", text = "📖 도감" },
 }
@@ -266,6 +265,11 @@ local function helperShapes(unlocked)
 	return list
 end
 
+-- 한 줄 안내 (카드 없이 나무 위 글씨)
+local function note(page, order, text)
+	return label({ LayoutOrder = order, Text = text, Size = UDim2.new(1, -10, 0, 26), TextSize = 16, TextColor3 = C.cream, ZIndex = 13, Parent = page })
+end
+
 local function render()
 	if not state or not state.growth then
 		return
@@ -276,16 +280,21 @@ local function render()
 			clear(p)
 		end
 	end
-	-- 가게 탭: 가게 임대·매입 + 업그레이드
-	local page = pages.shop
-	local order = 0
-	-- 가게 (D21): 노점 → 임대 → 매입
 	local SH = G.Shop
 	local shop = gr.shop or { state = "stall" }
 	local shopOpen = shop.state == "owned" or (shop.state == "rented" and not shop.closed)
-	order += 1
+	local lockText = shop.state == "stall" and "가게 임대 필요" or "문 닫힘"
+	local order = 0
+	local function nextOrder()
+		order += 1
+		return order
+	end
+
+	---------------------------------------------------------------- 1. 가게·기계 (D50)
+	local page = pages.shop
+	-- 가게 단계 (D21): 노점 → 임대 → 매입, 월세 상태
 	if shop.state == "stall" then
-		row(page, order, "🏪 야외 노점", string.format("가게 임대: Lv%d + 보증금 %d · 월세 %d분마다 %d", SH.rentLevel, SH.deposit, SH.rentEvery // 60, SH.rentAmount),
+		row(page, nextOrder(), "🏪 야외 노점", string.format("가게 임대: Lv%d + 보증금 %d · 월세 %d분마다 %d", SH.rentLevel, SH.deposit, SH.rentEvery // 60, SH.rentAmount),
 			state.level < SH.rentLevel and ("Lv" .. SH.rentLevel .. "부터") or (SH.deposit .. " 코인"),
 			state.level >= SH.rentLevel and state.coins >= SH.deposit, function()
 				act("buy", "rent")
@@ -294,136 +303,180 @@ local function render()
 		local sub = shop.closed and string.format("월세 %d코인이 모자라 문 닫힘 (코인이 생기면 바로 열려요)", SH.rentAmount)
 			or string.format("다음 월세 %d코인까지 %d:%02d (접속 중에만)", SH.rentAmount, (shop.rentLeft or 0) // 60, (shop.rentLeft or 0) % 60)
 		local price = SH.buyPrice - SH.deposit
-		row(page, order, shop.closed and "🏪 가게 (문 닫힘)" or "🏪 월세 가게", sub,
+		row(page, nextOrder(), shop.closed and "🏪 가게 (문 닫힘)" or "🏪 월세 가게", sub,
 			state.level < SH.buyLevel and ("매입 Lv" .. SH.buyLevel) or (price .. " 코인"),
 			state.level >= SH.buyLevel and state.coins >= price, function()
 				act("buy", "buyShop")
 			end)
 	else
-		row(page, order, "🏪 내 가게", "월세 없음")
+		row(page, nextOrder(), "🏪 내 가게", "월세 없음")
 	end
-	local lockText = shop.state == "stall" and "가게 임대 필요" or "문 닫힘"
+	-- 도구 업그레이드: 화로 · 누르개 · 작업대 (작업대 = 보관함 +25, D42)
 	for _, kind in ipairs(G.UpgradeOrder) do
 		local up = G.Upgrades[kind]
 		local lv = gr.upgrades[kind] or 1
 		local cost = up.costs[lv]
-		order += 1
 		local locked = SH.lockedWhenStall[kind] and not shopOpen
 		local can = cost and not locked and state.level >= G.UpgradeUnlockLevel and state.coins >= cost
 		local btn = not cost and "최고 단계" or (locked and lockText) or (state.level < G.UpgradeUnlockLevel and ("Lv" .. G.UpgradeUnlockLevel .. "부터")) or (cost .. " 코인")
-		row(page, order, string.format("%s Lv%d / %d", up.name, lv, #up.costs + 1), up.desc, btn, can, function()
+		row(page, nextOrder(), string.format("%s Lv%d / %d", up.name, lv, #up.costs + 1), up.desc, btn, can, function()
 			act("buy", kind)
 		end)
 	end
-	-- 알바생 탭: 고용·역할 + 화로 알바 교육 (교육은 아래, order + 500)
-	page = pages.helpers
-	-- 화로 알바 교육 (D39·D40, 2026-11-24): 국자 확장 대신
+	-- 연탄 덮개 (D46) — G.StoveTraining 안 coalCover. 기계 알바 교육은 알바생 탭
 	local trained = gr.stoveUps or {}
-	for _, t in ipairs(G.StoveTraining) do
-		order += 1
+	local function trainRow(pg, t)
 		local have = trained[t.key] == true
-		row(page, order + 500, string.format("🔥 %s%s", t.name, have and " ✓" or ""), t.text,
+		row(pg, nextOrder(), string.format("%s %s%s", t.key == "coalCover" and "🔥" or "🎓", t.name, have and " ✓" or ""), t.text,
 			have and "배움" or (not shopOpen and lockText) or (state.level < t.level and ("Lv" .. t.level .. "부터")) or (t.cost .. " 코인"),
 			not have and shopOpen and state.level >= t.level and state.coins >= t.cost, function()
 				act("train", t.key)
 			end)
 	end
-	-- 알바생 역할 (D34 → D43 → D46): 최대 인원은 서버 helperMax (D46 = 10명), 역할마다 한 명. "역할 고르기" = 역할 카드 창에서 골라 배치 (그 역할 알바와 서로 바뀜)
-	-- "역할 고르기" → 위 openPicker 창 (UI 세션, 2026-11-24)
+	for _, t in ipairs(G.StoveTraining) do
+		if t.key == "coalCover" then
+			trainRow(page, t)
+		end
+	end
+	-- 기계 2·3·4단계 (20번·D32): 다음 기계 사기 + 가진 기계마다 도안 바꾸기
+	local mc = gr.machine
+	if mc then
+		local nx = mc.next
+		row(page, nextOrder(), nx and string.format("⚙️ 다음 기계 · %s", nx.name) or "⚙️ 기계 (모두 삼)",
+			nx and string.format("Lv%d · %d초에 %d개 · 가게 안 기계 자리에 놓여요", nx.level, G.Machines[nx.stage].seconds, G.Machines[nx.stage].batch) or "공장은 공장 탭에서 (Lv25)",
+			not nx and "최고 단계" or (not shopOpen and lockText) or (state.level < nx.level and ("Lv" .. nx.level .. "부터")) or (nx.price .. " 코인"),
+			nx ~= nil and shopOpen and state.level >= nx.level and state.coins >= nx.price, function()
+				act("buy", "machine")
+			end)
+		local list = mc.machines
+		if not list and mc.name then
+			list = { { stage = mc.stage, name = mc.name, shape = mc.shape, shapes = mc.shapes, running = mc.running, status = mc.status, t = mc.t, seconds = mc.seconds, batch = mc.batch } }
+		end
+		for _, m in ipairs(list or {}) do
+			local e = m.shape and ShapeCatalog.get(m.shape)
+			local shapes = m.shapes or mc.shapes or {}
+			local status = m.running and string.format("만드는 중 %d/%d초 · %d개씩", m.t or 0, m.seconds or 0, m.batch or 0) or ("멈춤: " .. tostring(m.status))
+			row(page, nextOrder(), string.format("  %s · %s", m.name, e and e.name or "도안 없음"), status, "도안 바꾸기", #shapes > 1, function()
+				local idx = table.find(shapes, m.shape) or 0
+				act("machineShape", shapes[idx % #shapes + 1], m.stage)
+			end)
+		end
+	end
+	note(page, nextOrder(), string.format("📦 보관함 %d / %d", state.stock or 0, state.stockMax or G.StockMax or 0))
+
+	---------------------------------------------------------------- 2. 알바생 (D50)
+	page = pages.helpers
+	-- 알바생 역할 (D34 → D43 → D46): 역할마다 한 명. "역할 고르기" = 역할 카드 창 (그 역할 알바와 서로 바뀜)
 	local nHelp = #gr.helpers
 	local maxHelp = gr.helperMax or G.HelperMax
 	local hireCost = gr.hireCost
-	order += 1
-	row(page, order, string.format("알바생 %d / %d명", nHelp, maxHelp), "역할마다 한 명 (제작대·진열·계산·공장) · 기계는 알바가 있어야 돌아요",
-		(not shopOpen and lockText) or (nHelp >= maxHelp and "최대") or (hireCost and (hireCost .. " 코인")) or "최대",
+	row(page, nextOrder(), string.format("👤 알바생 %d / %d명", nHelp, maxHelp), hireCost and string.format("다음 고용비 %d 코인 · 역할마다 한 명 (제작대·진열·계산·공장)", hireCost) or "더 뽑을 수 없어요",
+		(not shopOpen and lockText) or (nHelp >= maxHelp and "최대") or (hireCost and ("고용 · " .. hireCost)) or "최대",
 		shopOpen and nHelp < maxHelp and hireCost ~= nil and state.coins >= hireCost, function()
 			act("buy", "hire")
 		end)
 	local posts = gr.posts or {}
-	local choices = helperShapes(gr.unlocked)
+	local wageSum = 0
 	for i, h in ipairs(gr.helpers) do
 		local post = h.post and G.helperPost(h.post)
-		order += 1
-		local status = not post and "대기 중 (자리 없음)" or (h.status == "work" and "일하는 중" or ("쉬는 중: " .. tostring(h.status)))
-		row(page, order, string.format("  알바생 %d · %s", i, post and post.name or "대기"), status, "역할 고르기", #posts > 0, function()
-			openPicker(i)
-		end)
+		local wage = post and post.wage or 0
+		if post then
+			wageSum += wage
+		end
+		local doing = not post and "대기 중 (자리 없음, 급여 없음)" or (h.status == "work" and "일하는 중" or ("쉬는 중: " .. tostring(h.status)))
+		row(page, nextOrder(), string.format("  알바생 %d · %s", i, post and post.name or "대기"),
+			post and string.format("%s · 급여 30초에 %d", doing, wage) or doing, "역할 고르기", #posts > 0, function()
+				openPicker(i)
+			end)
 		if h.post == "display" then
-			order += 1
 			local on = gr.displayHand ~= false
-			row(page, order, "    손으로 만든 것도 진열", on and "켬: 손 제작품을 먼저 옮겨요" or "끔: 손 제작품은 직접 놓아요", on and "끄기" or "켜기", true, function()
+			row(page, nextOrder(), "    손으로 만든 것도 진열", on and "켬: 손 제작품을 먼저 옮겨요" or "끔: 손 제작품은 직접 놓아요", on and "끄기" or "켜기", true, function()
 				act("displayHand", not on)
 			end)
 		end
-		if h.post == "stove" then
-			local e = ShapeCatalog.get(h.shape)
-			order += 1
-			row(page, order, string.format("    화로 도안 · %s", e and e.name or h.shape), "화로 알바가 만들 도안", "도안 바꾸기", #choices > 1, function()
-				local idx = 1
-				for k, c in ipairs(choices) do
-					if c.id == h.shape then
-						idx = k
-					end
-				end
-				act("helperShape", i, choices[idx % #choices + 1].id)
-			end)
+	end
+	for _, t in ipairs(G.StoveTraining) do
+		if t.key ~= "coalCover" then
+			trainRow(page, t) -- 기계 알바 교육 (Lv8, D46)
 		end
 	end
-	-- 기계 탭: 기계 2~4단계 (20번)
-	page = pages.machine
-	local mc = gr.machine
-	if mc then
-		local nx = mc.next
-		order += 1
-		local title = mc.name and string.format("⚙️ %s", mc.name) or "⚙️ 기계 자리 (비어 있음)"
-		local sub = nx and string.format("다음: %s · Lv%d · %d초에 %d개", nx.name, nx.level, G.Machines[nx.stage].seconds, G.Machines[nx.stage].batch) or "공장은 따로 (Lv25)"
-		local canBuy = nx ~= nil and shopOpen and state.level >= nx.level and state.coins >= nx.price
-		row(page, order, title, sub,
-			not nx and "최고 단계" or (not shopOpen and lockText) or (state.level < nx.level and ("Lv" .. nx.level .. "부터")) or (nx.price .. " 코인"),
-			canBuy, function()
-				act("buy", "machine")
-			end)
-		if mc.name then
-			local e = mc.shape and ShapeCatalog.get(mc.shape)
-			local status = mc.running and string.format("만드는 중 %d/%d초 · %d개씩", mc.t or 0, mc.seconds, mc.batch) or ("멈춤: " .. tostring(mc.status))
-			local shapes = mc.shapes or {}
-			order += 1
-			row(page, order, string.format("  기계 도안 · %s", e and e.name or "-"), status, "도안 바꾸기", #shapes > 1, function()
-				local idx = table.find(shapes, mc.shape) or 0
-				act("machineShape", shapes[idx % #shapes + 1])
-			end)
-		end
-	end
-	-- 공장 탭: 5단계 공장 해금만 여기서 (제어대 화면은 공장 안에서)
+	note(page, nextOrder(), string.format("💰 급여 합계: 30초에 %d 코인 (일할 때만)", wageSum))
+
+	---------------------------------------------------------------- 3. 공장 (D50)
 	page = pages.factory
 	local fc = gr.factory
-	if fc then
-		order += 1
-		if fc.unlocked then
-			local status = fc.on and (fc.status == "work" and "생산 중" or ("멈춤: " .. tostring(fc.status))) or "꺼짐"
-			row(page, order, "🏭 달고나 공장", string.format("%s · 가게 뒤 문으로 들어가 제어대에서 설정", status))
-		else
-			local needStage = (mc and mc.stage or 1) >= G.Factory.needStage
-			row(page, order, "🏭 달고나 공장", string.format("Lv%d · 연속 생산 설비 필요 · 한 판 20~40개", G.Factory.level),
-				(not shopOpen and lockText) or (not needStage and "기계 4단계 필요") or (state.level < G.Factory.level and ("Lv" .. G.Factory.level .. "부터")) or (G.Factory.price .. " 코인"),
-				shopOpen and needStage and state.level >= G.Factory.level and state.coins >= G.Factory.price, function()
-					act("buy", "factory")
+	local F = G.Factory
+	if not (fc and fc.unlocked) then
+		-- 잠금 그림 + 여는 조건 한 줄 (아직 안 열린 탭도 보이게 해서 목표가 눈에 띄게)
+		local lock = UI.card({ LayoutOrder = nextOrder(), Size = UDim2.new(1, -10, 0, 150), BackgroundColor3 = C.tan, ZIndex = 13, Parent = page })
+		label({ Text = "🔒", TextSize = 60, TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 70), ZIndex = 14, Parent = lock })
+		label({ Text = string.format("Lv%d · 연속 생산 설비 필요 · %s 코인", F.level, string.format("%d", F.price):reverse():gsub("(%d%d%d)", "%1,"):reverse():gsub("^,", "")), TextSize = 20, TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(0, 82), Size = UDim2.new(1, 0, 0, 26), ZIndex = 14, Parent = lock })
+		local needStage = (mc and mc.stage or 1) >= F.needStage
+		local b = UI.button({ Text = (not shopOpen and lockText) or (not needStage and "기계 4단계 필요") or (state.level < F.level and ("Lv" .. F.level .. "부터")) or "공장 사기", Color = C.yellow, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -8), Size = UDim2.fromOffset(200, 34), TextSize = 17, ZIndex = 14, Parent = lock })
+		local can = shopOpen and needStage and state.level >= F.level and state.coins >= F.price
+		UI.setButton(b, { Enabled = can })
+		b.Activated:Connect(function()
+			if can then
+				act("buy", "factory")
+			end
+		end)
+	else
+		-- 상태
+		local status = fc.on and (fc.status == "work" and "돌고 있음" or ("멈춤: " .. tostring(fc.status))) or "꺼짐"
+		row(page, nextOrder(), "🏭 달고나 공장", string.format("%s · 자세한 설정은 가게 뒤 공장 제어대", status))
+		-- 제어대 업그레이드 5종 (제어대에서도 같게 살 수 있음)
+		for _, u in ipairs(fc.upgrades or {}) do
+			local maxed = u.cost == nil
+			row(page, nextOrder(), string.format("  %s %d / %d", u.name, u.level or 0, u.max or 1), u.desc,
+				maxed and "최고 단계" or (u.cost .. " 코인"), not maxed and state.coins >= u.cost, function()
+					act("factoryUp", u.key)
 				end)
+		end
+		-- 공장 손재주 (D49): 공정마다 3단계. 서버(구매 Remote)는 저장·부지 세션이 정함 → G.Factory.skill이 생기면 [올리기]가 켜짐
+		local SK = F.skill
+		local costs = SK and SK.costs or { 3000, 7000, 15000 }
+		local skill = fc.skill or {}
+		note(page, nextOrder(), "🖐 공장 손재주 (공정 미니게임이 쉬워져요)")
+		for _, st in ipairs(F.staff.stations) do
+			local lv = skill[st.key] or 0
+			local cost = costs[lv + 1]
+			local nextFx = SK and SK.text and SK.text[st.key] and SK.text[st.key][lv + 1]
+				or ({ "판정 폭 +30%", "판정 폭 +60% + 도움", "성공 기준 80 → 60점" })[lv + 1]
+			row(page, nextOrder(), string.format("  %s · %d / 3단계", st.name, lv), cost and ("다음: " .. tostring(nextFx)) or "최고 단계",
+				not cost and "최고 단계" or (not SK and "준비 중") or ("올리기 · " .. cost), SK ~= nil and cost ~= nil and state.coins >= cost, function()
+					act("factorySkill", st.key)
+				end)
+		end
+		-- 공정 5자리 현황: 알바 / 내가 하기 (D45) / 비어 있음
+		note(page, nextOrder(), "👷 공정 자리")
+		for _, s in ipairs(fc.staff or {}) do
+			local who = s.self and "🙋 내가 하는 중" or (s.hired and "👤 알바" or "비어 있음")
+			row(page, nextOrder(), string.format("  %s", s.name), who,
+				s.self and "그만하기" or ((not s.hired and s.canSelf) and "내가 하기" or nil), true, function()
+					act("factorySelf", s.key)
+				end)
+		end
+		-- 대량 납품 주문 3칸 요약 (D47 서버가 생기면 fc.orders)
+		local orders = fc.orders
+		if orders and #orders > 0 then
+			for k, o in ipairs(orders) do
+				if k > 3 then
+					break
+				end
+				local e = o.shape and ShapeCatalog.get(o.shape)
+				row(page, nextOrder(), string.format("📜 납품 %s × %d", e and e.name or tostring(o.shape), o.n or 0), o.text or string.format("%d / %d · 보상 %s", o.done or 0, o.n or 0, tostring(o.reward or "")))
+			end
+		else
+			row(page, nextOrder(), "📜 대량 납품 주문", "준비 중 · 자세한 것은 제어대 [납품] 탭")
 		end
 	end
 
-	-- 목표
+	---------------------------------------------------------------- 4. 목표
 	page = pages.goals
 	for i, g in ipairs(gr.daily or {}) do
 		row(page, i, (g.done and "✅ " or "") .. g.text, string.format("%d / %d · 보상 %d EXP + %d 코인", g.p, g.n, G.ExpDailyGoal, G.Daily.rewardCoins))
 	end
 	label({ LayoutOrder = 10, Text = "목표는 날마다(UTC) 바뀌어요", Size = UDim2.new(1, -8, 0, 22), TextSize = 15, TextColor3 = C.cream, ZIndex = 13, Parent = page })
-	-- 빈 탭 안내
-	for id, p in pairs(pages) do
-		if id ~= "book" and #p:GetChildren() <= 1 then
-			label({ LayoutOrder = 1, Text = "아직 열린 게 없어요", Size = UDim2.new(1, -8, 0, 30), TextSize = 18, TextColor3 = C.cream, ZIndex = 13, Parent = p })
-		end
-	end
 end
 
 openBtn.Activated:Connect(function()
