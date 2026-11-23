@@ -51,7 +51,7 @@ local levelText = label({ Name = "Level", Text = "1", FontFace = UI.F.round, Tex
 -- 재료 줄 (0개면 빨갛게)
 local ingBar = new("Frame", {
 	Name = "Ingredients",
-	Position = UDim2.fromOffset(6, 132), -- 코인·보관함 알약 아래 (2026-11-24 사용자 요청)
+	Position = UDim2.fromOffset(10, 142), -- 코인·보관함 알약 아래 (2026-11-24 사용자 요청), 2026-11-25: 왼쪽 선 = 코인 동그라미 왼쪽(10), 살짝 아래로
 	Size = UDim2.fromOffset(0, 36),
 	AutomaticSize = Enum.AutomaticSize.X,
 	BackgroundColor3 = C.pill,
@@ -83,7 +83,7 @@ for i, ing in ipairs(G.Ingredients) do
 		Parent = ingBar,
 	})
 end
-local saveWarn = label({ Name = "SaveWarn", Position = UDim2.fromOffset(10, 182), Size = UDim2.fromOffset(300, 20), TextSize = 14, TextColor3 = C.white, Outline = C.bad, Text = "⚠ 저장 안 됨 (DataStore 꺼짐)", Visible = false, Parent = panel })
+local saveWarn = label({ Name = "SaveWarn", Position = UDim2.fromOffset(10, 186), Size = UDim2.fromOffset(300, 20), TextSize = 14, TextColor3 = C.white, Outline = C.bad, Text = "⚠ 저장 안 됨 (DataStore 꺼짐)", Visible = false, Parent = panel })
 
 ---------------------------------------------------------------- 레벨 아래: 코인 · 달고나 보관함 알약 (2026-11-24 사용자 요청: 레벨 밑으로, 가운데 화면을 비움)
 local top = new("Frame", {
@@ -129,7 +129,14 @@ local function menuButton(name, icon, text, color, order)
 	label({ Text = text, TextSize = 17, TextColor3 = C.white, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(0, 64), Size = UDim2.new(1, 0, 0, 20), Parent = holder })
 	return b, holder
 end
-local shopBtn = menuButton("ShopButton", "🛒", "재료 상점", C.green, 1)
+-- D54 (2026-11-25): 재료는 골목 슈퍼에 가서 삼 → [재료 상점] 버튼이 [슈퍼 가기] (누르면 바닥 길 안내, MarketClient).
+-- 슈퍼 계산대에서 [장보기] → 아래 상점 창을 "market"으로 엶. Lv10부터 [전화 주문] 버튼 → 같은 창을 "phone"으로 (배달비).
+local MK = G.Market or {}
+local PHONE_LEVEL = MK.phoneLevel or 10
+local PHONE_FEE = MK.phoneFee or 0.1
+local shopBtn = menuButton("ShopButton", "🏪", "슈퍼 가기", C.green, 1)
+local phoneBtn, phoneSlot = menuButton("PhoneButton", "📞", "전화 주문", C.cyan, 8)
+phoneSlot.Visible = false
 
 ---------------------------------------------------------------- 재료 상점 창 (나무 판 + 재료마다 한 줄, 묶음 3가지 ×1 / ×5 / ×10)
 -- 2026-11-24 사용자 "재료 구매 10회분씩만 되는데 10, 50, 100 단위로 추가": 버튼 3개 = 묶음 1·5·10개
@@ -168,6 +175,7 @@ end
 
 local haveText = {}
 local busy = false
+local shopMode = "market" -- "market" = 슈퍼 계산대, "phone" = 전화 주문 (배달비)
 for i, ing in ipairs(G.Ingredients) do
 	local row = UI.card({ Name = ing.id, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 72), ZIndex = 13, Parent = grid })
 	local iconBox = new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = C.tan, ZIndex = 14, Parent = row }, { UI.corner(12), UI.stroke(C.line, 2) })
@@ -187,19 +195,21 @@ for i, ing in ipairs(G.Ingredients) do
 		local coin = UI.coin(b.Face, 20, 18)
 		coin.AnchorPoint = Vector2.new(1, 0.5)
 		coin.Position = UDim2.new(0.5, -18, 0, 35)
-		UI.text({ Text = tostring(price), FontFace = UI.F.round, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.5, -14, 0, 35), Size = UDim2.fromOffset(70, 22), TextSize = 19, TextColor3 = C.white, Outline = UI.darker(b:GetAttribute("Color"), 0.45), ZIndex = 18, Parent = b.Face })
-		table.insert(buyButtons, { button = b, price = price })
+		local priceL = UI.text({ Text = tostring(price), FontFace = UI.F.round, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.5, -14, 0, 35), Size = UDim2.fromOffset(70, 22), TextSize = 19, TextColor3 = C.white, Outline = UI.darker(b:GetAttribute("Color"), 0.45), ZIndex = 18, Parent = b.Face })
+		local info = { button = b, base = price, price = price, label = priceL }
+		table.insert(buyButtons, info)
 		b.Activated:Connect(function()
 			if busy or not b:GetAttribute("Enabled") then
 				return
 			end
 			busy = true
+			local phone = shopMode == "phone"
 			local ok, res = pcall(function()
-				return Remotes.BuyIngredient:InvokeServer(ing.id, packs)
+				return Remotes.BuyIngredient:InvokeServer(ing.id, packs, phone and "phone" or nil)
 			end)
 			if ok and type(res) == "table" and res.ok then
 				UI.coinSound()
-				setMsg(string.format("%s %d%s을 샀어요 (-%d 코인)", ing.name, units, ing.id == "coal" and "장" or "회분", price), true)
+				setMsg(res.msg or string.format(phone and "%s %d%s 주문했어요 (-%d 코인) · 곧 배달 와요" or "%s %d%s을 샀어요 (-%d 코인)", ing.name, units, ing.id == "coal" and "장" or "회분", info.price), true)
 			else
 				setMsg((ok and type(res) == "table" and res.reason) or "살 수 없어요", false)
 			end
@@ -210,30 +220,83 @@ end
 
 local function refreshButtons()
 	for _, info in ipairs(buyButtons) do
+		info.price = shopMode == "phone" and math.ceil(info.base * (1 + PHONE_FEE)) or info.base
+		info.label.Text = tostring(info.price)
 		local afford = state ~= nil and state.coins >= info.price
 		UI.setButton(info.button, { Enabled = afford })
 	end
 end
 
-local function toggleShop()
-	shop.Visible = not shop.Visible
+-- 상점 창 열기: mode = "market"(슈퍼 계산대) | "phone"(전화 주문)
+local function openShopMode(mode)
+	shopMode = mode
+	local title = shop:FindFirstChild("Title")
+	local t = title and title:FindFirstChild("Text")
+	if t then
+		t.Text = mode == "phone" and string.format("📞 전화 주문 (배달비 %d%%)", math.floor(PHONE_FEE * 100 + 0.5)) or "🏪 골목 슈퍼 · 장보기"
+	end
 	shopMsg.Text = ""
+	refreshButtons()
+	shop.Visible = true
 end
-shopBtn.Activated:Connect(toggleShop)
-plusBtn.Activated:Connect(toggleShop)
--- 다른 스크립트(제작 화면)가 상점을 열 수 있게: OpenShop:Fire(재료 id)
+local function hasPhone()
+	return state ~= nil and (state.level or 0) >= PHONE_LEVEL
+end
+-- 슈퍼 길 안내 (MarketClient의 Guide BindableEvent: true 켜기 / false 끄기 / nil 바꾸기)
+local function guide(on)
+	local mc = script.Parent:FindFirstChild("MarketClient")
+	local ev = mc and mc:FindFirstChild("Guide")
+	if ev then
+		ev:Fire(on)
+	end
+end
+shopBtn.Activated:Connect(function()
+	shop.Visible = false
+	guide(nil)
+end)
+phoneBtn.Activated:Connect(function()
+	if shop.Visible and shopMode == "phone" then
+		shop.Visible = false
+	else
+		openShopMode("phone")
+	end
+end)
+plusBtn.Activated:Connect(function()
+	if hasPhone() then
+		openShopMode("phone")
+	else
+		guide(true)
+	end
+end)
+-- 슈퍼 계산대 [장보기] (MarketClient가 부름)
+local openMarket = Instance.new("BindableEvent")
+openMarket.Name = "OpenMarket"
+openMarket.Parent = script
+openMarket.Event:Connect(function(mode)
+	openShopMode(mode or "market")
+end)
+-- 다른 스크립트(제작 화면)가 재료가 없을 때 부름: OpenShop:Fire(재료 id)
+-- D54: 전화가 있으면(Lv10~) 전화 주문 창, 없으면 슈퍼 길 안내 + 알림
 local openShop = Instance.new("BindableEvent")
 openShop.Name = "OpenShop"
 openShop.Parent = script
 openShop.Event:Connect(function(id)
-	shop.Visible = true
 	local ing = nil
 	for _, x in ipairs(G.Ingredients) do
 		if x.id == id then
 			ing = x
 		end
 	end
-	setMsg(ing and (ing.name .. "이(가) 없어요. 사 가세요!") or "", false)
+	if hasPhone() then
+		openShopMode("phone")
+		setMsg(ing and (ing.name .. "이(가) 없어요. 전화로 주문하세요!") or "", false)
+	else
+		guide(true)
+		local toastEv = script:FindFirstChild("Toast")
+		if toastEv and ing then
+			toastEv:Fire(ing.name .. "이(가) 없어요 · 슈퍼에 가서 사 와요")
+		end
+	end
 end)
 closeBtn.Activated:Connect(function()
 	shop.Visible = false
@@ -267,6 +330,11 @@ local function showToast(text)
 		end
 	end)
 end
+-- 다른 스크립트가 알림을 띄울 때: Hud.Toast:Fire(글)
+local toastEv = Instance.new("BindableEvent")
+toastEv.Name = "Toast"
+toastEv.Parent = script
+toastEv.Event:Connect(showToast)
 
 ---------------------------------------------------------------- 상태 반영
 local shownCoins = 0
@@ -309,6 +377,7 @@ local function apply(s)
 	stockText.Text = string.format("%d/%d", s.stock or 0, s.stockMax or G.StockMax)
 	plotText.Text = s.plot and string.format("%d번 달고나 가게", s.plot) or "달고나 가게"
 	saveWarn.Visible = s.saving == false
+	phoneSlot.Visible = (s.level or 0) >= PHONE_LEVEL
 	refreshButtons()
 end
 
