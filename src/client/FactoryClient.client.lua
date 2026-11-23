@@ -809,7 +809,7 @@ function render()
 	-- 알바생 (공정별 고용)
 	local STAFF_COLOR = { sugar = Color3.fromRGB(240, 240, 240), boil = Color3.fromRGB(220, 70, 70), press = Color3.fromRGB(255, 205, 60), inspect = Color3.fromRGB(140, 200, 240), pack = Color3.fromRGB(80, 130, 220) }
 	for i, s in ipairs(f.staff or {}) do
-		local mine = f.self == s.key -- D45: 내가 이 공정을 맡는 중
+		local mine = s.self == true -- D45: 내가 이 공정을 맡는 중 (서버 staff[i].self)
 		local row = UI.card({ LayoutOrder = i, Size = UDim2.new(1, -10, 0, 74), BackgroundColor3 = mine and Color3.fromRGB(255, 240, 200) or nil, ZIndex = 13, Parent = staffList })
 		if mine then
 			row:FindFirstChildOfClass("UIStroke").Color = UI.C.gold
@@ -818,7 +818,8 @@ function render()
 		local chipC = new("TextLabel", { Position = UDim2.fromOffset(12, 15), Size = UDim2.fromOffset(44, 44), BackgroundColor3 = STAFF_COLOR[s.key] or SOFT, FontFace = UI.F.round, TextSize = 22, TextColor3 = s.key == "sugar" and BROWN or Color3.new(1, 1, 1), Text = tostring(i), ZIndex = 14, Parent = row })
 		corner(chipC, 22)
 		new("UIStroke", { Color = UI.C.woodDark, Thickness = 2.5, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = chipC })
-		local textW = s.hired and -240 or -360 -- 빈 자리는 버튼 두 개 ([내가 하기] [고용])
+		local selfBtn = (not s.hired) and (s.canSelf or mine) -- 알바 없는 자리 = [내가 하기] (서버 staff[i].canSelf)
+		local textW = selfBtn and -360 or -240 -- 버튼 두 개면 글씨 칸을 줄임
 		new("TextLabel", { Position = UDim2.fromOffset(66, 6), Size = UDim2.new(1, textW, 0, 22), BackgroundTransparency = 1, FontFace = UI.F.heavy, TextSize = 19, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = BROWN, TextTruncate = Enum.TextTruncate.AtEnd, Text = (s.name or s.key) .. (s.hired and (s.on and "  · 일하는 중" or "  · 쉬는 중") or (mine and "  · 🙋 내가 하는 중" or "")), ZIndex = 14, Parent = row })
 		new("TextLabel", { Position = UDim2.fromOffset(66, 30), Size = UDim2.new(1, textW, 0, 38), BackgroundTransparency = 1, FontFace = UI.F.bold, TextSize = 14, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = SOFT, Text = string.format("%s\n급여 30초당 6 · 이번 판 %s 코인", s.desc or "", tostring(s.wage or 0)), ZIndex = 14, Parent = row })
 		local hireCost = f.staffHireCost or 10000
@@ -829,15 +830,13 @@ function render()
 			act(s.hired and "factoryFire" or "factoryHire", s.key)
 		end)
 		-- [내가 하기] (D45): 알바가 없는 자리만. 맡는 중이면 [그만하기]
-		if not s.hired then
+		if selfBtn then
 			local me = new("TextButton", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -178, 0.5, 0), Size = UDim2.fromOffset(118, 48), BackgroundColor3 = mine and RED or UI.C.blue, TextSize = 17, Text = mine and "그만하기" or "내가 하기", ZIndex = 14, Parent = row })
 			corner(me, 14)
 			candy(me)
 			me.Activated:Connect(function()
-				act("factorySelf", mine and "" or s.key)
-				if not mine then
-					gui.Enabled = false -- 내 캐릭터가 그 자리로 걸어가는 걸 보이게 창을 닫음
-				end
+				-- 같은 공정을 다시 누르면 그만, 다른 공정이면 옮김 (서버 토글). 공장 방 밖이면 서버가 이유를 돌려줌 (msgL)
+				act("factorySelf", s.key)
 			end)
 		end
 		table.insert(made, row)
@@ -864,8 +863,8 @@ task.spawn(function()
 end)
 
 -- D45 "내가 하기" 맡는 동안 화면 위 가운데 알림판 (창을 닫아도 보임): 🙋 내가 ② 끓이기 하는 중 · [그만하기]
--- 서버 형식 (저장·부지 세션이 정해 보낼 예정): growth.factory.self = 공정 key | nil,
---   조작 Remotes.GrowthAction("factorySelf", key) 시작 / ("factorySelf", "") 그만. (이름이 달라지면 여기만 고침)
+-- 서버 (feat/factory-self-1124): growth.factory.staff[i].self = 내가 하는 중, .canSelf = 알바 없는 자리(버튼 보임),
+--   Remotes.GrowthAction("factorySelf", key) = 시작 / 같은 key 다시 = 그만 / 다른 key = 옮김. 플레이어 속성 FactorySelf = 지금 공정 key
 local selfGui = UI.screen("FactorySelf", 7, player:WaitForChild("PlayerGui"))
 local selfRoot = UI.root(selfGui)
 local selfFit = UI.fitter(selfRoot)
@@ -877,26 +876,38 @@ new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 8),
 new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, VerticalAlignment = Enum.VerticalAlignment.Center, Padding = UDim.new(0, 10), Parent = selfPill })
 local selfText = UI.text({ LayoutOrder = 1, Text = "", TextSize = 19, Size = UDim2.fromOffset(0, 40), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 6, Parent = selfPill })
 local selfStop = UI.button({ LayoutOrder = 2, Name = "StopSelf", Text = "그만하기", Color = UI.C.red, Size = UDim2.fromOffset(110, 42), TextSize = 17, ZIndex = 6, Parent = selfPill })
+local selfKey = nil
 selfStop.Activated:Connect(function()
-	act("factorySelf", "")
+	if selfKey then
+		act("factorySelf", selfKey) -- 같은 공정 다시 = 그만
+	end
 end)
 showSelf = function(f)
-	local key = f and f.self
-	local name = nil
+	local key, name = nil, nil
 	for _, s in ipairs(f and f.staff or {}) do
-		if s.key == key then
-			name = s.name
+		if s.self then
+			key, name = s.key, s.name
 		end
 	end
-	selfPill.Visible = key ~= nil and key ~= ""
+	if not key then
+		local a = player:GetAttribute("FactorySelf")
+		if type(a) == "string" and a ~= "" then
+			key = a
+		end
+	end
+	selfKey = key
+	selfPill.Visible = key ~= nil
 	selfText.Text = string.format("🙋 내가 %s 하는 중", name or tostring(key))
 end
+player:GetAttributeChangedSignal("FactorySelf"):Connect(function()
+	showSelf(state and state.growth and state.growth.factory)
+end)
 
 -- 알바생 고용·일하는지 바뀜을 알아보는 짧은 글 (매초 오는 갱신에서 바뀌었을 때만 다시 그림)
 local function staffSig(f)
 	local t = {}
 	for _, s in ipairs(f and f.staff or {}) do
-		table.insert(t, (s.hired and "1" or "0") .. (s.on and "1" or "0"))
+		table.insert(t, (s.hired and "1" or "0") .. (s.on and "1" or "0") .. (s.self and "1" or "0") .. (s.canSelf and "1" or "0"))
 	end
 	return table.concat(t)
 end
@@ -905,7 +916,7 @@ Remotes:WaitForChild("PlayerState").OnClientEvent:Connect(function(s)
 	state = s
 	local f = s and s.growth and s.growth.factory
 	-- 설정·상태가 바뀌었을 때만 다시 그림 (매초 오는 진행 갱신은 글씨만)
-	if gui.Enabled and f and (not old or old.shape ~= f.shape or old.qty ~= f.qty or old.mode ~= f.mode or old.on ~= f.on or old.status ~= f.status or old.lines ~= f.lines or old.maxQty ~= f.maxQty or old.self ~= f.self or staffSig(old) ~= staffSig(f)) then
+	if gui.Enabled and f and (not old or old.shape ~= f.shape or old.qty ~= f.qty or old.mode ~= f.mode or old.on ~= f.on or old.status ~= f.status or old.lines ~= f.lines or old.maxQty ~= f.maxQty or staffSig(old) ~= staffSig(f)) then
 		render()
 	end
 	showSelf(f)
