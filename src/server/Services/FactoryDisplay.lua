@@ -50,7 +50,22 @@ local ANIM = {
 	Fac_StartButton_Node = "lampRun",
 	Fac_StopButton_Node = "lampStop",
 	Fac_Chute_Node = "outlet",
+	-- 공정별로 나눈 새 기계 (3D 모델 세션 3af0f81, 2026-11-23, 기획 D36): 공정마다 움직임 (FactoryClient가 그림)
+	Fac_FeedPipe_Node = "feed", -- ① 공급관 흔들림
+	Fac_Stirrer_Node = "stir", -- ② 솥 젓개 (세로축 회전)
+	Fac_Gauge_Node = "gauge", -- ② 계기 바늘
+	Fac_HeatBand_Node = "heat", -- ② 가열 띠 (돌 때 빨강)
+	Fac_Nozzle_Node = "nozzle", -- ③ 노즐 (붓는 순간 내려옴)
+	Fac_Drop_Node = "drip", -- ③ 노즐 끝 방울
+	Fac_Lever_Node = "lever", -- ③ 조작대 레버 (프레스 박자)
+	Fac_Curtain_1_Node = "curtain", -- ④ 비닐 커튼
+	Fac_Curtain_2_Node = "curtain",
+	Fac_Curtain_3_Node = "curtain",
+	Fac_Curtain_4_Node = "curtain",
+	Fac_CrateLid_Node = "lid", -- ⑤ 상자 뚜껑
 }
+-- 공정 키 (알바생 D30 / 공정 표시등 / 빈 작업복 걸이)
+local STATION_KEYS = { "sugar", "boil", "press", "inspect", "pack" }
 local CONSOLE = { Line_ConsolePanel_Node = true, Fac_Console_Node = true } -- 제어대 ProximityPrompt를 붙일 부품
 
 local function part(parent, name, size, cf, color, material, props)
@@ -223,6 +238,30 @@ local function buildBuilding(lot)
 			local key = ANIM[d.Name] or (d.Parent and ANIM[d.Parent.Name])
 			if key then
 				d:SetAttribute("Anim", key)
+			end
+			-- 공정 표시등 Fac_Lamp_<key> (알바 일하면 켜짐) · 빈 작업복 걸이 Fac_Hanger_<key> (고용하면 숨김)
+			for _, k in ipairs(STATION_KEYS) do
+				if d.Name == "Fac_Lamp_" .. k or (d.Parent and d.Parent.Name == "Fac_Lamp_" .. k .. "_Node") then
+					d:SetAttribute("Anim", "stationLamp")
+					d:SetAttribute("StationKey", k)
+				elseif d.Name == "Fac_Hanger_" .. k or (d.Parent and d.Parent.Name == "Fac_Hanger_" .. k .. "_Node") then
+					d:SetAttribute("Anim", "hanger")
+					d:SetAttribute("StationKey", k)
+				end
+			end
+			-- 컨베이어 달고나 길·솥 김 자리 표시 (작은 상자): 건물 기준 자리만 속성으로 남기고 안 보이게
+			local mark = ({ Fac_Pt_BeltStart = "BeltStart", Fac_Pt_BeltEnd = "BeltEnd", Fac_Pt_Steam = "SteamAt" })[d.Name]
+				or (d.Parent and ({ Fac_Pt_BeltStart_Node = "BeltStart", Fac_Pt_BeltEnd_Node = "BeltEnd", Fac_Pt_Steam_Node = "SteamAt" })[d.Parent.Name])
+			if mark then
+				b:SetAttribute(mark, b:GetPivot():ToObjectSpace(d.CFrame))
+				d.Transparency = 1
+				d.CanCollide = false
+				d.CanQuery = false
+				d.CanTouch = false
+			end
+			-- 옛 5개 묶음 달고나: 클라이언트가 길 위에 6~8개를 돌려 쓰면 숨김 (길 표시가 있을 때만)
+			if d.Name == "Fac_BeltDalgona" or (d.Parent and d.Parent.Name == "Fac_BeltDalgona_Node") then
+				d:SetAttribute("BeltBundle", true)
 			end
 			if CONSOLE[d.Name] or (d.Parent and CONSOLE[d.Parent.Name]) then
 				console = console or d
