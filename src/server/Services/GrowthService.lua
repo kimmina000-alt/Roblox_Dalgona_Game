@@ -439,15 +439,34 @@ local function helperFoot(plot, post, i)
 			local pos = Vector3.new(l.X, y, l.Z)
 			return plot.cframe * CFrame.lookAt(pos, pos + Vector3.new(look.X, 0, look.Z))
 		end
-		local role = p.kind == "display" and "유리 진열장" or "앞 카운터 (나무)"
-		for _, part in ipairs(plot.model:GetDescendants()) do
-			if part:IsA("BasePart") and part:GetAttribute("Role") == role then
-				local l = plot.cframe:ToObjectSpace(part.CFrame)
-				local sz = part.Size
-				local halfZ = (math.abs(l.RightVector.Z) * sz.X + math.abs(l.UpVector.Z) * sz.Y + math.abs(l.LookVector.Z) * sz.Z) / 2
-				local pos = Vector3.new(l.X, y, l.Z + halfZ + 1.3)
-				return plot.cframe * CFrame.lookAt(pos, pos - Vector3.zAxis)
+		local function box(role)
+			for _, part in ipairs(plot.model:GetDescendants()) do
+				if part:IsA("BasePart") and part:GetAttribute("Role") == role then
+					local l = plot.cframe:ToObjectSpace(part.CFrame)
+					local sz = part.Size
+					local hx = (math.abs(l.RightVector.X) * sz.X + math.abs(l.UpVector.X) * sz.Y + math.abs(l.LookVector.X) * sz.Z) / 2
+					local hz = (math.abs(l.RightVector.Z) * sz.X + math.abs(l.UpVector.Z) * sz.Y + math.abs(l.LookVector.Z) * sz.Z) / 2
+					return l.Position, hx, hz
+				end
 			end
+			return nil
+		end
+		local case, _, caseZ = box("유리 진열장")
+		local counter, counterX, counterZ = box("앞 카운터 (나무)")
+		local pos = nil
+		if p.kind == "display" and case then
+			pos = Vector3.new(case.X, y, case.Z + caseZ + 1.3) -- 유리 진열장 뒤
+		elseif p.kind == "cashier" and counter then
+			-- 앞 카운터 뒤, 유리 진열장이 없는 쪽 끝 (진열 알바와 안 겹치게, 2026-11-24)
+			local x = counter.X
+			if case then
+				local side = case.X > counter.X and -1 or 1
+				x = counter.X + side * math.max(0, counterX - 2.5)
+			end
+			pos = Vector3.new(x, y, counter.Z + counterZ + 1.3)
+		end
+		if pos then
+			return plot.cframe * CFrame.lookAt(pos, pos - Vector3.zAxis)
 		end
 	end
 	if post == "stove" then
