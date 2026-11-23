@@ -8,7 +8,9 @@
 --     titles = { owned = { "커먼 장인", ... }, equipped = "커먼 장인" 또는 nil },
 --   }
 --   보상 알림: Remotes.CollectionReward (OnClientEvent) { title = "도감 등록!", text = "별 · 처음 Perfect", reward = "+220 코인", icon = "⭐" }
---   칭호 달기: Remotes.CollectionAction:InvokeServer("equipTitle", 이름) (서버가 만들면 씀, 없으면 화면만 바뀜)
+--   칭호 달기: Remotes.CollectionAction:InvokeServer("equipTitle", 이름) → { ok, reason }, 이름 "" = 떼기
+--   간판 금테: collection.signGold = true (23종 모두 Perfect)
+-- 서버 = feat/collection-server-1124 (2026-11-24, 이 형식 그대로)
 -- 서버 데이터가 없으면 Studio에서만 예시 데이터를 보여 줌 (게임에서는 빈 도감).
 -- 테스트: 이 스크립트 안 BindableEvent ShowReward:Fire({ ... }) 로 알림을 띄워 볼 수 있음.
 
@@ -23,6 +25,7 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local CustomerRig = require(Shared:WaitForChild("CustomerRig"))
 local UI = require(Shared:WaitForChild("UiStyle"))
+local G = require(Shared:WaitForChild("GrowthConfig"))
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local C = UI.C
 local new = UI.new
@@ -40,6 +43,17 @@ local CUSTOMER_LOOK = {
 local CUSTOMER_ORDER = { "Pongpong", "Mochi", "Dotori", "Godeungeo", "Kkuldanji", "Ppogeuli", "Owl" }
 local HEART_AT = { 10, 50, 150 } -- D38 하트 1·2·3
 
+-- 손님 이름: 서버와 같은 GrowthConfig.Customers.types[].name (없으면 CustomerRig label)
+local function customerName(id)
+	for _, t in ipairs(G.Customers and G.Customers.types or {}) do
+		if t.id == id and t.name then
+			return t.name
+		end
+	end
+	local t = CustomerRig.types[id]
+	return t and t.label or id
+end
+
 -- 칭호 목록 (D38): 등급마다 장인 + 달고나 장인 + 손님 단골집 7 + 골목 인기 가게
 local function titleList()
 	local list = {}
@@ -48,8 +62,7 @@ local function titleList()
 	end
 	table.insert(list, { name = "달고나 장인", cond = "도안 23종 모두 Perfect (가게 간판 금테)" })
 	for _, id in ipairs(CUSTOMER_ORDER) do
-		local t = CustomerRig.types[id]
-		local nm = t and t.label or id
+		local nm = customerName(id)
 		table.insert(list, { name = nm .. "네 단골집", cond = nm .. "에게 150개 팔기 (하트 3)" })
 	end
 	table.insert(list, { name = "골목 인기 가게", cond = "손님 7종 모두 하트 3" })
@@ -126,7 +139,7 @@ for i, t in ipairs(TABS) do
 		Parent = body,
 	}, { new("UIPadding", { PaddingRight = UDim.new(0, 8), PaddingBottom = UDim.new(0, 6) }) })
 end
-local countBox = UI.card({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 70), BackgroundColor3 = C.woodDark, ZIndex = 12, Parent = tabCol })
+local countBox = UI.card({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 84), BackgroundColor3 = C.woodDark, ZIndex = 12, Parent = tabCol })
 local countText = UI.text({ Text = "", TextSize = 16, TextColor3 = C.cream, TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, Size = UDim2.fromScale(1, 1), ZIndex = 13, Parent = countBox })
 local sampleTag = UI.text({ Text = "예시 데이터", Visible = false, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -60, 0, 10), Size = UDim2.fromOffset(120, 20), TextSize = 14, TextColor3 = C.white, Outline = C.bad, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 16, Parent = win })
 
@@ -228,7 +241,7 @@ local function renderShapes(d)
 			UI.stroke(C.red, 2.5).Parent = st
 		end
 	end
-	return string.format("모은 도안\n%d / %d\n금별 %d", made, #ShapeCatalog.list, stars)
+	return string.format("모은 도안\n%d / %d\n금별 %d%s", made, #ShapeCatalog.list, stars, d.signGold and "\n✨ 간판 금테" or "")
 end
 
 ---------------------------------------------------------------- 손님 탭
@@ -251,8 +264,7 @@ local function renderCustomers(d)
 	for i, id in ipairs(CUSTOMER_ORDER) do
 		local rec = d.customers[id]
 		local look = CUSTOMER_LOOK[id]
-		local t = CustomerRig.types[id]
-		local name = t and t.label or id
+		local name = customerName(id)
 		local isMet = rec and rec.met
 		if isMet then
 			met += 1
@@ -299,16 +311,22 @@ end
 new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = pages.titles })
 
 local function equipTitle(d, name)
-	d.titles.equipped = name
+	-- name "" = 떼기 (서버도 같은 규칙). 서버가 거절하면 화면을 되돌림
+	local before = d.titles.equipped
+	d.titles.equipped = name ~= "" and name or nil
+	render()
 	local action = Remotes:FindFirstChild("CollectionAction")
 	if action then
 		task.spawn(function()
-			pcall(function()
-				action:InvokeServer("equipTitle", name)
+			local ok, res = pcall(function()
+				return action:InvokeServer("equipTitle", name)
 			end)
+			if not (ok and type(res) == "table" and res.ok) then
+				d.titles.equipped = before
+				render()
+			end
 		end)
 	end
-	render()
 end
 
 local function renderTitles(d)
@@ -333,15 +351,17 @@ local function renderTitles(d)
 		UI.text({ Text = (has and "🏅 " or "🔒 ") .. t.name, Position = UDim2.fromOffset(14, 6), Size = UDim2.new(1, -190, 0, 26), TextSize = 20, TextColor3 = has and C.ink or C.soft, ZIndex = 14, Parent = row })
 		UI.text({ Text = t.cond, Position = UDim2.fromOffset(14, 34), Size = UDim2.new(1, -190, 0, 20), TextSize = 14, FontFace = UI.F.bold, TextColor3 = C.soft, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 14, Parent = row })
 		if has then
-			local b = UI.button({ Text = on and "다는 중" or "달기", Color = on and C.green or C.yellow, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(150, 46), TextSize = 19, ZIndex = 14, Parent = row })
+			-- 다는 중이면 [떼기]
+			local b = UI.button({ Text = on and "떼기" or "달기", Color = on and C.red or C.yellow, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(150, 46), TextSize = 19, ZIndex = 14, Parent = row })
 			b.Activated:Connect(function()
-				if not on then
-					equipTitle(d, t.name)
-				end
+				equipTitle(d, on and "" or t.name)
 			end)
+			if on then
+				UI.text({ Text = "✓ 다는 중", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -168, 0.5, 0), Size = UDim2.fromOffset(100, 22), TextSize = 16, TextColor3 = C.good, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 14, Parent = row })
+			end
 		end
 	end
-	return string.format("모은 칭호\n%d / %d", count, #TITLES)
+	return string.format("모은 칭호\n%d / %d%s", count, #TITLES, d.signGold and "\n✨ 간판 금테" or "")
 end
 
 ---------------------------------------------------------------- 그리기 · 열고 닫기
