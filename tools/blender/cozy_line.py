@@ -294,18 +294,22 @@ ball(P["L4_StartButton"], cp + Vector((0.35, -0.1, 0)), (0.1, 0.06, 0.1), MINT_B
 ball(P["L4_TowerR"], cp + Vector((0.6, -0.1, 0)), (0.1, 0.06, 0.1), RED_BTN, seg=(10, 6))
 
 # 위: 뒤 기둥 2개 + 가게와 같은 주황·크림 줄무늬 작은 차양 + 전구 2개(돌 때 켜짐)
-aw = P["L4_Awning"]
-for sx in (-1, 1):
-    box(cab, (sx * (LW / 2 - 0.25), LD / 2 - 0.25, TOPZ + 2.0), (0.18, 0.18, 4.0), WOOD_D, bev=0.05)
+#   2026-11-24 사용자: "위에 천막 삭제" → AWNING = False (기둥·매단 전구도 같이 빠짐, 식힘 창 불빛 L4_TowerG는 남음)
+AWNING = False
 NS = 8
 AZ = TOPZ + 3.95
-for k in range(NS):
+if not AWNING:
+    del P["L4_Awning"]
+aw = P.get("L4_Awning")
+for sx in ((-1, 1) if AWNING else ()):
+    box(cab, (sx * (LW / 2 - 0.25), LD / 2 - 0.25, TOPZ + 2.0), (0.18, 0.18, 4.0), WOOD_D, bev=0.05)
+for k in (range(NS) if AWNING else ()):
     x = -LW / 2 + (k + 0.5) * LW / NS
     col = ORANGE if k % 2 == 0 else AWN_CREAM
     box(aw, (x, 0.0, AZ), (LW / NS + 0.002, 2.4, 0.07), col, bev=0.025, seg=2, m=rot(x=-14))
     lip = Vector((x, -1.17, AZ - 0.32))
     cyl(aw, lip + Vector((-LW / NS / 2, 0, 0)), lip + Vector((LW / NS / 2, 0, 0)), 0.14, 0.14, col, seg=10)
-for x in (-1.6, 1.6):
+for x in ((-1.6, 1.6) if AWNING else ()):
     cyl(cab, (x, -0.6, AZ - 0.18), (x, -0.6, AZ - 0.35), 0.03, 0.03, WIRE, seg=5)
     ball(P["L4_TowerG"], (x, -0.6, AZ - 0.45), (0.11, 0.11, 0.13), BULB, seg=(10, 6))
 
