@@ -485,8 +485,8 @@ local function poseLimb(model, name, rootCF, rot)
 	end
 end
 
--- 7종 모델 중 하나로 손님 만들기. 없으면 nil
-local function buildModelCustomer(cf)
+-- 7종 모델 중 하나로 손님 만들기 (want = 손님 종류 id, D37). 없으면 nil
+local function buildModelCustomer(cf, want)
 	local CR = customerRig()
 	local assets = game:GetService("ServerStorage"):FindFirstChild("Assets")
 	local folder = assets and assets:FindFirstChild("Customers")
@@ -502,7 +502,7 @@ local function buildModelCustomer(cf)
 	if #choices == 0 then
 		return nil
 	end
-	local id = choices[math.random(#choices)]
+	local id = (want and table.find(choices, want)) and want or choices[math.random(#choices)]
 	local rig = CR.types[id]
 	local src = folder["Customer_" .. id]
 	local m = Instance.new("Model")
@@ -532,8 +532,8 @@ local function buildModelCustomer(cf)
 	return m
 end
 
-local function buildCustomer(cf)
-	local m = buildModelCustomer(cf)
+local function buildCustomer(cf, want)
+	local m = buildModelCustomer(cf, want)
 	if m then
 		local head = m.Head
 		local bb = Instance.new("BillboardGui")
@@ -762,9 +762,13 @@ local function demand(player)
 	return G.salesDemandFor(data) -- 노점·문 닫힘이면 국자 1개 수요 (D21)
 end
 
+-- 방문 간격: 수요 표(5-1) 간격 × (이 레벨 손님 평균 개수 ÷ 수요 표 평균 개수) → 분당 사는 개수 합계는 수요 표 그대로 (D37)
 local function interval(player)
-	local base = demand(player)
-	return base * (1 + (math.random() * 2 - 1) * SALES.jitter)
+	local base, lo, hi = demand(player)
+	local data = Data.get(player)
+	local mean = G.customerMeanBuy(data and data.level or 1)
+	local scale = mean / math.max((lo + hi) / 2, 0.01)
+	return base * scale * (1 + (math.random() * 2 - 1) * SALES.jitter)
 end
 
 local function local2world(plot, x, z)
@@ -779,8 +783,11 @@ local function spawnCustomer(index)
 	if available <= 0 then
 		return
 	end
-	local _, buyMin, buyMax = demand(owner)
-	local want = math.random(buyMin, buyMax)
+	-- 손님 종류 (D37): 레벨 구간 비율로 뽑고, 종류마다 사려는 개수
+	local od = Data.get(owner)
+	local ctype = G.rollCustomer(od and od.level or 1)
+	local kind = G.Customers.kinds[ctype.kind]
+	local want = math.random(kind.min, kind.max)
 	local n = math.min(want, available)
 	shop.reserved += n
 	local stand = shop.standLocal or Vector3.new(SALES.shelf.pos.X, 0, SALES.standZ)
@@ -792,7 +799,7 @@ local function spawnCustomer(index)
 	local doorP = local2world(plot, sx, SALES.streetZ)
 	local standP = local2world(plot, standL.X, standL.Z)
 	local exitP = local2world(plot, -side * SALES.streetHalf, SALES.streetZ)
-	local model = buildCustomer(CFrame.new(startP))
+	local model = buildCustomer(CFrame.new(startP), ctype.id)
 	model.Parent = shop.folder
 	local c = { model = model, reserved = n }
 	shop.customers[c] = true
@@ -821,7 +828,7 @@ local function spawnCustomer(index)
 		c.reserved = 0
 		local sold, coins, items = 0, 0, nil
 		if shop.owner == owner and owner.Parent then
-			sold, coins, items = Economy.sell(owner, reservedN)
+			sold, coins, items = Economy.sell(owner, reservedN, ctype)
 		end
 		if sold > 0 then
 			-- 알림창 대신 손님 위에 "+n코인" 글씨 (2026-11-24 사용자, 클라이언트 SaleFloatClient).
@@ -834,7 +841,7 @@ local function spawnCustomer(index)
 			startEating(model, items and items[1] or nil)
 			print(string.format("[Sales] %s Plot%d sold %d (+%d)", owner.Name, index, sold, coins))
 		else
-			say(model, "다 팔렸네...", 2)
+			say(model, ctype.kind == "vip" and "마음에 드는 게 없네..." or "다 팔렸네...", 2) -- 부엉이는 원하는 것만 (D37)
 		end
 		task.wait(0.6)
 		if model.Parent then
