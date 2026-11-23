@@ -469,16 +469,37 @@ doneBtn.Activated:Connect(function()
 	hint.Text = "저장하는 중…"
 	-- 서버가 진짜로 옮기므로, 내 화면에서 옮긴 것은 먼저 원래대로 (서버가 옮긴 자리가 그대로 보이게)
 	restoreAll()
+	-- 서버는 한 개씩 검사 → 서로 자리를 바꾸는 경우 앞의 것이 비켜야 됨. 실패한 것은 한 바퀴 더 (성공이 있는 동안 반복)
 	local failed = nil
-	for k, it in ipairs(list) do
-		if k > 1 then
-			task.wait(0.3) -- 서버 "천천히!" (0.25초)
+	local pending = list
+	local sent = 0
+	while #pending > 0 do
+		local nextRound, progress = {}, false
+		for _, it in ipairs(pending) do
+			if sent > 0 then
+				task.wait(0.3) -- 서버 "천천히!" (0.25초)
+			end
+			sent += 1
+			local res = buildAction("place", it.key, it.x, it.z, it.r)
+			if type(res) == "table" and res.ok then
+				progress = true
+			else
+				table.insert(nextRound, it)
+				failed = { it = it, why = type(res) == "table" and res.reason or "꾸미기 서버가 아직 없어요" }
+				if type(res) ~= "table" then
+					nextRound = {}
+					break
+				end
+			end
 		end
-		local res = buildAction("place", it.key, it.x, it.z, it.r)
-		if not (type(res) == "table" and res.ok) then
-			failed = { it = it, why = type(res) == "table" and res.reason or "꾸미기 서버가 아직 없어요" }
+		if #nextRound == 0 then
+			failed = (type(failed) == "table" and failed.why == "꾸미기 서버가 아직 없어요") and failed or nil
 			break
 		end
+		if not progress then
+			break
+		end
+		pending = nextRound
 	end
 	busy = false
 	if not failed then
