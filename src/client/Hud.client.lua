@@ -236,7 +236,7 @@ local toast = UI.card({
 toast:FindFirstChildOfClass("UIStroke").Color = C.woodDark
 toast:FindFirstChildOfClass("UIStroke").Thickness = 3
 new("UIPadding", { PaddingLeft = UDim.new(0, 18), PaddingRight = UDim.new(0, 18), Parent = toast })
-fit(toast)
+fit(toast, 600, 44) -- 알림 글씨는 창 배율 (읽혀야 함)
 local toastText = label({ Text = "", TextSize = 19, Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, ZIndex = 21, Parent = toast })
 local toastSeq = 0
 local function showToast(text)

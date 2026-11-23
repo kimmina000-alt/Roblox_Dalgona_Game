@@ -408,7 +408,7 @@ local function playToast(r)
 	local card = UI.card({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -10), Size = UDim2.fromOffset(460, 92), ZIndex = 40, Parent = root })
 	card:FindFirstChildOfClass("UIStroke").Color = C.woodDark
 	card:FindFirstChildOfClass("UIStroke").Thickness = 3.5
-	fit(card)
+	fit(card, 460, 92) -- 알림은 창 배율
 	local icon = new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 12, 0.5, 0), Size = UDim2.fromOffset(66, 66), BackgroundColor3 = C.gold, ZIndex = 41, Parent = card }, { UI.corner("round"), UI.stroke(C.woodDark, 3), UI.gloss(0.25) })
 	UI.text({ Text = r.icon or "📖", TextSize = 36, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.fromScale(1, 1), ZIndex = 42, Parent = icon })
 	local rib = UI.text({ Text = r.title or "도감 등록!", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.fromOffset(92, 0), Size = UDim2.fromOffset(0, 28), AutomaticSize = Enum.AutomaticSize.X, BackgroundTransparency = 0, BackgroundColor3 = C.wood, TextSize = 17, TextColor3 = C.cream, Outline = C.woodDark, ZIndex = 42, Parent = card })

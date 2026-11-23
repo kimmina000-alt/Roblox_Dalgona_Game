@@ -124,8 +124,13 @@ function UI.screen(name, order, parent)
 	})
 end
 
--- 배율: 기준 화면 800x360 (폰 가로에서 Roblox 위 메뉴·노치를 뺀 크기 ≈ 750x310 → 0.86, PC는 1.15까지)
+-- 배율 두 가지 (2026-11-24 사용자 "ui 줄이기"·실제 폰 사진: HUD가 너무 큼)
+--   HUD 조각(레벨판·코인·메뉴 버튼 등, fit(obj)): 기준 1350x560 → 폰 가로(약 750x300) ≈ 0.54, PC는 1.0까지
+--   창(fit(obj, w, h)): 기준 800x360 → 폰 ≈ 0.84 (글씨가 읽혀야 해서 HUD보다 크게), PC는 1.15까지 + 화면 안에 다 들어오게
 function UI.scaleFor(size)
+	return math.clamp(math.min(size.X / 1350, size.Y / 560), 0.5, 1.0)
+end
+function UI.windowScaleFor(size)
 	return math.clamp(math.min(size.X / 800, size.Y / 360), 0.7, 1.15)
 end
 
@@ -147,10 +152,11 @@ function UI.fitter(area)
 			return
 		end
 		current = UI.scaleFor(s)
+		local winK = UI.windowScaleFor(s)
 		for _, it in ipairs(items) do
 			local k = current
 			if it.w then
-				k = math.min(k, (s.X - 16) / it.w, (s.Y - 12) / it.h)
+				k = math.min(winK, (s.X - 16) / it.w, (s.Y - 12) / it.h)
 			end
 			it.scale.Scale = k
 		end
