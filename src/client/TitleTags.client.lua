@@ -1,8 +1,9 @@
 -- 머리 위 칭호 (D38, 2026-11-24): 플레이어 속성 Title(서버 CollectionService가 넣음, "" = 없음)을
 -- 이름 위에 작은 리본 판으로 띄움. 나와 다른 플레이어 모두. 이 화면에서만 만드는 BillboardGui.
--- 내가 만드는 동안은 모든 칭호(내 것·다른 사람 것)를 숨김 (2026-11-24 사용자 요청):
--- 신호 = LocalPlayer 속성 Making = true (MakingClient가 내 화면에서만 넣음, 끝나면 nil — 제작 세션 feat/making-polish-1125),
--- 혹시 그 신호가 없어도 내 제작 화면(PlayerGui.MakingScreen)이 켜져 있으면 숨김.
+-- 만드는 동안 칭호 숨김 (2026-11-24 사용자 요청), 신호 = 플레이어 속성 Making = true (끝나면 nil):
+--   제작 세션 feat/making-polish-1125: 도안 고르기~결과 창 닫기 동안 클라가 바로 넣고, Remotes.MakingState로 서버도 넣음(다른 사람에게 보임).
+--   그 플레이어가 만드는 중이면 그 사람 칭호를 숨김. 내가 만드는 중이면 (화면을 가리지 않게) 모든 칭호를 숨김.
+--   신호가 없어도 내 제작 화면(PlayerGui.MakingScreen)이 켜져 있으면 내가 만드는 중으로 봄.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -66,7 +67,7 @@ local function refresh(player)
 	local char = player.Character
 	local head = char and char:FindFirstChild("Head")
 	local has = type(title) == "string" and title ~= ""
-	local making = me:GetAttribute("Making") == true or myMaking
+	local making = player:GetAttribute("Making") == true or me:GetAttribute("Making") == true or myMaking
 	bb.Plate.Label.Text = has and ("🏅 " .. title) or ""
 	bb.Adornee = head
 	bb.Enabled = has and head ~= nil and not making
@@ -77,6 +78,11 @@ local function watch(player)
 	player:GetAttributeChangedSignal("Title"):Connect(function()
 		refresh(player)
 	end)
+	if player ~= me then
+		player:GetAttributeChangedSignal("Making"):Connect(function()
+			refresh(player)
+		end)
+	end
 	player.CharacterAdded:Connect(function(char)
 		char:WaitForChild("Head", 10)
 		refresh(player)
