@@ -16,6 +16,8 @@ local player = Players.LocalPlayer
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local DalgonaLook = require(Shared:WaitForChild("DalgonaLook"))
+local FactoryMini = require(script.Parent:WaitForChild("FactoryMini")) -- D45 공정 미니게임 (내가 맡은 공정, 판마다 한 번)
+FactoryMini.start()
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local UI = require(Shared:WaitForChild("UiStyle")) -- 2026-11-22 새 스타일 (나무 판 창 + 왼쪽 세로 탭 + 사탕 버튼)
 

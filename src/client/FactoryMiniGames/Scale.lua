@@ -1,0 +1,42 @@
+-- ① 설탕 넣기: 저울 바늘이 왼쪽↔오른쪽을 오가고, 초록 칸에 왔을 때 탭해서 멈추기 (한 번). 잘하면 그 판 설탕 −20%
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UI = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiStyle"))
+local new = UI.new
+
+local Scale = { LIMIT = 4 }
+
+local SPEED = 0.9 -- 바늘 왕복 (번/초)
+local ZONE = 0.16 -- 초록 칸 폭 (눈금판 비율)
+
+function Scale.run(area, api)
+	-- 눈금판
+	local dial = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55), Size = UDim2.fromScale(0.86, 0.34), BackgroundColor3 = Color3.fromRGB(250, 236, 210), Parent = area }, { UI.corner(10), UI.stroke(UI.C.woodDark, 2) })
+	local z0 = 0.15 + math.random() * (0.7 - ZONE)
+	new("Frame", { Position = UDim2.fromScale(z0, 0), Size = UDim2.fromScale(ZONE, 1), BackgroundColor3 = UI.C.green, BackgroundTransparency = 0.15, Parent = dial }, { UI.corner(6) })
+	for i = 0, 10 do
+		new("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(i / 10, 0), Size = UDim2.new(0, 2, 0.3, 0), BackgroundColor3 = UI.C.woodDark, BorderSizePixel = 0, Parent = dial })
+	end
+	UI.text({ Text = "설탕 저울", TextSize = 16, TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromScale(0, 0.05), Size = UDim2.fromScale(1, 0.18), Parent = area })
+	local needle = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0, 0.5), Size = UDim2.new(0, 6, 1.5, 0), BackgroundColor3 = UI.C.red, ZIndex = 3, Parent = dial }, { UI.corner(3), UI.stroke(UI.C.woodDark, 1.5) })
+	local p = api.pointer
+	local presses = p.presses
+	local t = math.random() * 2
+	while api.left() > 0 do
+		local dt = RunService.RenderStepped:Wait()
+		t += dt
+		local x = (math.sin(t * SPEED * math.pi * 2 - math.pi / 2) + 1) / 2 -- 0~1 왕복
+		needle.Position = UDim2.fromScale(x, 0.5)
+		if p.presses ~= presses then
+			-- 멈춤: 초록 칸 안이면 성공
+			local ok = x >= z0 and x <= z0 + ZONE
+			needle.BackgroundColor3 = ok and UI.C.good or UI.C.bad
+			api.hint(ok and "딱 맞아요!" or "조금 빗나갔어요")
+			task.wait(0.35)
+			return ok
+		end
+	end
+	return false
+end
+
+return Scale
