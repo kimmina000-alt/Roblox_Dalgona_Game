@@ -137,7 +137,11 @@ local function setUnturned(on)
 	-- 가게 작업대(주인 속성이 있는 것)만 돌려 놓음. 새 배치 미리 보기 작업대는 안 돌림
 	if on and not unturned and station.model:GetAttribute("OwnerUserId") ~= nil then
 		local plots = GrowthConfig.Plots
-		local a = math.rad((plots and plots.workstationTurn) or 0)
+		-- 2026-11-23 사용자 "손제작대 화면 배경 회전": 작업대를 내 화면에서 되돌리지 않음. 카메라(CameraRig)가 작업대 방향을
+		-- 따라 반대편에서 보므로 도구 배치는 그대로이고, 배경(가게 바닥·길)만 실제 가게 방향대로 보임.
+		-- 다시 되돌리려면 아래를 math.rad((plots and plots.workstationTurn) or 0) 으로
+		local a = 0
+		local _ = plots
 		if a == 0 then
 			return
 		end
