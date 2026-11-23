@@ -54,6 +54,24 @@ local function lineActive(fac, k)
 	return type(t0) == "number" and t0 > 0
 end
 
+local BELT_N = 7 -- 컨베이어 위에 돌려 쓰는 달고나 수 (D36: 6~8)
+local function beltFolder()
+	local f = workspace:FindFirstChild("FactoryBeltFx")
+	if not f then
+		f = Instance.new("Folder")
+		f.Name = "FactoryBeltFx"
+		f.Parent = workspace
+	end
+	return f
+end
+local HEAT = Color3.fromRGB(255, 90, 60)
+
+-- 경첩(hinge) 둘레로 axis 축 ang만큼 돌린 자세
+local function hingeTurn(cf, hinge, axis, ang)
+	local r = CFrame.fromAxisAngle(axis, ang)
+	return CFrame.new(hinge) * r * CFrame.new(-hinge) * cf
+end
+
 -- ── 공장 건물마다 기록 ──
 local factories = {} -- [Factory<i>] = rec
 
@@ -88,7 +106,17 @@ local function setup(fac, force)
 					d:SetAttribute("AnimBase", d.CFrame)
 					d:SetAttribute("AnimColor", d.Color)
 				end
-				table.insert(rec.parts, { p = d, a = a, cf = d:GetAttribute("AnimBase"), color = d:GetAttribute("AnimColor"), axis = axis, phase = (#rec.parts) * 0.7 })
+				if d:GetAttribute("AnimSize") == nil then
+					d:SetAttribute("AnimSize", d.Size)
+					d:SetAttribute("AnimT", d.Transparency)
+					d:SetAttribute("AnimMat", d.Material.Name)
+				end
+				local mat = Enum.Material[d:GetAttribute("AnimMat") or d.Material.Name]
+				table.insert(rec.parts, { p = d, a = a, cf = d:GetAttribute("AnimBase"), color = d:GetAttribute("AnimColor"), size = d:GetAttribute("AnimSize"), t0 = d:GetAttribute("AnimT"), mat = mat, axis = axis, phase = (#rec.parts) * 0.7, key = d:GetAttribute("StationKey") })
+			end
+			-- 옛 5개 묶음 달고나: 길 표시(BeltStart·BeltEnd)가 있으면 내 화면에서 숨기고 아래에서 6~8개를 돌려 씀 (D36)
+			if d:GetAttribute("BeltBundle") and b:GetAttribute("BeltStart") and b:GetAttribute("BeltEnd") then
+				d.LocalTransparencyModifier = 1
 			end
 		end
 		if d:IsA("ProximityPrompt") and d.Name == "ControlPrompt" then
@@ -112,6 +140,42 @@ local function setup(fac, force)
 			corner(rec.bars[k], 3)
 			rec.barText[k] = new("TextLabel", { Position = UDim2.fromOffset(8, y), Size = UDim2.new(1, -16, 0, 13), BackgroundTransparency = 1, FontFace = UI.F.bold, TextScaled = true, TextColor3 = Color3.fromRGB(220, 225, 235), TextXAlignment = Enum.TextXAlignment.Left, Text = "", Parent = box })
 			rec.bars[k].Parent.Visible = false
+		end
+	end
+	-- 컨베이어 위 달고나 (D36: 보이는 칸 6~8개만 돌려 씀). 길 = 건물 속성 BeltStart → BeltEnd (서버 FactoryDisplay)
+	if old and old.beltLooks then
+		for _, l in ipairs(old.beltLooks) do
+			l:Destroy()
+		end
+	end
+	if b:GetAttribute("BeltStart") and b:GetAttribute("BeltEnd") then
+		rec.beltLooks = {}
+		for i = 1, BELT_N do
+			local look = DalgonaLook.build({ s = fac:GetAttribute("Line1Shape") or "Circle", g = "Good" }, 0.9)
+			look.Name = "BeltDalgona" .. i
+			-- 공장 부지 밖 폴더에 둠: 부지 안에 넣으면 부품이 들어올 때마다 공장을 다시 훑는 감시(onAdded)가 되풀이됨
+			look.Parent = beltFolder()
+			rec.beltLooks[i] = look
+		end
+	end
+	-- 경첩으로 도는 부품(레버·뚜껑·커튼): 처음 자세 기준 경첩 자리와 축 (건물 기준 좌우축 = 기계 X축)
+	-- 기계 좌우축 = 벨트가 흐르는 방향 (시작 → 끝). 레버·뚜껑은 이 축으로 돌면 앞(제어대 쪽)으로 넘어옴 (3D 세션 메모)
+	local bp = b:GetPivot()
+	local s0, s1 = b:GetAttribute("BeltStart"), b:GetAttribute("BeltEnd")
+	local flow = (s0 and s1) and ((bp * s1).Position - (bp * s0).Position) or bp.RightVector
+	flow = Vector3.new(flow.X, 0, flow.Z)
+	flow = flow.Magnitude > 1e-3 and flow.Unit or Vector3.xAxis
+	for _, e in ipairs(rec.parts) do
+		local cf, sz = e.cf, e.size or e.p.Size
+		local half = (cf - cf.Position):VectorToWorldSpace(sz / 2)
+		local ext = Vector3.new(math.abs(half.X), math.abs(half.Y), math.abs(half.Z))
+		if e.a == "lever" or e.a == "lid" then
+			e.hinge = cf.Position - Vector3.new(0, ext.Y, 0) -- 아래 끝 = 경첩
+			e.hAxis = flow
+		elseif e.a == "curtain" then
+			e.hinge = cf.Position + Vector3.new(0, ext.Y, 0) -- 윗변 = 경첩
+			-- 커튼 폭 방향(가로로 긴 쪽)이 축 → 벨트 방향으로 흔들림
+			e.hAxis = (ext.X >= ext.Z) and Vector3.xAxis or Vector3.zAxis
 		end
 	end
 	factories[fac] = rec
@@ -246,6 +310,9 @@ RunService.Heartbeat:Connect(function()
 	local camPos = cam and cam.CFrame.Position or Vector3.zero
 	for fac, rec in pairs(factories) do
 		if not rec.building.Parent then
+			for _, l in ipairs(rec.beltLooks or {}) do
+				l:Destroy()
+			end
 			factories[fac] = nil
 			continue
 		end
@@ -321,6 +388,68 @@ RunService.Heartbeat:Connect(function()
 				elseif a == "kettle" then
 					local r = running and math.sin(now * 9 + e.phase) * 0.02 or 0
 					p.CFrame = e.cf * CFrame.Angles(r, 0, r)
+				elseif a == "feed" then
+					-- ① 공급관: 작게 흔들림
+					local r = running and math.sin(now * 7 + e.phase) * math.rad(1) or 0
+					p.CFrame = e.cf * CFrame.Angles(r, 0, r * 0.6)
+				elseif a == "stir" then
+					-- ② 젓개: 세로축으로 천천히 돎
+					if running then
+						e.ang = (e.ang or 0) + 0.04
+					end
+					p.CFrame = CFrame.new(e.cf.Position) * CFrame.Angles(0, e.ang or 0, 0) * e.cf.Rotation
+				elseif a == "gauge" then
+					-- ② 계기 바늘: 돌 때 -60° → +60° 로 오르고 (끓음) 되풀이, 멈추면 -60°
+					local k = running and ((now * 0.25 + e.phase) % 1) or 0
+					p.CFrame = e.cf * CFrame.fromAxisAngle(e.axis, math.rad(-60 + 120 * math.sin(k * math.pi * 0.5)))
+				elseif a == "heat" then
+					-- ② 가열 띠: 돌 때 빨강
+					p.Material = running and Enum.Material.Neon or e.mat
+					p.Color = running and HEAT:Lerp(e.color, 0.25 + 0.2 * math.sin(now * 3)) or e.color
+				elseif a == "nozzle" then
+					-- ③ 노즐: 붓는 순간(프레스 박자 사이) 살짝 내려왔다 올라감
+					local k = running and math.max(0, math.sin(now * 2.2 + 1.2)) or 0
+					p.CFrame = e.cf - Vector3.new(0, k * 0.22, 0)
+				elseif a == "drip" then
+					-- ③ 방울: 노즐 끝에서 떨어지며 작아지고 투명 → 다시
+					if running then
+						local k = (now * 1.1 + e.phase) % 1
+						p.CFrame = e.cf - Vector3.new(0, k * 0.88, 0)
+						p.Size = e.size * (1 - 0.6 * k)
+						p.Transparency = math.min(1, (e.t0 or 0) + k)
+					else
+						p.CFrame = e.cf
+						p.Size = e.size
+						p.Transparency = e.t0 or 0
+					end
+				elseif a == "lever" then
+					-- ③ 레버: 프레스 박자에 앞으로 ~40° 당김
+					local k = running and (1 - math.abs(math.sin(now * 2.2))) or 0
+					if e.hinge then
+						p.CFrame = hingeTurn(e.cf, e.hinge, e.hAxis, math.rad(40) * k)
+					end
+				elseif a == "curtain" then
+					-- ④ 비닐 커튼: 윗변 경첩으로 ±10° 흔들림
+					local r = running and math.sin(now * 2.6 + e.phase) * math.rad(10) or 0
+					if e.hinge then
+						p.CFrame = hingeTurn(e.cf, e.hinge, e.hAxis, r)
+					end
+				elseif a == "lid" then
+					-- ⑤ 상자 뚜껑: 돌 때 6초마다 잠깐 닫혔다 열림 (상자 하나 다 담음)
+					local c = running and ((now + e.phase) % 6) or 0
+					local k = (c > 4.6 and c < 5.8) and math.sin((c - 4.6) / 1.2 * math.pi) or 0
+					if e.hinge then
+						p.CFrame = hingeTurn(e.cf, e.hinge, e.hAxis, math.rad(100) * k * (e.lidSign or 1))
+					end
+				elseif a == "stationLamp" then
+					-- 공정 표시등: 그 공정 알바가 일하면 켜짐
+					local on = e.key ~= nil and fac:GetAttribute("StaffOn_" .. e.key) == true
+					p.Material = on and Enum.Material.Neon or Enum.Material.SmoothPlastic
+					p.Color = on and e.color or e.color:Lerp(Color3.new(0.2, 0.2, 0.2), 0.5)
+				elseif a == "hanger" then
+					-- 빈 작업복 걸이: 그 공정 알바를 고용하면 숨김
+					local hired = e.key ~= nil and fac:GetAttribute("Staff_" .. e.key) == true
+					p.LocalTransparencyModifier = hired and 1 or 0
 				elseif a == "lampRun" then
 					p.Material = running and Enum.Material.Neon or Enum.Material.SmoothPlastic
 					p.Color = running and e.color or e.color:Lerp(Color3.new(0.2, 0.2, 0.2), 0.5)
@@ -332,6 +461,23 @@ RunService.Heartbeat:Connect(function()
 					local on = not running and not stopped
 					p.Material = on and Enum.Material.Neon or Enum.Material.SmoothPlastic
 					p.Color = on and e.color or e.color:Lerp(Color3.new(0.2, 0.2, 0.2), 0.5)
+				end
+			end
+		end
+		-- 컨베이어 위 달고나 BELT_N개: 시작 → 끝으로 흘러가고 되풀이 (멈추면 그 자리에 섬)
+		if rec.beltLooks then
+			local bp = rec.building:GetPivot()
+			local s0, s1 = rec.building:GetAttribute("BeltStart"), rec.building:GetAttribute("BeltEnd")
+			if s0 and s1 then
+				local a0, a1 = (bp * s0).Position, (bp * s1).Position
+				if running then
+					rec.beltT = (rec.beltT or 0) + (now - (rec.beltLast or now)) * 0.08
+				end
+				rec.beltLast = now
+				for i, look in ipairs(rec.beltLooks) do
+					local k = ((rec.beltT or 0) + (i - 1) / BELT_N) % 1
+					local pos = a0:Lerp(a1, k)
+					look:PivotTo(CFrame.new(pos) * CFrame.Angles(math.rad(90), 0, 0))
 				end
 			end
 		end
