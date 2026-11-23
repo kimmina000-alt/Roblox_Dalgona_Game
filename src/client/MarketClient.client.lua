@@ -160,12 +160,23 @@ end)
 
 ---------------------------------------------------------------- 계산대 [장보기]
 local counter = nil -- 지금 연 계산대 (멀어지면 창 닫기)
+-- 계산대 = 속성 MarketCounter = true인 부품 (서버 MarketService·3D 세션), 없으면 AlleyMarket.MarketCounter
+local function findCounter()
+	for _, d in ipairs(workspace:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("MarketCounter") == true then
+			return d
+		end
+	end
+	local m = market()
+	local c = m and m:FindFirstChild("MarketCounter", true)
+	return c and c:IsA("BasePart") and c or nil
+end
 local function isMarketPrompt(prompt)
 	if prompt:GetAttribute("Market") == true then
 		return true
 	end
-	local m = market()
-	return m ~= nil and prompt:IsDescendantOf(m) and prompt.Parent and prompt.Parent.Name == "MarketCounter"
+	local p = prompt.Parent
+	return p ~= nil and (p:GetAttribute("MarketCounter") == true or p.Name == "MarketCounter")
 end
 ProximityPromptService.PromptTriggered:Connect(function(prompt, who)
 	if who ~= me or not isMarketPrompt(prompt) then
@@ -202,19 +213,51 @@ end)
 -- 계산대에 [장보기] 프롬프트가 없으면 내 화면에만 붙임 (스트리밍으로 늦게 들어와도)
 task.spawn(function()
 	while true do
-		local m = market()
-		local counter = m and m:FindFirstChild("MarketCounter", true)
-		if counter and counter:IsA("BasePart") and not counter:FindFirstChildWhichIsA("ProximityPrompt") then
+		local counter = findCounter()
+		if counter and not counter:FindFirstChildWhichIsA("ProximityPrompt") then
 			local pp = Instance.new("ProximityPrompt")
 			pp.Name = "ShopPrompt"
 			pp.ActionText = "장보기"
 			pp.ObjectText = "골목 슈퍼"
 			pp.HoldDuration = 0
-			pp.MaxActivationDistance = 10
+			pp.MaxActivationDistance = 12 -- 서버 장보기 범위(G.Market.radius 14) 안
 			pp.RequiresLineOfSight = false
 			pp:SetAttribute("Market", true)
 			pp.Parent = counter
 		end
 		task.wait(3)
+	end
+end)
+
+---------------------------------------------------------------- 봉지·배달 알림 (가운데 위 작은 알약)
+-- 플레이어 속성 (서버 MarketService): BagCount(봉지 안 개수 합), BagSize("s"/"m"/"l"), DeliveryAt(배달 도착 서버 시각)
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UI = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("UiStyle"))
+local infoGui = UI.screen("MarketInfo", 4, playerGui)
+local infoRoot = UI.root(infoGui)
+local infoFit = UI.fitter(infoRoot)
+local pill = UI.card({ AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(0, 40), AutomaticSize = Enum.AutomaticSize.X, BackgroundColor3 = UI.C.cream, Visible = false, Parent = infoRoot })
+UI.new("UIPadding", { PaddingLeft = UDim.new(0, 14), PaddingRight = UDim.new(0, 14), Parent = pill })
+infoFit(pill, 400, 40)
+local pillText = UI.text({ Text = "", TextSize = 18, Size = UDim2.fromScale(0, 1), AutomaticSize = Enum.AutomaticSize.X, Parent = pill })
+local BAG_KO = { s = "작은", m = "중간", l = "큰" }
+task.spawn(function()
+	while true do
+		local parts = {}
+		local n = me:GetAttribute("BagCount")
+		if type(n) == "number" and n > 0 then
+			table.insert(parts, string.format("🛍 %s 봉지 %d개 · 가게에 가져가요", BAG_KO[me:GetAttribute("BagSize")] or "", n))
+		end
+		local at = me:GetAttribute("DeliveryAt")
+		if type(at) == "number" then
+			local left = at - workspace:GetServerTimeNow()
+			if left > 0 then
+				table.insert(parts, string.format("🛵 배달 %d:%02d", math.floor(left / 60), math.floor(left % 60)))
+			end
+		end
+		local making = playerGui:FindFirstChild("MakingScreen")
+		pill.Visible = #parts > 0 and not (making and making.Enabled)
+		pillText.Text = table.concat(parts, "   ")
+		task.wait(0.5)
 	end
 end)

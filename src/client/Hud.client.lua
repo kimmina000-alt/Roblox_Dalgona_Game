@@ -133,7 +133,9 @@ end
 -- 슈퍼 계산대에서 [장보기] → 아래 상점 창을 "market"으로 엶. Lv10부터 [전화 주문] 버튼 → 같은 창을 "phone"으로 (배달비).
 local MK = G.Market or {}
 local PHONE_LEVEL = MK.phoneLevel or 10
-local PHONE_FEE = MK.phoneFee or 0.1
+local PHONE_FEE = MK.phoneMult and (MK.phoneMult - 1) or MK.phoneFee or 0.1
+-- 서버 (판매 세션 feat/shop-features-1125 MarketService): 장보기 = BuyIngredient(id, 묶음) (슈퍼 계산대 14칸 안, 결과 bag = true면 봉지에),
+-- 전화 = Remotes.MarketPhone:InvokeServer(id, 묶음) → { ok, reason, amount, cost, at }
 local shopBtn = menuButton("ShopButton", "🏪", "슈퍼 가기", C.green, 1)
 local phoneBtn, phoneSlot = menuButton("PhoneButton", "📞", "전화 주문", C.cyan, 8)
 phoneSlot.Visible = false
@@ -205,11 +207,22 @@ for i, ing in ipairs(G.Ingredients) do
 			busy = true
 			local phone = shopMode == "phone"
 			local ok, res = pcall(function()
-				return Remotes.BuyIngredient:InvokeServer(ing.id, packs, phone and "phone" or nil)
+				if phone then
+					return Remotes:WaitForChild("MarketPhone", 2):InvokeServer(ing.id, packs)
+				end
+				return Remotes.BuyIngredient:InvokeServer(ing.id, packs)
 			end)
 			if ok and type(res) == "table" and res.ok then
 				UI.coinSound()
-				setMsg(res.msg or string.format(phone and "%s %d%s 주문했어요 (-%d 코인) · 곧 배달 와요" or "%s %d%s을 샀어요 (-%d 코인)", ing.name, units, ing.id == "coal" and "장" or "회분", info.price), true)
+				local unit = ing.id == "coal" and "장" or "회분"
+				if phone then
+					local wait = res.at and math.max(0, math.floor(res.at - workspace:GetServerTimeNow() + 0.5)) or nil
+					setMsg(string.format("%s %d%s 주문했어요 (-%d 코인)%s", ing.name, res.amount or units, unit, res.cost or info.price, wait and string.format(" · %d초 뒤 배달", wait) or ""), true)
+				elseif res.bag then
+					setMsg(string.format("%s %d%s 봉지에 담았어요 (-%d 코인) · 가게에 가져가면 정리돼요", ing.name, units, unit, info.price), true)
+				else
+					setMsg(res.msg or string.format("%s %d%s을 샀어요 (-%d 코인)", ing.name, units, unit, info.price), true)
+				end
 			else
 				setMsg((ok and type(res) == "table" and res.reason) or "살 수 없어요", false)
 			end
