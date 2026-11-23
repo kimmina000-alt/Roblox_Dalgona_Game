@@ -33,7 +33,7 @@ local root = UI.root(gui)
 local fit = UI.fitter(root)
 local BUY_PACKS = G.BuyPacks or { 1, 5, 10 }
 local win = UI.window({ Name = "Window", Title = "냉장고", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(640, 340), ZIndex = 10, Parent = root })
-fit(win, 640, 365)
+fit(win, 640, 365, true) -- 화면 비율 창 (2026-11-24)
 win.Visible = false
 local body = win.Body
 body.Size = UDim2.new(1, -28, 1, -34 - 14 - 26)

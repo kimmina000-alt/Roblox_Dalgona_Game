@@ -134,6 +134,49 @@ function UI.windowScaleFor(size)
 	return math.clamp(math.min(size.X / 800, size.Y / 360), 0.7, 1.15)
 end
 
+-- 비율 창 (fit(obj, w, h, true)): 화면 가로 92% × 세로 88%, 아주 큰 모니터에서는 화면 픽셀 1700 × 940까지
+UI.WindowFill = Vector2.new(0.92, 0.88)
+UI.WindowMax = Vector2.new(1700, 940)
+
+-- UIGridLayout 칸을 줄 너비에 꽉 차게 (남는 오른쪽 빈칸 없이). minW = 칸 최소 너비(설계 px), ratio = 높이 / 너비,
+-- extraH = 칸 높이에 더할 고정 px. 창 배율(UIScale)은 grid.AbsoluteSize에서 거꾸로 계산.
+function UI.fillGrid(gridLayout, minW, ratio, extraH)
+	local frame = gridLayout.Parent
+	local pad = gridLayout.CellPadding.X.Offset
+	local function update()
+		local abs = frame.AbsoluteSize.X
+		if abs < 10 then
+			return
+		end
+		-- 설계 단위 너비: AbsoluteSize ÷ 배율 (배율 = 조상 UIScale들의 곱)
+		local k = 1
+		local p = frame
+		while p do
+			local sc = p:FindFirstChildOfClass("UIScale")
+			if sc then
+				k *= sc.Scale
+			end
+			p = p.Parent
+			if p and p:IsA("LayerCollector") then
+				break
+			end
+		end
+		local padR = 0
+		local up = frame:FindFirstChildOfClass("UIPadding")
+		if up then
+			padR = up.PaddingLeft.Offset + up.PaddingRight.Offset
+		end
+		local bar = frame:IsA("ScrollingFrame") and frame.ScrollBarThickness or 0
+		local width = abs / k - padR - bar - 2
+		local cols = math.max(1, math.floor((width + pad) / (minW + pad)))
+		local cell = (width - pad * (cols - 1)) / cols
+		gridLayout.CellSize = UDim2.fromOffset(math.floor(cell), math.floor(cell * ratio + (extraH or 0)))
+	end
+	frame:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
+	task.defer(update)
+	return update
+end
+
 -- 화면 전체를 덮는 투명 Root (fitter가 이 크기로 배율을 잰다. 폰 미리보기 때 Root만 줄이면 됨)
 function UI.root(gui)
 	return new("Frame", { Name = "Root", Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Parent = gui })
@@ -141,6 +184,9 @@ end
 
 -- fit(obj, w, h): obj에 UIScale을 달고 화면이 바뀌면 같이 맞춘다.
 --   w, h(설계 크기)를 주면 화면 안에 다 들어오게 더 줄인다 (창).
+--   fit(obj, w, h, true): 창 크기를 화면 비율로 (2026-11-24 사용자 "남는 공간 없게 정해진 고정 사이즈 말고
+--   화면에 따른 비율 사이즈로"). 화면의 UI.WindowFill만큼 차지하고, w × h는 가장 작은 크기(내용이 들어가는 최소).
+--   창 안 내용은 상대 크기(UDim2 scale)나 UI.fillGrid로 넓어진 만큼 채운다.
 -- 반환: fit, get(지금 배율), onChange(fn(scale, size))
 function UI.fitter(area)
 	local items = {}
@@ -157,6 +203,12 @@ function UI.fitter(area)
 			local k = current
 			if it.w then
 				k = math.min(winK, (s.X - 16) / it.w, (s.Y - 12) / it.h)
+				if it.fill then
+					local f = UI.WindowFill
+					local W = math.max(it.w, math.min(s.X * f.X, UI.WindowMax.X) / k)
+					local H = math.max(it.h, math.min(s.Y * f.Y, UI.WindowMax.Y) / k)
+					it.obj.Size = UDim2.fromOffset(math.floor(W), math.floor(H))
+				end
 			end
 			it.scale.Scale = k
 		end
@@ -166,9 +218,9 @@ function UI.fitter(area)
 	end
 	area:GetPropertyChangedSignal("AbsoluteSize"):Connect(update)
 	task.defer(update)
-	local function fit(obj, w, h)
+	local function fit(obj, w, h, fill)
 		local sc = new("UIScale", { Scale = current, Parent = obj })
-		table.insert(items, { scale = sc, w = w, h = h })
+		table.insert(items, { scale = sc, w = w, h = h, obj = obj, fill = fill == true and w ~= nil })
 		task.defer(update)
 		return sc
 	end

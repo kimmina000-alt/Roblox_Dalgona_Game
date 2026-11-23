@@ -116,7 +116,7 @@ task.spawn(function()
 end)
 
 local win, body = UI.window({ Name = "Window", Title = "📖 달고나 도감", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(800, 360), ZIndex = 10, Parent = root })
-fit(win, 800, 385)
+fit(win, 800, 385, true) -- 화면 비율 창 (2026-11-24)
 
 -- 왼쪽 세로 탭 + 아래 모은 수
 local tabCol = new("Frame", { Position = UDim2.fromOffset(10, 12), Size = UDim2.new(0, 130, 1, -24), BackgroundTransparency = 1, ZIndex = 12, Parent = body })
@@ -202,6 +202,7 @@ end
 
 ---------------------------------------------------------------- 도안 탭
 local shapeGrid = new("UIGridLayout", { CellSize = UDim2.fromOffset(118, 150), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = pages.shapes })
+UI.fillGrid(shapeGrid, 118, 150 / 118) -- 줄 너비에 꽉 차게
 
 local function renderShapes(d)
 	local page = pages.shapes

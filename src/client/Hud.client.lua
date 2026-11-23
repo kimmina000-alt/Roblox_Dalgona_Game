@@ -130,7 +130,7 @@ local shopBtn = menuButton("ShopButton", "🛒", "재료 상점", C.green, 1)
 -- (서버 Remotes.BuyIngredient(재료 id, 묶음 수) 그대로, 1~10 허용). 10회분 묶음이면 10 / 50 / 100, 연탄(5장 묶음)은 5 / 25 / 50.
 local BUY_PACKS = G.BuyPacks or { 1, 5, 10 } -- 서버(feat/buy-bulk-1124)가 이 값만 받음
 local shop = UI.window({ Name = "Shop", Title = "재료 상점", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(760, 330), ZIndex = 10, Parent = gui })
-fit(shop, 760, 355)
+fit(shop, 760, 355, true) -- 화면 비율 창 (2026-11-24)
 local shopBody = shop.Body
 shopBody.Size = UDim2.new(1, -28, 1, -34 - 14 - 26)
 local closeBtn = shop.Close

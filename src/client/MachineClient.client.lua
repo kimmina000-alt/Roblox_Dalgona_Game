@@ -274,7 +274,7 @@ gui.Enabled = false
 local fitRoot = UI.root(gui)
 local fitWin = UI.fitter(fitRoot)
 local win, body = UI.window({ Name = "Window", Title = "기계", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(760, 340), ZIndex = 10, Visible = true, Parent = fitRoot })
-fitWin(win, 760, 365)
+fitWin(win, 760, 365, true) -- 화면 비율 창 (2026-11-24)
 body.Size = UDim2.new(1, -28, 1, -34 - 14 - 26)
 local titleL = win.Title.Text
 local closeBtn = win.Close
@@ -287,7 +287,7 @@ end
 local statusL = onWood({ Position = UDim2.fromOffset(14, 6), Size = UDim2.new(1, -28, 0, 26), TextSize = 21, Text = "", Parent = body })
 local gridTitle = onWood({ Position = UDim2.fromOffset(14, 34), Size = UDim2.new(1, -28, 0, 22), TextSize = 18, FontFace = UI.F.bold, Text = "기계가 만들 도안", Parent = body })
 local grid = new("ScrollingFrame", { Position = UDim2.fromOffset(10, 60), Size = UDim2.new(1, -20, 1, -60 - 84), BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6, ScrollBarImageColor3 = UI.C.cream, CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, ZIndex = 12, Parent = body })
-new("UIGridLayout", { CellSize = UDim2.fromOffset(100, 118), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid })
+UI.fillGrid(new("UIGridLayout", { CellSize = UDim2.fromOffset(100, 118), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid }), 100, 1.18) -- 줄 너비에 꽉 차게
 local nextRow = UI.card({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 10, 1, -10), Size = UDim2.new(1, -20, 0, 70), ZIndex = 12, Parent = body })
 local nextL = UI.text({ Position = UDim2.fromOffset(14, 6), Size = UDim2.new(1, -190, 1, -12), TextSize = 19, FontFace = UI.F.bold, TextWrapped = true, Text = "", ZIndex = 13, Parent = nextRow })
 local buyBtn = UI.button({ Name = "Buy", Text = "사기", Color = UI.C.yellow, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(160, 52), TextSize = 22, ZIndex = 13, Parent = nextRow })

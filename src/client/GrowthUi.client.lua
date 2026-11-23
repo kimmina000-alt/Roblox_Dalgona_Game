@@ -36,7 +36,7 @@ local openBtn = UI.button({ Name = "Open", Text = "🌱", Color = C.blue, Radius
 label({ Text = "성장", TextSize = 17, TextColor3 = C.white, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, Position = UDim2.fromOffset(0, 64), Size = UDim2.new(1, 0, 0, 20), Parent = openSlot })
 
 local win, body = UI.window({ Name = "Window", Title = "가게 키우기", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(760, 320), ZIndex = 10, Parent = root })
-fit(win, 760, 345)
+fit(win, 760, 345, true) -- 화면 비율 창 (2026-11-24)
 body.Size = UDim2.new(1, -28, 1, -34 - 14 - 26)
 local closeBtn = win.Close
 local msg = label({ Text = "", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 20, 1, -8), Size = UDim2.new(1, -40, 0, 22), TextSize = 16, TextColor3 = C.white, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 12, Parent = win })
@@ -46,17 +46,28 @@ local function setMsg(text, good)
 end
 
 -- 왼쪽 세로 탭 (고른 탭은 밝은 나무 + 크림색 테두리)
-local TABS = { { id = "shop", text = "가게" }, { id = "goals", text = "목표" }, { id = "book", text = "도감" } }
+-- 2026-11-24 사용자: 카테고리 탭 (가게·기계·공장 / 알바생). 어느 줄이 어느 탭인지는 render()의 page = pages.<id>로 정함
+-- (기획 세션이 탭 구성을 정리해 보내면 여기 TABS와 render()의 page 줄만 바꾸면 됨). 도감 = 도감 화면 열기.
+local TABS = {
+	{ id = "shop", text = "🏪 가게" },
+	{ id = "machine", text = "⚙️ 기계" },
+	{ id = "factory", text = "🏭 공장" },
+	{ id = "helpers", text = "👤 알바생" },
+	{ id = "goals", text = "🎯 목표" },
+	{ id = "book", text = "📖 도감" },
+}
 local tabButtons, pages = {}, {}
-local tabCol = new("Frame", { Name = "Tabs", Position = UDim2.fromOffset(10, 12), Size = UDim2.new(0, 120, 1, -24), BackgroundTransparency = 1, ZIndex = 12, Parent = body }, {
-	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
+local TAB_GAP = 6
+local tabCol = new("Frame", { Name = "Tabs", Position = UDim2.fromOffset(10, 10), Size = UDim2.new(0, 130, 1, -20), BackgroundTransparency = 1, ZIndex = 12, Parent = body }, {
+	new("UIListLayout", { Padding = UDim.new(0, TAB_GAP), SortOrder = Enum.SortOrder.LayoutOrder }),
 })
 for i, t in ipairs(TABS) do
-	tabButtons[t.id] = UI.button({ Name = "Tab_" .. t.id, Text = t.text, Color = C.woodLight, LayoutOrder = i, Size = UDim2.new(1, 0, 0, 54), TextSize = 21, ZIndex = 12, Parent = tabCol })
+	-- 탭 높이 = 탭 칸 높이를 탭 수로 나눔 (창 크기가 화면 비율이라 같이 늘어남)
+	tabButtons[t.id] = UI.button({ Name = "Tab_" .. t.id, Text = t.text, Color = C.woodLight, LayoutOrder = i, Size = UDim2.new(1, 0, 1 / #TABS, -TAB_GAP * (#TABS - 1) / #TABS), TextSize = 18, ZIndex = 12, Parent = tabCol })
 	pages[t.id] = new("ScrollingFrame", {
 		Name = t.id,
-		Position = UDim2.fromOffset(142, 10),
-		Size = UDim2.new(1, -152, 1, -20),
+		Position = UDim2.fromOffset(152, 10),
+		Size = UDim2.new(1, -162, 1, -20),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 6,
@@ -260,9 +271,13 @@ local function render()
 		return
 	end
 	local gr = state.growth
-	-- 가게
+	for id, p in pairs(pages) do
+		if id ~= "book" then
+			clear(p)
+		end
+	end
+	-- 가게 탭: 가게 임대·매입 + 업그레이드
 	local page = pages.shop
-	clear(page)
 	local order = 0
 	-- 가게 (D21): 노점 → 임대 → 매입
 	local SH = G.Shop
@@ -300,12 +315,14 @@ local function render()
 			act("buy", kind)
 		end)
 	end
+	-- 알바생 탭: 고용·역할 + 화로 알바 교육 (교육은 아래, order + 500)
+	page = pages.helpers
 	-- 화로 알바 교육 (D39·D40, 2026-11-24): 국자 확장 대신
 	local trained = gr.stoveUps or {}
 	for _, t in ipairs(G.StoveTraining) do
 		order += 1
 		local have = trained[t.key] == true
-		row(page, order, string.format("🔥 %s%s", t.name, have and " ✓" or ""), t.text,
+		row(page, order + 500, string.format("🔥 %s%s", t.name, have and " ✓" or ""), t.text,
 			have and "배움" or (not shopOpen and lockText) or (state.level < t.level and ("Lv" .. t.level .. "부터")) or (t.cost .. " 코인"),
 			not have and shopOpen and state.level >= t.level and state.coins >= t.cost, function()
 				act("train", t.key)
@@ -352,7 +369,8 @@ local function render()
 			end)
 		end
 	end
-	-- 기계 2~4단계 (20번): 가게 뒤 기계 1자리, 단계대로 교체
+	-- 기계 탭: 기계 2~4단계 (20번)
+	page = pages.machine
 	local mc = gr.machine
 	if mc then
 		local nx = mc.next
@@ -376,7 +394,8 @@ local function render()
 			end)
 		end
 	end
-	-- 5단계 공장: 해금만 여기서 (제어대 화면은 공장 안에서)
+	-- 공장 탭: 5단계 공장 해금만 여기서 (제어대 화면은 공장 안에서)
+	page = pages.factory
 	local fc = gr.factory
 	if fc then
 		order += 1
@@ -395,11 +414,16 @@ local function render()
 
 	-- 목표
 	page = pages.goals
-	clear(page)
 	for i, g in ipairs(gr.daily or {}) do
 		row(page, i, (g.done and "✅ " or "") .. g.text, string.format("%d / %d · 보상 %d EXP + %d 코인", g.p, g.n, G.ExpDailyGoal, G.Daily.rewardCoins))
 	end
 	label({ LayoutOrder = 10, Text = "목표는 날마다(UTC) 바뀌어요", Size = UDim2.new(1, -8, 0, 22), TextSize = 15, TextColor3 = C.cream, ZIndex = 13, Parent = page })
+	-- 빈 탭 안내
+	for id, p in pairs(pages) do
+		if id ~= "book" and #p:GetChildren() <= 1 then
+			label({ LayoutOrder = 1, Text = "아직 열린 게 없어요", Size = UDim2.new(1, -8, 0, 30), TextSize = 18, TextColor3 = C.cream, ZIndex = 13, Parent = p })
+		end
+	end
 end
 
 openBtn.Activated:Connect(function()
