@@ -158,16 +158,149 @@ function FactoryMini.play(station, limit)
 	return ok == true
 end
 
+-- ── 내가 맡은 공정: 내 캐릭터가 그 자리(Fac_Stand_<key>)로 걸어가서 그 공정 옷을 입음 (서버는 캐릭터를 옮기지 않음) ──
+-- 옷은 FactoryDisplay 공정 알바 옷(D30)과 같은 색·모양을 내 화면에서만 붙임
+local OUTFIT = {
+	sugar = Color3.fromRGB(250, 250, 250),
+	boil = Color3.fromRGB(220, 70, 70),
+	press = Color3.fromRGB(255, 205, 60),
+	inspect = Color3.fromRGB(140, 200, 240),
+	pack = Color3.fromRGB(80, 130, 220),
+}
+local outfitParts = {}
+
+local function clearOutfit()
+	for _, q in ipairs(outfitParts) do
+		q:Destroy()
+	end
+	outfitParts = {}
+end
+
+local function wear(char, key)
+	clearOutfit()
+	local color = OUTFIT[key]
+	if not color then
+		return
+	end
+	local function add(name, size, cf, target, props)
+		local q = Instance.new("Part")
+		q.Name = "FactorySelf_" .. name
+		q.Size = size
+		q.CFrame = cf
+		q.Color = color
+		q.Material = Enum.Material.SmoothPlastic
+		q.CanCollide, q.CanQuery, q.CanTouch, q.Massless, q.Anchored = false, false, false, true, false
+		for k, v in pairs(props or {}) do
+			q[k] = v
+		end
+		local w = Instance.new("WeldConstraint")
+		w.Part0, w.Part1, w.Parent = target, q, q
+		q.Parent = char
+		table.insert(outfitParts, q)
+	end
+	local head = char:FindFirstChild("Head")
+	local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+	if key == "sugar" or key == "inspect" then
+		if head then
+			local hs = head.Size
+			add("Cap", Vector3.new(hs.X * 1.08, hs.Y * 0.4, hs.Z * 1.08), head.CFrame * CFrame.new(0, hs.Y * 0.38, 0), head, { Shape = Enum.PartType.Ball })
+		end
+	elseif key == "press" then
+		if head then
+			local hs = head.Size
+			add("HardHat", Vector3.new(hs.X * 1.12, hs.Y * 0.55, hs.Z * 1.12), head.CFrame * CFrame.new(0, hs.Y * 0.42, 0), head, { Shape = Enum.PartType.Ball })
+		end
+	elseif torso then
+		-- boil · pack: 앞치마
+		local s = torso.Size
+		add("Apron", Vector3.new(s.X * 0.8, s.Y * 0.9, 0.06), torso.CFrame * CFrame.new(0, -s.Y * 0.05, -s.Z / 2 - 0.03), torso)
+	end
+end
+
+local function myStand(key)
+	local plots = workspace:FindFirstChild("ShopPlots")
+	for _, plot in ipairs(plots and plots:GetChildren() or {}) do
+		if plot:GetAttribute("OwnerUserId") == player.UserId then
+			local mark = plot:FindFirstChild("Fac_Stand_" .. key, true)
+			if mark and not mark:IsA("BasePart") then
+				mark = mark:FindFirstChildWhichIsA("BasePart", true)
+			end
+			if mark then
+				return mark.Position - Vector3.new(0, mark.Size.Y / 2, 0), -mark.CFrame.LookVector
+			end
+		end
+	end
+	return nil
+end
+
+local current = nil -- 지금 맡은 공정
+local function onStart(key)
+	current = key
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not (hum and root) then
+		return
+	end
+	wear(char, key)
+	local pos, face = myStand(key)
+	if not pos then
+		return
+	end
+	hum:MoveTo(pos)
+	task.spawn(function()
+		-- 도착하면 기계 쪽을 봄 (8초 안에 못 가면 그대로 둠)
+		local t0 = os.clock()
+		while current == key and os.clock() - t0 < 8 do
+			local d = Vector3.new(root.Position.X - pos.X, 0, root.Position.Z - pos.Z)
+			if d.Magnitude < 1.2 then
+				if face then
+					local f = Vector3.new(face.X, 0, face.Z)
+					if f.Magnitude > 1e-3 then
+						root.CFrame = CFrame.lookAt(root.Position, root.Position + f.Unit)
+					end
+				end
+				break
+			end
+			task.wait(0.1)
+		end
+	end)
+end
+
+local function onEnd(key)
+	if current == key or key == nil then
+		current = nil
+		clearOutfit()
+	end
+end
+
 -- 서버 연결 (Remote가 아직 없으면 생길 때까지 기다리지 않고 지켜봄)
+-- 신호 (저장·부지 세션 FactoryService): ("start", key) / ("mini", key, token, 초) / ("end", key, 이유)
 local function hookRemote(re)
 	re.OnClientEvent:Connect(function(kind, station, token, limit)
-		if kind ~= FactoryMini.REMOTE.start then
+		if kind == "start" then
+			onStart(station)
+			return
+		elseif kind == "end" then
+			onEnd(station)
+			return
+		elseif kind ~= FactoryMini.REMOTE.start then
 			return
 		end
 		task.spawn(function()
 			local ok = FactoryMini.play(station, limit)
 			re:FireServer(FactoryMini.REMOTE.result, token, ok)
 		end)
+	end)
+	-- 캐릭터가 다시 생기면 (죽음·다시 들어옴) 맡은 공정이 남아 있으면 옷만 다시 입힘
+	player.CharacterAdded:Connect(function(char)
+		local key = player:GetAttribute("FactorySelf")
+		if type(key) == "string" and key ~= "" then
+			char:WaitForChild("HumanoidRootPart", 5)
+			wear(char, key)
+		else
+			clearOutfit()
+		end
 	end)
 end
 
