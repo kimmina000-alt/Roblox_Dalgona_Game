@@ -145,6 +145,14 @@ PlayerDataService.MIGRATIONS = {
 			end
 		end
 	end,
+	[12] = function(data)
+		-- v11 → v12 (2026-11-24 D44): 연탄을 사서 씀. 이미 하던 플레이어에게 연탄 2장 (화로에 든 1장은 reconcile이 coalLeft = 1로).
+		-- 처음 온 플레이어는 기본값(화로 1장 + 여분 1장)
+		if data.coins ~= nil then
+			data.ingredients = type(data.ingredients) == "table" and data.ingredients or {}
+			data.ingredients.coal = math.max(tonumber(data.ingredients.coal) or 0, 2)
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

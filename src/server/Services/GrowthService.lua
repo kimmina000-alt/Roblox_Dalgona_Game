@@ -24,6 +24,7 @@ local Factory = require(script.Parent:WaitForChild("FactoryService")) -- 5단계
 local Offline = require(script.Parent:WaitForChild("OfflineService")) -- 오프라인 생산 정산 (D29)
 local Tutorial = require(script.Parent:WaitForChild("TutorialService")) -- 첫 60초 안내 (21번)
 local Production = require(script.Parent:WaitForChild("ProductionService")) -- 손으로 만드는 중인가 (D34)
+local WorkstationBuilder = require(script.Parent:WaitForChild("WorkstationBuilder")) -- 화로 연탄 모습 (D44)
 
 local GrowthService = {}
 
@@ -545,6 +546,26 @@ local function rollHelperQuality(qMin, qMax)
 end
 
 -- 알바생 1명 1초 진행 (D34: 배치한 제작대에 따라)
+-- 화로 알바 연탄 (D44): 두 번째 화구(D40)가 있으면 그 화구 연탄(coalLeft2), 없으면 내 화로 연탄(coalLeft)을 같이 씀
+local function helperCoalKey(d)
+	return (d.stoveUps and d.stoveUps.burner2) and "coalLeft2" or "coalLeft"
+end
+
+-- 지금 화구에 연탄이 있거나 갈아 넣을 연탄이 있나
+local function helperCoalReady(d)
+	return (tonumber(d[helperCoalKey(d)]) or 1) > 0.001 or (d.ingredients.coal or 0) >= 1
+end
+
+-- 한 판 끝: 다 탔으면 보관 연탄 1장을 갈아 넣고 한 판만큼 태움 (Data.update 안에서)
+local function helperBurnCoal(dd)
+	local key = helperCoalKey(dd)
+	if (tonumber(dd[key]) or 1) <= 0.001 and (dd.ingredients.coal or 0) >= 1 then
+		dd.ingredients.coal -= 1
+		dd[key] = 1
+	end
+	dd[key] = math.max(0, (tonumber(dd[key]) or 1) - G.CoalPerMake)
+end
+
 -- 진열 알바 (D33): 옮길 달고나 하나 고르기 (먼저 만든 것부터, 손 제작품 켜면 손 제작품 먼저, 들고 있는 것은 빼고)
 local function displayPick(player, d)
 	local maxSlots = G.shelfSlots(d)
@@ -687,6 +708,8 @@ local function stepHelper(player, d, i, h, st, dt)
 		why = "보관함 가득"
 	elseif d.coins < wage then
 		why = "급여 부족"
+	elseif not helperCoalReady(d) then
+		why = "연탄 없음" -- D44
 	end
 	if why then
 		st.status = why
@@ -707,6 +730,7 @@ local function stepHelper(player, d, i, h, st, dt)
 		dd.coins -= wage
 		dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + wage
 		dd.stats.helperMade = (dd.stats.helperMade or 0) + 1
+		helperBurnCoal(dd) -- D44
 		local q, grade, mult = rollHelperQuality(qMin, qMax)
 		local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 		item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
@@ -745,6 +769,8 @@ local function offlineHelper(dd, i, st, dt, rep)
 		why = "보관함 가득"
 	elseif dd.coins < wage then
 		why = "급여 부족"
+	elseif not helperCoalReady(dd) then
+		why = "연탄 없음" -- D44
 	end
 	if why then
 		rep.stops["알바생 " .. i] = rep.stops["알바생 " .. i] or why -- 처음 멈춘 이유
@@ -758,6 +784,11 @@ local function offlineHelper(dd, i, st, dt, rep)
 	dd.coins -= wage
 	dd.stats.wagesPaid = (dd.stats.wagesPaid or 0) + wage
 	dd.stats.helperMade = (dd.stats.helperMade or 0) + 1
+	local coalBefore = dd.ingredients.coal or 0
+	helperBurnCoal(dd) -- D44
+	if (dd.ingredients.coal or 0) < coalBefore then
+		rep.used.coal = (rep.used.coal or 0) + (coalBefore - dd.ingredients.coal)
+	end
 	local q, grade, mult = rollHelperQuality(qMin, qMax)
 	local item = { s = shape.id, g = grade, q = q, b = shape.price, m = mult, pk = false, a = true }
 	item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
@@ -832,6 +863,11 @@ local function syncHelpers(player, d)
 	local ladles = G.helperAt(d, "stove") and 2 or 1
 	if ws and ws:GetAttribute("LadleCount") ~= ladles then
 		ws:SetAttribute("LadleCount", ladles)
+	end
+	-- 화로 연탄 모습 = 저장된 남은 양 (D44, 화로 알바가 태운 것·자리 비운 동안 쓴 것도)
+	local coal = tonumber(d.coalLeft) or 1
+	if ws and math.abs((ws:GetAttribute("CoalLeft") or 1) - coal) > 0.001 then
+		WorkstationBuilder.setCoal(ws, coal)
 	end
 end
 

@@ -111,6 +111,8 @@ ProductionService.hooks.mods = GrowthService.mods
 ProductionService.hooks.canStart = EconomyService.canMake
 ProductionService.hooks.onStart = EconomyService.onStart -- 나무젓가락 1쌍
 ProductionService.hooks.onResult = EconomyService.onMade
+ProductionService.hooks.coalStart = EconomyService.coalStart -- 연탄 갈아 넣기 (D44)
+ProductionService.hooks.coalBurn = EconomyService.coalBurn
 ProductionService.hooks.workstation = PlotService.workstation -- 내 가게 작업대 (17b)
 ProductionService.hooks.onPpopgi = EconomyService.onPpopgi -- 뽑기 보너스·쪼개짐 (15번)
 
