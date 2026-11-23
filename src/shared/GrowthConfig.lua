@@ -36,6 +36,7 @@ G.DefaultData = {
 	coalLeft = 1,
 	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
 	layout = {}, -- 건설 배치 (D53): [물건 key] = { x, z, r } (부지 로컬 격자, BuildService). 비면 처음 자리
+	bgmOff = false, -- 배경 음악 끔 (설정, GrowthAction("bgmOff", true/false)) → 플레이어 속성 BgmOff
 	custDex = {}, -- 손님 도감 (D38): [손님 id] = { sold = 판 수, h = 받은 하트 보상 0~3 }
 	titles = { owned = {} }, -- 칭호 (D38): owned = 얻은 이름들, equipped = 단 칭호
 	signGold = false, -- 간판 금테 (D38: 도안 23종 모두 Perfect)
@@ -340,6 +341,7 @@ G.OrderCustomer = {
 		tourist = { minGrade = "Rare", minQ = "Good", pack = true, n = { 1, 2 } },
 		vip = { minGrade = "Legendary", minQ = "Excellent", pack = true, n = { 1, 1 } },
 	},
+}
 -- 골목 슈퍼마켓 (D54, 2026-11-25 확정, 서버 MarketService): 슈퍼 계산대에서 사서 봉지에 들고 가게로, Lv10 전화 배달
 G.Market = {
 	radius = 14, -- 계산대(부품 속성 MarketCounter)에서 이 거리 안에서만 장보기
@@ -352,6 +354,7 @@ G.Market = {
 	shopFrontZ = -18,
 	shopBackZ = 60,
 	shopHalfWidth = 21.5,
+}
 -- 건설(꾸미기) 모드 (D53 안 A, 2026-11-25 확정, 서버 BuildService): 가게 안 물건을 2스터드 격자·90° 회전으로 옮김. 좌표는 부지 기준 로컬
 G.Build = {
 	cell = 2, -- 격자 한 칸 (스터드)
@@ -381,6 +384,14 @@ G.Build = {
 		{ key = "m3", name = "분홍 자판기 자리", names = { "MachineSlot3" }, machine = true },
 		{ key = "m4", name = "연속 생산 설비 자리", names = { "MachineSlot4" }, machine = true },
 	},
+}
+-- 작은 탁자 테이블보 (2026-11-24 사용자, SalesService tableCloth): 흰 천 위에 파스텔 꽃무늬 천을 마름모로.
+-- texture = 꽃무늬 그림 id (3D 세션이 주면 넣음, nil이면 단색), tile = 무늬 한 장 크기(스터드)
+G.ShopCloth = {
+	white = Color3.fromRGB(252, 250, 244),
+	floral = Color3.fromRGB(226, 238, 222), -- 참고 사진처럼 연한 민트·크림 바탕 (무늬는 texture)
+	texture = "rbxassetid://131309504197388", -- 3D 세션 tools/floral_tile.py (512×512 반복 꽃무늬, 크림·민트 + 파란 꽃)
+	tile = 2,
 }
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 
