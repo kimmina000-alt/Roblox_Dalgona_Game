@@ -20,6 +20,7 @@ local ROLE_AREA = {
 	["달고나 걸이판"] = "peg",
 	["작은 탁자"] = "table1",
 	["작은 탁자 2"] = "table2",
+	["작은 탁자 3"] = "table3",
 }
 local MAX_DISTANCE = 40 -- 너무 멀리서는 안 됨 (가게 안이나 앞에서)
 

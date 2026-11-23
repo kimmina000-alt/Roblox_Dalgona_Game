@@ -129,8 +129,10 @@ end
 
 -- 진열 가구 (가게 3D 부품 속성 Role, 2026-11-24 사용자): 칸 자리를 가구 기준으로 계산해서, 편집 화면(PlotLayout.ShopModel)에서
 -- 가구를 옮기면 칸도 따라감. 1~4 유리 진열장(길에서 볼 때 왼쪽부터), 5~8 걸이판(누른 자리에 걸림, item.pp), 9 작은 탁자, 10 작은 탁자 2
-local AREA_ROLES = { case = "유리 진열장", peg = "달고나 걸이판", table1 = "작은 탁자", table2 = "작은 탁자 2", counter = "앞 카운터 (나무)" }
-local AREA_SLOTS = { case = { 1, 2, 3, 4 }, peg = { 5, 6, 7, 8 }, table1 = { 9 }, table2 = { 10 } }
+-- 2026-11-24 사용자: 작은 탁자 하나 더 (작은 탁자 3 = 11칸)
+local AREA_ROLES = { case = "유리 진열장", peg = "달고나 걸이판", table1 = "작은 탁자", table2 = "작은 탁자 2", table3 = "작은 탁자 3", counter = "앞 카운터 (나무)" }
+local AREA_SLOTS = { case = { 1, 2, 3, 4 }, peg = { 5, 6, 7, 8 }, table1 = { 9 }, table2 = { 10 }, table3 = { 11 } }
+local TABLE_SLOT = { table1 = 9, table2 = 10, table3 = 11 }
 SalesService.AREA_ROLES = AREA_ROLES
 
 local function findRole(model, role)
@@ -184,8 +186,8 @@ local function furnitureSlot(shop, i, item)
 		end
 		local lift = SALES.lookSize * 0.5 + SALES.lookStick[1] -- 누른 자리 = 달고나 가운데
 		return at(Vector3.new(c.X + nx * (h.X + 0.08), c.Y + dy - lift, c.Z + dz), Vector3.new(nx, 0, 0))
-	elseif i == 9 or i == 10 then
-		local t = i == 9 and A.table1 or A.table2
+	elseif i >= 9 and i <= 11 then
+		local t = (i == 9 and A.table1) or (i == 10 and A.table2) or A.table3
 		if t then
 			local c, h = localBox(pcf, t)
 			local pos = Vector3.new(c.X, c.Y + h.Y + 0.02, c.Z)
@@ -908,8 +910,14 @@ local function placeByTouch(player, area, hit)
 		end
 	end
 	local list = AREA_SLOTS[area]
-	if area == "table1" or area == "table2" then
-		list = { area == "table1" and 9 or 10, area == "table1" and 10 or 9 } -- 누른 탁자가 차 있으면 다른 탁자
+	if TABLE_SLOT[area] then
+		-- 누른 탁자부터, 차 있으면 다른 탁자
+		list = { TABLE_SLOT[area] }
+		for _, k in ipairs({ "table1", "table2", "table3" }) do
+			if k ~= area then
+				table.insert(list, TABLE_SLOT[k])
+			end
+		end
 	end
 	local free = {}
 	for _, i in ipairs(list) do
