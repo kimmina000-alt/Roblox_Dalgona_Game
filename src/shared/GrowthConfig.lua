@@ -264,6 +264,15 @@ G.CarryHelpers = {
 	pickSeconds = 0.6, -- 집기·놓기
 	minWalk = 1.5, -- 가까워도 이만큼은 걸음 (초)
 }
+-- 가게 천장 조명 (2026-11-24 사용자 "가게 천장에 조명 설치"): 가게 기준 로컬 자리 (-Z = 골목 쪽), 천장 아래 매다는 전등
+G.ShopLights = {
+	spots = { { -12, -12 }, { 0, -12 }, { 12, -12 }, { -12, 2 }, { 0, 2 }, { 12, 2 } }, -- { x, z }
+	ceilingY = 16.6, -- 앞 지붕 아랫면 (가게 바닥 기준)
+	cord = 1.6, -- 전선 길이
+	color = Color3.fromRGB(255, 214, 160), -- 따뜻한 빛
+	range = 20,
+	brightness = 1.3,
+}
 G.Cashier = { demandMult = 1.1, browseMult = 0.5, tip = 0.05 }
 
 -- 손님 7종 (D37·GDD 14장, 2026-11-24): 레벨 구간마다 오는 비율, 종류마다 고르는 것·개수·팁. 손님 모델 id = CustomerRig.order

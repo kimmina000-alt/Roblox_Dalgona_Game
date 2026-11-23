@@ -363,6 +363,12 @@ local function buildShelf(shop, plot)
 			table.insert(shop.shopOnly, root)
 		end
 	end
+	-- 빈 가게면 숨기는 가게 앞 작은 탁자
+	shop.stallOnly = {}
+	if shop.areas.table1 then
+		local node = shop.areas.table1.Parent
+		table.insert(shop.stallOnly, (node and node:IsA("Model") and node ~= plot.model) and node or shop.areas.table1)
+	end
 	-- 노점 손님 자리: 가게 앞 작은 탁자 앞(골목 쪽)
 	if shop.areas.table1 then
 		local c, h = localBox(shop.plotCF, shop.areas.table1)
@@ -373,12 +379,8 @@ local function buildShelf(shop, plot)
 end
 
 -- 가게 열림/닫힘에 따라 카운터·유리 진열장 보이기 (부품마다 원래 투명도·충돌을 속성으로 기억)
-local function setShopFurniture(shop, open)
-	if shop.furnitureOpen == open then
-		return
-	end
-	shop.furnitureOpen = open
-	for _, root in ipairs(shop.shopOnly or {}) do
+local function setGroupVisible(roots, open)
+	for _, root in ipairs(roots) do
 		local list = root:IsA("BasePart") and { root } or {}
 		for _, d in ipairs(root:GetDescendants()) do
 			table.insert(list, d)
@@ -404,6 +406,17 @@ local function setShopFurniture(shop, open)
 	end
 end
 
+-- 가게 열림/닫힘·빈 가게에 따라 가구 보이기: 카운터·유리 진열장 = 가게가 열려야, 가게 앞 작은 탁자(노점 진열) = 주인이 있어야
+local function setShopFurniture(shop, open, owned)
+	local key = tostring(open) .. tostring(owned)
+	if shop.furnitureKey == key then
+		return
+	end
+	shop.furnitureKey = key
+	setGroupVisible(shop.shopOnly or {}, open)
+	setGroupVisible(shop.stallOnly or {}, owned) -- 빈 가게에는 진열대가 안 보임 (2026-11-24 사용자)
+end
+
 local function refreshShelf(index)
 	local shop = shops[index]
 	if not shop or not shop.shelf then
@@ -418,7 +431,7 @@ local function refreshShelf(index)
 	if plotM and plotM.model:GetAttribute("ShopOpen") ~= open then
 		plotM.model:SetAttribute("ShopOpen", open) -- 클라이언트 ShelfClient가 누를 가구를 고름
 	end
-	setShopFurniture(shop, open)
+	setShopFurniture(shop, open, data ~= nil)
 	if shop.stall ~= (not open) then
 		shop.stall = not open
 		for _, s in ipairs(shop.slots) do
@@ -1089,6 +1102,10 @@ function SalesService.init(dataService, economyService, plotService)
 		folder.Name = "Customers"
 		folder.Parent = plot.model
 		shop.folder = folder
+		refreshShelf(i) -- 빈 가게 모습 (진열 가구 숨김)
+		pcall(function()
+			require(script.Parent:WaitForChild("ShopLights")).build(plot) -- 천장 조명 (2026-11-24)
+		end)
 	end
 
 	Players.PlayerAdded:Connect(watchCarry)
@@ -1132,9 +1149,7 @@ function SalesService.init(dataService, economyService, plotService)
 					clearShop(i)
 					shop.owner = owner
 					shop.nextVisit = now + 2
-					if owner then
-						refreshShelf(i)
-					end
+					refreshShelf(i) -- 주인이 나가면 빈 가게 모습으로
 				end
 				if owner and owner.Parent and Data.get(owner) and now >= shop.nextVisit then
 					shop.nextVisit = now + interval(owner)
