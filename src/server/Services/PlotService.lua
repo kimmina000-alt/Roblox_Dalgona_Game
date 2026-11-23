@@ -441,6 +441,12 @@ local function buildWorkstation(i, player)
 		if template then
 			w = template:Clone()
 			w.Name = "Workstation"
+			-- 저장된 틀의 버튼 거리(예전 14)를 설정 값으로 (G.PromptDistance, 2026-11-24 사용자 "가구 더 가까이 가야 뜨게")
+			for _, pr in ipairs(w:GetDescendants()) do
+				if pr:IsA("ProximityPrompt") then
+					pr.MaxActivationDistance = G.PromptDistance or 6
+				end
+			end
 			w:SetAttribute("OwnerUserId", player.UserId)
 			w:SetAttribute("PlotIndex", i)
 			w.Parent = plot.model

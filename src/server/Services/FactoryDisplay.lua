@@ -11,6 +11,7 @@
 --     가게 뒷문 FactoryDoor.Door: 잠김 = 닫힘·자물쇠 "DoorLock"·간판 "Lv25 해금" / 열림 = 문짝이 열리고 안 부딪힘 → 걸어서 들어감
 
 local ServerStorage = game:GetService("ServerStorage")
+local PROMPT_DISTANCE = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("GrowthConfig")).PromptDistance or 6 -- 기계·가구 버튼이 뜨는 거리 (2026-11-24)
 
 local FactoryBuilder = require(script.Parent:WaitForChild("FactoryBuilder"))
 local Layout = require(script.Parent:WaitForChild("LayoutTemplate"))
@@ -289,7 +290,7 @@ local function buildBuilding(lot)
 		pr.ActionText = "제어대 열기"
 		pr.KeyboardKeyCode = Enum.KeyCode.F
 		pr.HoldDuration = 0
-		pr.MaxActivationDistance = 10
+		pr.MaxActivationDistance = PROMPT_DISTANCE
 		pr.RequiresLineOfSight = false
 		pr.Parent = att
 	end
@@ -309,7 +310,7 @@ local function buildBuilding(lot)
 		pr.ActionText = "내가 하기"
 		pr.KeyboardKeyCode = Enum.KeyCode.E
 		pr.HoldDuration = 0
-		pr.MaxActivationDistance = 7
+		pr.MaxActivationDistance = PROMPT_DISTANCE
 		pr.RequiresLineOfSight = false
 		pr.Parent = holder
 		pr.Triggered:Connect(function(player)

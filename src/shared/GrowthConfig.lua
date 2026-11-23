@@ -284,6 +284,8 @@ G.CarryHelpers = {
 	pickSeconds = 0.6, -- 집기·놓기
 	minWalk = 1.5, -- 가까워도 이만큼은 걸음 (초)
 }
+-- 기계·가구 버튼(ProximityPrompt)이 뜨는 거리 (2026-11-24 사용자 "가구 더 가까이 가야 뜨게"): 작업대·2~4단계 기계·공장 제어대·공정 내가 하기·냉장고·서랍장
+G.PromptDistance = 6
 -- 골목·가게 둘레 (2026-11-24 사용자, 판매 세션)
 G.ShopWorld = {
 	-- 카메라: 멀리서 마을 전체를 내려다보지 못하게 (클라 ShopWorld). 제작 화면(Scriptable)에는 안 씀

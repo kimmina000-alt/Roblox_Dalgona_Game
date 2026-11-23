@@ -224,7 +224,7 @@ local function syncPrompts()
 			pr.ObjectText = group.title
 			pr.KeyboardKeyCode = Enum.KeyCode.E
 			pr.HoldDuration = 0
-			pr.MaxActivationDistance = 8
+			pr.MaxActivationDistance = G.PromptDistance or 6 -- 기계·가구 버튼 거리 (GrowthConfig, 2026-11-24)
 			pr.RequiresLineOfSight = false
 			pr.Parent = part
 			pr.Triggered:Connect(function()
