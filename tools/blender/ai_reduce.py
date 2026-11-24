@@ -44,7 +44,7 @@ sc.render.engine = "CYCLES"; sc.cycles.samples = 1; sc.cycles.device = "CPU"
 for x in sc.objects: x.select_set(x in (H, L))
 bpy.context.view_layer.objects.active = L
 size = max(L.dimensions)
-bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, use_selected_to_active=True, cage_extrusion=size * 0.02, max_ray_distance=size * 0.06, margin=8)
+bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"}, use_selected_to_active=True, cage_extrusion=size * 0.05, max_ray_distance=size * 0.12, margin=8)
 img.pack()
 bpy.data.objects.remove(H, do_unlink=True)
 # 키 맞추고 원점 = 두 발 가운데 바닥
