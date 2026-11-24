@@ -312,8 +312,8 @@ function EconomyService.buy(player, ingredientId, packs)
 	-- 냉장고·서랍장 한도 (D57, 재료마다). 넘게 사려면 업그레이드
 	local cap = G.ingredientMax(data, ing.id)
 	if have + ing.pack * packs > cap then
-		local where = G.storageGroupOf(ing.id) == "fridge" and "냉장고" or "서랍장"
-		return { ok = false, reason = string.format("%s은(는) %d개까지 보관해요 (지금 %d개) · %s를 키우면 더 넣어요", ing.name, cap, have, where) }
+		local where = G.storageGroupOf(ing.id) == "fridge" and "냉장고를" or "서랍장을"
+		return { ok = false, reason = string.format("%s은(는) %d개까지 보관해요 (지금 %d개) · %s 키우면 더 넣어요", ing.name, cap, have, where) }
 	end
 	if data.coins < cost then
 		return { ok = false, reason = string.format("코인이 모자라요 (%d코인 필요)", cost) }
