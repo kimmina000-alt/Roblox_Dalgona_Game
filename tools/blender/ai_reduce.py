@@ -1,7 +1,7 @@
 # 고폴리 AI 모델(삼각형 수십만·4K 텍스처) → 삼각형 target개 + 새 UV + 원본 색을 텍스처 한 장(기본 1024)에 굽기.
 #   그냥 줄이기만 하면 UV 이음새가 어긋나 흰 줄이 생겨서, 줄인 메시에 UV를 새로 펴고 원본에서 색을 구움 (Cycles bake).
 #   키를 height(stud)로 맞추고 원점 = 바닥 가운데. 노멀·거칠기 텍스처는 버림 (가볍게).
-# 실행: "D:\Blender 5.2lender.exe" -b --factory-startup -P tools/blender/ai_reduce.py -- <원본.glb> <id> <키> <삼각형 수> <출력 폴더> [텍스처 크기]
+# 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/ai_reduce.py -- <원본.glb> <id> <키> <삼각형 수> <출력 폴더> [텍스처 크기]
 # 결과: <출력>/<id>_low.glb  (손님 7종: tools/blender/customers_ai.py 가 이어서 부품으로 나눔)
 import bpy, sys, os, bmesh
 from mathutils import Vector
