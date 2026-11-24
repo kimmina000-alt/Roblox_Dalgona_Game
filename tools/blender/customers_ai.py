@@ -34,7 +34,7 @@ CUT = {
     "Ppogeuli": dict(hip=0.45, neck=1.88, arm=(0.78, 1.22, 1.88), far=1.08),
     "Kkuldanji": dict(hip=0.42, neck=1.42, arm=(0.62, 0.95, 1.42)),
     "Mochi": dict(hip=0.5, neck=1.88, arm=(0.7, 1.25, 1.85)),
-    "Godeungeo": dict(hip=0.55, neck=2.18, arm=(0.82, 1.65, 2.18), far=0.98),
+    "Godeungeo": dict(hip=0.4, neck=2.22, arm=(0.78, 1.68, 2.22), far=0.78, far_dz=0.12),  # 2026-11-25 사용자 모델 NPC1 (npc1_paint.py로 칠함)
     "Dotori": dict(hip=0.55, neck=1.62, arm=(0.55, 1.15, 1.6), arm_y=(-0.7, 0.42)),  # 뒤쪽 큰 꼬리는 몸
     "Owl": dict(hip=0.28, neck=1.9, arm=(1.05, 0.85, 1.68), drop=0),  # 날개는 이미 망토 따라 내려와 있음
     "Pongpong": dict(hip=0.32, neck=1.48, arm=(0.72, 0.95, 1.45)),
@@ -78,6 +78,7 @@ def build(cid, x0):
     bmesh.ops.translate(bm, verts=bm.verts, vec=Vector((-cx, -cy, 0)))
     ax, az0, az1 = cut["arm"]
     far = cut.get("far")
+    fdz = cut.get("far_dz", 0.25)
     ay0, ay1 = cut.get("arm_y", (-9, 9))
     # UV 이음새로 갈라진 정점 붙이기 (UV는 면 모서리마다 남음) → 진짜 경계만 남음
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
@@ -85,7 +86,7 @@ def build(cid, x0):
     planes = [((0, 0, cut["hip"]), (0, 0, 1)), ((0, 0, cut["neck"]), (0, 0, 1)), ((0, 0, az0), (0, 0, 1)), ((0, 0, az1), (0, 0, 1)),
               ((ax, 0, 0), (1, 0, 0)), ((-ax, 0, 0), (1, 0, 0))]
     if far:
-        planes += [((far, 0, 0), (1, 0, 0)), ((-far, 0, 0), (1, 0, 0)), ((0, 0, az1 + 0.25), (0, 0, 1))]
+        planes += [((far, 0, 0), (1, 0, 0)), ((-far, 0, 0), (1, 0, 0)), ((0, 0, az1 + fdz), (0, 0, 1))]
     if "arm_y" in cut:
         planes += [((0, ay0, 0), (0, 1, 0)), ((0, ay1, 0), (0, 1, 0))]
     for co, no in planes:
@@ -94,7 +95,7 @@ def build(cid, x0):
     groups = {n: [] for n in ("Head", "Body", "ArmL", "ArmR", "LegL", "LegR")}
     for f in bm.faces:
         c = f.calc_center_median()
-        arm = ay0 < c.y < ay1 and (abs(c.x) > ax and az0 < c.z < az1 or far and abs(c.x) > far and az1 <= c.z < az1 + 0.25)
+        arm = ay0 < c.y < ay1 and (abs(c.x) > ax and az0 < c.z < az1 or far and abs(c.x) > far and az1 <= c.z < az1 + fdz)
         if c.z < cut["hip"] and c.y < cut.get("leg_y", 9):  # leg_y: 다리 높이까지 내려온 꼬리는 몸으로
             groups["LegL" if c.x > 0 else "LegR"].append(f)
         elif arm:

@@ -55,15 +55,15 @@ return {
 		Godeungeo = {
 			label = "고등어 아저씨",
 			height = 3.790,
-			mouth = Vector3.new(-0.000, 2.582, -0.969),
-			hand = Vector3.new(1.330, 1.333, 0.053),
+			mouth = Vector3.new(-0.000, 2.612, -0.964),
+			hand = Vector3.new(1.186, 1.352, 0.041),
 			parts = {
-				Head = { center = Vector3.new(-0.000, 2.985, -0.157), size = Vector3.new(1.960, 1.610, 1.555), joint = Vector3.new(-0.000, 2.180, 0.000) },
-				Body = { center = Vector3.new(-0.000, 1.365, 0.929), size = Vector3.new(1.640, 1.630, 3.701), joint = Vector3.new(-0.000, 0.550, 0.000) },
-				ArmL = { center = Vector3.new(-0.977, 1.711, 0.091), size = Vector3.new(0.674, 0.768, 0.528), joint = Vector3.new(-0.820, 1.981, 0.142) },
-				ArmR = { center = Vector3.new(1.027, 1.682, 0.089), size = Vector3.new(0.678, 0.772, 0.528), joint = Vector3.new(0.820, 1.917, 0.108) },
-				LegL = { center = Vector3.new(-0.359, 0.276, -0.005), size = Vector3.new(0.690, 0.549, 0.883), joint = Vector3.new(-0.364, 0.550, 0.000) },
-				LegR = { center = Vector3.new(0.362, 0.275, -0.005), size = Vector3.new(0.690, 0.550, 0.893), joint = Vector3.new(0.364, 0.550, 0.000) },
+				Head = { center = Vector3.new(-0.000, 3.005, -0.175), size = Vector3.new(1.804, 1.570, 1.552), joint = Vector3.new(-0.000, 2.220, 0.000) },
+				Body = { center = Vector3.new(-0.000, 1.310, 0.897), size = Vector3.new(1.560, 1.820, 3.644), joint = Vector3.new(-0.000, 0.400, 0.000) },
+				ArmL = { center = Vector3.new(-0.908, 1.758, 0.097), size = Vector3.new(0.686, 0.837, 0.489), joint = Vector3.new(-0.780, 2.046, 0.107) },
+				ArmR = { center = Vector3.new(0.910, 1.757, 0.097), size = Vector3.new(0.686, 0.837, 0.489), joint = Vector3.new(0.780, 2.044, 0.107) },
+				LegL = { center = Vector3.new(-0.372, 0.200, -0.002), size = Vector3.new(0.628, 0.400, 0.834), joint = Vector3.new(-0.398, 0.400, 0.000) },
+				LegR = { center = Vector3.new(0.372, 0.200, -0.002), size = Vector3.new(0.628, 0.400, 0.834), joint = Vector3.new(0.398, 0.400, 0.000) },
 			},
 		},
 		Dotori = {
