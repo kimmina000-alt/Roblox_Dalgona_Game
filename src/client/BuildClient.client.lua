@@ -305,6 +305,59 @@ local function load()
 	return next(items) ~= nil, "옮길 수 있는 물건이 없어요"
 end
 
+-- 지붕·천장·앞쪽 윗벽 숨기기 (내 화면만, 2026-11-25 묶음 시험: 위에서 보면 지붕만 보이고 레이캐스트가 지붕에 맞음)
+-- 부지 바닥 높이 + ROOF_Y 위에서 시작하는 부품 = 지붕·윗벽. LocalTransparencyModifier = 1 + 레이캐스트 제외, 나갈 때 되돌림.
+local ROOF_Y = 8
+local roofParts = {}
+local function hideRoof()
+	table.clear(roofParts)
+	local movable = {}
+	for _, it in pairs(items) do
+		for _, n in ipairs(it.nodes) do
+			movable[n.inst] = true
+		end
+	end
+	for _, d in ipairs(plot:GetDescendants()) do
+		if d:IsA("BasePart") then
+			-- 옮길 물건(노드 안)은 숨기지 않음
+			local skip = false
+			local a = d
+			while a and a ~= plot do
+				if movable[a] then
+					skip = true
+					break
+				end
+				a = a.Parent
+			end
+			if not skip then
+				-- 부품의 가장 낮은 점 (부지 로컬 높이)
+				local cf, size = d.CFrame, d.Size / 2
+				local low = math.huge
+				for _, sx in ipairs({ -1, 1 }) do
+					for _, sy in ipairs({ -1, 1 }) do
+						for _, sz in ipairs({ -1, 1 }) do
+							local y = plotCF:PointToObjectSpace((cf * CFrame.new(size.X * sx, size.Y * sy, size.Z * sz)).Position).Y
+							low = math.min(low, y)
+						end
+					end
+				end
+				if low > ROOF_Y then
+					d.LocalTransparencyModifier = 1
+					table.insert(roofParts, d)
+				end
+			end
+		end
+	end
+end
+local function showRoof()
+	for _, d in ipairs(roofParts) do
+		if d.Parent then
+			d.LocalTransparencyModifier = 0
+		end
+	end
+	table.clear(roofParts)
+end
+
 local function exit(restore)
 	if not active then
 		return
@@ -325,6 +378,7 @@ local function exit(restore)
 	end
 	table.clear(hidden)
 	camera.CameraType = Enum.CameraType.Custom
+	showRoof()
 	controls(true)
 end
 
@@ -355,6 +409,7 @@ local function enter()
 		end
 	end
 	gui.Enabled = true
+	hideRoof()
 	controls(false)
 	aimCamera()
 	refresh()
@@ -366,7 +421,11 @@ rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
 local function itemAt(screen)
 	local ray = camera:ViewportPointToRay(screen.X, screen.Y)
-	rayParams.FilterDescendantsInstances = { me.Character }
+	local ex = { me.Character }
+	for _, d in ipairs(roofParts) do
+		table.insert(ex, d)
+	end
+	rayParams.FilterDescendantsInstances = ex
 	local hit = workspace:Raycast(ray.Origin, ray.Direction * 600, rayParams)
 	if not hit then
 		return nil
