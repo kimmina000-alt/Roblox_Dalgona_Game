@@ -906,8 +906,8 @@ G.Tutorial = {
 		{ key = "press", text = "작업대 앞에서 E를 누르면 달고나를 만들 수 있어", touchText = "작업대 앞에서 손 모양 버튼을 누르면 달고나를 만들 수 있어", target = "workstation" },
 		{ key = "make", text = "모양을 고르고, 설탕을 녹이고 소다를 넣어 부풀린 다음 붓고 눌러서 찍어 보렴", target = nil },
 		{ key = "place", text = "잘했다! 진열장이나 벽 걸이판을 눌러서 달고나를 놓아 보렴", touchText = "잘했다! 진열장이나 벽 걸이판을 눌러서 달고나를 놓아 보렴", target = "shelf" },
-		{ key = "sale", text = "곧 손님이 와서 사 갈 거야. 조금만 기다려 보렴", target = "shelf" },
-		{ key = "shop", text = "첫 장사 축하한다! 재료가 떨어지면 상점에서 사면 돼. 상점 버튼을 눌러 보렴", target = "shopButton" },
+		{ key = "sale", text = "곧 손님이 와서 골라 카운터 앞에 줄을 설 거야. 손님 위 [계산]을 눌러 팔아 보렴", touchText = "곧 손님이 와서 골라 카운터 앞에 줄을 설 거야. 손님 위 [계산]을 눌러 팔아 보렴", target = "shelf" },
+		{ key = "shop", text = "첫 장사 축하한다! 재료가 떨어지면 골목 슈퍼에서 사 오면 돼. [슈퍼 가기] 버튼을 눌러 보렴", target = "shopButton" },
 	},
 	doneText = "이제 혼자서도 잘하겠구나. 맛있는 달고나 많이 팔아라!",
 }

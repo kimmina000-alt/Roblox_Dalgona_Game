@@ -116,7 +116,15 @@ local function build(group)
 	refresh()
 end
 
+-- 닫은 뒤 바로 다시 열리지 않게 (2026-11-25 묶음 시험: 냉장고 바로 옆에서 [X]를 누르면 같은 클릭이 냉장고에 닿아 다시 열림)
+-- 닫으면 잠금 → 냉장고·서랍장에서 LEAVE 스터드 넘게 멀어졌다가 다시 와야 열림
+local LEAVE = (G.PromptDistance or 6) + 4
+local closedLock = false
+
 local function open(group)
+	if closedLock then
+		return
+	end
 	current = group
 	local plank = win:FindFirstChild("Title")
 	local title = plank and plank:FindFirstChild("Text")
@@ -130,6 +138,7 @@ end
 
 win.Close.Activated:Connect(function()
 	win.Visible = false
+	closedLock = true
 end)
 
 Remotes:WaitForChild("PlayerState").OnClientEvent:Connect(function(s)
@@ -271,8 +280,22 @@ task.spawn(function()
 		if win.Visible and mk then
 			win.Visible = false
 		end
+		-- 닫은 뒤 잠금: 가장 가까운 냉장고·서랍장에서 멀어지면 풂
+		if closedLock then
+			local char = player.Character
+			local root = char and char:FindFirstChild("HumanoidRootPart")
+			local near = math.huge
+			for part in pairs(prompts) do
+				if root and part.Parent then
+					near = math.min(near, (part.Position - root.Position).Magnitude)
+				end
+			end
+			if near > LEAVE then
+				closedLock = false
+			end
+		end
 		for _, pr in pairs(prompts) do
-			pr.Enabled = not mk
+			pr.Enabled = not mk and not closedLock
 		end
 		n += 1
 		if n % 6 == 1 then
