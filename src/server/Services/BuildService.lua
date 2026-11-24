@@ -150,7 +150,9 @@ local function fixedRects(i)
 	end
 	for _, name in ipairs(B.fixedNames) do
 		local n = plot.model:FindFirstChild(name)
-		if n then
+		-- 손 작업대는 가게 안 자리(AtInside)일 때만. 들어온 직후에는 아직 가게 밖 노점 자리(입구 앞)에 있다가
+		-- PlotService가 곧 안으로 옮기는데, 그때 검사하면 "입구가 막혀요"로 저장된 배치가 처음 자리로 돌아갔음
+		if n and not (name == "Workstation" and n:GetAttribute("AtInside") ~= true) then
 			local c, h = boxOf(plot.cframe, { n })
 			if c then
 				local extra = B.fixedPad[name] or 0
