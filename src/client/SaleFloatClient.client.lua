@@ -24,7 +24,7 @@ local function float(pos, coins)
 	anchor.CFrame = CFrame.new(pos)
 	anchor.Parent = workspace.CurrentCamera -- 내 화면에만
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(170, 52)
+	bb.Size = UDim2.fromOffset(85, 26) -- 2026-11-25 사용자 "+n코인 글씨 반으로 줄이기" (170 × 52 → 반)
 	bb.AlwaysOnTop = true
 	bb.LightInfluence = 0
 	bb.MaxDistance = 140
@@ -40,7 +40,7 @@ local function float(pos, coins)
 	t.Parent = bb
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = UI.C.woodDark
-	stroke.Thickness = 2.5
+	stroke.Thickness = 1.5
 	stroke.Parent = t
 	local info = TweenInfo.new(TIME, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	TweenService:Create(bb, info, { StudsOffsetWorldSpace = Vector3.new(0, RISE, 0) }):Play()
