@@ -72,7 +72,7 @@ def build(cid, x0):
         bmesh.ops.delete(bm, geom=dead, context="FACES")
         bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context="VERTS")
     # 두 다리(발) 가운데를 원점으로 (몸이 한쪽으로 치우친 모델·긴 꼬리 보정)
-    feet = [v.co for v in bm.verts if v.co.z < cut["hip"]]
+    feet = [v.co for v in bm.verts if v.co.z < cut.get("feet", cut["hip"])]
     cx = (min(p.x for p in feet) + max(p.x for p in feet)) / 2
     cy = (min(p.y for p in feet) + max(p.y for p in feet)) / 2
     bmesh.ops.translate(bm, verts=bm.verts, vec=Vector((-cx, -cy, 0)))
@@ -95,7 +95,7 @@ def build(cid, x0):
     for f in bm.faces:
         c = f.calc_center_median()
         arm = ay0 < c.y < ay1 and (abs(c.x) > ax and az0 < c.z < az1 or far and abs(c.x) > far and az1 <= c.z < az1 + 0.25)
-        if c.z < cut["hip"]:
+        if c.z < cut["hip"] and c.y < cut.get("leg_y", 9):  # leg_y: 다리 높이까지 내려온 꼬리는 몸으로
             groups["LegL" if c.x > 0 else "LegR"].append(f)
         elif arm:
             groups["ArmL" if c.x > 0 else "ArmR"].append(f)
