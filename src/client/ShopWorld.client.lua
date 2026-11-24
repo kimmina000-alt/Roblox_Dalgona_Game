@@ -144,10 +144,85 @@ local function syncSelfPrompts()
 	end
 end
 
+---------------------------------------------------------------- 4) 쉬는 알바 숨기기
+
+-- 2026-11-24 사용자 "쉬는 알바생 걍 꺼내지 마 안 보이게 해": 쉬는 알바 미니미(대기·역할 없음·재료·연탄 없음 등)는 내 화면에서 숨기고,
+-- 일하기 시작하면 다시 보임. 가게 알바 = 속성 Working(서버 GrowthService setWorking), 공장 공정 알바 = 공장 속성 StaffOn_<key>.
+-- 들고 걷는 중(CarryState go/back, 진열 배달 DeliverAt 몇 초 안)이면 쉬어도 보임 (걷다가 사라지지 않게)
+local DELIVER_SHOW = 12 -- 진열 배달 신호 뒤 이만큼은 보임 (걷는 시간)
+
+local function busy(m, now)
+	local cs = m:GetAttribute("CarryState")
+	if cs == "go" or cs == "back" then
+		return true
+	end
+	local at = m:GetAttribute("DeliverAt")
+	return type(at) == "number" and now - at < DELIVER_SHOW
+end
+
+local hiddenGui = {} -- [BillboardGui] = 원래 Enabled
+local function setShown(m, show)
+	if m:GetAttribute("RestHidden") == (not show) then
+		return
+	end
+	m:SetAttribute("RestHidden", not show) -- 내 화면에만 있는 표시 (다른 연출 코드가 볼 수 있음)
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("BasePart") or d:IsA("Decal") then
+			d.LocalTransparencyModifier = show and 0 or 1
+		elseif d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
+			if show then
+				if hiddenGui[d] ~= nil then
+					d.Enabled = hiddenGui[d]
+					hiddenGui[d] = nil
+				end
+			elseif hiddenGui[d] == nil then
+				hiddenGui[d] = d.Enabled
+				d.Enabled = false
+			end
+		end
+	end
+end
+
+local function syncRestingHelpers()
+	local plots = workspace:FindFirstChild("ShopPlots")
+	local facs = workspace:FindFirstChild("Factories")
+	if not plots then
+		return
+	end
+	local now = workspace:GetServerTimeNow()
+	for _, plot in ipairs(plots:GetChildren()) do
+		for _, m in ipairs(plot:GetChildren()) do
+			if m:IsA("Model") and (m:GetAttribute("Minime") or m.Name:match("^Helper")) and m:GetAttribute("Post") ~= nil then
+				local working = m:GetAttribute("Working") == true
+				setShown(m, working or busy(m, now))
+			end
+		end
+		local lot = plot:FindFirstChild("FactoryLot")
+		local staff = lot and lot:FindFirstChild("Staff")
+		if staff then
+			local i = tonumber(plot.Name:match("%d+"))
+			local fac = facs and i and facs:FindFirstChild("Factory" .. i)
+			for _, m in ipairs(staff:GetChildren()) do
+				local key = m:GetAttribute("StaffKey")
+				if m:IsA("Model") and key then
+					local working = fac ~= nil and fac:GetAttribute("StaffOn_" .. key) == true
+					setShown(m, working or busy(m, now))
+				end
+			end
+		end
+	end
+	for g in pairs(hiddenGui) do
+		if not g.Parent then
+			hiddenGui[g] = nil
+		end
+	end
+end
+
 task.spawn(function()
 	while true do
 		pcall(syncGates)
 		pcall(syncSelfPrompts)
+		pcall(syncRestingHelpers)
 		task.wait(0.5)
 	end
 end)

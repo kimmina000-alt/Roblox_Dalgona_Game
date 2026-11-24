@@ -174,6 +174,82 @@ local function localBox(plotCF, p)
 	return l.Position, half
 end
 
+-- 작은 탁자 테이블보 (2026-11-24 사용자 "벽 진열대 아래 진열대 3개에 테이블보 깔기, 테이블이 사각형인데 마름모 모양으로"):
+-- 흰 천(탁자보다 조금 넓게, 네 옆으로 짧게 내려옴) 위에 꽃무늬 천을 45° 돌려 마름모로 겹침. 마름모 끝은 탁자 옆 가운데에서 살짝 내려옴.
+-- 천은 얇게 윗면에 붙어 진열 칸(3×3)을 가리지 않음 (칸 높이는 CLOTH_LIFT만큼 올림). 색·무늬는 G.ShopCloth
+local CLOTH_LIFT = 0.12
+local function clothPart(parent, name, size, cf, color)
+	local p = Instance.new("Part")
+	p.Name = name
+	p.Size = size
+	p.CFrame = cf
+	p.Color = color
+	p.Material = Enum.Material.Fabric
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false -- 눌러 진열할 때 광선이 탁자에 닿게
+	p.CanTouch = false
+	p.CastShadow = false
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	p.Parent = parent
+	return p
+end
+local function addTexture(p, face)
+	local C = G.ShopCloth
+	if C and C.texture then
+		local t = Instance.new("Texture")
+		t.Texture = C.texture
+		t.Face = face
+		t.StudsPerTileU = C.tile or 2
+		t.StudsPerTileV = C.tile or 2
+		t.Parent = p
+	end
+end
+local function tableCloth(plotCF, table_)
+	local C = G.ShopCloth or {}
+	local parent = table_.Parent and table_.Parent:IsA("Model") and table_.Parent or table_
+	local old = parent:FindFirstChild("TableCloth")
+	if old then
+		old:Destroy()
+	end
+	local folder = Instance.new("Model")
+	folder.Name = "TableCloth"
+	local c, h = localBox(plotCF, table_)
+	local topY = c.Y + h.Y
+	local base = plotCF * CFrame.new(c.X, topY, c.Z) -- 탁자 윗면 가운데, 가게 축
+	local white = C.white or Color3.fromRGB(252, 250, 244)
+	local flower = C.floral or Color3.fromRGB(226, 238, 222)
+	-- 흰 천 + 네 옆 드리움
+	local ov, drop = 0.18, 0.9 -- 흰 천은 길게 (참고 사진: 프릴 흰 천이 탁자 옆으로 길게)
+	clothPart(folder, "ClothWhite", Vector3.new(h.X * 2 + ov * 2, 0.05, h.Z * 2 + ov * 2), base * CFrame.new(0, 0.03, 0), white)
+	for _, s in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+		local alongX = s[2] ~= 0 -- 앞뒤 면이면 X로 긴 천
+		local size = alongX and Vector3.new(h.X * 2 + ov * 2, drop, 0.05) or Vector3.new(0.05, drop, h.Z * 2 + ov * 2)
+		local off = Vector3.new(s[1] * (h.X + ov), -drop / 2 + 0.05, s[2] * (h.Z + ov))
+		clothPart(folder, "ClothWhiteSide", size, base * CFrame.new(off), white)
+	end
+	-- 꽃무늬 마름모 (정사각형을 45° 돌림): 끝이 탁자 옆 가운데를 조금 넘음
+	local reach = math.max(h.X, h.Z) + 0.3
+	local side = reach * math.sqrt(2)
+	local dia = clothPart(folder, "ClothFloral", Vector3.new(side, 0.04, side), base * CFrame.new(0, 0.08, 0) * CFrame.Angles(0, math.rad(45), 0), flower)
+	addTexture(dia, Enum.NormalId.Top)
+	-- 마름모 끝이 탁자 밖으로 나온 곳에 짧게 드리운 끝자락
+	local tipDrop = 0.6
+	for _, s in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+		local half = s[1] ~= 0 and h.X or h.Z
+		if reach > half + ov then
+			local w = 0.5
+			local size = s[1] ~= 0 and Vector3.new(0.04, tipDrop, w) or Vector3.new(w, tipDrop, 0.04)
+			local off = Vector3.new(s[1] * (h.X + ov + 0.03), -tipDrop / 2 + 0.08, s[2] * (h.Z + ov + 0.03))
+			local flap = clothPart(folder, "ClothFloralTip", size, base * CFrame.new(off), flower)
+			addTexture(flap, s[1] > 0 and Enum.NormalId.Right or s[1] < 0 and Enum.NormalId.Left or s[2] > 0 and Enum.NormalId.Back or Enum.NormalId.Front)
+		end
+	end
+	folder.Parent = parent
+	return folder
+end
+
 -- 걸이판에 거는 자리 (가게 기준, 판 가운데에서 위아래 dy·옆 dz), 기본 2×2
 local function pegDefault(k, half)
 	local col = (k - 1) % 2
@@ -196,7 +272,7 @@ local function furnitureSlot(shop, i, item)
 		local c, h = localBox(pcf, A.table1)
 		local row = i <= 3 and 0 or 1
 		local col = i <= 3 and (i - 2) or (i == 4 and -0.5 or 0.5)
-		local pos = Vector3.new(c.X + col * h.X * 0.6, c.Y + h.Y + 0.02, c.Z - h.Z * 0.35 + row * h.Z * 0.7)
+		local pos = Vector3.new(c.X + col * h.X * 0.6, c.Y + h.Y + 0.02 + CLOTH_LIFT, c.Z - h.Z * 0.35 + row * h.Z * 0.7) -- 테이블보 위
 		return at(pos, Vector3.new(0, 0, -1))
 	end
 	local sa = SLOT_AREA[i]
@@ -230,7 +306,7 @@ local function furnitureSlot(shop, i, item)
 	local wR = math.abs(right.X) * h.X + math.abs(right.Z) * h.Z -- 반 너비 (옆)
 	local wD = math.abs(dir.X) * h.X + math.abs(dir.Z) * h.Z -- 반 깊이 (카운터 쪽)
 	local off = right * (-wR + (col + 0.5) * (2 * wR / g.cols)) + dir * (wD - (row + 0.5) * (2 * wD / g.rows)) -- 앞줄(카운터 쪽)부터
-	local pos = Vector3.new(c.X + off.X, c.Y + h.Y + 0.02, c.Z + off.Z)
+	local pos = Vector3.new(c.X + off.X, c.Y + h.Y + 0.02 + CLOTH_LIFT, c.Z + off.Z) -- 테이블보 위
 	return at(pos, dir)
 end
 
@@ -369,6 +445,13 @@ local function buildShelf(shop, plot)
 	if shop.areas.table1 then
 		local node = shop.areas.table1.Parent
 		table.insert(shop.stallOnly, (node and node:IsA("Model") and node ~= plot.model) and node or shop.areas.table1)
+	end
+	-- 작은 탁자 3개에 테이블보 (아래 tableCloth): 탁자와 같은 묶음에 넣어 보이기·숨기기를 같이 따름
+	for _, key in ipairs({ "table1", "table2", "table3" }) do
+		local t = shop.areas[key]
+		if t then
+			pcall(tableCloth, shop.plotCF, t)
+		end
 	end
 	-- 노점 손님 자리: 가게 앞 작은 탁자 앞(골목 쪽)
 	if shop.areas.table1 then
@@ -1079,6 +1162,33 @@ function SalesService.slotPosition(player, i)
 	end
 	local ok, cf = pcall(slotCFrame, shop, i)
 	return ok and cf and cf.Position or nil
+end
+
+-- 주문 손님(D55, OrderService)용: 손님 모델 하나 (7종 중 id, 없으면 nil)
+function SalesService.buildGuest(cf, id)
+	local ok, m = pcall(buildModelCustomer, cf, id)
+	return ok and m or nil
+end
+
+-- 주문 대기 자리 (D55): 틀 부품 OrderSeat(3D 세션 의자)가 있으면 그 자리, 없으면 손님 주문 자리 옆 3.5칸. 카운터 쪽을 봄
+function SalesService.orderSeat(index)
+	local shop = shops[index]
+	local plot = Plots.plotAt(index)
+	if not (shop and plot) then
+		return nil
+	end
+	local seat = plot.model:FindFirstChild("OrderSeat", true)
+	if seat and seat:IsA("BasePart") then
+		return CFrame.new(seat.Position + Vector3.new(0, seat.Size.Y / 2, 0)) * (seat.CFrame - seat.CFrame.Position)
+	end
+	local cf = plot.cframe
+	local stand = shop.standLocal or Vector3.new(0, 0, -25)
+	local side = shop.standSide and shop.standSide.Magnitude > 1e-3 and shop.standSide.Unit or Vector3.xAxis
+	local pos = stand + side * 3.5
+	local look = shop.shelfLocal or (stand + Vector3.new(0, 0, 4))
+	local wp = cf * Vector3.new(pos.X, 0.4, pos.Z)
+	local wl = cf * Vector3.new(look.X, 0.4, look.Z)
+	return CFrame.lookAt(wp, wl)
 end
 
 function SalesService.init(dataService, economyService, plotService)

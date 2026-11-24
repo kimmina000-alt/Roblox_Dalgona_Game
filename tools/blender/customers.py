@@ -1,5 +1,5 @@
 # 달고나 사러 오는 손님 NPC 7종 (사용자 디자인 2026-11-22: 동물 손님 그림 2장)
-#   뽀글이(갈색 푸들, 버건디 베레모, 동그란 안경), 꿀단지(노란 곰), 설기(옛 모찌, 흰 토끼, 세라복·하늘 치마·분홍 리본),
+#   뽀글이(2026-11-25부터 사용자가 만든 강아지 레퍼런스/dog1.glb, 갈색 푸들 색·버건디 베레모·동그란 안경), 꿀단지(노란 곰), 설기(옛 모찌, 흰 토끼, 세라복·하늘 치마·분홍 리본),
 #   고등어 아저씨(회색 고등어 무늬 고양이, 흰 수염, 러닝셔츠, 초록 운동복 바지), 도토리(회색 다람쥐, 남색 모자·제복, 갈색 가방),
 #   부엉이(보라 부엉이, 머리 위 초승달, 별무늬 남색 망토), 퐁퐁이(노란 오리, 하늘색 벙거지·원피스, 병아리 가방)
 #
@@ -12,7 +12,8 @@
 # 색 = 팔레트 텍스처 한 장 (16×16 칸, 칸마다 살짝 펠트 결). 모든 부품이 같은 텍스처를 쓰고 UV가 칸 가운데를 가리킨다.
 #   (glb의 여러 재질·정점 색 대신 — Roblox MeshPart는 텍스처 1장이라)
 #
-# 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/customers.py -- <출력 폴더(절대 경로)> [저장소 루트]
+# 실행: "D:\Blender 5.2\blender.exe" -b --factory-startup -P tools/blender/customers.py -- <출력 폴더(절대 경로)> [저장소 루트] [강아지 glb]
+#   강아지 glb를 안 주면 <출력 폴더>/../dog1.glb (= 레퍼런스/dog1.glb).
 # 결과: <출력>/dalgona_customers.glb (손님마다 빈 노드 Customer_<id> 아래 <id>_Head ... 메시),
 #       customers_preview.png (서 있는 모습), customers_preview2.png (걷기·먹기 자세, 비스듬히),
 #       customers_parts.txt, 저장소 루트를 주면 src/shared/CustomerRig.lua (자동 생성)
@@ -292,38 +293,84 @@ class Char:
             self.objs[n].matrix_basis = Matrix.Translation(j) @ R @ Matrix.Translation(c - j)
 
 
+DOG_GLB = os.path.abspath(argv[2]) if len(argv) > 2 else os.path.join(os.path.dirname(OUT), "dog1.glb")
+
+
+class MeshChar(Char):
+    """사용자가 만든 메시를 부품으로 나눠 쓰는 손님 (관절·손·입은 직접 정함)."""
+
+    def __init__(self, cid, label):
+        self.id, self.label, self.s = cid, label, {}
+        self.parts = {n: Part(n) for n in ("Head", "Body", "ArmL", "ArmR", "LegL", "LegR")}
+
+
+def load_glb(path):
+    """glb를 가져와 {오브젝트 이름: (메시, 월드 행렬)}. 가져온 오브젝트는 나중에 지울 목록으로 같이 돌려줌."""
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(filepath=path)
+    new = [o for o in bpy.data.objects if o not in before]
+    return {o.name: (o.data, o.matrix_world.copy()) for o in new if o.type == "MESH"}, new
+
+
+def add_mesh(p, me, M, rgb, flip=False):
+    vs = [p.bm.verts.new(M @ v.co) for v in me.vertices]
+    for poly in me.polygons:
+        f = [vs[i] for i in poly.vertices]
+        if flip:
+            f.reverse()
+        try:
+            p.bm.faces.new(f)
+        except ValueError:
+            pass
+    p.paint(rgb)
+
+
 # ───────────── 손님들 ─────────────
 def ppogeuli():
-    ch = Char("Ppogeuli", "뽀글이", leg=0.95, torso_h=1.15, torso_w=1.2, torso_d=0.95, hr=(0.78, 0.72, 0.72),
-              arm_len=1.0, arm_r=0.2, leg_r=0.24, foot=(0.25, 0.32, 0.16))
-    FUR, CURL, MUZ = (182, 118, 82), (160, 100, 68), (206, 152, 116)
-    ch.body(FUR, FUR, FUR, CURL)
-    h, b = ch.P("Head"), ch.P("Body")
-    # 2026-11-22 사용자: 겉에 붙은 곱슬 방울은 지우고 정돈 → 뒤로 부푼 머리털 덩어리 하나 + 길게 늘어진 귀
-    sph(h, (0, 0.12, ch.hcz + 0.2), (0.84, 0.72, 0.62), CURL, seg=(24, 14))
-    for sx in (1, -1):
-        sph(h, (sx * 0.82, 0.06, ch.hcz - 0.15), (0.2, 0.2, 0.42), CURL, seg=(14, 10))
-    # 주둥이·코·입
-    sph(h, ch.fp(0, -0.22, 0.12), (0.3, 0.2, 0.22), MUZ, seg=(14, 10))
-    sph(h, ch.fp(0, -0.12, 0.3), (0.09, 0.06, 0.07), (60, 36, 32), seg=(10, 6))
-    ch.smile(-0.38, w=0.08)
-    ch.dot_eyes(0.27, 0.08)
-    # 동그란 안경
-    GL = (92, 56, 42)
-    for sx in (1, -1):
-        c = ch.fp(sx * 0.27, 0.08, 0.07)
-        torus(h, c, 0.17, 0.026, GL, m=rot(z=sx * 8))
-        cyl(h, c + Vector((sx * 0.17, 0, 0)), Vector((sx * ch.hr[0] * 0.95, 0.1, ch.hcz + 0.1)), 0.02, 0.02, GL, seg=6)
-    cyl(h, ch.fp(0.1, 0.1, 0.1), ch.fp(-0.1, 0.1, 0.1), 0.02, 0.02, GL, seg=6)
-    # 베레모
-    sph(h, (0.1, 0.06, ch.hcz + ch.hr[2] * 0.92), (0.78, 0.74, 0.22), (138, 38, 56), seg=(24, 12), m=rot(y=14, x=-6))
-    cyl(h, (0.14, 0.06, ch.hcz + ch.hr[2] * 1.08), (0.16, 0.06, ch.hcz + ch.hr[2] * 1.08 + 0.13), 0.04, 0.03, (120, 30, 46), seg=8)
-    # 흰 칼라
-    torus(b, (0, 0, ch.neck - 0.03), 0.42, 0.08, (250, 246, 240), m=rot(x=90), vseg=8)
-    # 동그란 꼬리
-    d = ch.s["torso_d"]
-    sph(b, (0, d * 0.5 + 0.18, ch.hip + 0.3), 0.22, CURL, seg=(12, 8))
-    ch.mouth = ch.fp(0, -0.38, 0.05)
+    """2026-11-25 사용자: 뽀글이를 사용자가 만든 강아지(레퍼런스/dog1.glb)로 대체.
+    그 glb는 Mirror 모디파이어가 적용 안 된 채 내보내져 팔·귀·다리·눈·안경이 한쪽(+X)만 있다 → 여기서 X 대칭으로 채움.
+    색은 glb에 없어서 예전 뽀글이 색(갈색 푸들·버건디 베레모·갈색 안경)을 칠함."""
+    ch = MeshChar("Ppogeuli", "뽀글이")
+    src, junk = load_glb(DOG_GLB)
+    GROUND, K = -2.88, 3.65 / 4.20  # 다리 끝 = 바닥, 키 4.2 → 예전 뽀글이 키 3.65
+    M = Matrix.Diagonal((K, K, K, 1)) @ Matrix.Translation((0, 0, -GROUND))
+    P = lambda x, y, z: M @ Vector((x, y, z))
+    # 2026-11-25 사용자: 색 더 연하게 (손님 그림의 캐러멜 푸들·버건디 베레모·짙은 갈색 안경 참고)
+    FUR, CURL = (224, 176, 146), (206, 154, 124)
+    BERET, STEM, GL, EYE, NOSE = (158, 56, 70), (140, 46, 60), (78, 52, 44), (40, 30, 34), (70, 44, 38)
+    # (glb 오브젝트, 부품, 색, 대칭 복사 부품)
+    plan = [
+        ("Icosphere", "Head", FUR, None),       # 머리 (털 뭉치)
+        ("Icosphere.001", "Head", CURL, "Head"),  # 귀
+        ("Icosphere.003", "Head", BERET, None),   # 베레모 (한쪽으로 기울어진 모양 그대로)
+        ("Cube", "Head", STEM, None),            # 베레모 꼭지
+        ("Sphere", "Head", NOSE, None),          # 코
+        ("Sphere.002", "Head", EYE, "Head"),      # 눈
+        ("Torus", "Head", GL, "Head"),            # 동그란 안경
+        ("Icosphere.002", "Body", FUR, None),    # 몸
+        ("Cylinder.002", "Body", CURL, None),    # 꼬리
+        ("Cylinder.001", "ArmL", FUR, "ArmR"),    # 팔 (+X = 왼팔)
+        ("Cylinder", "LegL", CURL, "LegR"),       # 다리
+    ]
+    for name, part, rgb, mirror in plan:
+        me, W = src[name]
+        add_mesh(ch.P(part), me, M @ W, rgb)
+        if mirror:
+            add_mesh(ch.P(mirror), me, Matrix.Diagonal((-1, 1, 1, 1)) @ M @ W, rgb, flip=True)
+    for o in junk:
+        bpy.data.objects.remove(o, do_unlink=True)
+    sh = P(0.6, 0, -0.87)
+    hip = P(0.4, 0, -1.94)
+    ch.joints = {
+        "Head": P(0, 0, -0.6),
+        "Body": P(0, 0, -2.0),
+        "ArmL": sh,
+        "ArmR": Vector((-sh.x, sh.y, sh.z)),
+        "LegL": hip,
+        "LegR": Vector((-hip.x, hip.y, hip.z)),
+    }
+    ch.hand = P(-1.5, 0, -0.87)  # 오른손 = 대칭 팔 끝
+    ch.mouth = P(0, -0.95, -0.2)  # 코 아래 주둥이 앞
     return ch
 
 
@@ -604,7 +651,7 @@ if REPO:
          "", "return {", "\torder = { " + ", ".join(f'"{c.id}"' for c in CHARS) + " },", "\ttypes = {"]
     for ch in CHARS:
         height = max(ch.boxes[n][0].z + ch.boxes[n][1].z / 2 for n in ch.boxes)
-        hand = Vector((-ch.shx, -0.02, ch.shz - ch.s["arm_len"] + ch.s["arm_r"] * 1.1))
+        hand = getattr(ch, "hand", None) or Vector((-ch.shx, -0.02, ch.shz - ch.s["arm_len"] + ch.s["arm_r"] * 1.1))
         L.append(f"\t\t{ch.id} = {{")
         L.append(f'\t\t\tlabel = "{ch.label}",')
         L.append(f"\t\t\theight = {height:.3f},")
