@@ -238,10 +238,18 @@ task.spawn(function()
 	plots.ChildAdded:Connect(watchPlot)
 end)
 
+-- 꾸미기 화면(BuildUi) 동안은 말풍선을 숨김 (아래 큰 버튼과 겹침, 2026-11-25 묶음 시험)
+local function building()
+	local b = playerGui:FindFirstChild("BuildUi")
+	return b ~= nil and b.Enabled
+end
+
 -- 시계: 남은 시간 막대 (초록 → 노랑 → 빨강)
 RunService.Heartbeat:Connect(function()
 	local now = workspace:GetServerTimeNow()
+	local hide = building()
 	for plot, b in pairs(bubbles) do
+		b.bb.Enabled = not hide
 		local untilT = plot:GetAttribute("OrderUntil")
 		if type(untilT) == "number" then
 			local left = math.max(0, untilT - now)

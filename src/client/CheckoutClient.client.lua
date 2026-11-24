@@ -200,6 +200,9 @@ RunService.Heartbeat:Connect(function(dt)
 	local now = workspace:GetServerTimeNow()
 	local plot = myPlot()
 	local newFront = nil
+	-- 꾸미기 화면 동안은 인내 막대를 숨김 (아래 큰 버튼과 겹치지 않게)
+	local bui = playerGui:FindFirstChild("BuildUi")
+	local hide = bui ~= nil and bui.Enabled
 	for m in pairs(customers) do
 		local q = m:GetAttribute("Queue")
 		local patience = m:GetAttribute("Patience")
@@ -208,6 +211,7 @@ RunService.Heartbeat:Connect(function(dt)
 				buildBar(m)
 			end
 			local b = bars[m]
+			b.bb.Enabled = not hide
 			local k = type(patience) == "number" and math.clamp(patience, 0, 1) or 1
 			b.fill.Size = UDim2.fromScale(k, 1)
 			b.fill.BackgroundColor3 = k > 0.5 and C.green or (k > 0.2 and C.yellow or C.red)
