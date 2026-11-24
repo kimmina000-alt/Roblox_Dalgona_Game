@@ -226,16 +226,37 @@ local function check(it)
 end
 
 ---------------------------------------------------------------- 들어가기 · 나가기
+-- 움직임 막기: PlayerModule이 있으면 그걸로, 없으면(이 장소처럼) 걷기·점프 0 (MakingClient.setControls와 같은 방법)
+-- WaitForChild를 쓰면 PlayerModule이 없는 장소에서 영원히 멈춤 (2026-11-25 묶음 시험)
+local savedMove = nil
 local function controls(on)
-	local ok, pm = pcall(function()
-		return require(me:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"))
-	end)
-	if ok and pm then
-		local c = pm:GetControls()
+	local pm = me:FindFirstChild("PlayerScripts") and me.PlayerScripts:FindFirstChild("PlayerModule")
+	if pm then
+		local ok, c = pcall(function()
+			return require(pm):GetControls()
+		end)
+		if ok and c then
+			if on then
+				c:Enable()
+			else
+				c:Disable()
+			end
+		end
+	end
+	local touchGui = playerGui:FindFirstChild("TouchGui")
+	if touchGui then
+		touchGui.Enabled = on
+	end
+	local hum = me.Character and me.Character:FindFirstChildOfClass("Humanoid")
+	if hum then
 		if on then
-			c:Enable()
+			if savedMove then
+				hum.WalkSpeed, hum.JumpPower, hum.JumpHeight = savedMove[1], savedMove[2], savedMove[3]
+				savedMove = nil
+			end
 		else
-			c:Disable()
+			savedMove = savedMove or { hum.WalkSpeed, hum.JumpPower, hum.JumpHeight }
+			hum.WalkSpeed, hum.JumpPower, hum.JumpHeight = 0, 0, 0
 		end
 	end
 end
