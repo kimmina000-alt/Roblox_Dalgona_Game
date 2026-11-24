@@ -28,17 +28,18 @@ ORDER = ["Ppogeuli", "Kkuldanji", "Mochi", "Godeungeo", "Dotori", "Owl", "Pongpo
 LABEL = {"Ppogeuli": "뽀글이", "Kkuldanji": "꿀단지", "Mochi": "설기", "Godeungeo": "고등어 아저씨",
          "Dotori": "도토리", "Owl": "부엉이", "Pongpong": "퐁퐁이"}
 # hip = 다리 위 끝 높이, neck = 머리 아래 끝, arm = (팔 시작 |x|, 팔 띠 아래 z, 위 z), far = 이보다 바깥이면 목 높이 조금 위까지도 팔
-#   (팔 윗면이 목 높이를 넘는 모델). 단위 stud (모델 키 = 예전 손님 키).
+#   (팔 윗면이 목 높이를 넘는 모델), arm_y = 팔로 칠 앞뒤 범위. 단위 stud (모델 키 = 예전 손님 키).
+# 자르기 = 평면(bisect)으로 경계를 곧게 자른 뒤 부품마다 잘린 구멍을 막음(뚜껑 = 경계 한 점의 색) → 움직여도 찢긴 틈이 안 보임.
 CUT = {
     "Ppogeuli": dict(hip=0.45, neck=1.88, arm=(0.78, 1.22, 1.88), far=1.08),
     "Kkuldanji": dict(hip=0.42, neck=1.42, arm=(0.62, 0.95, 1.42)),
     "Mochi": dict(hip=0.5, neck=1.88, arm=(0.7, 1.25, 1.85)),
     "Godeungeo": dict(hip=0.55, neck=2.18, arm=(0.82, 1.65, 2.18), far=0.98),
-    "Dotori": dict(hip=0.55, neck=1.62, arm=(0.55, 1.15, 1.6)),
+    "Dotori": dict(hip=0.55, neck=1.62, arm=(0.55, 1.15, 1.6), arm_y=(-0.7, 0.42)),  # 뒤쪽 큰 꼬리는 몸
     "Owl": dict(hip=0.28, neck=1.9, arm=(1.05, 0.85, 1.68), drop=0),  # 날개는 이미 망토 따라 내려와 있음
     "Pongpong": dict(hip=0.32, neck=1.48, arm=(0.72, 0.95, 1.45)),
 }
-DELETE = {"Dotori": lambda c: c.y < -0.95 and 1.35 < c.z < 2.08 and c.x < -0.2}  # 오른쪽 앞 판 조각 (얼굴은 z 2.1 위)
+DELETE = {"Dotori": lambda c: (c.y < -0.95 and 1.35 < c.z < 2.08 and c.x < -0.2) or (c.x < -0.6 and 1.5 < c.z < 2.1)}  # 오른쪽 판 조각 (앞으로 뻗은 부분 + 어깨 위 뿌리). 얼굴은 z 2.1 위, 진짜 오른팔은 z 1.5 아래
 ARM_DROP = 55  # 도
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -76,14 +77,28 @@ def build(cid, x0):
     cy = (min(p.y for p in feet) + max(p.y for p in feet)) / 2
     bmesh.ops.translate(bm, verts=bm.verts, vec=Vector((-cx, -cy, 0)))
     ax, az0, az1 = cut["arm"]
+    far = cut.get("far")
+    ay0, ay1 = cut.get("arm_y", (-9, 9))
+    # UV 이음새로 갈라진 정점 붙이기 (UV는 면 모서리마다 남음) → 진짜 경계만 남음
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+    # 부품 경계를 평면으로 곧게 자름
+    planes = [((0, 0, cut["hip"]), (0, 0, 1)), ((0, 0, cut["neck"]), (0, 0, 1)), ((0, 0, az0), (0, 0, 1)), ((0, 0, az1), (0, 0, 1)),
+              ((ax, 0, 0), (1, 0, 0)), ((-ax, 0, 0), (1, 0, 0))]
+    if far:
+        planes += [((far, 0, 0), (1, 0, 0)), ((-far, 0, 0), (1, 0, 0)), ((0, 0, az1 + 0.25), (0, 0, 1))]
+    if "arm_y" in cut:
+        planes += [((0, ay0, 0), (0, 1, 0)), ((0, ay1, 0), (0, 1, 0))]
+    for co, no in planes:
+        geom = bm.verts[:] + bm.edges[:] + bm.faces[:]
+        bmesh.ops.bisect_plane(bm, geom=geom, dist=1e-5, plane_co=co, plane_no=no)
     groups = {n: [] for n in ("Head", "Body", "ArmL", "ArmR", "LegL", "LegR")}
     for f in bm.faces:
         c = f.calc_center_median()
+        arm = ay0 < c.y < ay1 and (abs(c.x) > ax and az0 < c.z < az1 or far and abs(c.x) > far and az1 <= c.z < az1 + 0.25)
         if c.z < cut["hip"]:
             groups["LegL" if c.x > 0 else "LegR"].append(f)
-        elif (abs(c.x) > ax and az0 < c.z < az1 or abs(c.x) > cut.get("far", 9) and az0 < c.z < az1 + 0.25
-              or max(abs(v.co.x) for v in f.verts) > ax + 0.25 and az0 - 0.1 < c.z < az1 + 0.25):  # 몸에서 팔 끝까지 걸친 긴 면
-            groups["ArmL" if max(f.verts, key=lambda v: abs(v.co.x)).co.x > 0 else "ArmR"].append(f)
+        elif arm:
+            groups["ArmL" if c.x > 0 else "ArmR"].append(f)
         elif c.z >= cut["neck"]:
             groups["Head"].append(f)
         else:
@@ -93,9 +108,15 @@ def build(cid, x0):
     sz = (az0 + az1) / 2
     ch = Ch()
     ch.id, ch.label = cid, LABEL[cid]
+    def shoulder(side):
+        ps = [v.co for f in groups[side] for v in f.verts if abs(abs(v.co.x) - ax) < 1e-3]
+        if not ps:
+            return Vector((ax if side == "ArmL" else -ax, 0, sz))
+        return Vector((ax if side == "ArmL" else -ax, sum(p.y for p in ps) / len(ps), sum(p.z for p in ps) / len(ps)))
+
     ch.joints = {
         "Head": Vector((0, 0, cut["neck"])), "Body": Vector((0, 0, cut["hip"])),
-        "ArmL": Vector((ax, 0, sz)), "ArmR": Vector((-ax, 0, sz)),
+        "ArmL": shoulder("ArmL"), "ArmR": shoulder("ArmR"),
         "LegL": Vector((lx, 0, cut["hip"])), "LegR": Vector((-lx, 0, cut["hip"])),
     }
     root = bpy.data.objects.new("Customer_" + cid, None)
@@ -118,6 +139,24 @@ def build(cid, x0):
                 continue
             for l_src, l_dst in zip(f.loops, nf.loops):
                 l_dst[uv_dst].uv = l_src[uv_src].uv
+        # 잘린 구멍 막기: 뚜껑 색 = 그 구멍 경계 한 점의 UV
+        def on_plane(e):
+            return any(all(abs((v.co - Vector(co)).dot(Vector(no))) < 2e-4 for v in e.verts) for co, no in planes)
+        bnd = [e for e in sub.edges if e.is_boundary and on_plane(e)]
+        if bnd:
+            res = bmesh.ops.holes_fill(sub, edges=bnd, sides=0)
+            for nf in res["faces"]:
+                uv = None
+                for v in nf.verts:
+                    for l in v.link_loops:
+                        if l.face is not nf and l.face not in res["faces"]:
+                            uv = l[uv_dst].uv.copy()
+                            break
+                    if uv:
+                        break
+                for l in nf.loops:
+                    l[uv_dst].uv = uv or (0.5, 0.5)
+            bmesh.ops.recalc_face_normals(sub, faces=sub.faces[:])
         if n in ("ArmL", "ArmR"):  # T자 팔 → 어깨에서 아래로
             j = ch.joints[n]
             d = cut.get("drop", ARM_DROP)
