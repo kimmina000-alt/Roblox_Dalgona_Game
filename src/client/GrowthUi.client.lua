@@ -144,7 +144,7 @@ local function act(what, a, b)
 	end)
 	busy = false
 	if ok and type(res) == "table" and res.ok then
-		if what == "buy" or what == "train" or what == "factoryUp" or what == "factorySkill" then
+		if what == "buy" or what == "train" or what == "factoryUp" or what == "factorySkill" or what == "displayUp" or what == "storageUp" then
 			UI.coinSound() -- 코인을 쓰는 것 (해금·업그레이드·알바 고용·교육)
 		end
 		setMsg(res.msg or "완료!", true)
@@ -325,6 +325,29 @@ local function render()
 		row(page, nextOrder(), string.format("%s Lv%d / %d", up.name, lv, #up.costs + 1), up.desc, btn, can, function()
 			act("buy", kind)
 		end)
+	end
+	-- 진열장 6단계 (D57, 2026-11-26): GrowthAction("displayUp"), 상태 displayTier(0~5) · shelfSlots(지금 칸 수)
+	local DISPLAY = G.Display or {
+		{ name = "기본 진열장", level = 3, cost = 0, slots = 8 },
+		{ name = "유리 진열장 1", level = 4, cost = 600, slots = 16 },
+		{ name = "유리 진열장 2", level = 6, cost = 1500, slots = 24 },
+		{ name = "선반 진열대 1", level = 10, cost = 4000, slots = 36 },
+		{ name = "선반 진열대 2", level = 15, cost = 12000, slots = 50 },
+		{ name = "벽면 진열장", level = 20, cost = 30000, slots = 70 },
+	}
+	do
+		local tier = state.displayTier or 0
+		local now, nxt = DISPLAY[tier + 1], DISPLAY[tier + 2]
+		local title = string.format("🧺 %s · 진열 %d칸", now and now.name or "진열장", state.shelfSlots or (now and now.slots) or 0)
+		if nxt then
+			row(page, nextOrder(), title, string.format("다음: %s · %d칸 · Lv%d", nxt.name, nxt.slots, nxt.level),
+				(not shopOpen and lockText) or (state.level < nxt.level and ("Lv" .. nxt.level .. "부터")) or ("업그레이드 · " .. nxt.cost),
+				shopOpen and state.level >= nxt.level and state.coins >= nxt.cost, function()
+					act("displayUp")
+				end)
+		else
+			row(page, nextOrder(), title, "가장 큰 진열장이에요", "최고 단계", false)
+		end
 	end
 	-- 연탄 덮개 (D46) — G.StoveTraining 안 coalCover. 기계 알바 교육은 알바생 탭
 	local trained = gr.stoveUps or {}
