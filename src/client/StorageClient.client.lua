@@ -45,9 +45,29 @@ local function setMsg(text, good)
 		s.Color = good and C.good or C.bad
 	end
 end
-local grid = new("Frame", { Name = "Grid", Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 1, -20), BackgroundTransparency = 1, ZIndex = 12, Parent = body }, {
+local grid = new("Frame", { Name = "Grid", Position = UDim2.fromOffset(10, 10), Size = UDim2.new(1, -20, 1, -82), BackgroundTransparency = 1, ZIndex = 12, Parent = body }, {
 	new("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 1, -4), CellPadding = UDim2.fromOffset(10, 10), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }),
 })
+
+-- 냉장고·서랍장 업그레이드 (D57, 2026-11-26): 아래 줄 = 다음 단계 이름·한도 + [업그레이드 · 값]
+-- 서버 GrowthAction("storageUp", "fridge" | "drawer"), 상태 storageTier = { fridge, drawer } · ingredientMax[id]
+local TIERS = G.StorageTiers or {
+	fridge = {
+		{ name = "냉장고", level = 1, cost = 0, max = 100 },
+		{ name = "큰 냉장고", level = 5, cost = 1500, max = 300 },
+		{ name = "업소용 냉장고", level = 12, cost = 8000, max = 1000 },
+		{ name = "대형 저온 창고", level = 20, cost = 30000, max = 3000 },
+	},
+	drawer = {
+		{ name = "서랍장", level = 1, cost = 0, max = 100, coal = 20 },
+		{ name = "큰 서랍장", level = 5, cost = 800, max = 300, coal = 60 },
+		{ name = "업소용 서랍장", level = 12, cost = 4000, max = 1000, coal = 200 },
+		{ name = "대형 서랍장", level = 20, cost = 15000, max = 3000, coal = 600 },
+	},
+}
+local upBar = UI.card({ Name = "Upgrade", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 10, 1, -8), Size = UDim2.new(1, -20, 0, 62), ZIndex = 12, Parent = body })
+local upText = UI.text({ Text = "", Position = UDim2.fromOffset(12, 4), Size = UDim2.new(1, -210, 1, -8), TextSize = 16, FontFace = UI.F.bold, TextWrapped = true, ZIndex = 13, Parent = upBar })
+local upBtn = UI.button({ Name = "UpgradeButton", Text = "업그레이드", Color = C.yellow, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(186, 50), TextSize = 17, ZIndex = 13, Parent = upBar })
 
 local state = nil
 local current = nil -- 지금 연 묶음
@@ -63,7 +83,39 @@ local function refresh()
 	for _, info in ipairs(buyButtons) do
 		UI.setButton(info.button, { Enabled = state ~= nil and state.coins >= info.price })
 	end
+	-- 업그레이드 줄
+	local key = current and current.key
+	local list = key and TIERS[key]
+	if list then
+		local tier = (state and state.storageTier and state.storageTier[key]) or 0
+		local now, nxt = list[tier + 1], list[tier + 2]
+		if nxt then
+			local lv = state and state.level or 1
+			upText.Text = string.format("지금 %s · 재료마다 %d개\n다음: %s · %d개%s · Lv%d", now.name, now.max, nxt.name, nxt.max, nxt.coal and string.format(" (연탄 %d)", nxt.coal) or "", nxt.level)
+			UI.setButton(upBtn, { Text = lv < nxt.level and ("Lv" .. nxt.level .. "부터") or ("업그레이드 · " .. nxt.cost), Enabled = state ~= nil and lv >= nxt.level and state.coins >= nxt.cost })
+		else
+			upText.Text = string.format("%s · 재료마다 %d개 (가장 큰 단계)", now.name, now.max)
+			UI.setButton(upBtn, { Text = "최고 단계", Enabled = false })
+		end
+	end
 end
+
+upBtn.Activated:Connect(function()
+	if busy or not upBtn:GetAttribute("Enabled") or not current then
+		return
+	end
+	busy = true
+	local ok, res = pcall(function()
+		return Remotes.GrowthAction:InvokeServer("storageUp", current.key)
+	end)
+	busy = false
+	if ok and type(res) == "table" and res.ok then
+		UI.coinSound()
+		setMsg(res.msg or "업그레이드했어요!", true)
+	else
+		setMsg((ok and type(res) == "table" and (res.reason or res.msg)) or "업그레이드할 수 없어요", false)
+	end
+end)
 
 local function build(group)
 	for _, c in ipairs(grid:GetChildren()) do

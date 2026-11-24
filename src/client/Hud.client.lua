@@ -183,7 +183,8 @@ for i, ing in ipairs(G.Ingredients) do
 	local iconBox = new("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = C.tan, ZIndex = 14, Parent = row }, { UI.corner(12), UI.stroke(C.line, 2) })
 	UI.ingredientIcon(ing, iconBox, 32, 15)
 	label({ Text = ing.name, Position = UDim2.fromOffset(72, 10), Size = UDim2.new(1, -560, 0, 26), TextSize = 21, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 14, Parent = row })
-	haveText[ing.id] = label({ Text = "보유 0", Position = UDim2.fromOffset(72, 38), Size = UDim2.new(1, -560, 0, 20), TextSize = 16, FontFace = UI.F.bold, TextColor3 = C.soft, ZIndex = 14, Parent = row })
+	haveText[ing.id] = label({ Text = "보유 0", Position = UDim2.fromOffset(72, 36), Size = UDim2.new(1, -560, 0, 30), TextSize = 16, FontFace = UI.F.bold, TextColor3 = C.soft, TextScaled = true, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, ZIndex = 14, Parent = row })
+	new("UITextSizeConstraint", { MaxTextSize = 16, MinTextSize = 10, Parent = haveText[ing.id] })
 	-- 오른쪽에 묶음 버튼 3개 (폰에서 누르기 쉽게 넓게: 150 × 56)
 	local btnRow = new("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(3 * 150 + 2 * 8, 56), BackgroundTransparency = 1, ZIndex = 14, Parent = row }, {
 		new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }),
@@ -198,7 +199,7 @@ for i, ing in ipairs(G.Ingredients) do
 		coin.AnchorPoint = Vector2.new(1, 0.5)
 		coin.Position = UDim2.new(0.5, -18, 0, 35)
 		local priceL = UI.text({ Text = tostring(price), FontFace = UI.F.round, AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.5, -14, 0, 35), Size = UDim2.fromOffset(70, 22), TextSize = 19, TextColor3 = C.white, Outline = UI.darker(b:GetAttribute("Color"), 0.45), ZIndex = 18, Parent = b.Face })
-		local info = { button = b, base = price, price = price, label = priceL }
+		local info = { button = b, base = price, price = price, label = priceL, id = ing.id, units = units }
 		table.insert(buyButtons, info)
 		b.Activated:Connect(function()
 			if busy or not b:GetAttribute("Enabled") then
@@ -235,7 +236,10 @@ local function refreshButtons()
 	for _, info in ipairs(buyButtons) do
 		info.price = shopMode == "phone" and math.ceil(info.base * (1 + PHONE_FEE)) or info.base
 		info.label.Text = tostring(info.price)
-		local afford = state ~= nil and state.coins >= info.price
+		-- 보관 한도 (D57 냉장고·서랍장): 넘치게 사는 묶음은 끔
+		local have = state and state.ingredients and state.ingredients[info.id] or 0
+		local cap = state and state.ingredientMax and state.ingredientMax[info.id] or G.IngredientMax
+		local afford = state ~= nil and state.coins >= info.price and have + info.units <= cap
 		UI.setButton(info.button, { Enabled = afford })
 	end
 end
@@ -384,8 +388,12 @@ local function apply(s)
 		local n = s.ingredients and s.ingredients[ing.id] or 0
 		ingText[ing.id].Text = ingPrefix(ing) .. n
 		ingText[ing.id].TextColor3 = n > 0 and C.white or Color3.fromRGB(255, 120, 110)
-		haveText[ing.id].Text = "보유 " .. n
-		haveText[ing.id].TextColor3 = n > 0 and C.soft or C.bad
+		-- 보관 한도 안내 (D57): 냉장고·서랍장이 꽉 차면 "보관 한도 · 냉장고를 키워요"
+		local cap = s.ingredientMax and s.ingredientMax[ing.id] or G.IngredientMax
+		local full = n + ing.pack > cap
+		local where = (G.storageGroupOf and G.storageGroupOf(ing.id) or (ing.id == "sugar" or ing.id == "soda") and "fridge" or "drawer") == "fridge" and "냉장고" or "서랍장"
+		haveText[ing.id].Text = full and string.format("보유 %d / %d · 보관 한도! %s를 키워요", n, cap, where) or string.format("보유 %d / %d", n, cap)
+		haveText[ing.id].TextColor3 = full and C.bad or (n > 0 and C.soft or C.bad)
 	end
 	stockText.Text = string.format("%d/%d", s.stock or 0, s.stockMax or G.StockMax)
 	plotText.Text = s.plot and string.format("%d번 달고나 가게", s.plot) or "달고나 가게"
