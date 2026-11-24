@@ -1,5 +1,5 @@
 -- 첫 60초 안내 화면 (21번, 2026-11-22). 서버 TutorialService가 플레이어 속성 Tutorial(단계, 0 = 없음)을 정함
---  - 할아버지 NPC (이 화면에만 보이는 부품 인형): 내 가게 입구 옆에 서서 머리 위 말풍선으로 지금 단계를 말함
+--  - (2026-11-25부터 안 씀) 할아버지 NPC — 사용자 "할아버지 삭제하고 그냥 텍스트랑 화살표로만 안내"
 --  - 아래 안내 판 (제작 화면 위에도 보이게 DisplayOrder 높게): 할아버지 말 + 단계 n/6 + 건너뛰기
 --  - 가리킬 곳: 작업대·진열대는 빛나는 테두리(Highlight) + 위에서 통통 튀는 화살표, 상점 버튼은 화면 화살표
 --  - 알림: 작업대에 가까이 가면 "near", 상점 창을 열면 "shop", 건너뛰기 "skip" → Remotes.Tutorial
@@ -66,6 +66,7 @@ face.Size = UDim2.fromScale(0.76, 0.76)
 face.Text = "👴"
 face.TextScaled = true
 face.Parent = faceRing
+faceRing.Visible = false -- 2026-11-25: 할아버지 없이 글씨·화살표로만 안내
 -- 이름: 판 위 모서리에 걸친 나무 리본
 local title = Instance.new("TextLabel")
 title.AnchorPoint = Vector2.new(0, 0.5)
@@ -77,6 +78,7 @@ title.FontFace = UI.F.heavy
 title.TextSize = 16 * S
 title.TextColor3 = UI.C.cream
 title.Text = "달고나 할아버지"
+title.Visible = false -- 2026-11-25: 할아버지 없이 (이름 리본도 숨김)
 title.Parent = panel
 UI.corner(8).Parent = title
 UI.stroke(UI.C.woodDark, 2.5).Parent = title
@@ -288,9 +290,8 @@ local function show(n)
 		uiArrow.Visible = false
 		return
 	end
-	if not npc or not npc.Parent then
-		buildNpc()
-	end
+	-- 2026-11-25 사용자 "처음 시작할 때 할아버지 삭제하고 그냥 텍스트랑 화살표로만 안내하기":
+	-- 할아버지 NPC(buildNpc)·얼굴 액자·이름 리본은 안 씀. 아래 안내 판 글씨 + 물건 위 화살표/빛 + 버튼 화살표만.
 	gui.Enabled = true
 	-- 만드는 동안(3단계): 아래 가운데에 작게, 건너뛰기 없이, 입력을 막지 않게 (누르기·찍기는 화면 어디를 눌러도 되는 단계)
 	panel.AnchorPoint = Vector2.new(0.5, 1)
@@ -301,9 +302,7 @@ local function show(n)
 		panel.Position = UDim2.new(0.5, 0, 1, -mp.bottom * S)
 		panel.Active = false
 		skip.Visible = false
-		-- 작은 판: 얼굴 액자 숨기고 글씨를 판 전체 폭으로
-		faceRing.Visible = false
-		title.Position = UDim2.fromOffset(14 * S, 0)
+		-- 작은 판: 글씨를 판 전체 폭으로
 		body.Position = UDim2.fromOffset(14 * S, 16 * S)
 		body.Size = UDim2.new(1, -28 * S, 1, -20 * S)
 		body.TextSize = 15 * S
@@ -311,10 +310,8 @@ local function show(n)
 		panel.Size = UDim2.fromOffset(PANEL_W * S, PANEL_H * S)
 		panel.Position = UDim2.new(0.5, 0, 1, -16 * S)
 		skip.Visible = true
-		faceRing.Visible = true
-		title.Position = UDim2.fromOffset(88 * S, 0)
-		body.Position = UDim2.fromOffset(92 * S, 18 * S)
-		body.Size = UDim2.new(1, -210 * S, 1, -24 * S)
+		body.Position = UDim2.fromOffset(18 * S, 14 * S)
+		body.Size = UDim2.new(1, -140 * S, 1, -20 * S)
 		body.TextSize = 18 * S
 	end
 	body.Text = stepText(n)
