@@ -144,6 +144,25 @@ local function syncSelfPrompts()
 	end
 end
 
+-- 가게 뒤 공장 문 "공장 들어가기"(서버 PlotService FactoryDoor.Door.FactoryPrompt): 남의 가게 문에서는 눌러도 아무 일이 없으므로
+-- 내 가게 문에서만 보임 (2026-11-26)
+local function syncDoorPrompts()
+	local plots = workspace:FindFirstChild("ShopPlots")
+	if not plots then
+		return
+	end
+	for _, plot in ipairs(plots:GetChildren()) do
+		local door = plot:FindFirstChild("FactoryDoor")
+		local pr = door and door:FindFirstChild("FactoryPrompt", true)
+		if pr and pr:IsA("ProximityPrompt") then
+			local mine = plot:GetAttribute("OwnerUserId") == player.UserId
+			if pr.Enabled ~= mine then
+				pr.Enabled = mine
+			end
+		end
+	end
+end
+
 ---------------------------------------------------------------- 4) 쉬는 알바 숨기기
 
 -- 2026-11-24 사용자 "쉬는 알바생 걍 꺼내지 마 안 보이게 해": 쉬는 알바 미니미(대기·역할 없음·재료·연탄 없음 등)는 내 화면에서 숨기고,
@@ -222,6 +241,7 @@ task.spawn(function()
 	while true do
 		pcall(syncGates)
 		pcall(syncSelfPrompts)
+		pcall(syncDoorPrompts)
 		pcall(syncRestingHelpers)
 		task.wait(0.5)
 	end
