@@ -540,6 +540,7 @@ local function refreshShelf(index)
 			s.disc.Color = (item.g == "Burnt") and Color3.fromRGB(60, 40, 28) or DALGONA
 			local shape = ShapeCatalog.get(item.s)
 			s.disc:SetAttribute("Shape", shape and shape.name or item.s)
+			s.disc:SetAttribute("Hand", item.hand == true or nil) -- 손 제작 "수제" 도장 (D58, UI 화면)
 			-- 완성품 모양으로 진열: 원판·테두리는 숨기고(칸 안내 자리로만 씀) 모양 모델을 눕혀 둠
 			local key = lookKey(item)
 			if s.lookKey ~= key then
@@ -560,6 +561,7 @@ local function refreshShelf(index)
 		else
 			s.disc.Transparency = 1
 			s.rim.Transparency = 1
+			s.disc:SetAttribute("Hand", nil)
 			if s.look then
 				s.look:Destroy()
 				s.look, s.lookKey = nil, nil
