@@ -766,7 +766,7 @@ end
 
 -- 진열장 업그레이드 6단계 (D57, GDD 17장, 2026-11-26 사용자 승인). d.displayTier = 0~5 (산 단계, 기본 0).
 -- slots = 그 단계까지 진열 칸 합계. 칸은 번호 순서로 열림 (1~4 유리 진열장 → 걸이판 → 작은 탁자, SalesService 칸 번호).
--- 가구에 실제로 있는 칸(G.Sales.shelfSlots 61)보다 많으면 그만큼만 (벽면 진열장 70칸 자리는 가게 3D·UI 세션이 붙이면 늘림)
+-- 가구에 실제로 있는 칸(G.Sales.shelfSlots 73 = 61 + 벽면 진열장 12)보다 많으면 그만큼만
 G.Display = {
 	{ name = "기본 진열장", level = 3, cost = 0, slots = 8 },
 	{ name = "유리 진열장 1", level = 4, cost = 600, slots = 16 },
@@ -776,6 +776,7 @@ G.Display = {
 	{ name = "벽면 진열장", level = 20, cost = 30000, slots = 70 },
 }
 G.DisplayMigrateTier = 4 -- 예전 61칸을 쓰던 저장은 선반 진열대 2(50칸)를 준 것으로 (v17)
+G.DisplayWallTier = 5 -- 이 단계부터 벽면 진열장 칸(62~) — 가게 3D에 WallDisplayCase가 없으면 그 단계는 아직 못 삼 (GrowthService)
 
 function G.displayTier(d)
 	return math.clamp(math.floor(tonumber(d and d.displayTier) or 0), 0, #G.Display - 1)
@@ -832,7 +833,7 @@ end
 
 ---------------------------------------------------------------- 판매: 진열대 + 손님 NPC (Phase 3, D12)
 G.Sales = {
-	shelfSlots = 61, -- 진열 칸 (2026-11-24 격자: 유리 진열장 4 + 걸이판 6×5 + 작은 탁자 3×3 ×3) (보관함 앞쪽 10개가 진열됨, 먼저 만든 것부터 팔림)
+	shelfSlots = 73, -- 진열 칸 (2026-11-24 격자: 유리 진열장 4 + 걸이판 6×5 + 작은 탁자 3×3 ×3 = 61, 2026-11-26 D57 벽면 진열장 4×3 = 62~73)
 	maxCustomers = 3, -- 가게당 동시 손님
 	-- 손님 수요 (GDD 5-1장 D12, 기획 세션 2026-11-20: 수요 ≈ 생산의 80%, 시뮬레이션 전 기획안)
 	-- { 방문 간격(초), 1명당 최소, 최대 }

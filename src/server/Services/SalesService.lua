@@ -131,7 +131,7 @@ end
 -- 진열 가구 (가게 3D 부품 속성 Role, 2026-11-24 사용자): 칸 자리를 가구 기준으로 계산해서, 편집 화면(PlotLayout.ShopModel)에서
 -- 가구를 옮기면 칸도 따라감. 칸 번호는 아래 GRID (격자, 2026-11-24)
 -- 2026-11-24 사용자: 작은 탁자 하나 더 (작은 탁자 3 = 11칸)
-local AREA_ROLES = { case = "유리 진열장", peg = "달고나 걸이판", table1 = "작은 탁자", table2 = "작은 탁자 2", table3 = "작은 탁자 3", counter = "앞 카운터 (나무)" }
+local AREA_ROLES = { case = "유리 진열장", peg = "달고나 걸이판", table1 = "작은 탁자", table2 = "작은 탁자 2", table3 = "작은 탁자 3", counter = "앞 카운터 (나무)", wall = "벽면 진열장" }
 local SHOP_ONLY_ROLES = { "앞 카운터 (나무)", "유리 진열장", "진열장 받침 (금속)", "진열 이름표 띠" }
 -- 격자 칸 (2026-11-24 사용자 "격자처럼 달고나 자리 만들어서"): 걸이판 6×5 = 30, 작은 탁자마다 3×3 = 9 (탁자 3개)
 -- 칸 번호: 1~4 유리 진열장, 5~34 걸이판(위 줄 왼쪽부터), 35~43 작은 탁자, 44~52 작은 탁자 2, 53~61 작은 탁자 3 → 모두 61 (G.Sales.shelfSlots)
@@ -141,6 +141,9 @@ local GRID = {
 	{ key = "table1", first = 35, cols = 3, rows = 3 },
 	{ key = "table2", first = 44, cols = 3, rows = 3 },
 	{ key = "table3", first = 53, cols = 3, rows = 3 },
+	-- 벽면 진열장 (D57 6단계, 3D 세션 claude/wall-case-1127): 뒤판 WallCaseBack(Role "벽면 진열장") = 칸 상자, 4열 × 3단 = 62~73.
+	-- 걸이판과 같은 계산 (선반 윗면 = 칸 가운데 − (lookSize/2 + lookStick[1]))
+	{ key = "wall", first = 62, cols = 4, rows = 3 },
 }
 local AREA_SLOTS, SLOT_AREA = {}, {} -- [area] = { 칸들 }, [칸] = { grid, k (0부터) }
 for _, g in ipairs(GRID) do
@@ -286,7 +289,7 @@ local function furnitureSlot(shop, i, item)
 	if g.key == "case" then
 		local x = c.X + h.X - (col + 0.5) * (2 * h.X / g.cols) -- 길에서 볼 때 왼쪽부터
 		return at(Vector3.new(x, c.Y - h.Y + 0.12, c.Z), Vector3.new(0, 0, -1))
-	elseif g.key == "peg" then
+	elseif g.key == "peg" or g.key == "wall" then
 		local nx = c.X < 0 and 1 or -1 -- 가게 안쪽을 보는 면
 		local dz = -h.Z + (col + 0.5) * (2 * h.Z / g.cols)
 		local dy = h.Y - (row + 0.5) * (2 * h.Y / g.rows) -- 위 줄부터

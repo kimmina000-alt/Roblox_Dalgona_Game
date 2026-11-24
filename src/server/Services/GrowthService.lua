@@ -291,11 +291,28 @@ end
 
 -- 알바생 index를 제작대 key로 (""면 대기). 그 자리에 다른 알바생이 있으면 서로 바꿈 (D34: 언제든 공짜로)
 -- 진열장 한 단계 올리기 (D57, G.Display). 가게가 있어야 (노점은 쟁반)
-local function actionDisplayUp(d)
+local function hasWallCase(player)
+	local plot = Plots.get(player)
+	if not (plot and plot.model) then
+		return false
+	end
+	for _, p in ipairs(plot.model:GetDescendants()) do
+		if p:IsA("BasePart") and p:GetAttribute("Role") == "벽면 진열장" then
+			return true
+		end
+	end
+	return false
+end
+
+local function actionDisplayUp(player, d)
 	local tier = G.displayTier(d)
 	local nxt = G.Display[tier + 2]
 	if not nxt then
 		return false, "진열장이 이미 가장 커요"
+	end
+	-- 벽면 진열장 칸(62~)은 가게 3D에 그 가구가 있어야 (3D 세션 WallDisplayCase, 사용자가 가져오면)
+	if tier + 1 >= G.DisplayWallTier and not hasWallCase(player) then
+		return false, nxt.name .. "은(는) 준비 중이에요"
 	end
 	if not (d.shop and (d.shop.state == "rented" or d.shop.state == "owned")) then
 		return false, "가게를 빌려야 진열장을 키울 수 있어요"
@@ -411,7 +428,7 @@ function GrowthService.action(player, what, a, b)
 		elseif what == "factorySkill" and type(a) == "string" then
 			ok, msg = Factory.buySkill(dd, a) -- 공장 손재주 한 단계 (D49, 공정 key)
 		elseif what == "displayUp" then
-			ok, msg = actionDisplayUp(dd) -- 진열장 단계 (D57)
+			ok, msg = actionDisplayUp(player, dd) -- 진열장 단계 (D57)
 		elseif what == "storageUp" and type(a) == "string" then
 			ok, msg = actionStorageUp(dd, a) -- 냉장고·서랍장 단계 (D57)
 		elseif what == "helperPost" and type(a) == "number" and type(b) == "string" then
