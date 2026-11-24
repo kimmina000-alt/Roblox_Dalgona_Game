@@ -820,6 +820,12 @@ end
 
 -- 웨이포인트를 따라 걷기 (Heartbeat에서 옮김). 도착하면 onArrive()
 local function walk(model, points, onArrive)
+	-- 이미 걷는 중이면 그 길은 버림 (줄이 당겨질 때 새 자리로, D56)
+	for i = #walkers, 1, -1 do
+		if walkers[i].model == model then
+			table.remove(walkers, i)
+		end
+	end
 	table.insert(walkers, { model = model, points = points, seg = 1, dist = 0, onArrive = onArrive, t = 0 })
 end
 
@@ -970,6 +976,160 @@ local function local2world(plot, x, z)
 	return (plot.cframe * CFrame.new(x, G.Plots.size.Y, z)).Position
 end
 
+---------------------------------------------------------------- 계산 줄 (D56, GDD 16장)
+-- 손님 c = { model, reserved(찜한 개수), ctype, owner, left(남은 인내 초), frontAt(맨 앞이 된 서버 시각), busy, leave(fn) }
+-- shop.queue = { c1(맨 앞), c2, ... }. 화면 쪽 약속 (UI 세션):
+--   손님 Model 속성 Queue(1 = 맨 앞, 줄 아니면 nil) · Patience(0~1, 0.5초마다) · FrontAt(맨 앞이 된 서버 시각)
+--   부지 모델 Plot<i> 속성 QueueCount(줄 선 손님 수)
+--   Remotes.Checkout:InvokeServer() → { ok, reason, coins, tip(bool) } (내 가게 맨 앞 손님 하나)
+local CHK = G.Checkout
+
+local function queueMax(shop)
+	return shop.stall and CHK.stallQueueMax or CHK.queueMax
+end
+
+-- 줄 k번째 자리 (세계 좌표)와 바라볼 점: 카운터 앞 자리(손님 주문 자리)에서 가게 문 쪽으로 gap씩
+local function queuePoint(index, k)
+	local shop, plot = shops[index], Plots.plotAt(index)
+	local stand = (shop.stall and shop.stallStandLocal) or shop.standLocal or Vector3.new(SALES.shelf.pos.X, 0, SALES.standZ)
+	-- 뒤 = 카운터 앞 자리가 보는 쪽(CustomerSpot LookVector → shelfLocal)의 반대. 노점은 쟁반(+Z) 반대
+	local facing = (not shop.stall and shop.shelfLocal) and (shop.shelfLocal - stand) or Vector3.new(0, 0, 1)
+	facing = Vector3.new(facing.X, 0, facing.Z)
+	local back = facing.Magnitude > 1e-3 and -facing.Unit or Vector3.new(0, 0, -1)
+	local p = stand + back * CHK.gap * (k - 1)
+	local face = stand - back * 4
+	return local2world(plot, p.X, p.Z), local2world(plot, face.X, face.Z)
+end
+
+local function syncQueue(index)
+	local shop, plot = shops[index], Plots.plotAt(index)
+	local now = workspace:GetServerTimeNow()
+	for k, c in ipairs(shop.queue) do
+		if k == 1 and not c.frontAt then
+			c.frontAt = now
+		end
+		local pos, face = queuePoint(index, k)
+		if c.at ~= k then
+			c.at = k
+			local m = c.model
+			if m.Parent then
+				walk(m, { m:GetPivot().Position, pos }, function()
+					if m.Parent then
+						m:PivotTo(CFrame.lookAt(pos, Vector3.new(face.X, pos.Y, face.Z)))
+					end
+				end)
+			end
+		end
+		c.model:SetAttribute("Queue", k)
+		c.model:SetAttribute("FrontAt", c.frontAt)
+	end
+	if plot and plot.model then
+		plot.model:SetAttribute("QueueCount", #shop.queue)
+	end
+end
+
+local function dropFromQueue(index, c)
+	local shop = shops[index]
+	local i = table.find(shop.queue, c)
+	if i then
+		table.remove(shop.queue, i)
+	end
+	if c.model.Parent then
+		c.model:SetAttribute("Queue", nil)
+		c.model:SetAttribute("Patience", nil)
+		c.model:SetAttribute("FrontAt", nil)
+	end
+	syncQueue(index)
+end
+
+-- 기다리다 지침: 찜한 것을 진열대에 돌려놓고(예약만 풀면 됨) 떠남, 벌 없음
+local function giveUp(index, c)
+	local shop = shops[index]
+	shop.reserved = math.max(0, shop.reserved - c.reserved)
+	c.reserved = 0
+	dropFromQueue(index, c)
+	say(c.model, "너무 오래 걸려…", 2)
+	task.delay(0.8, c.leave)
+end
+
+-- 맨 앞 손님 계산. who = "player" | "cashier"
+local function checkout(index, who)
+	local shop = shops[index]
+	local c = shop and shop.queue[1]
+	if not c or c.busy then
+		return { ok = false, reason = "계산할 손님이 없어요" }
+	end
+	local owner = shop.owner
+	if not (owner and owner.Parent and c.owner == owner) then
+		return { ok = false, reason = "계산할 손님이 없어요" }
+	end
+	c.busy = true
+	local n = c.reserved
+	shop.reserved = math.max(0, shop.reserved - n)
+	c.reserved = 0
+	local sold, coins, items = Economy.sell(owner, n, c.ctype)
+	local tip = false
+	if sold > 0 and who == "player" then
+		-- 빨리 계산 팁: 계산 알바 팁(Economy.sell 안 +5%)과 겹치지 않음 (둘 중 큰 것 = 같은 5%)
+		local od = Data.get(owner)
+		local hasCashier = od and G.helperAt(od, "cashier") and G.shopOpen(od)
+		if not hasCashier and c.frontAt and workspace:GetServerTimeNow() - c.frontAt <= CHK.fastTip.within then
+			local extra = math.max(1, math.floor(coins * CHK.fastTip.mult + 0.5))
+			Data.update(owner, function(d)
+				d.coins += extra
+				d.stats.coinsEarned = (d.stats.coinsEarned or 0) + extra
+			end)
+			coins += extra
+			tip = true
+		end
+	end
+	dropFromQueue(index, c)
+	local model = c.model
+	task.spawn(function()
+		if sold > 0 then
+			-- 알림창 대신 손님 위에 "+n코인" 글씨 (2026-11-24 사용자, 클라이언트 SaleFloatClient)
+			if saleFloat and model.Parent then
+				local cf, size = model:GetBoundingBox()
+				saleFloat:FireClient(owner, cf.Position + Vector3.new(0, size.Y / 2 + 0.6, 0), coins)
+			end
+			say(model, tip and "빨리 해 줘서 고마워요! ♥" or "고마워요!", 1.5)
+			Collection = Collection or require(script.Parent:WaitForChild("CollectionService"))
+			task.spawn(Collection.onCustomerSold, owner, c.ctype.id, sold) -- 손님 도감 하트 (D38)
+			startEating(model, items and items[1] or nil)
+			print(string.format("[Sales] %s Plot%d checkout(%s) %d (+%d%s)", owner.Name, index, who, sold, coins, tip and " tip" or ""))
+		else
+			say(model, c.ctype.kind == "vip" and "마음에 드는 게 없네..." or "다 팔렸네...", 2)
+		end
+		task.wait(1) -- 계산 연출 (UI 1초)
+		c.leave()
+	end)
+	return { ok = sold > 0, reason = sold == 0 and "진열대에 남은 게 없어요" or nil, coins = coins, tip = tip }
+end
+
+-- 0.5초마다: 인내 줄이기(주인이 만드는 중이면 절반), 계산 알바 자동 계산
+local function stepQueue(index, dt)
+	local shop = shops[index]
+	if #shop.queue == 0 then
+		return
+	end
+	local owner = shop.owner
+	local rate = (owner and owner:GetAttribute("Making")) and CHK.makingSlow or 1
+	for _, c in ipairs(table.clone(shop.queue)) do
+		if not c.busy then
+			c.left -= dt * rate
+			c.model:SetAttribute("Patience", math.clamp(c.left / CHK.patience, 0, 1))
+			if c.left <= 0 then
+				giveUp(index, c)
+			end
+		end
+	end
+	local front = shop.queue[1]
+	local od = owner and Data.get(owner)
+	if front and not front.busy and od and G.helperAt(od, "cashier") and G.shopOpen(od) and front.frontAt and workspace:GetServerTimeNow() - front.frontAt >= CHK.cashierSeconds then
+		checkout(index, "cashier")
+	end
+end
+
 local function spawnCustomer(index)
 	local shop = shops[index]
 	local plot = Plots.plotAt(index)
@@ -989,7 +1149,9 @@ local function spawnCustomer(index)
 	shop.reserved += n
 	local stand = (shop.stall and shop.stallStandLocal) or shop.standLocal or Vector3.new(SALES.shelf.pos.X, 0, SALES.standZ)
 	local shelfL = shop.shelfLocal or Vector3.new(SALES.shelf.pos.X, 0, SALES.shelf.pos.Z)
-	local standL = stand + (shop.standSide or Vector3.xAxis) * ((math.random() - 0.5) * 3)
+	-- 고르는 자리: 카운터 앞 자리(= 계산 줄 맨 앞, D56)에서 옆으로 비켜서
+	local sideSign = math.random() < 0.5 and -1 or 1
+	local standL = stand + (shop.standSide or Vector3.xAxis) * sideSign * (2.6 + math.random() * 1.6)
 	local sx = stand.X
 	local side = math.random() < 0.5 and -1 or 1
 	local startP = local2world(plot, side * SALES.streetHalf, SALES.streetZ)
@@ -998,15 +1160,20 @@ local function spawnCustomer(index)
 	local exitP = local2world(plot, -side * SALES.streetHalf, SALES.streetZ)
 	local model = buildCustomer(CFrame.new(startP), ctype.id)
 	model.Parent = shop.folder
-	local c = { model = model, reserved = n }
+	local c = { model = model, reserved = n, ctype = ctype, owner = owner }
 	shop.customers[c] = true
 
 	local function leave()
-		walk(model, { standP, doorP, exitP }, function()
+		if not model.Parent then
+			shop.customers[c] = nil
+			return
+		end
+		walk(model, { model:GetPivot().Position, doorP, exitP }, function()
 			model:Destroy()
 			shop.customers[c] = nil
 		end)
 	end
+	c.leave = leave
 	walk(model, { startP, doorP, standP }, function()
 		-- 진열대를 보며 고름
 		local shelfP = local2world(plot, shelfL.X, shelfL.Z)
@@ -1019,32 +1186,24 @@ local function spawnCustomer(index)
 		if not model.Parent then
 			return
 		end
-		-- 예약을 풀고 한 번에 꺼내 판다 (그 사이 yield 없음)
-		shop.reserved = math.max(0, shop.reserved - c.reserved)
-		local reservedN = c.reserved
-		c.reserved = 0
-		local sold, coins, items = 0, 0, nil
-		if shop.owner == owner and owner.Parent then
-			sold, coins, items = Economy.sell(owner, reservedN, ctype)
+		-- D56: 고른 것(찜 = 예약 그대로)을 들고 카운터 앞 줄로. 줄이 꽉 차면 진열대 앞에서 기다림
+		while model.Parent and shop.owner == owner and #shop.queue >= queueMax(shop) do
+			task.wait(0.5)
 		end
-		if sold > 0 then
-			-- 알림창 대신 손님 위에 "+n코인" 글씨 (2026-11-24 사용자, 클라이언트 SaleFloatClient).
-			-- 먹기 시작하면 손에 붙는 달고나가 잠깐 다른 곳에 있어 상자가 틀어지므로 그 전에 잼
-			if saleFloat then
-				local cf, size = model:GetBoundingBox()
-				saleFloat:FireClient(owner, cf.Position + Vector3.new(0, size.Y / 2 + 0.6, 0), coins)
-			end
-			say(model, string.format("%d개 살게요! +%d", sold, coins), 2)
-			task.spawn(Collection.onCustomerSold, owner, ctype.id, sold) -- 손님 도감 하트 (D38)
-			startEating(model, items and items[1] or nil)
-			print(string.format("[Sales] %s Plot%d sold %d (+%d)", owner.Name, index, sold, coins))
-		else
-			say(model, ctype.kind == "vip" and "마음에 드는 게 없네..." or "다 팔렸네...", 2) -- 부엉이는 원하는 것만 (D37)
+		if not model.Parent then
+			return
 		end
-		task.wait(0.6)
-		if model.Parent then
+		if shop.owner ~= owner or not owner.Parent then
+			shop.reserved = math.max(0, shop.reserved - c.reserved)
+			c.reserved = 0
 			leave()
+			return
 		end
+		say(model, string.format("%d개 살게요!", c.reserved), 1.5)
+		c.left = CHK.patience
+		table.insert(shop.queue, c)
+		model:SetAttribute("Patience", 1)
+		syncQueue(index)
 	end)
 end
 
@@ -1057,8 +1216,13 @@ local function clearShop(index)
 		c.model:Destroy()
 	end
 	shop.customers = {}
+	shop.queue = {}
 	shop.reserved = 0
 	shop.owner = nil
+	local plot = Plots.plotAt(index)
+	if plot and plot.model then
+		plot.model:SetAttribute("QueueCount", 0)
+	end
 	refreshShelf(index)
 end
 
@@ -1207,9 +1371,32 @@ function SalesService.init(dataService, economyService, plotService)
 		shelfPlace.Parent = remotes
 	end
 	shelfPlace.OnServerInvoke = placeByTouch
+	-- 계산 (D56): 내 가게 맨 앞 손님. 남의 가게는 못 함
+	local checkoutFn = remotes:FindFirstChild("Checkout")
+	if not checkoutFn then
+		checkoutFn = Instance.new("RemoteFunction")
+		checkoutFn.Name = "Checkout"
+		checkoutFn.Parent = remotes
+	end
+	local lastCheckout = {}
+	checkoutFn.OnServerInvoke = function(player)
+		if lastCheckout[player] and os.clock() - lastCheckout[player] < 0.3 then
+			return { ok = false, reason = "천천히!" }
+		end
+		lastCheckout[player] = os.clock()
+		local _, index = Plots.get(player)
+		local shop = index and shops[index]
+		if not (shop and shop.owner == player) then
+			return { ok = false, reason = "내 가게에서만 계산할 수 있어요" }
+		end
+		return checkout(index, "player")
+	end
+	Players.PlayerRemoving:Connect(function(p)
+		lastCheckout[p] = nil
+	end)
 	for i = 1, G.Plots.count do
 		local plot = Plots.plotAt(i)
-		local shop = { slots = {}, customers = {}, reserved = 0, nextVisit = 0, owner = nil }
+		local shop = { slots = {}, customers = {}, queue = {}, reserved = 0, nextVisit = 0, owner = nil }
 		shops[i] = shop
 		buildShelf(shop, plot)
 		local folder = Instance.new("Folder")
@@ -1253,10 +1440,17 @@ function SalesService.init(dataService, economyService, plotService)
 
 	-- 손님 보내기
 	task.spawn(function()
+		local lastStep = os.clock()
 		while true do
 			task.wait(0.5)
 			local now = os.clock()
+			local dt = now - lastStep
+			lastStep = now
 			for i, shop in pairs(shops) do
+				local okQ, errQ = pcall(stepQueue, i, dt) -- 계산 줄 (D56)
+				if not okQ then
+					warn("[Sales] queue", errQ)
+				end
 				local plot = Plots.plotAt(i)
 				local owner = plot.owner
 				if owner ~= shop.owner then
@@ -1267,7 +1461,8 @@ function SalesService.init(dataService, economyService, plotService)
 				end
 				if owner and owner.Parent and Data.get(owner) and now >= shop.nextVisit then
 					shop.nextVisit = now + interval(owner)
-					if count(shop.customers) < SALES.maxCustomers then
+					-- 줄 선 손님은 빼고 셈 (D56: 계산을 기다리는 동안에도 수요 표대로 손님이 옴, 줄이 차면 진열대 앞에서 기다림)
+					if count(shop.customers) - #shop.queue < CHK.browsingMax then
 						spawnCustomer(i)
 					end
 				end
