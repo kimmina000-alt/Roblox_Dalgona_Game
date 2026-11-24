@@ -1389,6 +1389,16 @@ function SalesService.init(dataService, economyService, plotService)
 		if not (shop and shop.owner == player) then
 			return { ok = false, reason = "내 가게에서만 계산할 수 있어요" }
 		end
+		-- 맨 앞 손님 가까이에서만 (2026-11-26, G.Checkout.reach + 지연 여유 3)
+		local front = shop.queue[1]
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if front and front.model.Parent and root then
+			local p = front.model:GetPivot().Position
+			local flat = Vector3.new(p.X - root.Position.X, 0, p.Z - root.Position.Z)
+			if flat.Magnitude > (CHK.reach or 10) + 3 then
+				return { ok = false, reason = "카운터 앞 손님 가까이에서 계산해요" }
+			end
+		end
 		return checkout(index, "player")
 	end
 	Players.PlayerRemoving:Connect(function(p)

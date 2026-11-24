@@ -92,7 +92,8 @@ local function store(player, list)
 	Data.update(player, function(d)
 		for id, n in pairs(list) do
 			if n > 0 then
-				d.ingredients[id] = math.min(G.IngredientMax, (d.ingredients[id] or 0) + n)
+				-- 살 때 한도(봉지·배달 포함)를 이미 봤으므로 그대로 넣음 (D57: 한도를 넘어도 없애지 않음)
+				d.ingredients[id] = (d.ingredients[id] or 0) + n
 				moved += n
 			end
 		end
@@ -173,8 +174,9 @@ local function phone(player, id, packs)
 	local n = ing.pack * packs
 	local cost = math.ceil(ing.price * packs * M.phoneMult)
 	local have = (d.ingredients[id] or 0) + pending(player, id)
-	if have + n > G.IngredientMax then
-		return { ok = false, reason = string.format("%s은(는) %d개까지 보관해요 (지금 %d개)", ing.name, G.IngredientMax, have) }
+	local cap = G.ingredientMax(d, id) -- 냉장고·서랍장 한도 (D57)
+	if have + n > cap then
+		return { ok = false, reason = string.format("%s은(는) %d개까지 보관해요 (지금 %d개)", ing.name, cap, have) }
 	end
 	if d.coins < cost then
 		return { ok = false, reason = string.format("코인이 모자라요 (%d코인 필요)", cost) }

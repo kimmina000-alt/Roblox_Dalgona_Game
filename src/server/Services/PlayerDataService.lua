@@ -250,6 +250,23 @@ PlayerDataService.MIGRATIONS = {
 			end
 		end
 	end,
+	[17] = function(data)
+		-- v16 → v17 (2026-11-26 D57): 진열장·냉장고·서랍장이 구매형.
+		-- 가게를 빌렸거나 산 저장은 예전 61칸을 쓰던 셈 → 선반 진열대 2(G.DisplayMigrateTier)를 줌. 노점이면 기본(0).
+		-- 새 칸 수보다 뒤 칸에 놓인 달고나는 보관함으로 (없어지지 않음). 냉장고·서랍장은 기본(0), 이미 더 가진 재료는 그대로
+		local shop = type(data.shop) == "table" and data.shop or nil
+		local hadShop = shop ~= nil and (shop.state == "rented" or shop.state == "owned")
+		data.displayTier = hadShop and G.DisplayMigrateTier or 0
+		data.storageTier = { fridge = 0, drawer = 0 }
+		if hadShop and type(data.stock) == "table" then
+			local slots = math.min(G.Display[data.displayTier + 1].slots, G.Sales.shelfSlots)
+			for _, it in ipairs(data.stock) do
+				if type(it) == "table" and type(it.sl) == "number" and it.sl > slots then
+					it.sl = nil
+				end
+			end
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))

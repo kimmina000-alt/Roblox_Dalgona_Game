@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 16 -- v16 (2026-11-24 D51): 문어 Mythic → 알바·기계·공장 도안 문어는 범선, Lv25 전이면 해금 뺌 / v15 (2026-11-24 D38): 도감 보상 표시·손님 도감·칭호 / v14 (2026-11-24 D46 재수정): 화로 알바 → 2단계 기계 자리, coalLeft2 없앰, 숙련 교육 환불·전문 교육 → 기계 알바 교육 / v13 (2026-11-24): 두 번째 화구 → 연탄 덮개 / v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
+G.SchemaVersion = 17 -- v17 (2026-11-26 D57): 진열장 단계(displayTier, 가게가 있던 저장은 4) · 냉장고·서랍장 단계, 넘치는 진열은 보관함으로 / v16 (2026-11-24 D51): 문어 Mythic → 알바·기계·공장 도안 문어는 범선, Lv25 전이면 해금 뺌 / v15 (2026-11-24 D38): 도감 보상 표시·손님 도감·칭호 / v14 (2026-11-24 D46 재수정): 화로 알바 → 2단계 기계 자리, coalLeft2 없앰, 숙련 교육 환불·전문 교육 → 기계 알바 교육 / v13 (2026-11-24): 두 번째 화구 → 연탄 덮개 / v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -37,6 +37,8 @@ G.DefaultData = {
 	displayHand = true, -- 진열 알바가 손으로 만든 것도 옮김 (D33, 켜고 끌 수 있음)
 	layout = {}, -- 건설 배치 (D53): [물건 key] = { x, z, r } (부지 로컬 격자, BuildService). 비면 처음 자리
 	bgmOff = false, -- 배경 음악 끔 (설정, GrowthAction("bgmOff", true/false)) → 플레이어 속성 BgmOff
+	displayTier = 0, -- 진열장 단계 0~5 (D57, G.Display). GrowthAction("displayUp")
+	storageTier = { fridge = 0, drawer = 0 }, -- 냉장고·서랍장 단계 0~3 (D57, G.StorageTiers). GrowthAction("storageUp", "fridge" | "drawer")
 	custDex = {}, -- 손님 도감 (D38): [손님 id] = { sold = 판 수, h = 받은 하트 보상 0~3 }
 	titles = { owned = {} }, -- 칭호 (D38): owned = 얻은 이름들, equipped = 단 칭호
 	signGold = false, -- 간판 금테 (D38: 도안 23종 모두 Perfect)
@@ -67,7 +69,7 @@ G.Ingredients = {
 	{ id = "twistTie", name = "빵끈", icon = "🎀", pack = 10, price = 5 }, -- 10개 5코인 (사용자 요청 2026-11-20, 임시값)
 	{ id = "coal", name = "연탄", icon = "⚫", pack = 5, price = 25 }, -- D44 (2026-11-24): 5장 25코인, 1장 = 화로에서 10판 (G.CoalPerMake)
 }
-G.IngredientMax = 999 -- 재료마다 최대 보관량
+G.IngredientMax = 3000 -- 재료마다 최대 보관량 (D57부터 맨 위 단계 값. 실제 한도는 G.ingredientMax(d, id) = 냉장고·서랍장 단계)
 -- 한 번에 살 수 있는 묶음 수 (2026-11-24 사용자 "10, 50, 100 단위로"): 1·5·10팩 = 재료마다 pack × 1/5/10 (설탕 10/50/100회분, 연탄 5/25/50장). 할인 없음
 G.BuyPacks = { 1, 5, 10 }
 -- 가게 냉장고·서랍장 (2026-11-24 사용자 "냉장고랑 냉장고 옆 서랍장 기능 구현", WORK_PRIORITIES 가게 기능 ②③):
@@ -102,8 +104,10 @@ G.PackWindowSeconds = 180 -- 다 만든 뒤 이 시간 안에 포장해야 함
 -- 판매가 (GDD 13장, 기획 확정 2026-11-20): round(도안 가격 × 품질 배율 × 뽑기 보너스 × 포장 1.1)
 G.PackedPriceMult = 1.1
 G.GachaBonusDefault = 1 -- 뽑기(15번)는 아직 없음: 자리만
-function G.salePrice(basePrice, qualityMult, gachaBonus, packed)
-	local v = (basePrice or 0) * (qualityMult or 1) * (gachaBonus or G.GachaBonusDefault) * (packed and G.PackedPriceMult or 1)
+-- 손 제작품 "수제" (D58, 2026-11-26 확정): 손으로 만든 것(진열 아이템 hand = true)만 판매가 ×1.5. 기계·알바·공장 것은 ×1
+G.HandMadeMult = 1.5
+function G.salePrice(basePrice, qualityMult, gachaBonus, packed, hand)
+	local v = (basePrice or 0) * (qualityMult or 1) * (gachaBonus or G.GachaBonusDefault) * (packed and G.PackedPriceMult or 1) * (hand and G.HandMadeMult or 1)
 	return math.floor(v + 0.5)
 end
 
@@ -140,11 +144,11 @@ G.LevelCoins = {
 	[16] = 1000, [17] = 1000, [18] = 1000, [19] = 1000, [20] = 1000,
 	[21] = 1200, [22] = 1200, [23] = 1200, [24] = 1200, [25] = 1200, -- 기획안
 }
-G.ExpHand = { base = 10, Excellent = 10, Perfect = 20 } -- 손 제작 성공 EXP + 등급 보너스
+G.ExpHand = { base = 15, Excellent = 10, Perfect = 20 } -- D58: base 10 → 15 -- 손 제작 성공 EXP + 등급 보너스
 G.ExpBurnt = 2 -- 태우거나 모양이 망가져도(Fail) 조금은 배움
 G.ExpHelper = 5 -- 알바생이 만든 1개 (손의 절반, 기획 확정 2026-11-20)
 G.ExpMachine = 1 -- 2~5단계 기계·공장 1개 (Phase 5에서 씀. 5씩 주면 Lv10 뒤 레벨이 설비값보다 너무 빨리 오름)
-G.ExpDailyGoal = 15 -- 일일 목표 1개 (GDD 6장)
+G.ExpDailyGoal = 30 -- 일일 목표 1개 (GDD 6장, D58: 15 → 30)
 
 function G.expToNext(level)
 	if level >= G.MaxLevel then
@@ -279,7 +283,7 @@ G.HelperPosts = {
 	{ key = "pink", name = "분홍 자판기", kind = "station", stage = 3, wage = 3 },
 	{ key = "line", name = "연속 생산 설비", kind = "station", stage = 4, wage = 3 },
 	{ key = "display", name = "진열", kind = "display", level = 5, wage = 2 },
-	{ key = "cashier", name = "계산", kind = "cashier", level = 6, wage = 2 },
+	{ key = "cashier", name = "계산", kind = "cashier", level = 5, wage = 2 }, -- D58: Lv6 → 5 (2단계 기계와 같은 때)
 	{ key = "f_sugar", name = "공장 ① 설탕 넣기", kind = "factory", factoryKey = "sugar", wage = 6 },
 	{ key = "f_boil", name = "공장 ② 끓이기", kind = "factory", factoryKey = "boil", wage = 6 },
 	{ key = "f_press", name = "공장 ③ 붓기·찍기", kind = "factory", factoryKey = "press", wage = 6 },
@@ -287,7 +291,16 @@ G.HelperPosts = {
 	{ key = "f_pack", name = "공장 ⑤ 포장", kind = "factory", factoryKey = "pack", wage = 6 },
 }
 -- 진열 알바 (D33): 보관함 → 진열대 빈 칸, 4초에 1개. 옮길 게 없으면 쉼(급여 없음). 손 제작품도 옮길지 = 데이터 displayHand (기본 켬)
-G.DisplayHelper = { seconds = 4 }
+-- 2026-11-26 사용자: "진열 알바가 너무 빨라서 걷는 모션이 안 보임" → walkSpeed 6.5 (걸어간 길 길이로 시간을 셈),
+--   한 번 갔다 올 때까지 다음 것을 안 놓음. 걷는 길 (사진: 카운터 왼쪽 끝 → 카운터와 손 작업대 사이 안쪽 바닥 → 오른쪽 벽 걸이판,
+--   가게 앞쪽 탁자·의자 쪽은 안 다님): 부지 로컬 경유점 route (틀 PlotLayout에 부품 DisplayRoute1, 2, …를 넣으면 그 자리가 우선).
+--   목표 칸이 부지 로컬 x < routeMinX(걸이판·작은 탁자 쪽)일 때만 경유점을 지나고, 마지막 경유점 → 칸 앞은 길 찾기(HelperPath)
+G.DisplayHelper = {
+	seconds = 4, -- 다음 것을 놓기까지 가장 짧은 간격
+	walkSpeed = 6.5, -- 스터드/초
+	routeMinX = 0,
+	route = { Vector3.new(9, 0, -13.5), Vector3.new(0, 0, -12), Vector3.new(-9, 0, -12.5) },
+}
 -- 계산 알바 (D43, D56에서 바뀜): 자동 계산(맨 앞 손님 0.8초, G.Checkout) · 모든 판매 팁 +5% · 손님 수요 +10%. 자리 비운 동안은 안 함
 -- 들고 가서 진열하는 알바 (2026-11-24 사용자): 4단계 기계 알바·공장 포장 알바는 만든 달고나를 보관함에 두고, 하나씩 들고 빈 진열 칸으로
 -- 걸어가 놓음 (가는 동안 그 칸을 예약). posts = 역할 key → 옮기는 달고나 src (item.src). 연출은 제작 세션 (미니미 속성 Carry*)
@@ -324,7 +337,7 @@ G.OrderCustomer = {
 	every = 180, -- 주문이 끝나고(채움·떠남) 다음 주문 손님까지 초 (±spread)
 	spread = 0.3,
 	firstDelay = 60, -- 들어와서 첫 주문 손님까지 (±spread)
-	wait = 180, -- 기다리는 초
+	wait = 240, -- 기다리는 초 (D58: 180 → 240, 손 한 판 60~90초)
 	waitBonus = 60, -- Epic 이상 도안이거나 포장 주문이면 더
 	newMult = 1.5, -- 주문 뒤 새로 만든 것: 판매가 ×
 	preMult = 1.3, -- 주문 전에 만들어 둔 것 (진열대·보관함)
@@ -401,10 +414,13 @@ G.Checkout = {
 	queueMax = 4, -- 가게 줄 (카운터 앞부터 뒤로)
 	stallQueueMax = 2, -- 노점: 작업대 옆 쟁반 앞
 	gap = 2.6, -- 줄 사이 (스터드)
-	patience = 45, -- 줄에서 기다리는 초. 다 되면 달고나를 돌려놓고 떠남 (벌 없음)
+	patience = 60, -- 줄에서 기다리는 초 (D58: 45 → 60). 다 되면 달고나를 돌려놓고 떠남 (벌 없음)
 	makingSlow = 0.5, -- 주인이 손으로 만드는 중(플레이어 속성 Making)이면 인내가 이 배로 줄어듦
 	fastTip = { within = 5, mult = 0.05 }, -- 맨 앞이 된 지 5초 안에 플레이어가 계산하면 팁 +5% (계산 알바 팁과 겹치지 않음)
 	cashierSeconds = 0.8, -- 계산 알바 자동 계산 (맨 앞 손님마다)
+	-- [계산] 버튼 거리 (2026-11-26): 맨 앞 손님은 카운터 앞(CustomerSpot, 카운터 앞면에서 약 1.6), 주인은 카운터 뒤에서 약 9 →
+	-- PromptDistance 6 + 카운터 깊이 ≈ 10. 서버는 reach + 3(지연 여유)보다 멀면 거절
+	reach = 10,
 	browsingMax = 3, -- 줄 말고 진열대 쪽에서 고르거나 기다리는 손님 (예전 G.Sales.maxCustomers 자리)
 }
 
@@ -748,9 +764,70 @@ function G.shopOpen(d)
 	return s.state == "rented" and not s.closed
 end
 
--- 진열 칸: 가게가 열려 있으면 진열대 10칸, 아니면 노점 쟁반 5칸
+-- 진열장 업그레이드 6단계 (D57, GDD 17장, 2026-11-26 사용자 승인). d.displayTier = 0~5 (산 단계, 기본 0).
+-- slots = 그 단계까지 진열 칸 합계. 칸은 번호 순서로 열림 (1~4 유리 진열장 → 걸이판 → 작은 탁자, SalesService 칸 번호).
+-- 가구에 실제로 있는 칸(G.Sales.shelfSlots 61)보다 많으면 그만큼만 (벽면 진열장 70칸 자리는 가게 3D·UI 세션이 붙이면 늘림)
+G.Display = {
+	{ name = "기본 진열장", level = 3, cost = 0, slots = 8 },
+	{ name = "유리 진열장 1", level = 4, cost = 600, slots = 16 },
+	{ name = "유리 진열장 2", level = 6, cost = 1500, slots = 24 },
+	{ name = "선반 진열대 1", level = 10, cost = 4000, slots = 36 },
+	{ name = "선반 진열대 2", level = 15, cost = 12000, slots = 50 },
+	{ name = "벽면 진열장", level = 20, cost = 30000, slots = 70 },
+}
+G.DisplayMigrateTier = 4 -- 예전 61칸을 쓰던 저장은 선반 진열대 2(50칸)를 준 것으로 (v17)
+
+function G.displayTier(d)
+	return math.clamp(math.floor(tonumber(d and d.displayTier) or 0), 0, #G.Display - 1)
+end
+
+-- 진열 칸: 가게가 열려 있으면 산 진열장 단계만큼, 아니면 노점 쟁반 5칸
 function G.shelfSlots(d)
-	return G.shopOpen(d) and G.Sales.shelfSlots or G.Shop.stallSlots
+	if not G.shopOpen(d) then
+		return G.Shop.stallSlots
+	end
+	return math.min(G.Display[G.displayTier(d) + 1].slots, G.Sales.shelfSlots)
+end
+
+-- 냉장고·서랍장 (D57, 구매형): 한도는 재료마다. d.storageTier = { fridge = 0~3, drawer = 0~3 }
+G.StorageTiers = {
+	fridge = {
+		{ name = "냉장고", level = 1, cost = 0, max = 100 },
+		{ name = "큰 냉장고", level = 5, cost = 1500, max = 300 },
+		{ name = "업소용 냉장고", level = 12, cost = 8000, max = 1000 },
+		{ name = "대형 저온 창고", level = 20, cost = 30000, max = 3000 },
+	},
+	drawer = {
+		{ name = "서랍장", level = 1, cost = 0, max = 100, coal = 20 },
+		{ name = "큰 서랍장", level = 5, cost = 800, max = 300, coal = 60 },
+		{ name = "업소용 서랍장", level = 12, cost = 4000, max = 1000, coal = 200 },
+		{ name = "대형 서랍장", level = 20, cost = 15000, max = 3000, coal = 600 },
+	},
+}
+
+-- 재료가 들어가는 곳 ("fridge" | "drawer", G.StorageGroups)
+function G.storageGroupOf(id)
+	for _, g in ipairs(G.StorageGroups) do
+		if table.find(g.ids, id) then
+			return g.key
+		end
+	end
+	return "drawer"
+end
+
+function G.storageTier(d, key)
+	local t = d and type(d.storageTier) == "table" and d.storageTier[key]
+	return math.clamp(math.floor(tonumber(t) or 0), 0, #G.StorageTiers[key] - 1)
+end
+
+-- 재료 하나의 보관 한도 (산 단계 기준, 연탄은 따로). 이미 더 가진 건 없애지 않고 더 사지만 못 함
+function G.ingredientMax(d, id)
+	local key = G.storageGroupOf(id)
+	local tier = G.StorageTiers[key][G.storageTier(d, key) + 1]
+	if id == "coal" then
+		return tier.coal or tier.max
+	end
+	return tier.max
 end
 
 ---------------------------------------------------------------- 판매: 진열대 + 손님 NPC (Phase 3, D12)
@@ -761,8 +838,8 @@ G.Sales = {
 	-- { 방문 간격(초), 1명당 최소, 최대 }
 	-- 1단계(연탄 화로)는 레벨 구간으로 (D39, 2026-11-24: 국자 수 대신). { 이 레벨까지, 방문 간격, 최소, 최대 }
 	demandByLevel = {
-		{ 2, 30, 1, 1 }, -- Lv1~2 노점: 분당 2
-		{ 4, 24, 1, 1 }, -- Lv3~4 가게: 분당 2.5
+		{ 2, 60, 1, 1 }, -- Lv1~2 노점: 분당 1 (D58: 30 → 60초, 손 한 판 75초 기준)
+		{ 4, 50, 1, 1 }, -- Lv3~4 가게: 분당 1.2 (D58: 24 → 50초)
 		{ math.huge, 20, 1, 2 }, -- Lv5~ (D46: 2단계 기계를 살 수 있는 때, 아직 안 샀으면): 분당 약 4.5
 	},
 	-- 2~5단계: 기계·공장

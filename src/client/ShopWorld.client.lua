@@ -176,7 +176,9 @@ local function busy(m, now)
 		return true
 	end
 	local at = m:GetAttribute("DeliverAt")
-	return type(at) == "number" and now - at < DELIVER_SHOW
+	local dur = m:GetAttribute("DeliverDur") -- 갔다 오는 시간 = 2배 (2026-11-26, 걷기가 느려짐)
+	local show = type(dur) == "number" and math.max(DELIVER_SHOW, dur * 2 + 0.5) or DELIVER_SHOW
+	return type(at) == "number" and now - at < show
 end
 
 local hiddenGui = {} -- [BillboardGui] = 원래 Enabled
