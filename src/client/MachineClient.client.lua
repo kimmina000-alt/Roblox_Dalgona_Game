@@ -76,6 +76,11 @@ local function setupMachine(plot, m, force)
 	if old and old.board then
 		old.board:Destroy()
 	end
+	for _, e in ipairs(old and old.parts or {}) do
+		if e.look then
+			e.look:Destroy()
+		end
+	end
 	local rec = { plot = plot, slot = slot, model = m, parts = {}, lastMade = old and old.lastMade or slot:GetAttribute("MadeAt") }
 	for _, d in ipairs(m:GetDescendants()) do
 		if d:IsA("BasePart") then
@@ -89,7 +94,7 @@ local function setupMachine(plot, m, force)
 					d:SetAttribute("AnimBase", d.CFrame)
 					d:SetAttribute("AnimColor", d.Color)
 				end
-				table.insert(rec.parts, { p = d, a = a, cf = d:GetAttribute("AnimBase"), color = d:GetAttribute("AnimColor"), mat = d.Material, axis = axis })
+				table.insert(rec.parts, { p = d, a = a, cf = d:GetAttribute("AnimBase"), color = d:GetAttribute("AnimColor"), mat = d.Material, axis = axis, thin = axis })
 			end
 		end
 	end
@@ -193,6 +198,42 @@ local function playMade(rec)
 	end
 end
 
+-- 창 속 달고나 (2·3단계 WindowDalgona, 서버 MachineDisplay가 무늬 없는 원판으로 만듦): 내 화면에서 원판을 숨기고
+-- 그 기계에서 고른 도안 모양(Shared.DalgonaLook)으로 바꿔 보임 (2026-11-25 "결과물에 달고나 그림 도안 선택한 걸로")
+local function windowLook(rec, e)
+	local p = e.p
+	if p.Name ~= "WindowDalgona" then
+		return
+	end
+	local shape = rec.slot:GetAttribute("Shape")
+	if type(shape) ~= "string" or shape == "" then
+		shape = "Circle"
+	end
+	if not e.look or e.lookShape ~= shape or not e.look.Parent then
+		if e.look then
+			e.look:Destroy()
+		end
+		local s = p.Size
+		local d = math.max(math.min(s.X, s.Y), math.min(s.Y, s.Z), math.min(s.X, s.Z))
+		e.look = DalgonaLook.build({ s = shape, g = "Good" }, d)
+		e.lookShape = shape
+		e.look.Name = "WindowLook"
+		e.look.Parent = rec.model
+		p.Transparency = 1
+		local mark = p.Parent and p.Parent:FindFirstChild(p.Name .. "Mark")
+		if mark and mark:IsA("BasePart") then
+			mark.Transparency = 1
+		end
+	end
+	-- 원판의 얇은 축 = 그림 면 방향 (DalgonaLook은 면이 로컬 +Y)
+	local n = p.CFrame:VectorToWorldSpace(e.thin)
+	local r = n:Cross(Vector3.yAxis)
+	if r.Magnitude < 1e-3 then
+		r = p.CFrame.RightVector
+	end
+	e.look:PivotTo(CFrame.fromMatrix(p.Position, r.Unit, n))
+end
+
 -- ── 매 프레임: 움직임 · 표시등 · 상태판 ──
 local OFF_DIM = 0.45
 RunService.Heartbeat:Connect(function()
@@ -259,6 +300,7 @@ RunService.Heartbeat:Connect(function()
 						-- 창 속 달고나: 돌아가는 동안 살짝 흔들림
 						local w = running and math.sin(now * 3 + e.cf.Position.X * 2) * 0.06 or 0
 						p.CFrame = e.cf * CFrame.Angles(0, 0, w)
+						windowLook(rec, e)
 					end
 				end
 			end
