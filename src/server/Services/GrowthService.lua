@@ -27,6 +27,7 @@ local Production = require(script.Parent:WaitForChild("ProductionService")) -- �
 local Collection = require(script.Parent:WaitForChild("CollectionService")) -- 도감 보상·칭호 (D38)
 local WorkstationBuilder = require(script.Parent:WaitForChild("WorkstationBuilder")) -- 화로 연탄 모습 (D44)
 local HelperPath = require(script.Parent:WaitForChild("HelperPath")) -- 알바생이 벽을 돌아 걷는 길 (2026-11-24)
+local WalkPath = require(Shared:WaitForChild("WalkPath")) -- 진열 알바 경유점 길 (2026-11-26)
 
 local GrowthService = {}
 
@@ -289,6 +290,67 @@ local function actionTrain(d, key)
 end
 
 -- 알바생 index를 제작대 key로 (""면 대기). 그 자리에 다른 알바생이 있으면 서로 바꿈 (D34: 언제든 공짜로)
+-- 진열장 한 단계 올리기 (D57, G.Display). 가게가 있어야 (노점은 쟁반)
+local function hasWallCase(player)
+	local plot = Plots.get(player)
+	if not (plot and plot.model) then
+		return false
+	end
+	for _, p in ipairs(plot.model:GetDescendants()) do
+		if p:IsA("BasePart") and p:GetAttribute("Role") == "벽면 진열장" then
+			return true
+		end
+	end
+	return false
+end
+
+local function actionDisplayUp(player, d)
+	local tier = G.displayTier(d)
+	local nxt = G.Display[tier + 2]
+	if not nxt then
+		return false, "진열장이 이미 가장 커요"
+	end
+	-- 벽면 진열장 칸(62~)은 가게 3D에 그 가구가 있어야 (3D 세션 WallDisplayCase, 사용자가 가져오면)
+	if tier + 1 >= G.DisplayWallTier and not hasWallCase(player) then
+		return false, nxt.name .. "은(는) 준비 중이에요"
+	end
+	if not (d.shop and (d.shop.state == "rented" or d.shop.state == "owned")) then
+		return false, "가게를 빌려야 진열장을 키울 수 있어요"
+	end
+	if (d.level or 1) < nxt.level then
+		return false, string.format("%s은(는) Lv%d부터예요", nxt.name, nxt.level)
+	end
+	if d.coins < nxt.cost then
+		return false, string.format("코인이 모자라요 (%d코인 필요)", nxt.cost)
+	end
+	d.coins -= nxt.cost
+	d.displayTier = tier + 1
+	return true, string.format("%s! 진열 칸 %d칸", nxt.name, math.min(nxt.slots, G.Sales.shelfSlots))
+end
+
+-- 냉장고·서랍장 한 단계 올리기 (D57, G.StorageTiers). key = "fridge" | "drawer"
+local function actionStorageUp(d, key)
+	local list = G.StorageTiers[key]
+	if not list then
+		return false, "잘못된 요청"
+	end
+	local tier = G.storageTier(d, key)
+	local nxt = list[tier + 2]
+	if not nxt then
+		return false, list[tier + 1].name .. "이(가) 이미 가장 커요"
+	end
+	if (d.level or 1) < nxt.level then
+		return false, string.format("%s은(는) Lv%d부터예요", nxt.name, nxt.level)
+	end
+	if d.coins < nxt.cost then
+		return false, string.format("코인이 모자라요 (%d코인 필요)", nxt.cost)
+	end
+	d.coins -= nxt.cost
+	d.storageTier = type(d.storageTier) == "table" and d.storageTier or { fridge = 0, drawer = 0 }
+	d.storageTier[key] = tier + 1
+	return true, string.format("%s! 재료마다 %d개까지%s", nxt.name, nxt.max, nxt.coal and string.format(" (연탄 %d장)", nxt.coal) or "")
+end
+
 local function actionSetPost(d, index, key)
 	local h = d.partTimers[index]
 	if not h then
@@ -365,6 +427,10 @@ function GrowthService.action(player, what, a, b)
 			ok, msg = actionTrain(dd, a)
 		elseif what == "factorySkill" and type(a) == "string" then
 			ok, msg = Factory.buySkill(dd, a) -- 공장 손재주 한 단계 (D49, 공정 key)
+		elseif what == "displayUp" then
+			ok, msg = actionDisplayUp(player, dd) -- 진열장 단계 (D57)
+		elseif what == "storageUp" and type(a) == "string" then
+			ok, msg = actionStorageUp(dd, a) -- 냉장고·서랍장 단계 (D57)
 		elseif what == "helperPost" and type(a) == "number" and type(b) == "string" then
 			ok, msg = actionSetPost(dd, math.floor(a), b)
 		elseif what == "helperShape" and type(a) == "number" and type(b) == "string" then
@@ -659,18 +725,73 @@ end
 local Sales = nil -- SalesService (칸 자리), 처음 쓸 때 가져옴
 
 -- 미니미가 그 칸으로 들고 가는 연출 신호 (클라 HelperLadles): 벽을 돌아가는 길(WalkPath)을 먼저 찾고 DeliverSlot·DeliverAt
-local function signalDeliver(player, m, slot)
+-- 진열 알바 걷는 길 (2026-11-26 사용자 사진): 걸이판·작은 탁자 쪽 칸이면 정해 둔 경유점(G.DisplayHelper.route 또는 틀 부품
+-- DisplayRoute1, 2, …)을 지나고, 마지막 경유점 → 칸 앞은 길 찾기. 반환 = WalkPath 문자열 또는 nil (경유점을 안 씀)
+local function displayRoute(player, from, to)
+	local DH = G.DisplayHelper
+	local plot = Plots.get(player)
+	if not (plot and plot.cframe and DH.route) then
+		return nil
+	end
+	local cf = plot.cframe
+	if cf:PointToObjectSpace(to).X > DH.routeMinX then
+		return nil
+	end
+	local pts = { from }
+	for k = 1, 20 do
+		local part = plot.model:FindFirstChild("DisplayRoute" .. k, true)
+		if not (part and part:IsA("BasePart")) then
+			break
+		end
+		table.insert(pts, Vector3.new(part.Position.X, from.Y, part.Position.Z))
+	end
+	if #pts == 1 then
+		for _, v in ipairs(DH.route) do
+			local w = cf * Vector3.new(v.X, 0, v.Z)
+			table.insert(pts, Vector3.new(w.X, from.Y, w.Z))
+		end
+	end
+	local last = pts[#pts]
+	local leg = WalkPath.decode(HelperPath.wait(last, to) or nil)
+	if leg then
+		for j = 2, #leg.points do
+			table.insert(pts, leg.points[j])
+		end
+	else
+		local flat = Vector3.new(to.X, last.Y, to.Z)
+		local away = last - flat
+		table.insert(pts, away.Magnitude > 2.4 and flat + away.Unit * 2.2 or last)
+	end
+	return WalkPath.encode(pts)
+end
+
+-- 미니미가 그 칸으로 들고 가는 연출 신호 (클라 HelperCarry): 길(WalkPath)·걷는 시간(DeliverDur)을 먼저 정하고 DeliverSlot·DeliverAt.
+-- 다녀오는 동안(st.busyUntil)은 다음 것을 안 놓음 (2026-11-26 "걷는 모션이 보이게")
+local function signalDeliver(player, m, slot, st)
+	if st then
+		st.busyUntil = os.clock() + 10 -- 길을 찾는 동안 (아래에서 실제 시간으로 바꿈)
+	end
 	task.spawn(function()
 		Sales = Sales or require(script.Parent:WaitForChild("SalesService"))
 		local from = m:GetPivot().Position
 		local to = Sales.slotPosition(player, slot)
-		local path = to and HelperPath.wait(from, to) or false
+		local path = to and (displayRoute(player, from, to) or HelperPath.wait(from, to)) or false
 		if not m.Parent then
+			if st then
+				st.busyUntil = nil
+			end
 			return
 		end
+		local DH, CH = G.DisplayHelper, G.CarryHelpers
+		local len = to and HelperPath.length(path, from, to) or 0
+		local dur = math.max(CH.minWalk, len / DH.walkSpeed) + CH.pickSeconds
 		m:SetAttribute("WalkPath", path or "")
 		m:SetAttribute("DeliverSlot", slot)
+		m:SetAttribute("DeliverDur", dur)
 		m:SetAttribute("DeliverAt", workspace:GetServerTimeNow())
+		if st then
+			st.busyUntil = os.clock() + dur * 2
+		end
 	end)
 end
 
@@ -706,7 +827,8 @@ local function stepRole(player, d, i, h, st, dt, p)
 	st.status = "work"
 	st.t += dt
 	setHelperText(st, string.format("알바생 %d · 진열 중", i))
-	if st.t < G.DisplayHelper.seconds then
+	payWage(player, st, p, dt) -- 일하는 시간만큼 (다녀오는 시간 포함, 2026-11-26)
+	if st.t < G.DisplayHelper.seconds or (st.busyUntil and os.clock() < st.busyUntil) then
 		return
 	end
 	st.t = 0
@@ -720,11 +842,8 @@ local function stepRole(player, d, i, h, st, dt, p)
 		it.pp = nil
 		placed = slot
 	end)
-	if placed then
-		payWage(player, st, p, G.DisplayHelper.seconds)
-		if st.model and st.model.Parent then
-			signalDeliver(player, st.model, placed)
-		end
+	if placed and st.model and st.model.Parent then
+		signalDeliver(player, st.model, placed, st)
 	end
 end
 

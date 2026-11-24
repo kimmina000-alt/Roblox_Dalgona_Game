@@ -226,8 +226,14 @@ local function displaySignal(m, plot, now)
 	if not to then
 		return nil
 	end
-	local walk = math.max(CH.minWalk or 1.5, Vector3.new(to.X - home.X, 0, to.Z - home.Z).Magnitude / (CH.speed or 7))
-	local dur = walk + PICK
+	-- 걷는 시간 = 서버가 걸어갈 길 길이로 정한 DeliverDur (2026-11-26 "너무 빨라서 걷는 모션이 안 보임": 곧은 거리로 세면
+	-- 돌아가는 길을 더 빨리 걸었음). 없으면 예전처럼 곧은 거리
+	local dur = m:GetAttribute("DeliverDur")
+	if type(dur) ~= "number" or dur <= 0 then
+		local DH = GrowthConfig.DisplayHelper or {}
+		local walk = math.max(CH.minWalk or 1.5, Vector3.new(to.X - home.X, 0, to.Z - home.Z).Magnitude / (DH.walkSpeed or CH.speed or 7))
+		dur = walk + PICK
+	end
 	local age = now - at
 	if age < 0 or age >= dur * 2 then
 		return { state = "" }

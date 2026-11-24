@@ -52,6 +52,17 @@ local function snapshot(player, data)
 			end
 			return t
 		end)(),
+		-- 재료마다 보관 한도 (D57 냉장고·서랍장 단계): ingredientMax[id], 단계 storageTier = { fridge, drawer }, 진열장 단계·칸
+		ingredientMax = (function()
+			local t = {}
+			for _, ing in ipairs(G.Ingredients) do
+				t[ing.id] = G.ingredientMax(data, ing.id)
+			end
+			return t
+		end)(),
+		storageTier = { fridge = G.storageTier(data, "fridge"), drawer = G.storageTier(data, "drawer") },
+		displayTier = G.displayTier(data),
+		shelfSlots = G.shelfSlots(data),
 		stock = G.storedCount(data), -- 보관함 (진열대 칸은 따로, D42)
 		stockMax = G.stockMax(data),
 		plot = player:GetAttribute("PlotIndex"),
@@ -298,8 +309,11 @@ function EconomyService.buy(player, ingredientId, packs)
 		end
 	end
 	local have = (data.ingredients[ing.id] or 0) + (market and market.pending(player, ing.id) or 0)
-	if have + ing.pack * packs > G.IngredientMax then
-		return { ok = false, reason = string.format("%s은(는) %d개까지 보관해요 (지금 %d개)", ing.name, G.IngredientMax, have) }
+	-- 냉장고·서랍장 한도 (D57, 재료마다). 넘게 사려면 업그레이드
+	local cap = G.ingredientMax(data, ing.id)
+	if have + ing.pack * packs > cap then
+		local where = G.storageGroupOf(ing.id) == "fridge" and "냉장고를" or "서랍장을"
+		return { ok = false, reason = string.format("%s은(는) %d개까지 보관해요 (지금 %d개) · %s 키우면 더 넣어요", ing.name, cap, have, where) }
 	end
 	if data.coins < cost then
 		return { ok = false, reason = string.format("코인이 모자라요 (%d코인 필요)", cost) }
@@ -479,7 +493,7 @@ function EconomyService.pack(player)
 			d.ingredients[id] = math.max(0, (d.ingredients[id] or 0) - n)
 		end
 		item.pk = true
-		item.p = G.salePrice(item.b or item.p, item.b and item.m or 1, item.gb or G.GachaBonusDefault, true)
+		item.p = G.salePrice(item.b or item.p, item.b and item.m or 1, item.gb or G.GachaBonusDefault, true, item.hand and item.b ~= nil)
 	end)
 	lastMade[player] = nil
 	fire("packed", player)
@@ -526,7 +540,7 @@ function EconomyService.onPpopgi(player, shape, res)
 				copy.sl = nil
 				copy.pk = false
 				copy.gb = nil
-				copy.p = G.salePrice(copy.b or copy.p, copy.b and copy.m or 1, G.GachaBonusDefault, false)
+				copy.p = G.salePrice(copy.b or copy.p, copy.b and copy.m or 1, G.GachaBonusDefault, false, copy.hand and copy.b ~= nil)
 				copy.x = true -- 뽑기 덤
 				table.insert(d.stock, copy)
 				added += 1
@@ -561,8 +575,9 @@ function EconomyService.onMade(player, shape, result)
 				m = result.mult or 1,
 				pk = false,
 				plain = plain or nil,
+				hand = true, -- 손 제작 "수제" (D58: 판매가 ×G.HandMadeMult)
 			}
-			item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false)
+			item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false, true)
 			table.insert(d.stock, item)
 			lastMade[player] = { item = item, t = os.clock() }
 			reward.stocked = true

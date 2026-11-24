@@ -57,7 +57,8 @@ local busy = false
 local function refresh()
 	for id, t in pairs(haveText) do
 		local n = state and state.ingredients and state.ingredients[id] or 0
-		t.Text = string.format("보유 %d / %d", n, G.IngredientMax)
+		local cap = state and state.ingredientMax and state.ingredientMax[id] or G.IngredientMax -- 냉장고·서랍장 한도 (D57)
+		t.Text = string.format("보유 %d / %d", n, cap)
 	end
 	for _, info in ipairs(buyButtons) do
 		UI.setButton(info.button, { Enabled = state ~= nil and state.coins >= info.price })
