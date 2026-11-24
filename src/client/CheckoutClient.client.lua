@@ -6,6 +6,7 @@
 --   Queue (1 = 맨 앞, 줄이 아니면 nil), Patience (0~1 남은 인내, 서버가 갱신 — 제작 중 절반 속도도 서버가 셈),
 --   FrontAt (맨 앞이 된 서버 시각), Coins (받을 코인, 선택)
 --   Remotes.Checkout:InvokeServer() → { ok, reason, coins, tip } (맨 앞 손님 하나 계산)
+--   부지 모델 Plot<i> 속성 QueueCount = 줄 선 손님 수. 계산 알바 자동 계산은 서버 Notify만. (판매 세션 확정 2026-11-25)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -235,7 +236,7 @@ task.spawn(function()
 		if was and not making.Enabled then
 			task.wait(0.6) -- 결과 화면이 닫힌 뒤
 			local plot = myPlot()
-			local n = plot and queueCount(plot) or 0
+			local n = plot and (plot:GetAttribute("QueueCount") or queueCount(plot)) or 0 -- 서버 부지 속성 QueueCount
 			if n > 0 then
 				toast(string.format("🧾 손님 %d명이 계산을 기다려요! 카운터로 가요", n))
 			end
