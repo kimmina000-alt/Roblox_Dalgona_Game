@@ -254,6 +254,25 @@ local function itemName(key)
 	return key
 end
 
+-- 받침에 맞는 조사 ("와"/"과", "가"/"이"). 끝이 숫자면 읽는 소리로 (1 일, 3 삼 …)
+local DIGIT_BATCHIM = { ["0"] = true, ["1"] = true, ["3"] = true, ["6"] = true, ["7"] = true, ["8"] = true }
+local function hasBatchim(word)
+	local last
+	for _, cp in utf8.codes(word) do
+		last = cp
+	end
+	if not last then
+		return false
+	end
+	if last >= 0xAC00 and last <= 0xD7A3 then
+		return (last - 0xAC00) % 28 ~= 0
+	end
+	return DIGIT_BATCHIM[utf8.char(last)] == true
+end
+local function josa(word, withBatchim, without)
+	return word .. (hasBatchim(word) and withBatchim or without)
+end
+
 -- 배치 layout이 괜찮나 (부지 i 기준). 반환: ok, 이유
 local function validate(i, layout)
 	local info = capture(i)
@@ -278,7 +297,7 @@ local function validate(i, layout)
 		end
 		for k2, r2 in pairs(rects) do
 			if overlap(r, r2) and (e or layout[k2]) then
-				return false, string.format("%s와(과) %s가 겹쳐요", itemName(key), itemName(k2))
+				return false, string.format("%s %s 겹쳐요", josa(itemName(key), "과", "와"), josa(itemName(k2), "이", "가"))
 			end
 		end
 		rects[key] = r
