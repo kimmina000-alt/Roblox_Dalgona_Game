@@ -412,7 +412,9 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 		local hud = playerGui:FindFirstChild("ShopHud")
 		local shop = hud and hud:FindFirstChild("Shop")
-		if shop and shop.Visible and not sentShop then
+		-- D54: [슈퍼 가기]를 누르면 상점 창 대신 길 안내(workspace.MarketGuide)가 켜짐 → 그것도 이 단계 끝
+		local guideOn = workspace:FindFirstChild("MarketGuide") ~= nil and #workspace.MarketGuide:GetChildren() > 0
+		if ((shop and shop.Visible) or guideOn) and not sentShop then
 			sentShop = true
 			remote:FireServer("shop")
 		end

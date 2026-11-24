@@ -159,6 +159,8 @@ local state = nil
 -- 알바생 줄의 "역할 고르기" → 열린 역할 카드 + 대기 카드 중 하나를 누르면 Remotes.GrowthAction("helperPost", 번호, key | "")
 -- (그 역할에 다른 알바가 있으면 서버가 서로 바꿔 줌). 아직 안 열린 역할은 흐리게 + 여는 조건.
 local POST_ICON = { stove = "🔥", steel = "🥫", pink = "🍬", line = "🏭", display = "🧺", cashier = "💰" }
+-- 역할 한 줄 설명 (D56: 계산 알바 = 자동 계산)
+local POST_DESC = { cashier = "자동 계산 · 팁 +5% · 수요 +10%", display = "보관함 → 진열대" }
 local picker, pickerBody = UI.window({ Name = "RolePicker", Title = "알바 역할 고르기", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(780, 340), ZIndex = 30, Parent = root })
 fit(picker, 780, 365)
 local pickerGrid = new("ScrollingFrame", {
@@ -212,7 +214,8 @@ local function openPicker(i)
 		local ring = new("Frame", { Position = UDim2.fromOffset(10, 10), Size = UDim2.fromOffset(46, 46), BackgroundColor3 = enabled and C.tan or Color3.fromRGB(210, 196, 172), ZIndex = 34, Parent = c }, { UI.corner("round"), UI.stroke(C.woodDark, 2.5) })
 		label({ Text = icon, TextSize = 26, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.fromScale(1, 1), ZIndex = 35, Parent = ring })
 		label({ Text = name, Position = UDim2.fromOffset(62, 8), Size = UDim2.new(1, -68, 0, 40), TextSize = 17, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, TextColor3 = enabled and C.ink or C.soft, ZIndex = 34, Parent = c })
-		label({ Text = sub, Position = UDim2.fromOffset(10, 60), Size = UDim2.new(1, -20, 0, 18), TextSize = 13, FontFace = UI.F.bold, TextColor3 = C.soft, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 34, Parent = c })
+		local subL = label({ Text = sub, Position = UDim2.fromOffset(10, 60), Size = UDim2.new(1, -20, 0, 18), TextSize = 13, FontFace = UI.F.bold, TextColor3 = C.soft, TextScaled = true, ZIndex = 34, Parent = c })
+		new("UITextSizeConstraint", { MaxTextSize = 13, MinTextSize = 9, Parent = subL })
 		if chosen then
 			label({ Text = "✓ 지금 역할", Position = UDim2.fromOffset(10, 86), Size = UDim2.new(1, -20, 0, 28), TextSize = 17, TextColor3 = C.good, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 34, Parent = c })
 			return
@@ -234,7 +237,7 @@ local function openPicker(i)
 		end
 		local o = open[p.key]
 		local icon = POST_ICON[p.key] or (p.kind == "factory" and "⚙️") or "👤"
-		local sub = string.format("급여 30초당 %d", (o and o.wage) or p.wage or 0)
+		local sub = POST_DESC[p.key] or string.format("급여 30초당 %d", (o and o.wage) or p.wage or 0)
 		if o then
 			local holder = o.helper and o.helper ~= pickerFor and string.format("알바생 %d와 바꾸기", o.helper) or "비어 있음"
 			card(p.key, p.name, icon, sub, holder, true, cur == p.key)
@@ -385,7 +388,7 @@ local function render()
 		end
 		local doing = not post and "대기 중 (자리 없음, 급여 없음)" or (h.status == "work" and "일하는 중" or ("쉬는 중: " .. tostring(h.status)))
 		row(page, nextOrder(), string.format("  알바생 %d · %s", i, post and post.name or "대기"),
-			post and string.format("%s · 급여 30초에 %d", doing, wage) or doing, "역할 고르기", #posts > 0, function()
+			post and string.format("%s%s · 급여 30초에 %d", POST_DESC[h.post] and (POST_DESC[h.post] .. " · ") or "", doing, wage) or doing, "역할 고르기", #posts > 0, function()
 				openPicker(i)
 			end)
 		if h.post == "display" then

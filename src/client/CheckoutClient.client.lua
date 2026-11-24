@@ -4,7 +4,8 @@
 --   줄 선 손님마다 머리 위 인내 막대 (45초, 초록 → 노랑 → 빨강). 제작 화면이 끝나면 "손님 n명이 기다려요".
 -- 서버 형식 (저장·부지 세션에 제안, 2026-11-25): 손님 Model(이름 Customer) 속성
 --   Queue (1 = 맨 앞, 줄이 아니면 nil), Patience (0~1 남은 인내, 서버가 갱신 — 제작 중 절반 속도도 서버가 셈),
---   FrontAt (맨 앞이 된 서버 시각), Coins (받을 코인, 선택)
+--   FrontAt (맨 앞이 된 서버 시각). (Coins는 없음 — 계산할 때 정해짐, "+n코인" 글씨는 서버 SaleFloat가 띄움)
+--   손님은 Plot<i>.Customers 폴더 안 Model "Customer". 계산 뒤 손님 말풍선 "고마워요!"는 서버가.
 --   Remotes.Checkout:InvokeServer() → { ok, reason, coins, tip } (맨 앞 손님 하나 계산)
 --   부지 모델 Plot<i> 속성 QueueCount = 줄 선 손님 수. 계산 알바 자동 계산은 서버 Notify만. (판매 세션 확정 2026-11-25)
 
@@ -116,7 +117,9 @@ local function effect(m, coins, tip)
 			coin:Destroy()
 		end)
 	end
-	local text = (coins and string.format("+%d코인", coins) or "계산 완료!") .. (tip and "  💗팁" or "")
+	-- "+n코인"은 서버 SaleFloat가 띄우므로 여기서는 팁만
+	local text = tip and "💗 팁 +" .. math.floor(TIP * 100 + 0.5) .. "%" or "계산 완료!"
+	local _ = coins
 	local t = UI.text({ Text = text, FontFace = UI.F.heavy, TextSize = 15, TextColor3 = C.gold, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0.25, 0), Size = UDim2.fromOffset(120, 18), Visible = false, Parent = bb })
 	task.delay(0.45, function()
 		t.Visible = true
@@ -147,7 +150,7 @@ prompt.Triggered:Connect(function()
 	end
 	busy = false
 	if ok and type(res) == "table" and res.ok then
-		effect(m, res.coins or m:GetAttribute("Coins"), res.tip)
+		effect(m, res.coins, res.tip)
 	else
 		toast((ok and type(res) == "table" and res.reason) or (r and "계산할 수 없어요" or "계산 서버가 아직 없어요"))
 	end
