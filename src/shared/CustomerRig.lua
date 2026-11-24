@@ -11,16 +11,16 @@ return {
 	types = {
 		Ppogeuli = {
 			label = "뽀글이",
-			height = 3.646,
-			mouth = Vector3.new(-0.000, 2.310, -0.662),
-			hand = Vector3.new(0.710, 1.100, -0.020),
+			height = 3.654,
+			mouth = Vector3.new(-0.000, 2.329, -0.826),
+			hand = Vector3.new(1.304, 1.747, 0.000),
 			parts = {
-				Head = { center = Vector3.new(-0.000, 2.808, -0.115), size = Vector3.new(2.030, 1.675, 1.910), joint = Vector3.new(-0.000, 2.100, 0.000) },
-				Body = { center = Vector3.new(-0.000, 1.550, 0.188), size = Vector3.new(1.200, 1.200, 1.375), joint = Vector3.new(-0.000, 0.950, 0.000) },
-				ArmL = { center = Vector3.new(-0.710, 1.478, -0.020), size = Vector3.new(0.488, 1.216, 0.460), joint = Vector3.new(-0.710, 1.880, 0.000) },
-				ArmR = { center = Vector3.new(0.710, 1.478, -0.020), size = Vector3.new(0.488, 1.216, 0.460), joint = Vector3.new(0.710, 1.880, 0.000) },
-				LegL = { center = Vector3.new(-0.288, 0.505, -0.091), size = Vector3.new(0.487, 1.010, 0.650), joint = Vector3.new(-0.288, 0.950, 0.000) },
-				LegR = { center = Vector3.new(0.288, 0.505, -0.091), size = Vector3.new(0.487, 1.010, 0.650), joint = Vector3.new(0.288, 0.950, 0.000) },
+				Head = { center = Vector3.new(-0.000, 2.779, -0.029), size = Vector3.new(2.442, 1.751, 1.825), joint = Vector3.new(-0.000, 1.981, 0.000) },
+				Body = { center = Vector3.new(0.011, 1.330, 0.227), size = Vector3.new(1.617, 1.637, 1.784), joint = Vector3.new(-0.000, 0.765, 0.000) },
+				ArmL = { center = Vector3.new(-0.907, 1.745, 0.000), size = Vector3.new(1.011, 0.412, 0.412), joint = Vector3.new(-0.521, 1.747, 0.000) },
+				ArmR = { center = Vector3.new(0.907, 1.745, 0.000), size = Vector3.new(1.011, 0.412, 0.412), joint = Vector3.new(0.521, 1.747, 0.000) },
+				LegL = { center = Vector3.new(-0.352, 0.411, 0.000), size = Vector3.new(0.608, 0.817, 0.608), joint = Vector3.new(-0.348, 0.817, 0.000) },
+				LegR = { center = Vector3.new(0.352, 0.411, 0.000), size = Vector3.new(0.608, 0.817, 0.608), joint = Vector3.new(0.348, 0.817, 0.000) },
 			},
 		},
 		Kkuldanji = {
