@@ -26,7 +26,7 @@
 
 **묶음 1127 끝남** (main 8b835c5): 진열 알바 걷기 6.5·사진 경로, D57 진열장 6단계·냉장고/서랍장 단계(저장 v17), D58 수치(수제 ×1.5·손 EXP 15·손님 간격 60/50·인내 60·계산 알바 Lv5·주문 240·일일 30), 계산 거리 10, 업그레이드 버튼·수제 도장, 벽면 진열장 칸 62~73. 화면 미확인: 진열 알바 걷기.
 
-**다음 묶음 (1128)**: 사용자 Import 먼저 — 벽면 진열장(wall_case glb → ShopModel.WallDisplayCase, 없으면 6단계 "준비 중"), 손 작업대 앞 긴 진열장·손님 의자(user_furniture glb, 놓을 코드 필요), 임시 기본 NPC(customers_basic glb + feat/basic-npc-1126). 그다음 후보: D47 대량 납품, D35 기계 손 미니게임(2단계 25초·3단계 40초 이하).
+**다음 묶음 (1128)**: 사용자 Import 먼저 — 벽면 진열장(wall_case glb → ShopModel.WallDisplayCase, 없으면 6단계 "준비 중"), 손 작업대 앞 긴 진열장·손님 의자(user_furniture glb, 놓을 코드 필요), 임시 기본 NPC(customers_basic glb + feat/basic-npc-1126). 코드 준비됨: feat/machine-making-1126 d11d30c(D35 2·3단계 기계 직접 만들기, 기계 값 그대로·Perfect 1+EXP, Studio 시험 끝), claude/stage23-user-1126 28862fe(2·3단계 사용자 기계 모델, Studio Edit에만 있음 — 머지 때 장소 저장 필수, 기계 움직임 Anim 없음), docs/machine-making-1126 133f170(D35 조작 세부). 그다음 후보: D47 대량 납품.
 
 ---
 
