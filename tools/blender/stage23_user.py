@@ -25,6 +25,8 @@ bpy.ops.import_scene.gltf(filepath=SRC)
 
 STAGE2 = ["Cube.032", "Cube.033", "Cube.034", "Cube.035", "Cube.036", "Cube.090", "Cylinder.006", "Cylinder.007", "Cylinder.008", "Cylinder.011"]
 STAGE3 = ["Cube.026", "Cube.027", "Cube.028", "Cube.029", "Cube.030", "Cube.031", "Cylinder.003", "Cylinder.004", "Cylinder.005"]
+COIL_TOP = {"Cylinder.003"}                  # 3단계 안 검은 원통(사용자가 동그라미 친 곳) → 윗면에 열선 그림
+COIL_PX = (626.75, 322.25, 27.0)             # 아틀라스 속 1-2 위판의 열선 동그라미 (가운데 x, y, 반지름 픽셀)
 FRONT_MAT = {"Stage2Machine": "Material.009", "Stage3Machine": "Material"}   # 그림 있는 앞면 재질 (1-1 / 2-1)
 
 A = 1024
@@ -116,10 +118,25 @@ def build(name, objs, place_x):
         tmp.from_mesh(me)
         tmp.transform(o.matrix_world)
         src_uv = tmp.loops.layers.uv.active
+        coil = on in COIL_TOP
+        if coil:  # 속이 빈 검은 통: 안쪽 바닥 원판에 2단계 위판의 열선(동그란 코일) 그림을 씌움 (사용자 2026-11-26)
+            zt = max(v.co.z for v in tmp.verts)
+            floor = [f for f in tmp.faces if f.normal.z > 0.9 and f.calc_center_median().z < zt - 0.02]
+            fv = {v for f in floor for v in f.verts}
+            xs1 = [v.co.x for v in fv]
+            ys1 = [v.co.y for v in fv]
+            xc, yc = (min(xs1) + max(xs1)) / 2, (min(ys1) + max(ys1)) / 2
+            R = max(max(xs1) - min(xs1), max(ys1) - min(ys1)) / 2
+            floor = set(floor)
         for f in tmp.faces:
             m = me.materials[f.material_index] if me.materials else None
+            top = coil and f in floor
             for l in f.loops:
-                l[src_uv].uv = remap(l[src_uv].uv.x, l[src_uv].uv.y, m)
+                if top:
+                    cx, cy, rp = COIL_PX
+                    l[src_uv].uv = ((cx + (l.vert.co.x - xc) / R * rp) / A, 1 - (cy - (l.vert.co.y - yc) / R * rp) / A)
+                else:
+                    l[src_uv].uv = remap(l[src_uv].uv.x, l[src_uv].uv.y, m)
             if m and m.name == FRONT_MAT[name]:
                 front_n += f.calc_center_median() * f.calc_area()   # 앞 그림 면들의 무게 중심 (얇은 판은 법선이 양쪽이라 위치로 봄)
                 front_a[0] += f.calc_area()
