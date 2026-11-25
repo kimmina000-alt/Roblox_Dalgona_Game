@@ -62,34 +62,81 @@ local function near(pos, px)
 	return (Pointer.pos - screenOf(pos)).Magnitude < (px or TAP_PX)
 end
 
+-- 다른 화면(HUD·메뉴·기계 창 등) 숨기기. 다른 UI들은 "MakingScreen" 이름만 보고 숨어서, 여기서 직접 끄고 끝나면 켜 둔 것만 다시 켬
+local hiddenGuis = {}
+local function hideOthers(hide)
+	if hide then
+		for _, g in ipairs(player.PlayerGui:GetChildren()) do
+			if g:IsA("ScreenGui") and g.Enabled and g ~= (ui and ui.gui) and g.Name ~= "TouchGui" then
+				g.Enabled = false
+				table.insert(hiddenGuis, g)
+			end
+		end
+	else
+		for _, g in ipairs(hiddenGuis) do
+			if g.Parent then
+				g.Enabled = true
+			end
+		end
+		table.clear(hiddenGuis)
+	end
+end
+
+-- 조작 끄기·켜기 (MakingClient setControls와 같은 방식: PlayerModule이 있으면 끄고, 폰 조이스틱 숨김, 걷기 속도 0)
+local savedSpeed = nil
 local function controls(on)
-	local ok, pm = pcall(function()
-		return require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"))
-	end)
-	if ok and pm then
-		local c = pm:GetControls()
+	local pm = player.PlayerScripts:FindFirstChild("PlayerModule")
+	if pm then
+		local ok, c = pcall(function()
+			return require(pm):GetControls()
+		end)
+		if ok and c then
+			if on then
+				c:Enable()
+			else
+				c:Disable()
+			end
+		end
+	end
+	local touchGui = player.PlayerGui:FindFirstChild("TouchGui")
+	if touchGui then
+		touchGui.Enabled = on
+	end
+	local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+	if hum then
 		if on then
-			c:Enable()
+			if savedSpeed then
+				hum.WalkSpeed = savedSpeed
+				savedSpeed = nil
+			end
 		else
-			c:Disable()
+			savedSpeed = savedSpeed or hum.WalkSpeed
+			hum.WalkSpeed = 0
 		end
 	end
 end
 
--- 위에서 내려다봄 (화면 위 = 기계 뒤 -Z)
-local function camera(sc)
-	local cam = workspace.CurrentCamera
-	cam.CameraType = Enum.CameraType.Scriptable
-	cam.FieldOfView = 50
-	local o = sc.origin.Position
-	local vp = cam.ViewportSize
-	local h = vp.X / math.max(vp.Y, 1) < 1.2 and 26 or 15.5
-	cam.CFrame = CFrame.lookAt(o + Vector3.new(-0.4, h, h * 0.2), o + Vector3.new(-0.4, 0, 0.2), Vector3.new(0, 0, -1))
+-- 단계마다 볼 곳으로 카메라를 부드럽게 옮김. 손제작대 CameraRig처럼 매 프레임 다시 고정 (다른 스크립트가 Custom으로 돌려도 안 빠지게)
+local camCF, camGoal = nil, nil
+local function shot(sc, name)
+	camGoal = sc:shot(name)
+	if not camCF then
+		camCF = camGoal
+	end
+	RunService:UnbindFromRenderStep("MachineMakeCam")
+	RunService:BindToRenderStep("MachineMakeCam", Enum.RenderPriority.Camera.Value + 1, function(dt)
+		local c = workspace.CurrentCamera
+		c.CameraType = Enum.CameraType.Scriptable
+		c.FieldOfView = 50
+		camCF = camCF:Lerp(camGoal, 1 - math.exp(-dt * 5))
+		c.CFrame = camCF
+	end)
 end
 
 ---------------------------------------------------------------- ① 동전
 local function stepCoin(sc)
 	ui:setStep(1)
+	shot(sc, "coin")
 	ui:say("동전 3개를 넣어요", "동전 구멍을 세 번 눌러요 (100원 × 3)")
 	local n, seen = 0, Pointer.presses
 	while n < 3 do
@@ -98,20 +145,27 @@ local function stepCoin(sc)
 		end
 		if Pointer.presses ~= seen then
 			seen = Pointer.presses
-			if near(sc.coinPos, TAP_PX * 1.2) then
+			local slot = nil
+			for _, c in ipairs(sc.coinList) do
+				if near(c, TAP_PX * 1.2) then
+					slot = c
+				end
+			end
+			if slot then
 				n += 1
 				Sfx.play("metalClink", 0.5, 1.4 + n * 0.1)
-				local coin = Scene.cyl(sc.model, "Coin", 0.08, 0.8, sc.coinPos + Vector3.new(0, 1.2, 0), Color3.fromRGB(210, 210, 200), Enum.Material.Metal)
+				-- 동전이 앞에서 구멍으로 쏙 (세운 동전 = 원기둥 축이 Z)
+				local coin = Scene.part(sc.model, "Coin", Vector3.new(0.08, 0.55, 0.55), CFrame.new(slot), Color3.fromRGB(210, 210, 200), Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
 				task.spawn(function()
 					for k = 0, 10 do
-						coin.Position = sc.coinPos + Vector3.new(0, 1.2 - k * 0.12, 0)
+						coin.CFrame = CFrame.new(slot + Vector3.new(0, 0, -1.2 + k * 0.12)) * CFrame.Angles(0, math.rad(90), 0)
 						task.wait(0.02)
 					end
 					coin:Destroy()
 				end)
 				ui:toast(string.format("%d / 3", n), 0.5)
 			else
-				ui:hint("왼쪽 위 동전 구멍을 눌러요")
+				ui:hint("기계 앞 동전 구멍을 눌러요")
 			end
 		end
 	end
@@ -137,17 +191,31 @@ end
 
 local function stepSugar(sc)
 	ui:setStep(2)
-	if not slide(sc, Vector3.new(sc.spoutPos.X, sc.origin.Y + 0.25, sc.spoutPos.Z + 0.1), 0.45) then
+	shot(sc, "sugar")
+	if not slide(sc, sc.sugarLadle, 0.45) then
 		return nil
 	end
-	ui:say("배출구를 꾹 누르고 있으면 설탕이 나와요", "막대가 초록 칸에 오면 손을 떼요")
-	local fill, pressed = 0, false
+	local what = sc.stage == 3 and "설탕 버튼을" or "설탕 배출구를"
+	ui:say(what .. " 꾹 누르고 있으면 설탕이 나와요", "막대가 초록 칸에 오면 손을 떼요")
+	local fill, pressed, holding, wasDown = 0, false, false, false
 	while true do
 		local dt = frame()
 		if not dt then
 			return nil
 		end
-		local on = Pointer.down
+		local d = Pointer.down
+		if d and not wasDown then
+			holding = near(sc.pressPos, TAP_PX * 1.3)
+			if not holding then
+				ui:hint(what .. " 꾹 눌러요")
+			end
+		end
+		if not d then
+			holding = false
+		end
+		wasDown = d
+		local on = holding
+		sc:setStream(on)
 		if on then
 			pressed = true
 			fill = math.min(SUGAR_MAX, fill + SUGAR_RATE * dt)
@@ -162,6 +230,7 @@ local function stepSugar(sc)
 		end
 	end
 	Sfx.loop("sugarPour", 0, 1)
+	sc:setStream(false)
 	ui:setMeter(false)
 	local score
 	if fill >= SUGAR_LO and fill <= SUGAR_HI then
@@ -181,7 +250,8 @@ end
 ---------------------------------------------------------------- ③ 녹이기
 local function stepMelt(sc)
 	ui:setStep(3)
-	if not slide(sc, sc.burnerPos + Vector3.new(0, 0.55, 0), 0.5) then
+	shot(sc, "melt")
+	if not slide(sc, sc.burnerPos + Vector3.new(0, 0.25 * sc.ladleK, 0), 0.5) then
 		return nil
 	end
 	ui:say("국자 안에서 원을 그리며 저어요", "딱 좋은 빠르기로 저으면 빨리 녹아요")
@@ -206,13 +276,13 @@ local function stepMelt(sc)
 			else
 				bad += dt * 0.6
 			end
-			local tip = Pointer.toPlane(sc:ladlePos().Y + 0.3)
 			local c = sc:ladlePos()
+			local tip = Pointer.toPlane(c.Y + 0.3 * sc.ladleK)
 			local off = Vector3.new(tip.X - c.X, 0, tip.Z - c.Z)
-			if off.Magnitude > 0.6 then
-				off = off.Unit * 0.6
+			if off.Magnitude > sc.ladleR then
+				off = off.Unit * sc.ladleR
 			end
-			sc:setStick(c + off + Vector3.new(0, 0.3, 0), true)
+			sc:setStick(c + off + Vector3.new(0, 0.3 * sc.ladleK, 0), true)
 			Sfx.loop("stirDry", 0.4, 0.8 + speed / 12)
 		else
 			bad += dt -- 안 저으면 바닥이 눌어붙음
@@ -240,8 +310,9 @@ end
 ---------------------------------------------------------------- ④ 소다
 local function stepSoda(sc)
 	ui:setStep(4)
+	shot(sc, "soda")
 	ui:say("소다 통을 눌러 젓가락에 소다를 묻혀요", "두세 번 묻히면 알맞아요 · 다 묻혔으면 국자를 눌러 털어 넣어요")
-	local dips, seen, tip = 0, Pointer.presses, sc.sodaPos + Vector3.new(0, 1.4, 0)
+	local dips, seen, tip = 0, Pointer.presses, sc.sodaTip
 	sc:setStick(tip, true)
 	while true do
 		if not frame() then
@@ -251,7 +322,7 @@ local function stepSoda(sc)
 			seen = Pointer.presses
 			if near(sc.sodaPos + Vector3.new(0, 1.2, 0)) then
 				dips += 1
-				tip = sc.sodaPos + Vector3.new(0, 1.3, 0)
+				tip = sc.sodaTip - Vector3.new(0, 0.15, 0)
 				Sfx.play("stirCrystal", 0.6, 1.4)
 				ui:toast(string.format("소다 %d번", dips), 0.5)
 			elseif dips > 0 and near(sc:ladlePos()) then
@@ -279,12 +350,12 @@ local function stepSoda(sc)
 		if Pointer.down then
 			foam += dt * FOAM_RATE * (speed >= Config.Soda.fastMin and 1 or 0.35)
 			local c = sc:ladlePos()
-			local p = Pointer.toPlane(c.Y + 0.3)
+			local p = Pointer.toPlane(c.Y + 0.3 * sc.ladleK)
 			local off = Vector3.new(p.X - c.X, 0, p.Z - c.Z)
-			if off.Magnitude > 0.6 then
-				off = off.Unit * 0.6
+			if off.Magnitude > sc.ladleR then
+				off = off.Unit * sc.ladleR
 			end
-			sc:setStick(c + off + Vector3.new(0, 0.3, 0), true)
+			sc:setStick(c + off + Vector3.new(0, 0.3 * sc.ladleK, 0), true)
 			Sfx.loop("foamBubble", 0.4, 1)
 		else
 			Sfx.loop("foamBubble", 0, 1)
@@ -311,6 +382,7 @@ end
 ---------------------------------------------------------------- ⑤ 금형판에 붓기
 local function stepPour(sc, shape)
 	ui:setStep(5)
+	shot(sc, "pour")
 	ui:say("국자를 금형판 칸 위로 끌어 꾹 누르고 있어요", "칸이 꽉 차면 다음 칸으로 · 넘치지 않게")
 	local n = #sc.cavities
 	local batter = n * 1.05 -- 국자에 든 반죽 (칸 n개 + 조금)
@@ -321,11 +393,12 @@ local function stepPour(sc, shape)
 			return nil
 		end
 		if Pointer.down then
-			local p = Pointer.toPlane(sc.origin.Y + 1.3)
-			sc:ladleTo(Vector3.new(p.X, sc.origin.Y + 1.3, p.Z))
+			local y = sc.cavY + 0.8
+			local p = Pointer.toPlane(y)
+			sc:ladleTo(Vector3.new(p.X, y, p.Z))
 			cur = nil
 			for i, c in ipairs(sc.cavities) do
-				if Vector3.new(p.X - c.pos.X, 0, p.Z - c.pos.Z).Magnitude < 1.1 then
+				if Vector3.new(p.X - c.pos.X, 0, p.Z - c.pos.Z).Magnitude < sc.cavD * 0.6 then
 					cur = i
 				end
 			end
@@ -373,8 +446,10 @@ end
 ---------------------------------------------------------------- ⑥ 막대 꽂기
 local function stepStick(sc)
 	ui:setStep(6)
+	shot(sc, "stick")
 	ui:say("칸마다 막대를 꽂아요", "굳기 전에 칸을 하나씩 눌러요")
 	sc:ladleTo(sc.ladleRest)
+	sc:setHeat(0) -- 다 부었으니 화구 끔
 	local left, seen = #sc.cavities, Pointer.presses
 	while left > 0 do
 		if not frame() then
@@ -382,9 +457,9 @@ local function stepStick(sc)
 		end
 		if Pointer.presses ~= seen then
 			seen = Pointer.presses
-			for _, c in ipairs(sc.cavities) do
+			for i, c in ipairs(sc.cavities) do
 				if not c.stick and near(c.pos, 70) then
-					c.stick = Scene.part(sc.model, "Stick", Vector3.new(0.14, 0.14, 2.4), CFrame.new(c.pos + Vector3.new(0, 0.12, 1.7)), Color3.fromRGB(236, 214, 170), Enum.Material.Wood)
+					sc:addStick(i)
 					left -= 1
 					Sfx.play("pop", 0.5, 1.2)
 					break
@@ -396,14 +471,16 @@ local function stepStick(sc)
 	task.wait(0.3)
 	for _, c in ipairs(sc.cavities) do
 		if c.look then
-			c.look:PivotTo(c.look:GetPivot() + Vector3.new(0, 0.6, 0))
+			c.look:PivotTo(c.look:GetPivot() + Vector3.new(0, sc.cavD * 0.3, 0))
 		end
 		if c.stick then
-			c.stick.Position += Vector3.new(0, 0.6, 0)
+			c.stick.Position += Vector3.new(0, sc.cavD * 0.3, 0)
 		end
 	end
 	Sfx.play("stepDone", 0.5, 1)
 	-- 국자 물에 헹굼 (영상 끝)
+	task.wait(0.5)
+	shot(sc, "rinse")
 	slide(sc, sc.waterPos + Vector3.new(0, 0.6, 0), 0.5)
 	Sfx.play("sodaDrop", 0.4, 0.7)
 	task.wait(0.4)
@@ -414,7 +491,6 @@ end
 local function round(stage, start)
 	local shape = start.shape
 	local sc = Scene.new(stage, start.batch or 2, shape)
-	camera(sc)
 	local scores = {}
 	local ok = stepCoin(sc)
 	if ok then
@@ -439,6 +515,19 @@ local function round(stage, start)
 	local res = nil
 	if ok and not aborted then
 		ui:say("다 만들었어요!", "")
+		if start.test then
+			-- Studio 시험: 서버 대신 같은 식으로 셈 (MachineMakeService와 같은 가중치)
+			local q = math.floor((scores.sugar or 0) * 0.15 + (scores.melt or 0) * 0.3 + (scores.soda or 0) * 0.25 + (scores.pour or 0) * 0.3 + 0.5)
+			local grade = "Burnt"
+			for _, g in ipairs(Config.Grades) do
+				if q >= g.min then
+					grade = g.name
+					break
+				end
+			end
+			print(string.format("[MachineMake] test sugar %d melt %d soda %d pour %d -> Q%d %s", scores.sugar or 0, scores.melt or 0, scores.soda or 0, scores.pour or 0, q, grade))
+			return sc, { ok = true, q = q, grade = grade, made = start.batch, perfect = grade == "Perfect" }
+		end
 		local okR, r = pcall(function()
 			return Remotes:WaitForChild("SubmitMachineMake"):InvokeServer(start.id, scores)
 		end)
@@ -459,21 +548,29 @@ local function finish(sc)
 		ui:setMeter(false)
 		ui:show(false)
 	end
+	RunService:UnbindFromRenderStep("MachineMakeCam")
+	camCF, camGoal = nil, nil
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70
 	controls(true)
+	hideOthers(false)
 	player:SetAttribute("Making", nil)
 end
 
--- stage = 2·3. 기계 창의 [직접 만들기]가 부름
-function MachineMake.start(stage)
+-- stage = 2·3. 기계 창의 [직접 만들기]가 부름. test = { shape } 는 Studio에서만: 서버 없이 한 판 (화면 시험용, 저장 안 바뀜)
+function MachineMake.start(stage, test)
 	if running or Pointer.enabled then
 		return false, "지금은 다른 것을 만들고 있어요"
 	end
-	local okS, start = pcall(function()
-		return Remotes:WaitForChild("StartMachineMake"):InvokeServer(stage)
-	end)
+	local okS, start
+	if test and RunService:IsStudio() then
+		okS, start = true, { ok = true, test = true, id = "test", shape = test.shape or "Circle", batch = stage == 3 and 5 or 2 }
+	else
+		okS, start = pcall(function()
+			return Remotes:WaitForChild("StartMachineMake"):InvokeServer(stage)
+		end)
+	end
 	if not (okS and type(start) == "table" and start.ok) then
 		return false, (okS and type(start) == "table" and start.reason) or "잠깐 뒤에 다시 해 봐요"
 	end
@@ -485,6 +582,7 @@ function MachineMake.start(stage)
 	ui.onExit = function()
 		aborted = true
 	end
+	hideOthers(true)
 	ui:show(true)
 	ui:setSubAlways(true)
 	Pointer.enabled = true
@@ -516,10 +614,13 @@ function MachineMake.start(stage)
 				finish(nil)
 				return
 			end
-			-- 한 판 더: 서버에 새 판
-			local ok2, s2 = pcall(function()
-				return Remotes.StartMachineMake:InvokeServer(stage)
-			end)
+			-- 한 판 더: 서버에 새 판 (Studio 시험이면 그대로)
+			local ok2, s2 = true, start
+			if not start.test then
+				ok2, s2 = pcall(function()
+					return Remotes.StartMachineMake:InvokeServer(stage)
+				end)
+			end
 			if not (ok2 and type(s2) == "table" and s2.ok) then
 				ui:say(ok2 and type(s2) == "table" and s2.reason or "잠깐 뒤에 다시 해 봐요", "")
 				task.wait(2)

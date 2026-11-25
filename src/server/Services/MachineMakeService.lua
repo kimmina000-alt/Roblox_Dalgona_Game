@@ -55,6 +55,38 @@ local function canMakeN(d, shape, m)
 	return math.max(n, 0)
 end
 
+-- 기계 메시를 클라이언트도 볼 수 있게 ReplicatedStorage.Assets.MachineMeshes로 복사 (제작 화면 MachineMakeScene이 씀).
+-- 원본: 편집 화면 Workspace.MachineLayout.StageN.StageNMachine (서버 시작 때 MachineDisplay가 ServerStorage.Assets로 옮김)
+local function ensureMesh(stage)
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	if not assets then
+		return
+	end
+	local folder = assets:FindFirstChild("MachineMeshes")
+	if not folder then
+		folder = Instance.new("Folder")
+		folder.Name = "MachineMeshes"
+		folder.Parent = assets
+	end
+	local name = "Stage" .. stage .. "Machine"
+	if folder:FindFirstChild(name) then
+		return
+	end
+	local SS = game:GetService("ServerStorage")
+	local layout = workspace:FindFirstChild("MachineLayout") or (SS:FindFirstChild("Assets") and SS.Assets:FindFirstChild("MachineLayout"))
+	local t = layout and layout:FindFirstChild("Stage" .. stage)
+	local src = t and t:FindFirstChild(name)
+	if src and src:IsA("BasePart") then
+		local c = src:Clone()
+		c.Anchored = true
+		c.CanCollide = false
+		c.CanQuery = false
+		c.CanTouch = false
+		c.CFrame = CFrame.new()
+		c.Parent = folder
+	end
+end
+
 function MM.start(player, stage)
 	stage = tonumber(stage)
 	if stage ~= 2 and stage ~= 3 then
@@ -82,6 +114,7 @@ function MM.start(player, stage)
 	if n <= 0 then
 		return { ok = false, reason = G.stockRoom(d) <= 0 and "보관함이 가득 찼어요" or "재료가 모자라요" }
 	end
+	ensureMesh(stage)
 	local s = { id = HttpService:GenerateGUID(false), t0 = workspace:GetServerTimeNow(), stage = stage, shape = shape }
 	sessions[player] = s
 	return { ok = true, id = s.id, shape = shape.id, batch = n }
@@ -154,6 +187,11 @@ function MM.init(dataService, economyService, remotes)
 	if remotes.SubmitMachineMake then
 		remotes.SubmitMachineMake.OnServerInvoke = MM.submit
 	end
+	-- 첫 제작 때 기다리지 않게 미리 복사 (MachineDisplay가 MachineLayout을 옮긴 뒤)
+	task.delay(3, function()
+		ensureMesh(2)
+		ensureMesh(3)
+	end)
 	game:GetService("Players").PlayerRemoving:Connect(function(p)
 		sessions[p] = nil
 	end)
