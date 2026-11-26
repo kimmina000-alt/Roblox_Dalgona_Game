@@ -55,13 +55,13 @@ end
 local gui = UI.screen("OrderUi", 7, playerGui)
 local root = UI.root(gui)
 local fit = UI.fitter(root)
-local win, body = UI.window({ Name = "Window", Title = "주문 건네기", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(560, 300), ZIndex = 10, Parent = root })
+local win, body = UI.window({ Name = "Window", Title = "주문 팔기", Position = UDim2.new(0.5, 0, 0.5, 8), Size = UDim2.fromOffset(560, 300), ZIndex = 10, Parent = root })
 fit(win, 560, 320)
 body.Size = UDim2.new(1, -28, 1, -34 - 14 - 26)
 local orderL = UI.text({ Text = "", Position = UDim2.fromOffset(16, 14), Size = UDim2.new(1, -32, 0, 30), TextSize = 22, TextColor3 = C.cream, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 12, Parent = body })
 local leftL = UI.text({ Text = "", Position = UDim2.fromOffset(16, 48), Size = UDim2.new(1, -32, 0, 24), TextSize = 17, TextColor3 = C.cream, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 12, Parent = body })
 local matchL = UI.text({ Text = "", Position = UDim2.fromOffset(16, 84), Size = UDim2.new(1, -32, 0, 28), TextSize = 20, TextColor3 = C.white, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, TextWrapped = true, ZIndex = 12, Parent = body })
-local giveBtn = UI.button({ Text = "건네기", Color = C.green, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14), Size = UDim2.fromOffset(240, 60), TextSize = 22, ZIndex = 12, Parent = body })
+local giveBtn = UI.button({ Text = "팔기", Color = C.green, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14), Size = UDim2.fromOffset(240, 60), TextSize = 22, ZIndex = 12, Parent = body })
 local msg = UI.text({ Text = "", AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 20, 1, -8), Size = UDim2.new(1, -40, 0, 22), TextSize = 16, TextColor3 = C.white, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, ZIndex = 12, Parent = win })
 
 local function setMsg(text, good)
@@ -98,10 +98,10 @@ local function openPicker()
 	matched = type(res.ids) == "table" and #res.ids or 0
 	if matched > 0 then
 		matchL.Text = string.format("진열대·보관함에 맞는 달고나 %d개", matched)
-		UI.setButton(giveBtn, { Enabled = true, Text = "건네기" })
+		UI.setButton(giveBtn, { Enabled = true, Text = "팔기" })
 	else
 		matchL.Text = "맞는 달고나가 없어요 · 주문대로 만들어 오세요"
-		UI.setButton(giveBtn, { Enabled = false, Text = "건네기" })
+		UI.setButton(giveBtn, { Enabled = false, Text = "팔기" })
 	end
 end
 
@@ -118,7 +118,7 @@ giveBtn.Activated:Connect(function()
 		local hud = script.Parent:FindFirstChild("Hud")
 		local toast = hud and hud:FindFirstChild("Toast")
 		if toast then
-			toast:Fire(string.format("주문 %d개 건넸어요%s", r.given or 1, r.coins and string.format(" (+%d 코인)", r.coins) or ""))
+			toast:Fire(string.format("주문 %d개 팔았어요%s", r.given or 1, r.coins and string.format(" (+%d 코인)", r.coins) or ""))
 		end
 		if r.done then
 			win.Visible = false
@@ -179,7 +179,7 @@ local function buildBubble(plot)
 	local countL = UI.text({ Text = "", Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 26), TextSize = 19, TextColor3 = gr and gr.color or C.ink, Outline = C.woodDark, TextXAlignment = Enum.TextXAlignment.Center, TextTruncate = Enum.TextTruncate.AtEnd, Parent = btn })
 	UI.text({ Text = string.rep("★", STARS[q] or 1) .. string.rep("☆", 3 - math.min(3, STARS[q] or 1)) .. (plot:GetAttribute("OrderPack") and "  🎁" or ""), Position = UDim2.fromOffset(8, 30), Size = UDim2.new(1, -16, 0, 24), TextSize = 20, TextColor3 = C.gold, Outline = Color3.fromRGB(150, 100, 20), TextXAlignment = Enum.TextXAlignment.Center, Parent = btn })
 	local _, fill, label = UI.bar({ Position = UDim2.fromOffset(12, 60), Size = UDim2.new(1, -24, 0, 18), Color = C.green, TextSize = 13, Parent = btn })
-	UI.text({ Text = mine and "탭해서 건네기" or "주문 손님", Position = UDim2.fromOffset(0, 80), Size = UDim2.new(1, 0, 0, 16), TextSize = 12, FontFace = UI.F.bold, TextColor3 = C.soft, TextXAlignment = Enum.TextXAlignment.Center, Parent = btn })
+	UI.text({ Text = mine and "탭해서 팔기" or "주문 손님", Position = UDim2.fromOffset(0, 80), Size = UDim2.new(1, 0, 0, 16), TextSize = 12, FontFace = UI.F.bold, TextColor3 = C.soft, TextXAlignment = Enum.TextXAlignment.Center, Parent = btn })
 	if mine then
 		btn.Activated:Connect(openPicker)
 	end

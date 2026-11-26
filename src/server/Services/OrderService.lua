@@ -4,6 +4,9 @@
 --   기다리기 3분 (Epic 이상·포장 주문 +1분). 끝나면(채우거나 떠나면) 약 3분(±30%) 뒤 다음 손님
 --   건네기: 맞는 달고나(보관함·진열대 어디든) → 판매가 × 1.5(주문 뒤 새로 만든 것) / × 1.3(그 전에 만든 것), Perfect면 ×2 / ×1.7,
 --           + 손님 종류 팁. 다 채우면 EXP 20 + 그 손님 하트 판매 수 +3. 계산 알바(D43)가 있으면 맞는 게 생기는 순간 자동으로 건넴
+--   D59 (2026-11-26 사용자 확정): 계산 알바가 없으면 자동으로 안 팔리고, 내가 손님 가까이(sellRange)에서 [팔기]를 눌러야 팔림.
+--     알바 없을 때 맞는 게 생기면 남은 시간을 readyGrace초 이상으로 한 번 늘림, 남은 leaveWarn초에 "곧 떠나요" 알림,
+--     내가 만드는 중(플레이어 속성 Making)에는 기다림이 절반 속도로 줄어듦. 부지 속성 OrderReady = 지금 팔 수 있는 개수
 --   실패: 시간이 지나면 떠남, 벌 없음
 --
 -- 화면 쪽 약속 (UI 세션):
@@ -54,6 +57,7 @@ local function setAttrs(plot, o)
 	m:SetAttribute("OrderNeed", o and o.n or nil)
 	m:SetAttribute("OrderDone", o and o.done or nil)
 	m:SetAttribute("OrderUntil", o and o.untilT or nil)
+	m:SetAttribute("OrderReady", o and o.ready or nil)
 end
 
 -- 맞는 달고나인가
@@ -190,12 +194,28 @@ local function finish(player, why)
 	end
 end
 
--- 건네기. ids = 건넬 달고나 id 목록(없으면 서버가 고름). 반환 결과 표
-local function give(player, ids)
+-- 플레이어가 주문 손님 가까이 있나 (D59 [팔기] 거리)
+local function nearGuest(player, plot)
+	local guest = plot and plot.model:FindFirstChild("OrderGuest")
+	local char = player.Character
+	local root = char and char:FindFirstChild("HumanoidRootPart")
+	if not (guest and root) then
+		return false
+	end
+	local p = guest:GetPivot().Position
+	local d = Vector3.new(p.X - root.Position.X, 0, p.Z - root.Position.Z).Magnitude
+	return d <= (O.sellRange or 12)
+end
+
+-- 팔기(건네기). ids = 건넬 달고나 id 목록(없으면 서버가 고름), auto = 계산 알바가 자동으로 (거리 안 봄). 반환 결과 표
+local function give(player, ids, auto)
 	local st = state[player]
 	local o = st and st.order
 	if not o then
 		return { ok = false, reason = "주문 손님이 없어요" }
+	end
+	if not auto and not nearGuest(player, plotOf(player)) then
+		return { ok = false, reason = "주문 손님 가까이 가서 팔아요" }
 	end
 	local tip = O.tip[o.kind] or 0
 	local given, coins = 0, 0
@@ -278,14 +298,39 @@ local function step(player)
 	local plot, i = plotOf(player)
 	local o = st.order
 	if o then
-		if not plot or workspace:GetServerTimeNow() > o.untilT or not G.shopOpen(d) then
+		local now = workspace:GetServerTimeNow()
+		-- 내가 만드는 중이면 기다림이 절반 속도 (D59, D56 계산과 같음): 1초마다 도는 step이라 그만큼 뒤로 미룸
+		if player:GetAttribute("Making") then
+			o.untilT += 1 - (O.makingSlow or 0.5)
+		end
+		if not plot or now > o.untilT or not G.shopOpen(d) then
 			local t = G.customerType(o.cust)
 			finish(player, (t and t.name or "손님") .. ": 아쉽다… (주문 손님이 떠났어요)")
 			return
 		end
-		-- 계산 알바(D43)가 있으면 맞는 게 생기는 순간 자동으로 건넴
-		if G.helperAt(d, "cashier") and #matchList(d, o) > 0 then
-			give(player, nil)
+		local ready = #matchList(d, o)
+		local cashier = G.helperAt(d, "cashier")
+		-- 계산 알바(D43)가 있으면 맞는 게 생기는 순간 자동으로 건넴 (D59 Q1 ②: 지금 그대로)
+		if cashier and ready > 0 then
+			give(player, nil, true)
+			return
+		end
+		-- 알바 없음: 내가 [팔기]를 눌러야 팔림. 맞는 게 처음 생기면 남은 시간을 readyGrace 이상으로 (한 번)
+		if ready > 0 and not o.graced then
+			o.graced = true
+			if o.untilT - now < (O.readyGrace or 60) then
+				o.untilT = now + (O.readyGrace or 60)
+			end
+			local t = G.customerType(o.cust)
+			Economy.notify(player, string.format("%s 주문 달고나 준비됐어요! 손님에게 가서 [팔기]", t and t.name or "손님"))
+		end
+		if o.untilT - now <= (O.leaveWarn or 30) and not o.warned then
+			o.warned = true
+			Economy.notify(player, "주문 손님이 곧 떠나요")
+		end
+		if o.ready ~= ready or (plot and plot.model:GetAttribute("OrderUntil") ~= o.untilT) then
+			o.ready = ready
+			setAttrs(plot, o)
 		end
 		return
 	end
