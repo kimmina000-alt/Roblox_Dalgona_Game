@@ -4,6 +4,7 @@
 - 원본은 GitHub(`kimmina000-alt/Roblox_Dalgona_Game`). 기능마다 브랜치, 사용자가 승인하면 `main`에 머지한다.
 - `레퍼런스/`는 커밋하지 않는다.
 - 계획: `docs/DEVELOPMENT_PLAN.md` (4장 미니게임, 6장 개발 순서), 움직임 기준값: `docs/MOTION_REFERENCE_ANALYSIS.md`.
+- 여러 AI가 같이 일하는 규칙·Studio 동기화 도구·시험 방법·지금 상태: `docs/AI_COLLAB_GUIDE.md` (다른 AI는 `AGENTS.md`부터).
 
 ## 코드 구조 (Rojo, `default.project.json`)
 | 폴더 | Studio 위치 | 내용 |
