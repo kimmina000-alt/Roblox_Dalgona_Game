@@ -7,7 +7,9 @@
 --   soda  = 손 제작 소다 기록 { t0, t1, delay, amount, fastFrac, puff, samples = { {zone}, ... } }
 --   pour  = { t0, t1, fills = { 칸마다 채운 양 } }
 --   stick = { t0, t1 }
--- 녹이다 태우면(melt.burnt) 뒤 단계 없이 끝나고 품질은 손 제작처럼 Q 20 이하 (Burnt).
+--   press = { t0, t1, h }   (D62) 금형판 누름판으로 한 번 누른 두께 (손 작업대 마지막 목표 0.08)
+-- 3단계(D63): 설탕·소다는 앞면 기둥에서 정량 → sugar = { t0, t1, held }(기둥에 댄 초), 설탕은 점수에서 빼고 소다 양은 서버가 정량으로 넣음.
+-- 가중치는 단계별 (GDD 19장 D63 표). 녹이다 태우면(melt.burnt) 뒤 단계 없이 끝나고 품질은 손 제작처럼 Q 20 이하 (Burnt).
 -- 시각(t0, t1)은 workspace:GetServerTimeNow(). 서버는 단계 순서·걸린 시간·표본을 검사한다.
 local Shared = script.Parent
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
@@ -15,8 +17,15 @@ local Scoring = require(Shared:WaitForChild("Scoring"))
 
 local Rules = {}
 
-Rules.STEPS = { "sugar", "melt", "soda", "pour", "stick" }
-Rules.WEIGHT = { sugar = 0.15, melt = 0.30, soda = 0.25, pour = 0.30 }
+Rules.STEPS = { "sugar", "melt", "soda", "pour", "press", "stick" }
+-- 단계별 가중치 (D62·D63 권장안, 2026-11-26): 3단계는 설탕이 정량이라 0
+Rules.WEIGHTS = {
+	[2] = { sugar = 0.10, melt = 0.30, soda = 0.20, pour = 0.20, press = 0.20 },
+	[3] = { sugar = 0, melt = 0.30, soda = 0.20, pour = 0.25, press = 0.25 },
+}
+Rules.WEIGHT = Rules.WEIGHTS[2]
+Rules.SODA_FIXED = 0.5 -- 3단계 오른쪽 기둥 정량 (Config.Soda 알맞은 양 가운데)
+Rules.SUGAR_HOLD = 1.2 -- 3단계: 설탕 기둥에 국자를 댄 시간이 이 이상이어야 (정량이 다 나오는 데 약 1.5초)
 Rules.BURNT_Q = 20 -- 탔으면 Q 이 값 이하 (손 제작 Scoring.compute와 같음)
 
 Rules.SUGAR_RATE = 0.42 -- 설탕 받는 빠르기 (1 = 꽉 참, 초당)
@@ -52,9 +61,19 @@ function Rules.pour(fills, n)
 	return sum / n
 end
 
-function Rules.quality(scores)
+-- 누르기 (D62): 손 작업대 Scoring.pressOne의 마지막 목표(0.08) 한 번, 너무 얇으면(갈라짐) -35
+function Rules.press(h)
+	h = c(tonumber(h) or 1, 0, 1)
+	local s = Scoring.pressOne(3, h)
+	if h < Config.Press.crack then
+		s -= 35
+	end
+	return c(s, 0, 100)
+end
+
+function Rules.quality(scores, stage)
 	local q = 0
-	for k, w in pairs(Rules.WEIGHT) do
+	for k, w in pairs(Rules.WEIGHTS[stage] or Rules.WEIGHT) do
 		q += c(tonumber(scores[k]) or 0, 0, 100) * w
 	end
 	q = math.floor(q + 0.5)
@@ -138,9 +157,10 @@ local function recomputeSoda(rec, samples)
 	end
 end
 
--- raw = 클라이언트 기록, t0 = 세션 시작(서버 시각), now = 지금(서버 시각), n = 이번 판 칸 수
--- 반환: scores { sugar, melt, soda, pour, burnt } 또는 nil, 이유
-function Rules.evaluate(raw, t0, now, n)
+-- raw = 클라이언트 기록, t0 = 세션 시작(서버 시각), now = 지금(서버 시각), n = 이번 판 칸 수, stage = 2 | 3
+-- 반환: scores { sugar, melt, soda, pour, press, burnt } 또는 nil, 이유
+function Rules.evaluate(raw, t0, now, n, stage)
+	stage = stage == 3 and 3 or 2
 	if type(raw) ~= "table" then
 		return nil, "bad payload"
 	end
@@ -174,6 +194,9 @@ function Rules.evaluate(raw, t0, now, n)
 			recomputeMelt(clean, r.samples)
 		elseif key == "soda" then
 			recomputeSoda(clean, r.samples)
+			if stage == 3 then
+				clean.amount = Rules.SODA_FIXED -- 정량 기둥: 클라이언트 값 대신 (D63)
+			end
 			if r.burnt == true then
 				burnt = true -- 소다 넣기 전에 타 버림 (Soda.run이 ctx.markBurnt)
 			end
@@ -183,12 +206,21 @@ function Rules.evaluate(raw, t0, now, n)
 	end
 
 	local scores = { burnt = burnt }
-	-- 설탕: 꾹 누른 시간 이상 걸렸어야 함
-	local fill = num(rawOf.sugar.fill, 0, Rules.SUGAR_MAX, 0)
-	if rec.sugar.dur < fill / Rules.SUGAR_RATE * 0.85 - 0.3 then
-		return nil, "sugar too fast"
+	if stage == 3 then
+		-- 설탕 기둥: 국자를 댄 시간 검사만, 점수 없음 (가중치 0)
+		local held = num(rawOf.sugar.held, 0, 60, 0)
+		if held < Rules.SUGAR_HOLD or rec.sugar.dur < held - 0.3 then
+			return nil, "sugar hold"
+		end
+		scores.sugar = 100
+	else
+		-- 설탕: 꾹 누른 시간 이상 걸렸어야 함
+		local fill = num(rawOf.sugar.fill, 0, Rules.SUGAR_MAX, 0)
+		if rec.sugar.dur < fill / Rules.SUGAR_RATE * 0.85 - 0.3 then
+			return nil, "sugar too fast"
+		end
+		scores.sugar = Rules.sugar(fill)
 	end
-	scores.sugar = Rules.sugar(fill)
 	scores.melt = Scoring.melt(rec.melt)
 	scores.soda = rec.soda and Scoring.soda(rec.soda) or 0
 	scores.pour = 0
@@ -208,10 +240,20 @@ function Rules.evaluate(raw, t0, now, n)
 		end
 		scores.pour = Rules.pour(fills, n)
 	end
+	scores.press = 0
+	if rec.press then
+		-- 누르기: 0.45에서 목표까지 내려오는 데 걸리는 시간보다 빨리 끝낼 수 없음
+		local h = num(rawOf.press.h, 0, Config.Press.h0, Config.Press.h0)
+		local need = math.log(Config.Press.h0 / math.max(h, 0.02)) / Config.Press.k
+		if rec.press.dur < need * 0.8 - 0.2 then
+			return nil, "press too fast"
+		end
+		scores.press = Rules.press(h)
+	end
 	if rec.stick and rec.stick.dur < 0.15 * n then
 		return nil, "stick too fast"
 	end
-	if not burnt and not (rec.pour and rec.stick) then
+	if not burnt and not (rec.pour and rec.press and rec.stick) then
 		return nil, "missing step"
 	end
 	return scores

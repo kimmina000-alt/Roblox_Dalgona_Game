@@ -1,24 +1,28 @@
--- 2·3단계 기계 직접 만들기 장면 (MachineMake가 씀). 2026-11-26 사용자: "스튜디오에 새로 넣은 2단계 3단계 기계 … 해당 3D 에셋에서 만드는 걸로"
--- 사용자 기계 메시(Stage2Machine 빨간 철제 기계 / Stage3Machine 분홍 판매기, tools/blender/stage23_user.py)를 그대로 세우고,
--- 메시 위 자리(동전 구멍 · 설탕 배출구/버튼 · 화구 · 금형판 칸)에 움직이는 것을 올린다.
+-- 2·3단계 기계 직접 만들기 장면 (MachineMake가 씀).
+-- 사용자 기계 메시(Stage2Machine 빨간 철제 기계 / Stage3Machine 분홍 판매기, tools/blender/stage23_user.py)를 세우고,
+-- 메시 위 자리(동전 구멍 · 설탕 배출구/기둥 · 화구 · 금형판 칸)에 움직이는 것을 올린다. 모두 내 화면에서만 (클라이언트).
 -- 2026-11-26 사용자 "손 작업대 화면 구현 방식 그대로": 국자·나무젓가락·소다통·설탕 더미·녹는 결정·젓가락 길·부푸는 반죽은
--- 내 가게 손 작업대(Workstations.mine)를 복제해 기계 화구 위에 얹고(국자·젓가락·소다통만 보이게), 손 작업대 단계 모듈
--- (Steps/Melt, Steps/Soda)이 그 Station으로 그대로 돈다 (Scene:station()).
--- 메시는 서버 MachineMakeService가 ReplicatedStorage.Assets.MachineMeshes로 복사해 둠 (없으면 상자 모양으로 대신).
--- 자리 값은 메시 기준(바닥 가운데 = 원점, 앞 = -Z, 화면 오른쪽 = -X, 메시 단위). 2026-11-26 메시 꼭짓점(EditableMesh)으로 다시 잼.
+--   내 가게 손 작업대(Workstations.mine)를 복제해 기계 화구 위에 얹고(국자·젓가락·소다통만 보이게) 손 작업대 단계 모듈
+--   (Steps/Melt, Steps/Soda)이 그 Station으로 그대로 돈다 (Scene:station()).
+-- D60 (2026-11-26 사용자 확정, 안 A): 장면을 하늘(y 900) 대신 **내 가게의 그 기계 자리**에 만든다. 국자가 들어가게 기계는 S배로 키운
+--   복제를 진짜 기계 자리(뒷면 맞춤)에 세우고, 진짜 기계들·내 캐릭터는 만드는 동안 내 화면에서 숨김. 카메라는 지금 자리에서 그 기계로 다가감.
+--   장면 모델은 가게 부지(Plot) 안에 넣어 ViewClear가 카메라를 가리는 천장·벽을 숨김. 내 가게 기계를 못 찾으면 예전처럼 y 900.
+-- D61 막대 통(손 작업대 StickCup) + 아이스크림 막대(Steps/Stick.build), D62 넓은 누름판(손 작업대 Presser), D63 3단계 설탕·소다 기둥.
+-- 자리 값은 메시 기준(바닥 가운데 = 원점, 앞 = -Z, 화면 오른쪽 = -X, 메시 단위). 2026-11-26 메시 꼭짓점(EditableMesh)으로 잼.
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DalgonaLook = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("DalgonaLook"))
 local Making = script.Parent:WaitForChild("Making")
 local Station = require(Making:WaitForChild("Station"))
 local Workstations = require(Making:WaitForChild("Workstations"))
 local ViewScale = require(Making:WaitForChild("ViewScale"))
+local ViewClear = require(Making:WaitForChild("ViewClear"))
 
 local Scene = {}
 Scene.__index = Scene
 
-local ORIGIN = CFrame.new(0, 900, 0)
+local SKY = CFrame.new(0, 900, 0) -- 내 가게 기계를 못 찾을 때만
 local C = {
-	dark = Color3.fromRGB(70, 72, 78),
 	white = Color3.fromRGB(250, 250, 248),
 	water = Color3.fromRGB(150, 196, 222),
 	coil = Color3.fromRGB(255, 96, 40),
@@ -40,15 +44,15 @@ local LAYOUT = {
 		sugarLadle = Vector3.new(0, 0.12, -1.95), -- 설탕 받을 때 국자 그릇 바닥 자리 (배출구 아래, 기계 앞)
 		burner = Vector3.new(1.4, 4.52, -0.1), -- 윗판 왼쪽 화구 윗면
 		burnerD = 0.6,
-		sodaCup = { pos = Vector3.new(0.04, 4.83, -0.58), r = 0.22 }, -- 가운데 원통 (테두리 높이, 안쪽 반지름) — 소다를 여기에 (사용자 2026-11-26)
+		sodaCup = { pos = Vector3.new(0.04, 4.83, -0.58), r = 0.22 }, -- 가운데 원통 (테두리 높이, 안쪽 반지름) — 소다를 여기에
 		cavY = 5.92, -- 금형판 윗면 (뒤쪽에 들린 판, 칸 8개)
 		cavD = 0.46,
 		cavs = { 1.9, 1.39, 0.82, 0.31, -0.26, -0.83, -1.4, -1.97 }, -- 칸 x (z = cavZ)
 		cavZ = 1.15,
 		markCavities = false, -- 메시에 칸이 그려져 있음
-		-- 메시가 앞판·윗판·금형판뿐이라 옆·뒤가 뚫려 보임 (사용자 2026-11-26 "2단계 기계 옆면 없음") → 몸통 벽을 Part로
-		-- 메시 몸통: x ±2.43, 앞판 z -1.11, 뒤 z 1.61, 윗판 높이 4.52
+		-- 메시가 앞판·윗판·금형판뿐이라 옆·뒤가 뚫려 보임 → 몸통 벽을 Part로 (x ±2.43, 앞판 z -1.11, 뒤 z 1.61, 윗판 4.52)
 		body = { x = 2.43, zFront = -1.11, zBack = 1.61, top = 4.5 },
+		stickBox = Vector3.new(-1.9, 4.52, -0.75), -- 막대 통: 윗판 오른쪽 앞 (D61)
 		shelfY = 4.5, -- 물그릇 올린 옆 선반 높이
 		ladleRest = Vector3.new(-1.3, 0.1, -2.3),
 	},
@@ -56,15 +60,16 @@ local LAYOUT = {
 		S = 2,
 		size = Vector3.new(6.32, 7.13, 4.97),
 		coins = { Vector3.new(-0.94, 4.84, -2.45) }, -- 앞판 동전 넣는 곳
-		press = Vector3.new(0.29, 4.13, -2.45), -- "설탕" 버튼
-		spout = Vector3.new(1.66, 2.6, -1.3), -- 왼쪽 관 (컵 위)
-		-- 검은 컵(열선): 가운데 (1.90, -1.21), 테두리 높이 1.02, 바깥 반지름 0.94, 안쪽 0.64, 안쪽 바닥 0.40 (꼭짓점으로 잼)
+		-- D63: 앞면 아래 은색 기둥 두 개 (꼭짓점으로 잼: x 1.90 / 0.30, z -1.21, 아래 끝 2.43). 왼쪽 = 설탕, 오른쪽 = 식소다
+		sugarPillar = Vector3.new(1.9, 2.43, -1.21),
+		sodaPillar = Vector3.new(0.3, 2.43, -1.21),
+		spout = Vector3.new(1.9, 2.43, -1.21),
+		-- 검은 컵(열선): 가운데 (1.90, -1.21), 테두리 높이 1.02, 바깥 반지름 0.94, 안쪽 0.64, 안쪽 바닥 0.40
 		cup = { x = 1.9, z = -1.21, rim = 1.02, rOut = 0.94, rIn = 0.64, floor = 0.4 },
-		sugarLadle = Vector3.new(1.9, 1.02, -1.21), -- 설탕도 컵 위 국자로 받음 (관이 컵 위)
+		sugarLadle = Vector3.new(1.9, 1.02, -1.21),
 		burner = Vector3.new(1.9, 1.02, -1.21), -- 국자 받침 = 컵 테두리
-		-- 오른쪽 검은 판: 메시 판(x -2.85~-0.42, z -2.35~-0.20, 윗면 1.48)이 5칸보다 좁음 (사용자 2026-11-26 "다섯 개 다 들어가게 옆으로 키워")
-		-- → 옆으로 넓힌 판을 Part로 덮고 칸을 고르게
-		tray = { x0 = -3.1, x1 = -0.1, z0 = -2.35, z1 = -0.2, top = 1.5 },
+		-- 오른쪽 검은 판: 메시 판(x -2.85~-0.42)이 5칸보다 좁음 → 옆으로 넓힌 판을 Part로 덮고 칸을 고르게. 앞쪽은 막대 통 자리만큼 더
+		tray = { x0 = -3.1, x1 = -0.1, z0 = -2.75, z1 = -0.2, top = 1.5 },
 		cavY = 1.5,
 		cavD = 0.7,
 		cavGrid = { -- 5칸: 앞줄 3 + 뒷줄 2
@@ -72,8 +77,9 @@ local LAYOUT = {
 			Vector3.new(-1.12, 0, -0.8), Vector3.new(-2.08, 0, -0.8),
 		},
 		markCavities = true, -- 판이 민판이라 칸 자국을 올림
+		stickBox = Vector3.new(-0.45, 1.5, -2.5), -- 막대 통: 넓힌 판 오른쪽 앞
 		shelfY = 1.7,
-		ladleRest = Vector3.new(0.3, 0.45, -1.5),
+		ladleRest = Vector3.new(0.3, 0.45, -1.9),
 	},
 }
 
@@ -118,25 +124,6 @@ local function middle(list, n)
 	return out
 end
 
-local function machineMesh(stage, parent, cf, S, L)
-	local assets = ReplicatedStorage:FindFirstChild("Assets")
-	local folder = assets and (assets:FindFirstChild("MachineMeshes") or assets:WaitForChild("MachineMeshes", 3))
-	local src = folder and (folder:FindFirstChild("Stage" .. stage .. "Machine") or folder:WaitForChild("Stage" .. stage .. "Machine", 2))
-	if src then
-		local m = src:Clone()
-		m.Anchored = true
-		m.CanCollide = false
-		m.CanQuery = false
-		m.CanTouch = false
-		m.Size = L.size * S
-		m.CFrame = cf * CFrame.new(0, L.size.Y * S / 2, 0)
-		m.Parent = parent
-		return m
-	end
-	-- 대신: 상자 (메시가 아직 안 왔을 때)
-	return part(parent, "MachineBox", L.size * S, cf * CFrame.new(0, L.size.Y * S / 2, 0), stage == 3 and Color3.fromRGB(240, 150, 176) or Color3.fromRGB(200, 50, 50), Enum.Material.Metal)
-end
-
 -- 부품 상자를 세계 축으로 본 가로(X)·세로(Z) 폭
 local function flatWidth(p)
 	local cf, s = p.CFrame, p.Size
@@ -146,28 +133,104 @@ local function flatWidth(p)
 	return math.max(wx, wz)
 end
 
+local function myPlot()
+	local ws = Workstations.mine()
+	return ws and ws.Parent or nil
+end
+
+-- 내 가게의 그 단계 기계 (Plot.Machine2·3) 메시
+local function shopMachine(plot, stage)
+	local m = plot and plot:FindFirstChild("Machine" .. stage)
+	local mesh = m and m:FindFirstChild("Stage" .. stage .. "Machine", true)
+	return m, mesh
+end
+
+-- 내 화면에서만 숨기기 (되돌릴 값 기억)
+local function hideLocal(self, inst)
+	local list = inst:IsA("BasePart") and { inst } or {}
+	for _, d in ipairs(inst:GetDescendants()) do
+		table.insert(list, d)
+	end
+	for _, d in ipairs(list) do
+		if d:IsA("BasePart") and self.hidden[d] == nil then
+			self.hidden[d] = d.LocalTransparencyModifier
+			d.LocalTransparencyModifier = 1
+		elseif (d:IsA("BillboardGui") or d:IsA("SurfaceGui")) and self.hiddenGui[d] == nil then
+			self.hiddenGui[d] = d.Enabled
+			d.Enabled = false
+		end
+	end
+end
+
 -- stage: 2 / 3, cavities: 이번 판 칸 수(=개수), shape: 도안 id
 function Scene.new(stage, cavities, shape)
 	local self = setmetatable({}, Scene)
 	local L = LAYOUT[stage] or LAYOUT[2]
 	local S = L.S
+	self.stage, self.S, self.L = stage, S, L
+	self.hidden, self.hiddenGui = {}, {}
 	local m = Instance.new("Model")
 	m.Name = "MachineMakeScene"
 	self.model = m
-	self.origin = ORIGIN
-	self.stage = stage
-	self.S = S
-	self.L = L
-	local O = ORIGIN.Position
-	local function at(v)
-		return O + v * S
-	end
-	self.at = at
-	-- 바닥(탁자)·뒷벽 (카메라에 하늘이 안 보이게)
-	part(m, "Floor", Vector3.new(90, 1, 70), CFrame.new(O + Vector3.new(0, -0.5, 10)), C.floor, Enum.Material.WoodPlanks)
-	part(m, "Wall", Vector3.new(90, 60, 1), CFrame.new(O + Vector3.new(0, 25, L.size.Z * S / 2 + 6)), C.wall, Enum.Material.Plaster)
-	self.machine = machineMesh(stage, m, ORIGIN, S, L)
 
+	-- 기준 자리 (D60): 내 가게 그 기계의 바닥 가운데, 뒷면을 맞춘 채 S배 (앞으로 커짐)
+	local plot = myPlot()
+	local shopM, mesh = shopMachine(plot, stage)
+	local ORIGIN
+	if mesh then
+		local bottom = mesh.CFrame * CFrame.new(0, -mesh.Size.Y / 2, 0)
+		ORIGIN = bottom * CFrame.new(0, 0, mesh.Size.Z / 2 - L.size.Z * S / 2)
+		self.inShop = true
+	else
+		ORIGIN = SKY
+	end
+	self.origin = ORIGIN
+	self.rot = ORIGIN - ORIGIN.Position
+	local function at(v) -- 메시 단위 자리 → 세계
+		return ORIGIN:PointToWorldSpace(v * S)
+	end
+	local function W(x, y, z) -- 장면 기준(스터드) 자리 → 세계
+		return ORIGIN:PointToWorldSpace(Vector3.new(x, y, z))
+	end
+	local function CF(x, y, z) -- 장면 기준 자리·방향 → CFrame
+		return ORIGIN * CFrame.new(x, y, z)
+	end
+	self.at, self.W, self.CF = at, W, CF
+	function self.dir(v)
+		return ORIGIN:VectorToWorldSpace(v)
+	end
+
+	if not self.inShop then
+		-- 하늘 장면: 바닥(탁자)·뒷벽 (카메라에 하늘이 안 보이게)
+		part(m, "Floor", Vector3.new(90, 1, 70), CF(0, -0.5, 10), C.floor, Enum.Material.WoodPlanks)
+		part(m, "Wall", Vector3.new(90, 60, 1), CF(0, 25, L.size.Z * S / 2 + 6), C.wall, Enum.Material.Plaster)
+	else
+		-- 진짜 기계들(다른 단계 포함 — 키운 기계와 겹침)과 내 캐릭터는 만드는 동안 숨김
+		for _, c in ipairs(plot:GetChildren()) do
+			if c:IsA("Model") and c.Name:match("^Machine%d$") then
+				hideLocal(self, c)
+			end
+		end
+		local ch = Players.LocalPlayer.Character
+		if ch then
+			hideLocal(self, ch)
+		end
+	end
+
+	-- 기계 몸 (S배 복제)
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local folder = assets and (assets:FindFirstChild("MachineMeshes") or assets:WaitForChild("MachineMeshes", 3))
+	local src = folder and (folder:FindFirstChild("Stage" .. stage .. "Machine") or folder:WaitForChild("Stage" .. stage .. "Machine", 2))
+	if src then
+		local mm = src:Clone()
+		mm.Anchored, mm.CanCollide, mm.CanQuery, mm.CanTouch = true, false, false, false
+		mm.Size = L.size * S
+		mm.CFrame = CF(0, L.size.Y * S / 2, 0)
+		mm.Parent = m
+		self.machine = mm
+	else
+		self.machine = part(m, "MachineBox", L.size * S, CF(0, L.size.Y * S / 2, 0), stage == 3 and Color3.fromRGB(240, 150, 176) or Color3.fromRGB(200, 50, 50), Enum.Material.Metal)
+	end
 	-- 2단계 몸통 옆·뒤 벽 (메시에 없음)
 	if L.body then
 		local b = L.body
@@ -175,26 +238,27 @@ function Scene.new(stage, cavities, shape)
 		local depth = (b.zBack - b.zFront) * S
 		local zc = (b.zBack + b.zFront) / 2 * S
 		for _, sx in ipairs({ 1, -1 }) do
-			part(m, "BodySide", Vector3.new(0.08, h, depth), CFrame.new(O + Vector3.new(sx * (b.x * S - 0.04), h / 2, zc)), C.red, Enum.Material.Metal)
+			part(m, "BodySide", Vector3.new(0.08, h, depth), CF(sx * (b.x * S - 0.04), h / 2, zc), C.red, Enum.Material.Metal)
 		end
-		part(m, "BodyBack", Vector3.new(b.x * 2 * S, h, 0.08), CFrame.new(O + Vector3.new(0, h / 2, b.zBack * S - 0.04)), C.red, Enum.Material.Metal)
+		part(m, "BodyBack", Vector3.new(b.x * 2 * S, h, 0.08), CF(0, h / 2, b.zBack * S - 0.04), C.red, Enum.Material.Metal)
 	end
 
 	self.coinList = {}
 	for _, c in ipairs(L.coins) do
 		table.insert(self.coinList, at(c))
 	end
-	self.coinPos = self.coinList[1]
-	self.pressPos = at(L.press)
+	self.pressPos = L.press and at(L.press) or nil
 	self.spoutPos = at(L.spout)
 	self.sugarLadle = at(L.sugarLadle)
 	self.burnerPos = at(L.burner)
+	self.sugarPillar = L.sugarPillar and at(L.sugarPillar) or nil
+	self.sodaPillar = L.sodaPillar and at(L.sodaPillar) or nil
 
-	-- 화구 열선 빛 (켜지면 빨갛게). 3단계는 검은 컵 "안쪽"이 빨갛게 (사용자 2026-11-26): 안쪽 바닥 원판 + 안벽을 따라 세운 열선 12개
+	-- 화구 열선 빛. 3단계는 검은 컵 "안쪽"이 빨갛게: 안쪽 바닥 원판 + 안벽을 따라 세운 열선 12개
 	self.glowParts = {}
 	if L.cup then
 		local cu = L.cup
-		local cpos = O + Vector3.new(cu.x, 0, cu.z) * S
+		local cpos = at(Vector3.new(cu.x, 0, cu.z))
 		local rIn = cu.rIn * S
 		table.insert(self.glowParts, cyl(m, "CupGlowFloor", 0.04, rIn * 1.9, cpos + Vector3.new(0, cu.floor * S + 0.03, 0), C.coil, Enum.Material.Neon, { Transparency = 1, CastShadow = false }))
 		local wallH = (cu.rim - cu.floor) * S * 0.8
@@ -206,21 +270,25 @@ function Scene.new(stage, cavities, shape)
 	else
 		table.insert(self.glowParts, cyl(m, "BurnerGlow", 0.04, L.burnerD * S, self.burnerPos + Vector3.new(0, 0.03, 0), C.coil, Enum.Material.Neon, { Transparency = 1, CastShadow = false }))
 	end
-	-- 설탕 줄기 (누르는 동안)
+	-- 3단계 기둥 끝 빛 (국자가 가까우면 켜짐)
+	self.pillarGlow = {}
+	for _, key in ipairs({ "sugarPillar", "sodaPillar" }) do
+		if self[key] then
+			self.pillarGlow[key] = cyl(m, key .. "Glow", 0.05, 0.3 * S, self[key] - Vector3.new(0, 0.03, 0), Color3.fromRGB(255, 240, 180), Enum.Material.Neon, { Transparency = 1, CastShadow = false })
+		end
+	end
+	-- 설탕 줄기 (누르는 동안 / 기둥에서)
 	self.stream = part(m, "SugarStream", Vector3.new(0.14, 1, 0.14), CFrame.new(self.spoutPos), C.white, Enum.Material.Sand, { Transparency = 1, CastShadow = false })
 	-- 붓는 반죽 줄기
-	self.pourStream = part(m, "BatterStream", Vector3.new(0.22, 1, 0.22), CFrame.new(O), Color3.fromRGB(206, 152, 96), Enum.Material.SmoothPlastic, { Transparency = 1, CastShadow = false })
+	self.pourStream = part(m, "BatterStream", Vector3.new(0.22, 1, 0.22), CF(0, 0, 0), Color3.fromRGB(206, 152, 96), Enum.Material.SmoothPlastic, { Transparency = 1, CastShadow = false })
 
-	-- 옆 선반: 화면 왼쪽(+X)·오른쪽(-X). 물그릇은 오른쪽, 3단계 소다통은 왼쪽(컵 가까이). 2단계 소다는 가운데 원통 안
+	-- 옆 선반: 화면 오른쪽(-X)에 물그릇, 3단계는 왼쪽(+X)에 소다통 대신 비워 둠 (소다는 기둥에서)
 	local half = L.size.X * S / 2
 	local shelfY = L.shelfY * S
 	local zShelf = -L.size.Z * S / 2 + 2.4
-	part(m, "ShelfR", Vector3.new(3.4, shelfY, 4.2), CFrame.new(O + Vector3.new(-half - 2, shelfY / 2, zShelf)), C.shelf, Enum.Material.Wood)
-	self.shelfLTop = O + Vector3.new(half + 2, shelfY, zShelf - 0.2)
-	if not L.sodaCup then
-		part(m, "ShelfL", Vector3.new(3.4, shelfY, 4.2), CFrame.new(O + Vector3.new(half + 2, shelfY / 2, zShelf)), C.shelf, Enum.Material.Wood)
-	end
-	self.waterPos = O + Vector3.new(-half - 2, shelfY, zShelf - 0.2)
+	part(m, "ShelfR", Vector3.new(3.4, shelfY, 4.2), CF(-half - 2, shelfY / 2, zShelf), C.shelf, Enum.Material.Wood)
+	self.shelfLTop = W(half + 2, shelfY, zShelf - 0.2)
+	self.waterPos = W(-half - 2, shelfY, zShelf - 0.2)
 	cyl(m, "Bowl", 0.6, 1.8, self.waterPos + Vector3.new(0, 0.3, 0), Color3.fromRGB(190, 190, 186), Enum.Material.Metal)
 	self.water = cyl(m, "Water", 0.05, 1.55, self.waterPos + Vector3.new(0, 0.55, 0), C.water, Enum.Material.Glass, { Transparency = 0.35 })
 
@@ -228,11 +296,11 @@ function Scene.new(stage, cavities, shape)
 	if L.tray then
 		local t = L.tray
 		local w, d = (t.x1 - t.x0) * S, (t.z1 - t.z0) * S
-		part(m, "WideTray", Vector3.new(w, 0.16, d), CFrame.new(O + Vector3.new((t.x0 + t.x1) / 2 * S, t.top * S - 0.08, (t.z0 + t.z1) / 2 * S)), C.tray, Enum.Material.Metal)
+		part(m, "WideTray", Vector3.new(w, 0.16, d), CF((t.x0 + t.x1) / 2 * S, t.top * S - 0.08, (t.z0 + t.z1) / 2 * S), C.tray, Enum.Material.Metal)
 	end
 	local cavD = L.cavD * S
 	self.cavD = cavD
-	self.cavY = O.Y + L.cavY * S
+	self.cavY = at(Vector3.new(0, L.cavY, 0)).Y
 	local spots = {}
 	if L.cavGrid then
 		for i = 1, math.min(cavities, #L.cavGrid) do
@@ -244,11 +312,10 @@ function Scene.new(stage, cavities, shape)
 		end
 	end
 	self.cavities = {}
-	local cx, cz = 0, 0
+	local sum = Vector3.zero
 	for i, v in ipairs(spots) do
-		local pos = Vector3.new(O.X + v.X * S, self.cavY, O.Z + v.Z * S)
-		cx += pos.X
-		cz += pos.Z
+		local pos = at(Vector3.new(v.X, L.cavY, v.Z))
+		sum += pos
 		if L.markCavities then
 			local mark = DalgonaLook.build({ s = shape, g = "Burnt" }, { diameter = cavD, stick = false })
 			mark.Name = "Cavity" .. i
@@ -260,18 +327,22 @@ function Scene.new(stage, cavities, shape)
 					end
 				end
 			end
-			mark:PivotTo(CFrame.new(pos + Vector3.new(0, 0.005, 0)))
+			mark:PivotTo(CFrame.new(pos + Vector3.new(0, 0.005, 0)) * self.rot)
 			mark.Parent = m
 		end
 		table.insert(self.cavities, { pos = pos, fill = 0, look = nil, stick = nil })
 	end
-	self.plateCenter = Vector3.new(cx / math.max(#spots, 1), self.cavY, cz / math.max(#spots, 1))
+	self.plateCenter = sum / math.max(#spots, 1)
 	self.ladleRest = at(L.ladleRest)
-	m.Parent = workspace
+	self.stickBoxPos = at(L.stickBox)
+	m.Parent = self.inShop and plot or workspace
+	if self.inShop then
+		ViewClear.start(m) -- 카메라와 장면 사이 가게 천장·벽을 내 화면에서 숨김 (손 작업대와 같은 모듈)
+	end
 	return self
 end
 
--- 손 작업대 Station (국자·나무젓가락·소다통·설탕 더미·결정·거품 그대로). 내 가게 손 작업대를 복제해 화구 위에 얹음.
+-- 손 작업대 Station (국자·나무젓가락·소다통·설탕 더미·결정·거품·막대 통·누름판 그대로). 내 가게 손 작업대를 복제해 화구 위에 얹음.
 -- 반환: Station 또는 nil, 이유
 function Scene:station()
 	if self.S_ then
@@ -295,7 +366,7 @@ function Scene:station()
 		clone:SetAttribute(k, nil)
 	end
 	-- 손 작업대 앞(+Z, 플레이어 쪽) = 기계 앞(-Z) → 180° 돌림 (화면 위쪽 = 기계 뒤)
-	clone:PivotTo(CFrame.new(self.origin.Position) * CFrame.Angles(0, math.pi, 0))
+	clone:PivotTo(CFrame.new(self.origin.Position) * self.rot * CFrame.Angles(0, math.pi, 0))
 	-- 철망 윗면 가운데를 화구 윗면 가운데로
 	local brazier = clone:FindFirstChild("Brazier")
 	local grillTop, gx, gz, gn = -math.huge, 0, 0, 0
@@ -314,7 +385,8 @@ function Scene:station()
 	end
 	local target = self.burnerPos
 	clone:PivotTo(clone:GetPivot() + Vector3.new(target.X - gx / gn, target.Y - grillTop, target.Z - gz / gn))
-	-- 국자·나무젓가락·소다통만 보이게
+	-- 국자·나무젓가락·소다통·막대 통만 보이게 (누름판은 누르기 단계에서 따로 꺼냄)
+	local stickCup = clone:FindFirstChild("StickCup", true)
 	local keep = {}
 	for _, n in ipairs({ "Ladle", "Chopsticks", "SodaTub" }) do
 		local c = clone:FindFirstChild(n)
@@ -322,23 +394,24 @@ function Scene:station()
 			keep[c] = true
 		end
 	end
+	if stickCup then
+		keep[stickCup] = true
+	end
 	local function kept(d)
-		local p = d.Parent
+		local p = d
 		while p and p ~= clone do
 			if keep[p] then
 				return true
 			end
 			p = p.Parent
 		end
-		return keep[d] == true
+		return false
 	end
 	for _, d in ipairs(clone:GetDescendants()) do
-		if d:IsA("ProximityPrompt") or d:IsA("ClickDetector") then
-			if d:IsA("ProximityPrompt") then
-				d.Enabled = false
-			else
-				d:Destroy()
-			end
+		if d:IsA("ProximityPrompt") then
+			d.Enabled = false
+		elseif d:IsA("ClickDetector") then
+			d:Destroy()
 		elseif not kept(d) then
 			if d:IsA("BasePart") then
 				d.Transparency = 1
@@ -364,7 +437,7 @@ function Scene:station()
 	-- 연탄 불꽃은 안 씀 (기계는 열선): 화면 밖 빈 이미터로 바꿔 Heat가 만져도 안 보이게
 	S.Flame = Instance.new("ParticleEmitter")
 	S:useChopstick(1, "A")
-	-- 소다통: 2단계는 가운데 원통 안 (통 몸통은 숨기고 소다 가루만, 원통 안쪽 크기로), 3단계는 왼쪽 선반 위
+	-- 소다통: 2단계는 가운데 원통 안 (통 몸통·라벨은 숨기고 가루만, 원통 안쪽 크기로). 3단계는 기둥에서 나와서 통을 숨김
 	local tub = S.SodaTub
 	local powder = tub:FindFirstChild("Soda")
 	if self.L.sodaCup and powder then
@@ -375,7 +448,7 @@ function Scene:station()
 		end
 		local want = self.at(self.L.sodaCup.pos) - Vector3.new(0, 0.12, 0)
 		tub:PivotTo(tub:GetPivot() + (want - powder.Position))
-		-- 통 몸통·라벨만 숨김 (보이는 가루 = SodaPowderMesh, Soda는 원래 투명한 찍기 판정 자리)
+		-- 보이는 가루 = SodaPowderMesh, Soda는 원래 투명한 찍기 판정 자리
 		for _, d in ipairs(tub:GetDescendants()) do
 			if d:IsA("BasePart") and (d.Name == "SodaCanMesh" or d.Name == "SodaLabelMesh" or d.Name == "Tub") then
 				d.Transparency = 1
@@ -383,14 +456,109 @@ function Scene:station()
 			end
 		end
 	elseif powder then
-		local cf, size = tub:GetBoundingBox()
-		local bottom = cf.Position.Y - size.Y / 2
-		local want = self.shelfLTop
-		tub:PivotTo(tub:GetPivot() + Vector3.new(want.X - cf.Position.X, want.Y - bottom, want.Z - cf.Position.Z))
+		for _, d in ipairs(tub:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.Transparency = 1
+				d.CastShadow = false
+			end
+		end
+		tub:PivotTo(tub:GetPivot() + (self.sodaPillar - powder.Position)) -- 판정 자리만 기둥 아래로 (CameraRig 소다 화면이 기둥을 봄)
 	end
 	S.rest.SodaTub = tub:GetPivot()
+	-- 막대 통 (D61): 금형판 옆으로
+	if stickCup then
+		local root = stickCup
+		while root.Parent and root.Parent ~= clone and root.Parent:IsA("Model") and root.Parent.Name ~= "Stage1Decor" do
+			root = root.Parent
+		end
+		local cf, size = (root:IsA("Model") and root:GetBoundingBox()) or root.CFrame, (root:IsA("Model") and select(2, root:GetBoundingBox())) or root.Size
+		local bottom = cf.Position - Vector3.new(0, size.Y / 2, 0)
+		local delta = self.stickBoxPos - bottom
+		if root:IsA("Model") then
+			root:PivotTo(root:GetPivot() + delta)
+		else
+			root.CFrame += delta
+		end
+		self.stickCup = stickCup
+	end
 	self.S_ = S
 	return S
+end
+
+-- 막대를 꺼내는 자리 (막대 통 맨 위, 없으면 통 자리)
+function Scene:stickRest()
+	local cup = self.stickCup
+	if cup and cup:IsA("BasePart") then
+		local up = cup:GetAttribute("StackUp")
+		if up then
+			return cup.Position + Vector3.new(0, up + 0.02, 0)
+		end
+		return cup.Position + Vector3.new(0, cup.Size.Y / 2 + 0.05, 0)
+	end
+	return self.stickBoxPos + Vector3.new(0, 0.3, 0)
+end
+
+-- 넓은 누름판 (D62): 손 작업대 누름판을 복제해 금형판 칸을 다 덮는 크기로
+function Scene:presser()
+	if self.press then
+		return self.press
+	end
+	-- 복제 작업대의 누름판은 숨겨 놓았으니, 내 가게 손 작업대의 누름판(원래 투명도 그대로)을 복제
+	local ws = Workstations.mine()
+	local src = ws and ws:FindFirstChild("Presser")
+	if not src then
+		return nil
+	end
+	local p = src:Clone()
+	p.Name = "WidePresser"
+	for _, d in ipairs(p:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.LocalTransparencyModifier = 0
+			d.CanQuery, d.CanCollide, d.CanTouch = false, false, false
+			d.Anchored = true
+		elseif d:IsA("ProximityPrompt") then
+			d.Enabled = false
+		end
+	end
+	if not p.PrimaryPart then
+		p.PrimaryPart = p:FindFirstChild("Disc") or p:FindFirstChildWhichIsA("BasePart", true)
+	end
+	p:PivotTo(CFrame.new(p:GetPivot().Position) * self.rot)
+	local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
+	for _, c in ipairs(self.cavities) do
+		local l = self.origin:PointToObjectSpace(c.pos)
+		minX, maxX = math.min(minX, l.X), math.max(maxX, l.X)
+		minZ, maxZ = math.min(minZ, l.Z), math.max(maxZ, l.Z)
+	end
+	local span = math.max(maxX - minX, maxZ - minZ) + self.cavD * 1.3
+	local _, size = p:GetBoundingBox()
+	local w = math.max(size.X, size.Z)
+	if w > 0.01 then
+		p:ScaleTo(p:GetScale() * span / w)
+	end
+	p.Parent = self.model
+	self.press = { model = p }
+	return self.press
+end
+
+-- 누름판 아랫면 가운데를 금형판 칸 가운데 + h(스터드) 높이로
+function Scene:presserTo(h)
+	local pr = self:presser()
+	if not pr then
+		return
+	end
+	local cf, sz = pr.model:GetBoundingBox()
+	local bottom = cf.Position - Vector3.new(0, sz.Y / 2, 0)
+	local c = self.plateCenter
+	local want = Vector3.new(c.X, self.cavY + h, c.Z)
+	pr.model:PivotTo(pr.model:GetPivot() + (want - bottom))
+end
+
+function Scene:hidePresser()
+	if self.press then
+		self.press.model:Destroy()
+		self.press = nil
+	end
 end
 
 -- 국자 그릇 가운데를 point로 (손잡이 방향 = Station 제자리 그대로), tilt = 국자 기울기(라디안)
@@ -419,18 +587,27 @@ function Scene:setHeat(v)
 	end
 end
 
--- 설탕 줄기: 배출구 끝에서 국자까지
-function Scene:setStream(on)
+-- 3단계 기둥 끝 빛 (key = "sugarPillar" | "sodaPillar")
+function Scene:setPillarGlow(key, on)
+	local p = self.pillarGlow and self.pillarGlow[key]
+	if p then
+		p.Transparency = on and 0.2 or 1
+	end
+end
+
+-- 설탕(소다) 줄기: top(배출구·기둥 끝)에서 국자까지
+function Scene:setStream(on, top, color)
 	local s = self.stream
 	if not on then
 		s.Transparency = 1
 		return
 	end
-	local top = self.spoutPos
+	top = top or self.spoutPos
 	local bottom = self:bowlPos() + Vector3.new(0, 0.2, 0)
 	local len = math.max(0.1, top.Y - bottom.Y)
 	s.Size = Vector3.new(0.14, len, 0.14)
 	s.CFrame = CFrame.new(Vector3.new(top.X, (top.Y + bottom.Y) / 2, top.Z))
+	s.Color = color or C.white
 	s.Transparency = 0.1
 end
 
@@ -473,47 +650,62 @@ function Scene:setCavityFill(i, fill, shape, color)
 		end
 	end
 	c.look:ScaleTo(math.max(0.15, k))
-	c.look:PivotTo(CFrame.new(c.pos + Vector3.new(0, 0.03 + 0.03 * math.min(fill, 1.3), 0)))
+	c.look:PivotTo(CFrame.new(c.pos + Vector3.new(0, 0.03 + 0.03 * math.min(fill, 1.3), 0)) * self.rot)
+	c.baseLook = c.look:GetPivot()
 	if fill > 1.15 and not c.spill then
 		-- 넘침: 둘레로 흘러나온 얇은 반죽
 		c.spill = cyl(self.model, "Spill" .. i, 0.03, self.cavD * 1.3, c.pos + Vector3.new(0, 0.01, 0), color or Color3.fromRGB(214, 150, 70), Enum.Material.SmoothPlastic, { Transparency = 0.2 })
 	end
 end
 
--- 막대 꽂기: 칸 앞쪽(-Z, 화면 아래)으로 나옴
-function Scene:addStick(i)
+-- 누르는 동안 칸 반죽이 납작해짐 (k = 0~1, 1 = 다 눌림)
+function Scene:flattenCavities(k)
+	for _, c in ipairs(self.cavities) do
+		if c.look then
+			c.look:ScaleTo(math.max(0.15, math.min(c.fill, 1)) * (1 + 0.12 * k))
+			if c.baseLook then
+				c.look:PivotTo(c.baseLook - Vector3.new(0, 0.03 * k, 0))
+			end
+		end
+	end
+end
+
+-- 칸 i의 막대 끝 자리 (칸 가운데에서 앞(-Z) 쪽으로 빠져나옴)
+function Scene:stickSpot(i)
 	local c = self.cavities[i]
-	local L = self.cavD * 1.1
-	c.stick = part(self.model, "Stick", Vector3.new(self.cavD * 0.1, self.cavD * 0.06, L), CFrame.new(c.pos + Vector3.new(0, 0.08, -self.cavD * 0.3 - L / 2)), Color3.fromRGB(236, 214, 170), Enum.Material.Wood)
+	return c.pos + self.dir(Vector3.new(0, 0.08, -self.cavD * 0.15))
 end
 
 -- 금형판 붓기 판(UI) 위 칸 자리: uv (위 = 기계 뒤 +Z, 오른쪽 = 화면 오른쪽 -X), 칸 반지름 비율
 function Scene:moldPadLayout()
 	local minX, maxX, minZ, maxZ = math.huge, -math.huge, math.huge, -math.huge
-	for _, c in ipairs(self.cavities) do
-		minX, maxX = math.min(minX, c.pos.X), math.max(maxX, c.pos.X)
-		minZ, maxZ = math.min(minZ, c.pos.Z), math.max(maxZ, c.pos.Z)
+	local locals = {}
+	for i, c in ipairs(self.cavities) do
+		local l = self.origin:PointToObjectSpace(c.pos)
+		locals[i] = l
+		minX, maxX = math.min(minX, l.X), math.max(maxX, l.X)
+		minZ, maxZ = math.min(minZ, l.Z), math.max(maxZ, l.Z)
 	end
 	local r = self.cavD / 2
 	local span = math.max(maxX - minX, maxZ - minZ) + 2 * r + self.cavD * 0.8
 	local cx, cz = (minX + maxX) / 2, (minZ + maxZ) / 2
 	local uvs = {}
-	for i, c in ipairs(self.cavities) do
-		uvs[i] = { 0.5 + (cx - c.pos.X) / span, 0.5 + (cz - c.pos.Z) / span }
+	for i, l in ipairs(locals) do
+		uvs[i] = { 0.5 + (cx - l.X) / span, 0.5 + (cz - l.Z) / span }
 	end
 	return uvs, r / span
 end
 
--- 카메라 자리 (Station을 안 쓰는 단계: 동전 · 설탕 · 붓기 · 막대 · 헹굼): target, 거리, 내려다보는 각도°
+-- 카메라 자리 (Station을 안 쓰는 단계: 동전 · 설탕 · 붓기 · 누르기 · 막대 · 헹굼): target, 거리, 내려다보는 각도°
 function Scene:shot(name)
 	local t, d, p
 	if self.stage == 3 then
 		if name == "coin" then
 			t, d, p = self.at(Vector3.new(0, 3.9, -2.45)), 19, 12
-		elseif name == "sugar" then
-			t, d, p = self.at(Vector3.new(1.2, 2.2, -1.8)), 15, 22
-		elseif name == "pour" or name == "stick" then
-			t, d, p = self.plateCenter + Vector3.new(0.8, 0, 0), 12, 50
+		elseif name == "sugar" or name == "sodaPillar" then
+			t, d, p = self.at(Vector3.new(1.1, 1.8, -1.6)), 15, 22
+		elseif name == "pour" or name == "stick" or name == "press" then
+			t, d, p = self.plateCenter + self.dir(Vector3.new(0.6, 0, -0.4)), 12, 50
 		else
 			t, d, p = self.waterPos:Lerp(self.burnerPos, 0.5), 18, 35
 		end
@@ -522,8 +714,8 @@ function Scene:shot(name)
 			t, d, p = self.at(Vector3.new(0, 2.3, -1.6)), 22, 10
 		elseif name == "sugar" then
 			t, d, p = self.at(Vector3.new(0, 0.9, -1.8)), 13, 18
-		elseif name == "pour" or name == "stick" then
-			t, d, p = self.plateCenter, 9, 60
+		elseif name == "pour" or name == "stick" or name == "press" then
+			t, d, p = self.plateCenter + self.dir(Vector3.new(-1.0, 0, -1.2)), 10, 58
 		else
 			t, d, p = self.waterPos:Lerp(self.burnerPos, 0.5), 18, 45
 		end
@@ -534,7 +726,7 @@ function Scene:shot(name)
 		d *= 1.6 -- 세로 화면: 더 멀리
 	end
 	local r = math.rad(p)
-	local eye = t + Vector3.new(0, math.sin(r) * d, -math.cos(r) * d)
+	local eye = t + self.dir(Vector3.new(0, math.sin(r) * d, -math.cos(r) * d))
 	return CFrame.lookAt(eye, t)
 end
 
@@ -544,6 +736,21 @@ function Scene:destroy()
 			self.S_:clearFx()
 		end)
 	end
+	if self.inShop then
+		ViewClear.stop()
+	end
+	for p, v in pairs(self.hidden) do
+		if p.Parent then
+			p.LocalTransparencyModifier = v
+		end
+	end
+	table.clear(self.hidden)
+	for g, v in pairs(self.hiddenGui) do
+		if g.Parent then
+			g.Enabled = v
+		end
+	end
+	table.clear(self.hiddenGui)
 	self.model:Destroy()
 end
 
