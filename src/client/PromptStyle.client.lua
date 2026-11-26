@@ -20,11 +20,14 @@ local folder = new("Folder", { Name = "PromptGuis", Parent = playerGui })
 local H = 54 -- 판 높이 (기본 72보다 작게, 폰에서 누르기엔 충분)
 local KEY = 42 -- 키 동그라미
 
-local mine = setmetatable({}, { __mode = "k" }) -- 이 스크립트가 Custom으로 바꾼 프롬프트
+-- 이 스크립트가 Custom으로 바꾼 프롬프트 표시 = 프롬프트 속성 (내 화면에만 있음).
+-- 예전엔 약한 키 표(__mode "k")에 넣었는데, 다른 스크립트가 붙잡지 않는 프롬프트(손 작업대 MakePrompt 등)는
+-- 가비지 수집 때 표에서 빠져 Custom인 채 아무도 안 그려 버튼이 안 뜸 (2026-11-26 사용자 "다가가도 제작하는 버튼 안 뜸")
+local MARK = "PromptStyled"
 
 local function adopt(p)
 	if p:IsA("ProximityPrompt") and p.Style == Enum.ProximityPromptStyle.Default then
-		mine[p] = true
+		p:SetAttribute(MARK, true)
 		p.Style = Enum.ProximityPromptStyle.Custom
 	end
 end
@@ -71,7 +74,10 @@ local function build(prompt, inputType)
 	local bb = new("BillboardGui", {
 		Name = "Prompt",
 		Adornee = prompt.Parent,
-		AlwaysOnTop = true,
+		-- AlwaysOnTop = true인 판은 이 게임 화면에 안 그려짐 (2026-11-26 Studio 확인: 주문 말풍선·이름표처럼 false만 보임)
+		-- → false로 두고 물건 위로 조금 띄워 책상·기계에 파묻히지 않게
+		AlwaysOnTop = false,
+		StudsOffsetWorldSpace = Vector3.new(0, 2.2, 0),
 		LightInfluence = 0,
 		ResetOnSpawn = false,
 		Active = true,
@@ -165,7 +171,7 @@ local function build(prompt, inputType)
 end
 
 ProximityPromptService.PromptShown:Connect(function(prompt, inputType)
-	if not mine[prompt] then
+	if prompt:GetAttribute(MARK) ~= true then
 		return
 	end
 	local cleanup = build(prompt, inputType)
