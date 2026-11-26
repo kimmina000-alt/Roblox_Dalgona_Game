@@ -6,6 +6,7 @@
 --     입력 기록은 점수가 아니라 단계 시각·설탕 양·젓기 표본·칸마다 채운 양 (2026-11-26, 손 제작처럼 서버가 다시 셈).
 --     형식·검사·점수식은 shared/MachineMakeRules. 품질 Q = 설탕 15% + 녹이기 30% + 소다 25% + 붓기 30%. 한 판 = 그 기계 batch개(2단계 2, 3단계 5), 재료는 원가대로 그만큼.
 --     Perfect(95+)는 한 판에 1개만, 나머지는 Excellent (D41). 기계 것이라 수제 ×1.5(D58)는 안 붙음. EXP = G.ExpMachine × 개수 + 판마다 5
+--     도감(D38)에는 손으로 만든 것으로 셈 (D41): 손 제작처럼 한 판에 한 번, 그 판의 가장 좋은 등급으로 CollectionService.onMade
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 
@@ -16,6 +17,7 @@ local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
 local Rules = require(Shared:WaitForChild("MachineMakeRules"))
 
 local MM = {}
+local Collection = nil -- CollectionService (도감, 처음 쓸 때 가져옴 — SalesService와 같은 방식)
 
 local Data, Economy = nil, nil
 local sessions = {} -- [player] = { id, t0, stage, shape, batch = 이번 판 칸 수 }
@@ -142,6 +144,8 @@ function MM.submit(player, id, raw)
 	local grade = gradeOf(q)
 	local m = G.Machines[s.stage]
 	local made, perfect, ups, newShapes = 0, false, {}, {}
+	local notes, newTitles, gold = {}, {}, false
+	Collection = Collection or require(script.Parent:WaitForChild("CollectionService"))
 	Data.update(player, function(d)
 		local n = canMakeN(d, s.shape, m)
 		if n <= 0 then
@@ -168,10 +172,21 @@ function MM.submit(player, id, raw)
 		d.stats.machineDirect = (d.stats.machineDirect or 0) + 1
 		ups = Economy.addExp(d, G.ExpMachine * n + ROUND_EXP)
 		made = n
+		-- 도감 (D41: 기계 직접 만들기도 손으로 만든 것으로 셈). 한 판에 한 번, 가장 좋은 등급 = grade (Perfect면 Perfect)
+		local okC, cNotes, cUps, cTitles, cGold = pcall(Collection.onMade, d, s.shape, { grade = grade })
+		if okC then
+			notes, newTitles, gold = cNotes or {}, cTitles or {}, cGold == true
+			for _, u in ipairs(cUps or {}) do
+				table.insert(ups, u)
+			end
+		else
+			warn("[MachineMake] 도감 기록 실패:", cNotes)
+		end
 	end)
 	if made <= 0 then
 		return { ok = false, reason = "재료나 보관함 자리가 모자라요" }
 	end
+	Collection.after(player, notes, newTitles, gold) -- 도감 알림·칭호·간판 금테
 	Economy.announceLevels(player, ups)
 	Economy.push(player)
 	print(string.format("[MachineMake] %s stage %d %s x%d Q%d %s", player.Name, s.stage, s.shape.id, made, q, grade))
