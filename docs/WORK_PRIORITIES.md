@@ -32,6 +32,8 @@
 
 **다음 묶음 (1130)**: 사용자 Import 먼저 — 벽면 진열장(wall_case glb → ShopModel.WallDisplayCase, 없으면 6단계 "준비 중"), 손 작업대 앞 긴 진열장·손님 의자(user_furniture glb, 놓을 코드 필요), 임시 기본 NPC(customers_basic glb + feat/basic-npc-1126). 그다음 후보: D47 대량 납품.
 
+---
+
 ## 1. 끝난 것 ✅
 
 | # | 내용 | 어디에 |
