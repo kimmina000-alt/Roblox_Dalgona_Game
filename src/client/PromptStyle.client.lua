@@ -170,6 +170,17 @@ local function build(prompt, inputType)
 	end
 end
 
+-- 만드는 중(손 작업대·기계 직접 만들기, 플레이어 속성 Making)에는 상호작용 버튼을 모두 끔 (2026-11-26 사용자 "2단계 기계에서 설탕 받은 뒤
+-- 저으려고 드래그할 때 계속 모양 선택 창이 뜸"): 기계 제작 장면은 하늘(y 900)에 있고 카메라가 아래를 보는데, 가게에 서 있는 내 캐릭터
+-- 옆 기계 버튼 판(BillboardGui)이 바닥에 가려 안 보여도 화면에 겹쳐 눌림 → 드래그마다 "도안 고르기"가 눌려 기계 창이 열림.
+-- 서비스를 끄면 모든 프롬프트가 숨겨지고(PromptHidden → 판 지움) E 키도 안 먹음. Making이 풀리면 다시 켬
+local player = Players.LocalPlayer
+local function syncMaking()
+	ProximityPromptService.Enabled = player:GetAttribute("Making") ~= true
+end
+player:GetAttributeChangedSignal("Making"):Connect(syncMaking)
+syncMaking()
+
 ProximityPromptService.PromptShown:Connect(function(prompt, inputType)
 	if prompt:GetAttribute(MARK) ~= true then
 		return
