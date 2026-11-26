@@ -117,10 +117,9 @@ end
 
 -- 진열된(지금 열린 칸 안) 달고나, 먼저 만든 것부터
 function EconomyService.shelved(d)
-	local slots = G.shelfSlots(d)
 	local list = {}
 	for _, item in ipairs(d.stock) do
-		if item.sl and item.sl <= slots then
+		if item.sl and G.slotOpen(d, item.sl) then
 			table.insert(list, item)
 		end
 	end
@@ -143,7 +142,7 @@ function EconomyService.freeSlot(d)
 			used[item.sl] = true
 		end
 	end
-	for i = 1, G.shelfSlots(d) do
+	for _, i in ipairs(G.openSlots(d)) do -- 열리는 순서대로 (G.SlotOpenOrder)
 		if not used[i] and not EconomyService.isReserved(d, i) then
 			return i
 		end
@@ -205,7 +204,7 @@ function EconomyService.place(player, slot, extra) -- extra: 놓을 때 달고�
 	if not data then
 		return false, "불러오는 중이에요"
 	end
-	if type(slot) ~= "number" or slot < 1 or slot > G.shelfSlots(data) then
+	if type(slot) ~= "number" or not G.slotOpen(data, slot) then
 		return false, "그 칸은 쓸 수 없어요"
 	end
 	for _, item in ipairs(data.stock) do

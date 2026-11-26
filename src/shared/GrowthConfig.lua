@@ -17,7 +17,7 @@ G.Save = {
 }
 
 -- 스키마 버전. 데이터 모양을 바꾸면 올리고 PlayerDataService.MIGRATIONS[새 버전]에 옮기는 함수를 넣는다.
-G.SchemaVersion = 17 -- v17 (2026-11-26 D57): 진열장 단계(displayTier, 가게가 있던 저장은 4) · 냉장고·서랍장 단계, 넘치는 진열은 보관함으로 / v16 (2026-11-24 D51): 문어 Mythic → 알바·기계·공장 도안 문어는 범선, Lv25 전이면 해금 뺌 / v15 (2026-11-24 D38): 도감 보상 표시·손님 도감·칭호 / v14 (2026-11-24 D46 재수정): 화로 알바 → 2단계 기계 자리, coalLeft2 없앰, 숙련 교육 환불·전문 교육 → 기계 알바 교육 / v13 (2026-11-24): 두 번째 화구 → 연탄 덮개 / v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
+G.SchemaVersion = 18 -- v18 (2026-11-26): 진열 칸 여는 순서 바꿈(유리 진열장 → 작은 탁자 3개 → 걸이판 → 벽면 진열장), 새 순서로 닫힌 칸의 달고나는 보관함으로 / v17 (2026-11-26 D57): v17 (2026-11-26 D57): 진열장 단계(displayTier, 가게가 있던 저장은 4) · 냉장고·서랍장 단계, 넘치는 진열은 보관함으로 / v16 (2026-11-24 D51): 문어 Mythic → 알바·기계·공장 도안 문어는 범선, Lv25 전이면 해금 뺌 / v15 (2026-11-24 D38): 도감 보상 표시·손님 도감·칭호 / v14 (2026-11-24 D46 재수정): 화로 알바 → 2단계 기계 자리, coalLeft2 없앰, 숙련 교육 환불·전문 교육 → 기계 알바 교육 / v13 (2026-11-24): 두 번째 화구 → 연탄 덮개 / v12 (2026-11-24 D44): 연탄 재료·화로 연탄 남은 양 / v11 (2026-11-24 D43·D42): 공장 공정 알바 → 알바생 목록, 보관함 보장분 / v10 (D34·D39·D40): 알바생 배치(post), 국자 → 화로 알바 교육(stoveUps) / v2 (2026-11-20 성장): 해금·도감·일일 목표·알바생 / v3 (2026-11-21 D21): 노점 → 월세 가게 / v4: 진열대에 직접 놓기 / v5: 기계 2~4단계 / v6: 공장 / v7: 오프라인 생산 (lastSeen) / v8: 공장 공정 알바생 / v9: 첫 60초 안내
 
 -- 새 플레이어 기본 데이터 (빠진 칸은 불러올 때 여기서 채움)
 G.DefaultData = {
@@ -256,7 +256,7 @@ function G.stockRoom(d)
 	local used = 0
 	local slots = G.shelfSlots(d)
 	for _, it in ipairs(d.stock) do
-		if it.sl and it.sl <= slots then
+		if it.sl and G.slotOpen(d, it.sl) then
 			used += 1
 		end
 	end
@@ -765,7 +765,8 @@ function G.shopOpen(d)
 end
 
 -- 진열장 업그레이드 6단계 (D57, GDD 17장, 2026-11-26 사용자 승인). d.displayTier = 0~5 (산 단계, 기본 0).
--- slots = 그 단계까지 진열 칸 합계. 칸은 번호 순서로 열림 (1~4 유리 진열장 → 걸이판 → 작은 탁자, SalesService 칸 번호).
+-- slots = 그 단계까지 진열 칸 합계. 칸이 열리는 순서는 아래 G.SlotOpenOrder (2026-11-26 사용자: 작은 탁자 3개가 다 진열되게 —
+-- 예전엔 칸 번호 순서(유리 진열장 → 걸이판 → 작은 탁자)라 50칸 단계에서 세 번째 탁자(53~61)가 비어 있었음).
 -- 가구에 실제로 있는 칸(G.Sales.shelfSlots 73 = 61 + 벽면 진열장 12)보다 많으면 그만큼만
 G.Display = {
 	{ name = "기본 진열장", level = 3, cost = 0, slots = 8 },
@@ -788,6 +789,50 @@ function G.shelfSlots(d)
 		return G.Shop.stallSlots
 	end
 	return math.min(G.Display[G.displayTier(d) + 1].slots, G.Sales.shelfSlots)
+end
+
+-- 진열 칸이 열리는 순서 (칸 번호 구간, SalesService GRID와 같음): 유리 진열장 1~4 → 작은 탁자 35~43 · 44~52 · 53~61 → 걸이판 5~34 → 벽면 진열장 62~73.
+-- 칸 번호는 그대로라 저장(item.sl)은 안 바뀜. 단계마다 앞에서부터 G.shelfSlots개가 열림
+G.SlotOpenOrder = { { 1, 4 }, { 35, 61 }, { 5, 34 }, { 62, 73 } }
+
+-- 진열장 단계 tier(0~5)에서 열린 칸 번호 목록 (가게가 열렸을 때)
+function G.openSlotsForTier(tier)
+	local n = math.min(G.Display[math.clamp(tier, 0, #G.Display - 1) + 1].slots, G.Sales.shelfSlots)
+	local out = {}
+	for _, r in ipairs(G.SlotOpenOrder) do
+		for i = r[1], math.min(r[2], G.Sales.shelfSlots) do
+			if #out >= n then
+				return out
+			end
+			table.insert(out, i)
+		end
+	end
+	return out
+end
+
+-- 지금 열린 칸 번호 목록 (채우는 순서). 노점이면 쟁반 1~5
+function G.openSlots(d)
+	if not G.shopOpen(d) then
+		local out = {}
+		for i = 1, G.Shop.stallSlots do
+			out[i] = i
+		end
+		return out
+	end
+	return G.openSlotsForTier(G.displayTier(d))
+end
+
+-- 칸 i가 지금 열려 있는지
+function G.slotOpen(d, i)
+	if type(i) ~= "number" then
+		return false
+	end
+	for _, k in ipairs(G.openSlots(d)) do
+		if k == i then
+			return true
+		end
+	end
+	return false
 end
 
 -- 냉장고·서랍장 (D57, 구매형): 한도는 재료마다. d.storageTier = { fridge = 0~3, drawer = 0~3 }
