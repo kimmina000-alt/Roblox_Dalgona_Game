@@ -226,6 +226,10 @@ local function makeDemo(S, spoon, geo, restCF, ladle, carryY)
 	return demo
 end
 
+-- 2·3단계 기계 직접 만들기(MachineMake)도 같은 국자 속 설탕 더미·결정을 씀 (2026-11-26 사용자 "손 작업대 설탕 질감 그대로")
+Sugar.pile = updatePile
+Sugar.addGrain = addGrain
+
 function Sugar.run(ctx)
 	local S, P, ui, st = ctx.station, ctx.pointer, ctx.ui, ctx.state
 	local cfg = Config.Sugar

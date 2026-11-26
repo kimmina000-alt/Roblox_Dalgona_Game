@@ -641,6 +641,61 @@ end
 -- 뽑기 판 (2026-11-23 사용자 요청: 붓기 판처럼 뽑기에도 따로 판, 손가락이 도안을 가리지 않게). 붓기 판(PourPad)은
 -- 고정 기능이라 건드리지 않고 같은 자리·모양으로 따로 만듦. 판 안 = 화면에 보이는 달고나 둘레를 그대로 줄인 것:
 -- 점선(도안)을 작은 점으로 그리고, 판을 누르고 끌면 바늘이 달고나의 같은 자리를 긁음 (Ppopgi가 씀)
+-- 금형판 붓기 판 (2026-11-26 사용자: 2·3단계 기계도 손 작업대처럼 반투명 검은 판을 눌러 붓기). 붓기 판(PourPad, 고정)과
+-- 같은 자리·모양으로 따로 만듦. 판 안 = 금형판 칸을 위에서 본 배치 (uv 0~1, 위 = 기계 뒤쪽). 칸을 누르고 있으면 그 칸에 부음.
+-- cavs = { {u, v}, ... }, fills = { 0~1.3 }, active = 지금 붓는 칸 번호 또는 nil, r = 칸 반지름(판 크기 비율)
+function Ui:setMoldPad(visible, cavs, fills, active, r)
+	if not self.moldPad then
+		local pad = new("Frame", { Name = "MoldPad", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -24, 0.56, 0), Size = UDim2.fromOffset(self.touch and 230 or 260, self.touch and 230 or 260), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.5, Visible = false, ZIndex = 5, Parent = self.root }, { corner(16) })
+		new("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.5, Thickness = 2, Parent = pad })
+		label({ Text = "칸을 누르고 있으면 부어요", TextSize = 15, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.4, AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0, -6), Size = UDim2.new(1, 0, 0, 20), ZIndex = 5, Parent = pad })
+		self.moldCavs = {}
+		self.moldPad = pad
+	end
+	self.moldPad.Visible = visible
+	if not visible or not cavs then
+		return
+	end
+	for i, c in ipairs(cavs) do
+		local e = self.moldCavs[i]
+		if not e then
+			local ring = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = Color3.fromRGB(40, 36, 34), BackgroundTransparency = 0.2, ZIndex = 6, Parent = self.moldPad }, { corner(999) })
+			local stroke = new("UIStroke", { Color = Color3.new(1, 1, 1), Transparency = 0.3, Thickness = 2, Parent = ring })
+			local fill = new("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0, 0), BackgroundColor3 = Color3.fromRGB(232, 164, 82), ZIndex = 7, Parent = ring }, { corner(999) })
+			e = { ring = ring, stroke = stroke, fill = fill }
+			self.moldCavs[i] = e
+		end
+		local d = (r or 0.12) * 2
+		e.ring.Visible = true
+		e.ring.Position = UDim2.fromScale(c[1], c[2])
+		e.ring.Size = UDim2.fromScale(d, d)
+		e.ring.SizeConstraint = Enum.SizeConstraint.RelativeXX
+		local f = math.clamp((fills and fills[i]) or 0, 0, 1.3)
+		local k = math.min(f, 1)
+		e.fill.Size = UDim2.fromScale(k, k)
+		-- 알맞음(85~110%) 초록, 넘침 빨강, 붓는 중 분홍 테두리
+		e.stroke.Color = (i == active) and Color3.fromRGB(255, 120, 160) or (f > 1.1 and Color3.fromRGB(255, 90, 90)) or (f >= 0.85 and Color3.fromRGB(120, 220, 120)) or Color3.new(1, 1, 1)
+		e.stroke.Thickness = (i == active) and 4 or 2
+	end
+	for i = #cavs + 1, #self.moldCavs do
+		self.moldCavs[i].ring.Visible = false
+	end
+end
+
+-- 화면 점 → 금형판 판 위 (u, v). 판 밖이면 nil
+function Ui:moldPadAt(pos)
+	local pad = self.moldPad
+	if not (pad and pad.Visible) then
+		return nil
+	end
+	local p, sz = pad.AbsolutePosition, pad.AbsoluteSize
+	local u, v = (pos.X - p.X) / sz.X, (pos.Y - p.Y) / sz.Y
+	if u < -0.05 or u > 1.05 or v < -0.05 or v > 1.05 then
+		return nil
+	end
+	return u, v
+end
+
 function Ui:setPpPad(visible)
 	if not self.ppPad then
 		local pad = new("Frame", { Name = "PpopgiPad", AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -24, 0.56, 0), Size = UDim2.fromOffset(self.touch and 230 or 260, self.touch and 230 or 260), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.5, ClipsDescendants = true, Visible = false, ZIndex = 5, Parent = self.root }, { corner(16) })

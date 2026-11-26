@@ -1,10 +1,13 @@
 -- 2·3단계 기계 직접 만들기 (D35·D41, 2026-11-26 사용자: 참고 영상 "달고나 판매기" 순서, 2·3단계는 같은 순서·판 수만 다름,
 -- 금형판 칸이 모양 → 찍기·뽑기 없음). 서버 MachineMakeService(시작·제출), 장면 MachineMakeScene, 화면 글·게이지는 손 제작 Making/Ui.
--- 순서: ① 동전 3개 → ② 국자를 배출구에 대고 설탕 받기(꾹 누르기, 초록 칸에서 떼기) → ③ 화구에서 원 그리며 젓기
---       → ④ 설탕 섞은 소다를 젓가락에 묻혀(통 누르기) 국자에 털고 빠르게 젓기 → ⑤ 금형판 칸마다 국자를 대고 꾹 눌러 붓기
+-- 순서: ① 동전 3개 → ② 국자를 배출구에 대고 설탕 받기(꾹 누르기, 초록 칸에서 떼기) → ③ 녹이기 → ④ 소다 → ⑤ 금형판 칸마다 붓기
 --       → ⑥ 칸마다 막대 꽂기 → (국자 물에 헹굼, 자동) → 서버 제출 → 결과
--- 서버로는 점수가 아니라 입력 기록(단계 시각·설탕 양·젓기 표본·칸마다 채운 양)을 보냄 (2026-11-26).
--- 점수·품질 Q는 shared/MachineMakeRules로 서버가 다시 셈 (화면·Studio 시험도 같은 함수). 개수·Perfect 1개 규칙은 서버가 정함
+-- 2026-11-26 사용자 "손 작업대 화면 구현 방식과 게임 방식 그대로": 내 손 작업대를 복제한 Station(MachineMakeScene:station)으로
+--   국자·나무젓가락·소다통·설탕 더미와 결정(Steps/Sugar)을 그대로 쓰고, ③ 녹이기·④ 소다는 손 작업대 단계 모듈(Steps/Melt, Steps/Soda)을
+--   그대로 돌림 (결정이 녹는 단계·젓가락 길·국자 높이·탐·소다 찍기·부푸는 거품·점수 모두 같음). ⑤ 붓기는 손 작업대 붓기 판처럼
+--   화면 오른쪽 반투명 검은 판(Ui:setMoldPad)의 칸을 누르고 있으면 그 칸에 부음.
+-- 서버로는 점수가 아니라 입력 기록(단계 시각·설탕 양·손 제작 녹이기/소다 기록·칸마다 채운 양)을 보냄.
+-- 점수·품질 Q는 shared/MachineMakeRules로 서버가 다시 셈 (Studio 시험 모드도 같은 함수). 개수·Perfect 1개 규칙은 서버가 정함
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -12,12 +15,17 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
+local Scoring = require(Shared:WaitForChild("Scoring"))
 local Rules = require(Shared:WaitForChild("MachineMakeRules"))
 local Making = script.Parent:WaitForChild("Making")
 local Ui = require(Making:WaitForChild("Ui"))
 local Pointer = require(Making:WaitForChild("Pointer"))
-local StirJudge = require(Making:WaitForChild("Stir"))
 local Sfx = require(Making:WaitForChild("Sfx"))
+local CameraRig = require(Making:WaitForChild("CameraRig"))
+local Steps = Making:WaitForChild("Steps")
+local SugarStep = require(Steps:WaitForChild("Sugar"))
+local MeltStep = require(Steps:WaitForChild("Melt"))
+local SodaStep = require(Steps:WaitForChild("Soda"))
 local Scene = require(script.Parent:WaitForChild("MachineMakeScene"))
 
 local player = Players.LocalPlayer
@@ -36,11 +44,10 @@ local STEPS = {
 local TAP_PX = 110 -- 도구 화면 자리에서 이만큼 안을 누르면 그 도구
 local SUGAR_RATE = Rules.SUGAR_RATE
 local SUGAR_LO, SUGAR_HI, SUGAR_MAX = Rules.SUGAR_LO, Rules.SUGAR_HI, Rules.SUGAR_MAX
-local MELT_LIMIT = Rules.MELT_LIMIT
 local POUR_RATE = Rules.POUR_RATE
-local SUGAR = Color3.fromRGB(250, 250, 248)
-local AMBER = Color3.fromRGB(226, 150, 50)
-local FOAM = Color3.fromRGB(206, 152, 96)
+local GRAINS = 16 -- 설탕 더미 위 결정 낱알 수 (Steps/Sugar와 같은 느낌)
+local WHITE = Color3.fromRGB(252, 252, 252)
+local BATTER = Color3.fromRGB(206, 152, 96)
 
 local ui = nil
 local running = false
@@ -50,33 +57,18 @@ local function now()
 	return workspace:GetServerTimeNow()
 end
 
--- SAMPLE초마다 표본 하나 (서버가 같은 간격으로 다시 셈)
-local function sampler()
-	local o = { s = {}, acc = 0, last = 0 }
-	function o:add(dt, z)
-		self.acc += dt
-		self.last = z
-		while self.acc >= Rules.SAMPLE and #self.s < Rules.MAX_SAMPLES do
-			self.acc -= Rules.SAMPLE
-			table.insert(self.s, z)
-		end
-	end
-	-- 끝날 때 남은 반 칸 이상은 표본 하나로 (서버 계산이 덜 나오지 않게)
-	function o:finish()
-		if self.acc >= Rules.SAMPLE * 0.5 and #self.s < Rules.MAX_SAMPLES then
-			table.insert(self.s, self.last)
-		end
-		self.acc = 0
-		return self.s
-	end
-	return o
-end
-
 local function frame()
 	if aborted then
 		return nil
 	end
-	return RunService.RenderStepped:Wait()
+	local dt = RunService.RenderStepped:Wait()
+	if aborted then
+		return nil
+	end
+	if ui then
+		ui:tick()
+	end
+	return dt
 end
 
 local function screenOf(pos)
@@ -142,13 +134,13 @@ local function controls(on)
 	end
 end
 
--- 단계마다 볼 곳으로 카메라를 부드럽게 옮김. 손제작대 CameraRig처럼 매 프레임 다시 고정 (다른 스크립트가 Custom으로 돌려도 안 빠지게)
+-- 카메라: 동전·설탕·붓기·막대·헹굼은 장면 자리(Scene:shot), 녹이기·소다는 손 작업대 CameraRig 그대로 (국자를 따라감).
+-- 장면 카메라는 매 프레임 다시 고정 (다른 스크립트가 Custom으로 돌려도 안 빠지게)
 local camCF, camGoal = nil, nil
 local function shot(sc, name)
+	CameraRig.release()
 	camGoal = sc:shot(name)
-	if not camCF then
-		camCF = camGoal
-	end
+	camCF = camCF or workspace.CurrentCamera.CFrame
 	RunService:UnbindFromRenderStep("MachineMakeCam")
 	RunService:BindToRenderStep("MachineMakeCam", Enum.RenderPriority.Camera.Value + 1, function(dt)
 		local c = workspace.CurrentCamera
@@ -157,6 +149,11 @@ local function shot(sc, name)
 		camCF = camCF:Lerp(camGoal, 1 - math.exp(-dt * 5))
 		c.CFrame = camCF
 	end)
+end
+local function rig(key)
+	RunService:UnbindFromRenderStep("MachineMakeCam")
+	camCF = nil
+	CameraRig.go(key)
 end
 
 ---------------------------------------------------------------- ① 동전
@@ -200,8 +197,8 @@ local function stepCoin(sc)
 end
 
 ---------------------------------------------------------------- ② 설탕 받기
-local function slide(sc, to, dur)
-	local from = sc:ladlePos()
+-- 국자 그릇 가운데를 from → to로 (가운데가 살짝 들리는 호)
+local function slide(sc, from, to, dur)
 	local t = 0
 	while t < dur do
 		local dt = frame()
@@ -210,20 +207,23 @@ local function slide(sc, to, dur)
 		end
 		t += dt
 		local k = math.min(t / dur, 1)
-		sc:ladleTo(from:Lerp(to, k * k * (3 - 2 * k)) + Vector3.new(0, math.sin(k * math.pi) * 0.6, 0))
+		sc:ladleBowlTo(from:Lerp(to, k * k * (3 - 2 * k)) + Vector3.new(0, math.sin(k * math.pi) * 0.8, 0))
 	end
 	return true
 end
 
-local function stepSugar(sc)
+local function stepSugar(sc, S, st)
 	ui:setStep(2)
 	shot(sc, "sugar")
-	if not slide(sc, sc.sugarLadle, 0.45) then
+	local home = S.Bowl.Position
+	local catchAt = sc.sugarLadle + Vector3.new(0, S.bowlHalf, 0)
+	if (catchAt - home).Magnitude > 0.2 and not slide(sc, home, catchAt, 0.45) then
 		return nil
 	end
 	local t0 = now()
 	local what = sc.stage == 3 and "설탕 버튼을" or "설탕 배출구를"
 	ui:say(what .. " 꾹 누르고 있으면 설탕이 나와요", "막대가 초록 칸에 오면 손을 떼요")
+	st.grains = {}
 	local fill, pressed, holding, wasDown = 0, false, false, false
 	while true do
 		local dt = frame()
@@ -250,7 +250,21 @@ local function stepSugar(sc)
 		else
 			Sfx.loop("sugarPour", 0, 1)
 		end
-		sc:setContents(fill * 0.9, SUGAR, Enum.Material.Sand)
+		-- 손 작업대와 같은 국자 속 설탕 더미(그릇 더미 메시) + 결정 낱알 (Steps/Sugar)
+		if fill > 0.01 then
+			local k = math.clamp(fill / SUGAR_HI, 0, 1.2)
+			if SugarStep.pile(S, st, math.min(k, 1), WHITE) then
+				-- 더미는 설탕 그릇 더미 메시를 복제함 → 복제한 작업대에선 그릇이 숨겨져 있어 보이게 되돌림
+				if st.pile and st.pile.Transparency > 0.5 then
+					st.pile.Transparency = 0
+				end
+				while #st.grains < math.floor(GRAINS * math.min(k, 1)) do
+					SugarStep.addGrain(S, st.grains, st)
+				end
+			else
+				S:setContents({ Transparency = 0, thickness = 0.05 + 0.3 * math.min(k, 1), Color = WHITE, Material = Enum.Material.Sand })
+			end
+		end
 		ui:setMeter(true, fill / SUGAR_MAX, SUGAR_LO / SUGAR_MAX, SUGAR_HI / SUGAR_MAX, string.format("%d%%", math.floor(fill / SUGAR_HI * 100 + 0.5)), "설탕")
 		if (pressed and not on) or fill >= SUGAR_MAX then
 			break
@@ -268,206 +282,108 @@ local function stepSugar(sc)
 		ui:toast("너무 많아요", 0.8)
 	end
 	task.wait(0.4)
+	-- 국자를 화구 위로 (손 작업대 녹이기 시작 자리 = 철망 바로 위)
+	local onBurner = S:ladleAt(Config.Melt.hMin)
+	local pv = S.Ladle:GetPivot()
+	local bowlHome = onBurner.Position - (pv.Position - S.Bowl.Position)
+	if not slide(sc, S.Bowl.Position, bowlHome, 0.5) then
+		return nil
+	end
+	S.Ladle:PivotTo(onBurner)
 	return rec
 end
 
----------------------------------------------------------------- ③ 녹이기
-local function stepMelt(sc)
-	ui:setStep(3)
-	shot(sc, "melt")
-	if not slide(sc, sc.burnerPos + Vector3.new(0, 0.25 * sc.ladleK, 0), 0.5) then
-		return nil
-	end
-	ui:say("국자 안에서 원을 그리며 저어요", "딱 좋은 빠르기로 저으면 빨리 녹아요")
-	local judge = StirJudge.new()
-	local cfg = Config.Melt
-	local melt, t, heat = 0, 0, 0
-	local smp, t0 = sampler(), now()
-	while melt < 1 do
-		local dt = frame()
-		if not dt then
-			return nil
-		end
-		t += dt
-		heat = math.min(1, heat + dt * 0.8)
-		sc:setHeat(heat)
-		local speed = judge:update(dt)
-		local zone = StirJudge.zone(speed, cfg.slow, cfg.fast)
-		local stirring = Pointer.down
-		local z = stirring and zone or 0
-		smp:add(dt, z)
-		melt += Rules.meltGain(z, dt)
-		if stirring then
-			local c = sc:ladlePos()
-			local tip = Pointer.toPlane(c.Y + 0.3 * sc.ladleK)
-			local off = Vector3.new(tip.X - c.X, 0, tip.Z - c.Z)
-			if off.Magnitude > sc.ladleR then
-				off = off.Unit * sc.ladleR
-			end
-			sc:setStick(c + off + Vector3.new(0, 0.3 * sc.ladleK, 0), true)
-			Sfx.loop("stirDry", 0.4, 0.8 + speed / 12)
-		else
-			sc:setStick(nil, false)
-			Sfx.loop("stirDry", 0, 1)
-		end
-		sc:setContents(0.9, SUGAR:Lerp(AMBER, math.clamp(melt, 0, 1)), melt > 0.55 and Enum.Material.SmoothPlastic or Enum.Material.Sand)
-		ui:setGauge(stirring, speed, cfg.slow, cfg.fast)
-		ui:setMeter(true, melt, 0.999, 1, string.format("%d%%", math.floor(math.min(melt, 1) * 100)), "녹음")
-		if t > MELT_LIMIT then
-			ui:toast("너무 오래 걸렸어요", 0.8)
-			break
-		end
-	end
-	Sfx.loop("stirDry", 0, 1)
-	ui:setGauge(false)
-	ui:setMeter(false)
-	return { t0 = t0, t1 = now(), s = smp:finish() }
-end
-
----------------------------------------------------------------- ④ 소다
-local function stepSoda(sc)
-	ui:setStep(4)
-	shot(sc, "soda")
-	local t0 = now()
-	ui:say("소다 통을 눌러 젓가락에 소다를 묻혀요", "두세 번 묻히면 알맞아요 · 다 묻혔으면 국자를 눌러 털어 넣어요")
-	local dips, seen, tip = 0, Pointer.presses, sc.sodaTip
-	sc:setStick(tip, true)
-	while true do
-		if not frame() then
-			return nil
-		end
-		if Pointer.presses ~= seen then
-			seen = Pointer.presses
-			if near(sc.sodaPos + Vector3.new(0, 1.2, 0)) then
-				dips += 1
-				tip = sc.sodaTip - Vector3.new(0, 0.15, 0)
-				Sfx.play("stirCrystal", 0.6, 1.4)
-				ui:toast(string.format("소다 %d번", dips), 0.5)
-			elseif dips > 0 and near(sc:ladlePos()) then
-				break
-			elseif dips == 0 then
-				ui:hint("먼저 소다 통을 눌러요")
-			end
-		end
-		sc:setStick(tip, true)
-		sc:setStickSoda(tip, dips)
-	end
-	-- 털어 넣고 빠르게 젓기
-	sc:setStickSoda(tip, 0)
-	Sfx.play("sodaDrop", 0.5, 1.2)
-	ui:say("빠르게 저어요!", "빠르게 저을수록 금방 부풀어요")
-	local judge = StirJudge.new()
-	local foam, t = 0, 0
-	local smp = sampler()
-	while foam < 1 do
-		local dt = frame()
-		if not dt then
-			return nil
-		end
-		t += dt
-		local speed = judge:update(dt)
-		local z = Pointer.down and (speed >= Config.Soda.fastMin and 2 or 1) or 0
-		smp:add(dt, z)
-		foam += Rules.foamGain(z, dt)
-		if Pointer.down then
-			local c = sc:ladlePos()
-			local p = Pointer.toPlane(c.Y + 0.3 * sc.ladleK)
-			local off = Vector3.new(p.X - c.X, 0, p.Z - c.Z)
-			if off.Magnitude > sc.ladleR then
-				off = off.Unit * sc.ladleR
-			end
-			sc:setStick(c + off + Vector3.new(0, 0.3 * sc.ladleK, 0), true)
-			Sfx.loop("foamBubble", 0.4, 1)
-		else
-			Sfx.loop("foamBubble", 0, 1)
-		end
-		sc:setContents(0.9 + 0.5 * math.min(foam, 1), AMBER:Lerp(FOAM, math.min(foam * 1.4, 1)), Enum.Material.SmoothPlastic)
-		ui:setGauge(Pointer.down, speed, Config.Soda.fastMin * 0.6, Config.Soda.fastMin)
-		ui:setMeter(true, foam, 0.999, 1, string.format("%d%%", math.floor(math.min(foam, 1) * 100)), "거품")
-		if t > Rules.FOAM_LIMIT then
-			break
-		end
-	end
-	Sfx.loop("foamBubble", 0, 1)
-	ui:setGauge(false)
-	ui:setMeter(false)
-	sc:setStick(nil, false)
-	return { t0 = t0, t1 = now(), dips = dips, s = smp:finish() }
-end
-
----------------------------------------------------------------- ⑤ 금형판에 붓기
-local function stepPour(sc, shape)
+---------------------------------------------------------------- ⑤ 금형판에 붓기 (반투명 검은 판)
+local function stepPour(sc, S, shape, st)
 	ui:setStep(5)
 	shot(sc, "pour")
-	ui:say("국자를 금형판 칸 위로 끌어 꾹 누르고 있어요", "칸이 꽉 차면 다음 칸으로 · 넘치지 않게")
+	ui:say("오른쪽 검은 판의 칸을 꾹 누르고 있어요", "칸이 꽉 차면 다음 칸으로 · 넘치지 않게")
 	local t0 = now()
 	local n = #sc.cavities
-	local batter = n * Rules.BATTER_PER_CAVITY -- 국자에 든 반죽 (칸 n개 + 조금)
-	local cur = nil
+	local batter0 = n * Rules.BATTER_PER_CAVITY -- 국자에 든 반죽 (칸 n개 + 조금)
+	local batter = batter0
+	local color = st.batterColor or S.Contents.Color or BATTER
+	local baseThick = math.max(0.1, S.Contents.Size.X)
+	local uvs, rr = sc:moldPadLayout()
+	local fills = {}
+	for i = 1, n do
+		fills[i] = 0
+	end
+	-- 국자는 금형판 위로 (처음엔 판 가운데 위)
+	local hoverY = sc.cavY + S.bowlHalf + 1.1
+	local cur, last = nil, sc.plateCenter
+	local tilt = 0
+	ui:setMoldPad(true, uvs, fills, nil, rr)
 	while true do
 		local dt = frame()
 		if not dt then
+			ui:setMoldPad(false)
+			sc:setPourStream(nil)
 			return nil
 		end
+		cur = nil
 		if Pointer.down then
-			local y = sc.cavY + 0.8
-			local p = Pointer.toPlane(y)
-			sc:ladleTo(Vector3.new(p.X, y, p.Z))
-			cur = nil
-			for i, c in ipairs(sc.cavities) do
-				if Vector3.new(p.X - c.pos.X, 0, p.Z - c.pos.Z).Magnitude < sc.cavD * 0.6 then
-					cur = i
+			local u, v = ui:moldPadAt(Pointer.pos)
+			if u then
+				local best, bd = nil, (rr * 1.7) ^ 2
+				for i, c in ipairs(uvs) do
+					local dd = (c[1] - u) ^ 2 + (c[2] - v) ^ 2
+					if dd < bd then
+						best, bd = i, dd
+					end
 				end
-			end
-			if cur and batter > 0 then
-				local add = math.min(batter, POUR_RATE * dt)
-				batter -= add
-				sc:setCavityFill(cur, sc.cavities[cur].fill + add, shape)
-				Sfx.loop("pourGlug", 0.45, 1)
+				cur = best
 			else
-				Sfx.loop("pourGlug", 0, 1)
+				ui:hint("오른쪽 검은 판의 칸을 눌러요")
 			end
+		end
+		if cur then
+			last = sc.cavities[cur].pos
+		end
+		-- 국자: 고른 칸 위로 가서 기울여 부음 (손을 떼면 바로 세움)
+		tilt += ((cur and batter > 0) and 1.0 - tilt or -tilt) * (1 - math.exp(-dt * 10))
+		local bowlAt = Vector3.new(last.X, hoverY, last.Z) + Vector3.new(0, 0, -0.35 * tilt)
+		sc:ladleBowlTo(bowlAt, tilt)
+		if cur and batter > 0 then
+			local add = math.min(batter, POUR_RATE * dt)
+			batter -= add
+			fills[cur] += add
+			sc:setCavityFill(cur, fills[cur], shape, color)
+			sc:setPourStream(S.Bowl.Position + Vector3.new(0, -0.2, -0.2), sc.cavities[cur].pos + Vector3.new(0, 0.05, 0), color)
+			S:setContents({ thickness = baseThick * math.max(0, batter / batter0) })
+			Sfx.loop("pourGlug", 0.45, 1)
 		else
+			sc:setPourStream(nil)
 			Sfx.loop("pourGlug", 0, 1)
 		end
-		sc:setContents(math.max(0, batter / (n * 1.05)) * 1.3, FOAM, Enum.Material.SmoothPlastic)
-		local shown = cur and sc.cavities[cur].fill or 0
-		ui:setMeter(true, shown / 1.3, 0.85 / 1.3, 1.1 / 1.3, string.format("%d / %d칸", (function()
-			local k = 0
-			for _, c in ipairs(sc.cavities) do
-				if c.fill >= 0.85 then
-					k += 1
-				end
-			end
-			return k
-		end)(), n), "칸")
-		local allFull = true
-		for _, c in ipairs(sc.cavities) do
-			if c.fill < 0.85 then
-				allFull = false
+		ui:setMoldPad(true, uvs, fills, cur, rr)
+		local full = 0
+		for i = 1, n do
+			if fills[i] >= Rules.CAVITY_FULL then
+				full += 1
 			end
 		end
-		-- 칸이 다 85% 넘어도 손을 뗄 때까지는 계속 (마지막 칸도 100%까지 채울 수 있게, 2026-11-26 시험: 바로 끝나 마지막 칸이 최대 67점)
-		if (allFull and not Pointer.down) or batter <= 0.01 then
+		ui:setMeter(true, (cur and fills[cur] or 0) / 1.3, 0.85 / 1.3, 1.1 / 1.3, string.format("%d / %d칸", full, n), "칸")
+		-- 칸이 다 85% 넘어도 손을 뗄 때까지는 계속 (마지막 칸도 100%까지 채울 수 있게)
+		if (full >= n and not Pointer.down) or batter <= 0.01 then
 			break
 		end
 	end
 	Sfx.loop("pourGlug", 0, 1)
+	sc:setPourStream(nil)
 	ui:setMeter(false)
-	local fills = {}
-	for i, c in ipairs(sc.cavities) do
-		fills[i] = c.fill
-	end
+	ui:setMoldPad(false)
+	S:setContents({ Transparency = 1 })
 	return { t0 = t0, t1 = now(), fills = fills }
 end
 
----------------------------------------------------------------- ⑥ 막대 꽂기
-local function stepStick(sc)
+---------------------------------------------------------------- ⑥ 막대 꽂기 + 헹굼
+local function stepStick(sc, S)
 	ui:setStep(6)
 	shot(sc, "stick")
 	local t0 = now()
 	ui:say("칸마다 막대를 꽂아요", "굳기 전에 칸을 하나씩 눌러요")
-	sc:ladleTo(sc.ladleRest)
+	sc:ladleBowlTo(sc.ladleRest + Vector3.new(0, S.bowlHalf, 0))
 	sc:setHeat(0) -- 다 부었으니 화구 끔
 	local left, seen = #sc.cavities, Pointer.presses
 	while left > 0 do
@@ -500,7 +416,7 @@ local function stepStick(sc)
 	-- 국자 물에 헹굼 (영상 끝)
 	task.wait(0.5)
 	shot(sc, "rinse")
-	slide(sc, sc.waterPos + Vector3.new(0, 0.6, 0), 0.5)
+	slide(sc, S.Bowl.Position, sc.waterPos + Vector3.new(0, 0.6, 0), 0.5)
 	Sfx.play("sodaDrop", 0.4, 0.7)
 	task.wait(0.4)
 	return { t0 = t0, t1 = now() }
@@ -510,34 +426,84 @@ end
 local function round(stage, start)
 	local shape = start.shape
 	local sc = Scene.new(stage, start.batch or 2, shape)
-	local recs = {} -- 단계마다 입력 기록 (점수는 서버가 MachineMakeRules로 셈)
+	local S, why = sc:station()
+	if not S then
+		return sc, { ok = false, reason = why }
+	end
+	CameraRig.init(S.model:GetPivot(), S.model)
+	-- 손 작업대 단계 모듈(Steps/Melt, Steps/Soda)이 쓰는 ctx (MakingClient runSession과 같은 모양)
+	local ctx = { station = S, pointer = Pointer, ui = ui, state = {}, records = {}, scores = {}, aborted = false }
+	function ctx.now()
+		return now()
+	end
+	function ctx.frame()
+		local dt = frame()
+		ctx.aborted = dt == nil
+		return dt
+	end
+	function ctx.live(key, score)
+		ctx.scores[key] = score
+		ui:setQuality(Scoring.live(ctx.scores), Config.StarCut)
+	end
+	function ctx.markBurnt()
+		local m = ctx.records.melt
+		if m then
+			m.burn = 1
+			m.burnt = true
+		end
+		ctx.state.burntLate = true
+	end
+	ui:setQuality(100, Config.StarCut)
+	local recs = ctx.records
+	local burnt = false
 	local ok = stepCoin(sc)
-	for _, k in ipairs({ "sugar", "melt", "soda", "pour", "stick" }) do
-		if not ok then
-			break
+	if ok then
+		recs.sugar = stepSugar(sc, S, ctx.state)
+		ok = recs.sugar ~= nil
+	end
+	if ok then
+		ui:setStep(3)
+		sc:setHeat(1)
+		rig("melt")
+		recs.melt = MeltStep.run(ctx)
+		ok = recs.melt ~= nil
+		burnt = ok and (recs.melt.burnt == true)
+	end
+	if ok and not burnt then
+		Sfx.play("stepDone", 0.45)
+		ui:setStep(4)
+		rig("soda")
+		recs.soda = SodaStep.run(ctx)
+		ok = recs.soda ~= nil
+		if ok and ctx.state.burntLate then
+			recs.soda.burnt = true
+			burnt = true
 		end
-		if k == "sugar" then
-			recs.sugar = stepSugar(sc)
-		elseif k == "melt" then
-			recs.melt = stepMelt(sc)
-		elseif k == "soda" then
-			recs.soda = stepSoda(sc)
-		elseif k == "pour" then
-			recs.pour = stepPour(sc, shape)
-		else
-			recs.stick = stepStick(sc)
-		end
-		ok = recs[k] ~= nil
+	end
+	if ok and not burnt then
+		Sfx.play("stepDone", 0.45)
+		recs.pour = stepPour(sc, S, shape, ctx.state)
+		ok = recs.pour ~= nil
+	end
+	if ok and not burnt then
+		recs.stick = stepStick(sc, S)
+		ok = recs.stick ~= nil
+	end
+	if burnt and ok then
+		ui:say("앗, 까맣게 탔어요", "이번 판은 탄 달고나가 돼요")
+		task.wait(1.5)
 	end
 	local res = nil
 	if ok and not aborted then
-		ui:say("다 만들었어요!", "")
+		if not burnt then
+			ui:say("다 만들었어요!", "")
+		end
 		if start.test then
 			-- Studio 시험: 서버와 같은 검사·점수 (MachineMakeRules.evaluate) → 기록이 서버 검사를 통과하는지도 여기서 봄
-			local scores, why = Rules.evaluate(recs, start.t0, now(), #sc.cavities)
+			local scores, why2 = Rules.evaluate(recs, start.t0, now(), #sc.cavities)
 			if not scores then
-				print("[MachineMake] test rejected:", why)
-				return sc, { ok = false, reason = "서버 검사 거절: " .. tostring(why) }
+				print("[MachineMake] test rejected:", why2)
+				return sc, { ok = false, reason = "서버 검사 거절: " .. tostring(why2) }
 			end
 			local q = Rules.quality(scores)
 			local grade = "Burnt"
@@ -547,7 +513,7 @@ local function round(stage, start)
 					break
 				end
 			end
-			print(string.format("[MachineMake] test sugar %d melt %d soda %d pour %d -> Q%d %s", scores.sugar, scores.melt, scores.soda, scores.pour, q, grade))
+			print(string.format("[MachineMake] test sugar %d melt %d soda %d pour %d burnt %s -> Q%d %s", scores.sugar, scores.melt, scores.soda, scores.pour, tostring(scores.burnt), q, grade))
 			return sc, { ok = true, q = q, grade = grade, made = #sc.cavities, perfect = grade == "Perfect" }
 		end
 		local okR, r = pcall(function()
@@ -562,16 +528,22 @@ local function finish(sc)
 	running = false
 	Pointer.enabled = false
 	Pointer.reset()
+	Pointer.sideZone = nil
 	if sc then
 		sc:destroy()
 	end
 	if ui then
 		ui:setGauge(false)
 		ui:setMeter(false)
+		pcall(function()
+			ui:setHeight(false)
+			ui:setMoldPad(false)
+		end)
 		ui:show(false)
 	end
 	RunService:UnbindFromRenderStep("MachineMakeCam")
 	camCF, camGoal = nil, nil
+	CameraRig.release()
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70
@@ -613,7 +585,12 @@ function MachineMake.start(stage, test)
 	player:SetAttribute("Making", true)
 	task.spawn(function()
 		while running do
-			local sc, res = round(stage, start)
+			local ok, sc, res = pcall(round, stage, start)
+			if not ok then
+				warn("[MachineMake] round error:", sc)
+				finish(nil)
+				return
+			end
 			if aborted or not res then
 				finish(sc)
 				return

@@ -1,48 +1,32 @@
--- 2·3단계 기계 직접 만들기 판정 (D35·D41). 서버(MachineMakeService, 최종 점수)와 클라이언트(MachineMake, 화면·Studio 시험)가 같은 함수를 쓴다.
--- 클라이언트는 점수 대신 입력 기록만 보낸다 (손 제작 ProductionService와 같은 방식, 2026-11-26):
---   sugar = { t0, t1, fill }                      설탕 받은 양 (꽉 참 = 1)
---   melt  = { t0, t1, s = { 0~3, ... } }          SAMPLE초마다 젓기 상태: 0 안 저음 / 1 느림 / 2 알맞음 / 3 빠름
---   soda  = { t0, t1, dips, s = { 0~2, ... } }     털어 넣은 뒤 SAMPLE초마다: 0 안 저음 / 1 느리게 / 2 빠르게
+-- 2·3단계 기계 직접 만들기 판정 (D35·D41). 서버(MachineMakeService, 최종 점수)와 클라이언트(MachineMake, Studio 시험)가 같은 함수를 쓴다.
+-- 2026-11-26 사용자 "손 작업대 구현 방식·게임 방식 그대로": 녹이기·소다는 손 작업대 단계 모듈(Steps/Melt, Steps/Soda)을 그대로 돌리고,
+-- 점수도 손 제작과 같은 식(shared/Scoring)·같은 서버 다시 계산(ProductionService와 같은 표본 재계산)으로 한다.
+-- 클라이언트는 점수 대신 입력 기록만 보낸다:
+--   sugar = { t0, t1, fill }                                          설탕 받은 양 (꽉 참 = 1)
+--   melt  = 손 제작 녹이기 기록 { t0, t1, green, tempOk, scorch, burn, burnt, samples = { {zone, temp}, ... } }
+--   soda  = 손 제작 소다 기록 { t0, t1, delay, amount, fastFrac, puff, samples = { {zone}, ... } }
 --   pour  = { t0, t1, fills = { 칸마다 채운 양 } }
 --   stick = { t0, t1 }
--- 시각(t0, t1)은 workspace:GetServerTimeNow(). 서버는 단계 순서·걸린 시간·표본 수가 맞는지 보고, 녹은 정도·거품을 표본으로 다시 계산한다.
+-- 녹이다 태우면(melt.burnt) 뒤 단계 없이 끝나고 품질은 손 제작처럼 Q 20 이하 (Burnt).
+-- 시각(t0, t1)은 workspace:GetServerTimeNow(). 서버는 단계 순서·걸린 시간·표본을 검사한다.
+local Shared = script.Parent
+local Config = require(Shared:WaitForChild("DalgonaConfig"))
+local Scoring = require(Shared:WaitForChild("Scoring"))
+
 local Rules = {}
 
-Rules.SAMPLE = 0.2 -- 표본 간격 (초)
-Rules.MAX_SAMPLES = 200 -- 단계마다 표본 최대 (녹이기 32초 = 160개)
 Rules.STEPS = { "sugar", "melt", "soda", "pour", "stick" }
 Rules.WEIGHT = { sugar = 0.15, melt = 0.30, soda = 0.25, pour = 0.30 }
+Rules.BURNT_Q = 20 -- 탔으면 Q 이 값 이하 (손 제작 Scoring.compute와 같음)
 
 Rules.SUGAR_RATE = 0.42 -- 설탕 받는 빠르기 (1 = 꽉 참, 초당)
 Rules.SUGAR_LO, Rules.SUGAR_HI, Rules.SUGAR_MAX = 0.72, 0.95, 1.25
-Rules.MELT_RATE = 0.085 -- 알맞은 빠르기로 저을 때 초당 녹는 양 (약 12초)
-Rules.MELT_LIMIT = 32
-Rules.FOAM_RATE = 0.3 -- 빠르게 저을 때 초당 거품
-Rules.FOAM_LIMIT = 25
 Rules.POUR_RATE = 0.75 -- 칸에 붓는 빠르기 (초당)
 Rules.BATTER_PER_CAVITY = 1.05 -- 국자에 든 반죽 = 칸 수 × 이 값
 Rules.CAVITY_FULL = 0.85
--- 서버는 0.2초 표본으로 다시 세서 화면(매 프레임)과 조금 다를 수 있음 (Studio 300판 시험: 0.87~1.05) → 0.85면 "다 됨"으로 침
-Rules.DONE = 0.85
 
 local function c(x, lo, hi)
 	return math.clamp(x, lo, hi)
-end
-
--- 녹이기에서 한 칸(SAMPLE초)에 녹는 양 (녹이기 화면과 같은 비율)
-function Rules.meltGain(zone, dt)
-	if zone == 0 then
-		return 0
-	end
-	return dt * Rules.MELT_RATE * (zone == 2 and 1 or zone == 3 and 0.55 or 0.2)
-end
-
--- 소다 젓기에서 한 칸에 오르는 거품
-function Rules.foamGain(z, dt)
-	if z == 0 then
-		return 0
-	end
-	return dt * Rules.FOAM_RATE * (z == 2 and 1 or 0.35)
 end
 
 function Rules.sugar(fill)
@@ -53,46 +37,6 @@ function Rules.sugar(fill)
 		return math.max(20, 100 - (Rules.SUGAR_LO - fill) * 160)
 	end
 	return math.max(20, 100 - (fill - Rules.SUGAR_HI) * 220)
-end
-
--- 녹이기: 알맞게 저은 시간 비율. 다 녹기 전에 끝냈으면 녹은 만큼만, 제한 시간을 넘겼으면 ×0.6
-function Rules.melt(samples)
-	local dt = Rules.SAMPLE
-	local melt, good, bad = 0, 0, 0
-	for _, z in ipairs(samples) do
-		melt += Rules.meltGain(z, dt)
-		if z == 2 then
-			good += dt
-		elseif z == 0 then
-			bad += dt -- 안 저으면 바닥이 눌어붙음
-		else
-			bad += dt * 0.6
-		end
-	end
-	local score = c(100 * good / math.max(good + bad, 0.1), 0, 100)
-	if #samples * dt > Rules.MELT_LIMIT then
-		score *= 0.6
-	elseif melt < Rules.DONE then
-		score *= c(melt, 0, 1)
-	end
-	return score, melt
-end
-
--- 소다: 묻힌 횟수 50% + 거품이 다 오른 빠르기 50%
-function Rules.soda(dips, samples)
-	dips = math.floor(c(dips or 0, 0, 20))
-	local dt = Rules.SAMPLE
-	local foam, t, doneAt = 0, 0, nil
-	for _, z in ipairs(samples) do
-		t += dt
-		foam += Rules.foamGain(z, dt)
-		if foam >= Rules.DONE and not doneAt then
-			doneAt = t
-		end
-	end
-	local dipScore = (dips == 2 or dips == 3) and 100 or (dips == 1 and 70) or 60
-	local foamScore = doneAt and c(100 - math.max(0, doneAt - 4) * 6, 40, 100) or 30
-	return dipScore * 0.5 + foamScore * 0.5, foam
 end
 
 -- 붓기: 칸마다 꽉 찬 정도 (1에 가까울수록), n = 이번 판 칸 수
@@ -113,7 +57,11 @@ function Rules.quality(scores)
 	for k, w in pairs(Rules.WEIGHT) do
 		q += c(tonumber(scores[k]) or 0, 0, 100) * w
 	end
-	return math.floor(q + 0.5)
+	q = math.floor(q + 0.5)
+	if scores.burnt then
+		q = math.min(q, Rules.BURNT_Q)
+	end
+	return q
 end
 
 ---------------------------------------------------------------- 서버 검사
@@ -125,38 +73,85 @@ local function num(v, lo, hi, default)
 	return math.clamp(v, lo, hi)
 end
 
--- 표본 표를 정수 목록으로 (범위 밖·이상한 값은 0 = 안 저음)
-local function cleanSamples(s, maxZone)
-	local out = {}
-	if type(s) ~= "table" then
-		return out
+-- 손 제작 ProductionService와 같은 받는 값 { 이름, 최소, 최대, 기본값 }
+local FIELDS = {
+	melt = { { "green", 0, 1, 0 }, { "tempOk", 0, 1, 0 }, { "scorch", 0, 5, 5 }, { "burn", 0, 1, 1 } },
+	soda = { { "delay", 0, 120, 120 }, { "amount", 0, 3, 0 }, { "fastFrac", 0, 1, 0 }, { "puff", 0, 1, 0 } },
+}
+
+-- 녹이기 표본 { zone(1 느림, 2 적당, 3 빠름), 온도 }로 비율 다시 계산 (ProductionService recomputeMelt와 같음, 화로 업그레이드 없음)
+local function recomputeMelt(rec, samples)
+	if type(samples) ~= "table" or #samples < 5 then
+		return
 	end
-	for i, z in ipairs(s) do
-		if i > Rules.MAX_SAMPLES then
+	local n, green, ok, counted = 0, 0, 0, 0
+	local started = false
+	local okLow, okHigh = Config.Melt.tempLow, Config.Melt.tempHigh
+	for i, s in ipairs(samples) do
+		if i > Config.Server.maxSamples then
 			break
 		end
-		z = num(z, 0, maxZone, 0)
-		table.insert(out, math.floor(z + 0.5))
+		if type(s) == "table" then
+			local zone = num(s[1], 1, 3, 1)
+			local temp = num(s[2], 0, 400, 0)
+			n += 1
+			if zone == 2 then
+				green += 1
+			end
+			if temp >= Config.Melt.tempLow - 5 then
+				started = true
+			end
+			if started then
+				counted += 1
+				if temp >= okLow - 5 and temp <= okHigh + 3 then
+					ok += 1
+				end
+			end
+		end
 	end
-	return out
+	if n > 0 then
+		rec.green = green / n
+	end
+	if counted > 0 then
+		rec.tempOk = ok / counted
+	end
 end
 
--- 표본 수가 걸린 시간과 맞는지 (프레임 끊김을 생각해 넉넉히)
-local function samplesFit(count, dur)
-	local expect = dur / Rules.SAMPLE
-	return count <= expect + 3 and count >= expect * 0.7 - 3
+local function recomputeSoda(rec, samples)
+	if type(samples) ~= "table" or #samples < 3 then
+		return
+	end
+	local n, fast = 0, 0
+	for i, s in ipairs(samples) do
+		if i > Config.Server.maxSamples then
+			break
+		end
+		if type(s) == "table" then
+			n += 1
+			if num(s[1], 1, 3, 1) == 3 then
+				fast += 1
+			end
+		end
+	end
+	if n > 0 then
+		rec.fastFrac = fast / n
+	end
 end
 
 -- raw = 클라이언트 기록, t0 = 세션 시작(서버 시각), now = 지금(서버 시각), n = 이번 판 칸 수
--- 반환: scores { sugar, melt, soda, pour } 또는 nil, 이유
+-- 반환: scores { sugar, melt, soda, pour, burnt } 또는 nil, 이유
 function Rules.evaluate(raw, t0, now, n)
 	if type(raw) ~= "table" then
 		return nil, "bad payload"
 	end
 	local prevEnd = t0 - 1
-	local rec = {}
+	local rec, rawOf = {}, {}
+	local burnt = false
 	for _, key in ipairs(Rules.STEPS) do
 		local r = raw[key]
+		if r == nil and burnt then
+			break -- 녹이다(또는 소다 넣기 전에) 태우면 뒤 단계 없음
+		end
 		if type(r) ~= "table" then
 			return nil, "missing step " .. key
 		end
@@ -164,51 +159,60 @@ function Rules.evaluate(raw, t0, now, n)
 		if a < prevEnd - 0.5 or b <= a or b > now + 1 then
 			return nil, "bad order " .. key
 		end
+		local dur = b - a
+		if (key == "melt" or key == "soda") and (dur < Config.Server.minStep or dur > Config.Server.maxStep) then
+			return nil, "bad duration " .. key
+		end
 		prevEnd = b
-		rec[key] = r
-		rec[key .. "Dur"] = b - a
+		local clean = { dur = dur }
+		for _, f in ipairs(FIELDS[key] or {}) do
+			clean[f[1]] = num(r[f[1]], f[2], f[3], f[4])
+		end
+		if key == "melt" then
+			clean.burnt = r.burnt == true or clean.burn >= 1
+			burnt = clean.burnt
+			recomputeMelt(clean, r.samples)
+		elseif key == "soda" then
+			recomputeSoda(clean, r.samples)
+			if r.burnt == true then
+				burnt = true -- 소다 넣기 전에 타 버림 (Soda.run이 ctx.markBurnt)
+			end
+		end
+		rec[key] = clean
+		rawOf[key] = r
 	end
 
-	local scores = {}
+	local scores = { burnt = burnt }
 	-- 설탕: 꾹 누른 시간 이상 걸렸어야 함
-	local fill = num(rec.sugar.fill, 0, Rules.SUGAR_MAX, 0)
-	if rec.sugarDur < fill / Rules.SUGAR_RATE * 0.85 - 0.3 then
+	local fill = num(rawOf.sugar.fill, 0, Rules.SUGAR_MAX, 0)
+	if rec.sugar.dur < fill / Rules.SUGAR_RATE * 0.85 - 0.3 then
 		return nil, "sugar too fast"
 	end
 	scores.sugar = Rules.sugar(fill)
-
-	-- 녹이기
-	local ms = cleanSamples(rec.melt.s, 3)
-	if #ms < 5 or not samplesFit(#ms, rec.meltDur) then
-		return nil, "melt samples"
+	scores.melt = Scoring.melt(rec.melt)
+	scores.soda = rec.soda and Scoring.soda(rec.soda) or 0
+	scores.pour = 0
+	if rec.pour then
+		-- 붓기: 반죽은 칸 수 × 1.05까지, 붓는 시간 이상 걸렸어야 함
+		local fills, total = {}, 0
+		local rf = type(rawOf.pour.fills) == "table" and rawOf.pour.fills or {}
+		for i = 1, n do
+			fills[i] = num(rf[i], 0, n * Rules.BATTER_PER_CAVITY, 0)
+			total += fills[i]
+		end
+		if total > n * Rules.BATTER_PER_CAVITY + 0.02 then
+			return nil, "pour too much"
+		end
+		if rec.pour.dur < total / Rules.POUR_RATE * 0.85 - 0.3 then
+			return nil, "pour too fast"
+		end
+		scores.pour = Rules.pour(fills, n)
 	end
-	scores.melt = Rules.melt(ms)
-
-	-- 소다 (묻히는 시간이 있어 걸린 시간 ≥ 표본 시간)
-	local ss = cleanSamples(rec.soda.s, 2)
-	if #ss < 3 or #ss * Rules.SAMPLE > rec.sodaDur + 1 then
-		return nil, "soda samples"
-	end
-	scores.soda = Rules.soda(rec.soda.dips, ss)
-
-	-- 붓기: 반죽은 칸 수 × 1.05까지, 붓는 시간 이상 걸렸어야 함
-	local fills, total = {}, 0
-	local rf = type(rec.pour.fills) == "table" and rec.pour.fills or {}
-	for i = 1, n do
-		fills[i] = num(rf[i], 0, n * Rules.BATTER_PER_CAVITY, 0)
-		total += fills[i]
-	end
-	if total > n * Rules.BATTER_PER_CAVITY + 0.02 then
-		return nil, "pour too much"
-	end
-	if rec.pourDur < total / Rules.POUR_RATE * 0.85 - 0.3 then
-		return nil, "pour too fast"
-	end
-	scores.pour = Rules.pour(fills, n)
-
-	-- 막대: 칸마다 한 번 누름
-	if rec.stickDur < 0.15 * n then
+	if rec.stick and rec.stick.dur < 0.15 * n then
 		return nil, "stick too fast"
+	end
+	if not burnt and not (rec.pour and rec.stick) then
+		return nil, "missing step"
 	end
 	return scores
 end
