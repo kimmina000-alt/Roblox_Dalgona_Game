@@ -2,8 +2,9 @@
 -- 금형판 칸이 모양이고 찍기·뽑기는 없음). 화면은 클라이언트 MachineMaking이 그림.
 --   Remotes.StartMachineMake:InvokeServer(stage) → { ok, id, shape, batch, reason }
 --     2·3단계만 · 그 기계를 가졌고 · 가게 열림 · 그 기계에 알바가 없을 때(D46) · 재료가 1개분 이상 · 보관함 자리가 있을 때
---   Remotes.SubmitMachineMake:InvokeServer(id, { sugar, melt, soda, pour = 0~100, t = 걸린 초 }) → { ok, q, grade, made, perfect, reason }
---     품질 Q = 설탕 15% + 녹이기 30% + 소다 25% + 붓기 30%. 한 판 = 그 기계 batch개(2단계 2, 3단계 5), 재료는 원가대로 그만큼.
+--   Remotes.SubmitMachineMake:InvokeServer(id, 입력 기록) → { ok, q, grade, made, perfect, reason }
+--     입력 기록은 점수가 아니라 단계 시각·설탕 양·젓기 표본·칸마다 채운 양 (2026-11-26, 손 제작처럼 서버가 다시 셈).
+--     형식·검사·점수식은 shared/MachineMakeRules. 품질 Q = 설탕 15% + 녹이기 30% + 소다 25% + 붓기 30%. 한 판 = 그 기계 batch개(2단계 2, 3단계 5), 재료는 원가대로 그만큼.
 --     Perfect(95+)는 한 판에 1개만, 나머지는 Excellent (D41). 기계 것이라 수제 ×1.5(D58)는 안 붙음. EXP = G.ExpMachine × 개수 + 판마다 5
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
@@ -12,14 +13,14 @@ local Shared = ReplicatedStorage:WaitForChild("Shared")
 local G = require(Shared:WaitForChild("GrowthConfig"))
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
+local Rules = require(Shared:WaitForChild("MachineMakeRules"))
 
 local MM = {}
 
 local Data, Economy = nil, nil
-local sessions = {} -- [player] = { id, t0, stage, shape }
+local sessions = {} -- [player] = { id, t0, stage, shape, batch = 이번 판 칸 수 }
 local MIN_SECONDS = 10 -- 이보다 빨리 낸 판은 거절 (동전 ~ 막대까지 짧게 잡아도 이보다 김)
 local MAX_SECONDS = 300
-local WEIGHT = { sugar = 0.15, melt = 0.30, soda = 0.25, pour = 0.30 }
 local ROUND_EXP = 5
 
 local function gradeOf(q)
@@ -115,13 +116,9 @@ function MM.start(player, stage)
 		return { ok = false, reason = G.stockRoom(d) <= 0 and "보관함이 가득 찼어요" or "재료가 모자라요" }
 	end
 	ensureMesh(stage)
-	local s = { id = HttpService:GenerateGUID(false), t0 = workspace:GetServerTimeNow(), stage = stage, shape = shape }
+	local s = { id = HttpService:GenerateGUID(false), t0 = workspace:GetServerTimeNow(), stage = stage, shape = shape, batch = n }
 	sessions[player] = s
 	return { ok = true, id = s.id, shape = shape.id, batch = n }
-end
-
-local function score(v)
-	return math.clamp(tonumber(v) or 0, 0, 100)
 end
 
 function MM.submit(player, id, raw)
@@ -130,16 +127,18 @@ function MM.submit(player, id, raw)
 		return { ok = false, reason = "no session" }
 	end
 	sessions[player] = nil
-	local took = workspace:GetServerTimeNow() - s.t0
+	local nowT = workspace:GetServerTimeNow()
+	local took = nowT - s.t0
 	if took < MIN_SECONDS or took > MAX_SECONDS then
 		return { ok = false, reason = "time" }
 	end
-	raw = type(raw) == "table" and raw or {}
-	local q = 0
-	for k, w in pairs(WEIGHT) do
-		q += score(raw[k]) * w
+	-- 점수는 클라이언트가 보낸 값이 아니라 입력 기록으로 다시 셈 (순서·시간·표본 수 검사 포함)
+	local scores, why = Rules.evaluate(raw, s.t0, nowT, s.batch)
+	if not scores then
+		warn("[MachineMake] rejected", player.Name, why)
+		return { ok = false, reason = "기록이 이상해서 이번 판은 못 받았어요" }
 	end
-	q = math.floor(q + 0.5)
+	local q = Rules.quality(scores)
 	local grade = gradeOf(q)
 	local m = G.Machines[s.stage]
 	local made, perfect, ups, newShapes = 0, false, {}, {}

@@ -3,7 +3,8 @@
 -- 순서: ① 동전 3개 → ② 국자를 배출구에 대고 설탕 받기(꾹 누르기, 초록 칸에서 떼기) → ③ 화구에서 원 그리며 젓기
 --       → ④ 설탕 섞은 소다를 젓가락에 묻혀(통 누르기) 국자에 털고 빠르게 젓기 → ⑤ 금형판 칸마다 국자를 대고 꾹 눌러 붓기
 --       → ⑥ 칸마다 막대 꽂기 → (국자 물에 헹굼, 자동) → 서버 제출 → 결과
--- 점수(0~100)는 설탕·녹이기·소다·붓기 4개를 서버로 보냄. 품질 Q와 개수·Perfect 1개 규칙은 서버가 정함
+-- 서버로는 점수가 아니라 입력 기록(단계 시각·설탕 양·젓기 표본·칸마다 채운 양)을 보냄 (2026-11-26).
+-- 점수·품질 Q는 shared/MachineMakeRules로 서버가 다시 셈 (화면·Studio 시험도 같은 함수). 개수·Perfect 1개 규칙은 서버가 정함
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -11,6 +12,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("DalgonaConfig"))
 local ShapeCatalog = require(Shared:WaitForChild("ShapeCatalog"))
+local Rules = require(Shared:WaitForChild("MachineMakeRules"))
 local Making = script.Parent:WaitForChild("Making")
 local Ui = require(Making:WaitForChild("Ui"))
 local Pointer = require(Making:WaitForChild("Pointer"))
@@ -32,12 +34,10 @@ local STEPS = {
 	{ key = "stick", label = "막대", icon = "🍡", title = "막대 꽂기", desc = "" },
 }
 local TAP_PX = 110 -- 도구 화면 자리에서 이만큼 안을 누르면 그 도구
-local SUGAR_RATE = 0.42 -- 설탕 받는 빠르기 (1 = 꽉 참)
-local SUGAR_LO, SUGAR_HI, SUGAR_MAX = 0.72, 0.95, 1.25
-local MELT_RATE = 0.085 -- 적당한 빠르기로 저을 때 초당 녹는 양 (약 12초)
-local MELT_LIMIT = 32
-local FOAM_RATE = 0.3 -- 빠르게 저을 때 초당 거품
-local POUR_RATE = 0.75 -- 칸에 붓는 빠르기
+local SUGAR_RATE = Rules.SUGAR_RATE
+local SUGAR_LO, SUGAR_HI, SUGAR_MAX = Rules.SUGAR_LO, Rules.SUGAR_HI, Rules.SUGAR_MAX
+local MELT_LIMIT = Rules.MELT_LIMIT
+local POUR_RATE = Rules.POUR_RATE
 local SUGAR = Color3.fromRGB(250, 250, 248)
 local AMBER = Color3.fromRGB(226, 150, 50)
 local FOAM = Color3.fromRGB(206, 152, 96)
@@ -45,6 +45,32 @@ local FOAM = Color3.fromRGB(206, 152, 96)
 local ui = nil
 local running = false
 local aborted = false
+
+local function now()
+	return workspace:GetServerTimeNow()
+end
+
+-- SAMPLE초마다 표본 하나 (서버가 같은 간격으로 다시 셈)
+local function sampler()
+	local o = { s = {}, acc = 0, last = 0 }
+	function o:add(dt, z)
+		self.acc += dt
+		self.last = z
+		while self.acc >= Rules.SAMPLE and #self.s < Rules.MAX_SAMPLES do
+			self.acc -= Rules.SAMPLE
+			table.insert(self.s, z)
+		end
+	end
+	-- 끝날 때 남은 반 칸 이상은 표본 하나로 (서버 계산이 덜 나오지 않게)
+	function o:finish()
+		if self.acc >= Rules.SAMPLE * 0.5 and #self.s < Rules.MAX_SAMPLES then
+			table.insert(self.s, self.last)
+		end
+		self.acc = 0
+		return self.s
+	end
+	return o
+end
 
 local function frame()
 	if aborted then
@@ -195,6 +221,7 @@ local function stepSugar(sc)
 	if not slide(sc, sc.sugarLadle, 0.45) then
 		return nil
 	end
+	local t0 = now()
 	local what = sc.stage == 3 and "설탕 버튼을" or "설탕 배출구를"
 	ui:say(what .. " 꾹 누르고 있으면 설탕이 나와요", "막대가 초록 칸에 오면 손을 떼요")
 	local fill, pressed, holding, wasDown = 0, false, false, false
@@ -232,19 +259,16 @@ local function stepSugar(sc)
 	Sfx.loop("sugarPour", 0, 1)
 	sc:setStream(false)
 	ui:setMeter(false)
-	local score
+	local rec = { t0 = t0, t1 = now(), fill = fill }
 	if fill >= SUGAR_LO and fill <= SUGAR_HI then
-		score = 100
 		ui:toast("딱 알맞아요!", 0.8)
 	elseif fill < SUGAR_LO then
-		score = math.max(20, 100 - (SUGAR_LO - fill) * 160)
 		ui:toast("조금 적어요", 0.8)
 	else
-		score = math.max(20, 100 - (fill - SUGAR_HI) * 220)
 		ui:toast("너무 많아요", 0.8)
 	end
 	task.wait(0.4)
-	return score
+	return rec
 end
 
 ---------------------------------------------------------------- ③ 녹이기
@@ -257,7 +281,8 @@ local function stepMelt(sc)
 	ui:say("국자 안에서 원을 그리며 저어요", "딱 좋은 빠르기로 저으면 빨리 녹아요")
 	local judge = StirJudge.new()
 	local cfg = Config.Melt
-	local melt, good, bad, t, heat = 0, 0, 0, 0, 0
+	local melt, t, heat = 0, 0, 0
+	local smp, t0 = sampler(), now()
 	while melt < 1 do
 		local dt = frame()
 		if not dt then
@@ -269,13 +294,10 @@ local function stepMelt(sc)
 		local speed = judge:update(dt)
 		local zone = StirJudge.zone(speed, cfg.slow, cfg.fast)
 		local stirring = Pointer.down
+		local z = stirring and zone or 0
+		smp:add(dt, z)
+		melt += Rules.meltGain(z, dt)
 		if stirring then
-			melt += dt * MELT_RATE * (zone == 2 and 1 or zone == 3 and 0.55 or 0.2)
-			if zone == 2 then
-				good += dt
-			else
-				bad += dt * 0.6
-			end
 			local c = sc:ladlePos()
 			local tip = Pointer.toPlane(c.Y + 0.3 * sc.ladleK)
 			local off = Vector3.new(tip.X - c.X, 0, tip.Z - c.Z)
@@ -285,7 +307,6 @@ local function stepMelt(sc)
 			sc:setStick(c + off + Vector3.new(0, 0.3 * sc.ladleK, 0), true)
 			Sfx.loop("stirDry", 0.4, 0.8 + speed / 12)
 		else
-			bad += dt -- 안 저으면 바닥이 눌어붙음
 			sc:setStick(nil, false)
 			Sfx.loop("stirDry", 0, 1)
 		end
@@ -300,17 +321,14 @@ local function stepMelt(sc)
 	Sfx.loop("stirDry", 0, 1)
 	ui:setGauge(false)
 	ui:setMeter(false)
-	local score = math.clamp(100 * good / math.max(good + bad, 0.1), 0, 100)
-	if t > MELT_LIMIT then
-		score *= 0.6
-	end
-	return score
+	return { t0 = t0, t1 = now(), s = smp:finish() }
 end
 
 ---------------------------------------------------------------- ④ 소다
 local function stepSoda(sc)
 	ui:setStep(4)
 	shot(sc, "soda")
+	local t0 = now()
 	ui:say("소다 통을 눌러 젓가락에 소다를 묻혀요", "두세 번 묻히면 알맞아요 · 다 묻혔으면 국자를 눌러 털어 넣어요")
 	local dips, seen, tip = 0, Pointer.presses, sc.sodaTip
 	sc:setStick(tip, true)
@@ -340,6 +358,7 @@ local function stepSoda(sc)
 	ui:say("빠르게 저어요!", "빠르게 저을수록 금방 부풀어요")
 	local judge = StirJudge.new()
 	local foam, t = 0, 0
+	local smp = sampler()
 	while foam < 1 do
 		local dt = frame()
 		if not dt then
@@ -347,8 +366,10 @@ local function stepSoda(sc)
 		end
 		t += dt
 		local speed = judge:update(dt)
+		local z = Pointer.down and (speed >= Config.Soda.fastMin and 2 or 1) or 0
+		smp:add(dt, z)
+		foam += Rules.foamGain(z, dt)
 		if Pointer.down then
-			foam += dt * FOAM_RATE * (speed >= Config.Soda.fastMin and 1 or 0.35)
 			local c = sc:ladlePos()
 			local p = Pointer.toPlane(c.Y + 0.3 * sc.ladleK)
 			local off = Vector3.new(p.X - c.X, 0, p.Z - c.Z)
@@ -363,7 +384,7 @@ local function stepSoda(sc)
 		sc:setContents(0.9 + 0.5 * math.min(foam, 1), AMBER:Lerp(FOAM, math.min(foam * 1.4, 1)), Enum.Material.SmoothPlastic)
 		ui:setGauge(Pointer.down, speed, Config.Soda.fastMin * 0.6, Config.Soda.fastMin)
 		ui:setMeter(true, foam, 0.999, 1, string.format("%d%%", math.floor(math.min(foam, 1) * 100)), "거품")
-		if t > 25 then
+		if t > Rules.FOAM_LIMIT then
 			break
 		end
 	end
@@ -371,12 +392,7 @@ local function stepSoda(sc)
 	ui:setGauge(false)
 	ui:setMeter(false)
 	sc:setStick(nil, false)
-	local dipScore = (dips == 2 or dips == 3) and 100 or (dips == 1 and 70) or 60
-	local foamScore = math.clamp(100 - math.max(0, t - 4) * 6, 40, 100)
-	if foam < 1 then
-		foamScore = 30
-	end
-	return dipScore * 0.5 + foamScore * 0.5
+	return { t0 = t0, t1 = now(), dips = dips, s = smp:finish() }
 end
 
 ---------------------------------------------------------------- ⑤ 금형판에 붓기
@@ -384,8 +400,9 @@ local function stepPour(sc, shape)
 	ui:setStep(5)
 	shot(sc, "pour")
 	ui:say("국자를 금형판 칸 위로 끌어 꾹 누르고 있어요", "칸이 꽉 차면 다음 칸으로 · 넘치지 않게")
+	local t0 = now()
 	local n = #sc.cavities
-	local batter = n * 1.05 -- 국자에 든 반죽 (칸 n개 + 조금)
+	local batter = n * Rules.BATTER_PER_CAVITY -- 국자에 든 반죽 (칸 n개 + 조금)
 	local cur = nil
 	while true do
 		local dt = frame()
@@ -436,24 +453,25 @@ local function stepPour(sc, shape)
 	end
 	Sfx.loop("pourGlug", 0, 1)
 	ui:setMeter(false)
-	local sum = 0
-	for _, c in ipairs(sc.cavities) do
-		sum += math.clamp(100 - math.abs(c.fill - 1) * 220, 0, 100)
+	local fills = {}
+	for i, c in ipairs(sc.cavities) do
+		fills[i] = c.fill
 	end
-	return sum / n
+	return { t0 = t0, t1 = now(), fills = fills }
 end
 
 ---------------------------------------------------------------- ⑥ 막대 꽂기
 local function stepStick(sc)
 	ui:setStep(6)
 	shot(sc, "stick")
+	local t0 = now()
 	ui:say("칸마다 막대를 꽂아요", "굳기 전에 칸을 하나씩 눌러요")
 	sc:ladleTo(sc.ladleRest)
 	sc:setHeat(0) -- 다 부었으니 화구 끔
 	local left, seen = #sc.cavities, Pointer.presses
 	while left > 0 do
 		if not frame() then
-			return false
+			return nil
 		end
 		if Pointer.presses ~= seen then
 			seen = Pointer.presses
@@ -484,40 +502,43 @@ local function stepStick(sc)
 	slide(sc, sc.waterPos + Vector3.new(0, 0.6, 0), 0.5)
 	Sfx.play("sodaDrop", 0.4, 0.7)
 	task.wait(0.4)
-	return true
+	return { t0 = t0, t1 = now() }
 end
 
 ---------------------------------------------------------------- 한 판
 local function round(stage, start)
 	local shape = start.shape
 	local sc = Scene.new(stage, start.batch or 2, shape)
-	local scores = {}
+	local recs = {} -- 단계마다 입력 기록 (점수는 서버가 MachineMakeRules로 셈)
 	local ok = stepCoin(sc)
-	if ok then
-		scores.sugar = stepSugar(sc)
-		ok = scores.sugar ~= nil
-	end
-	if ok then
-		scores.melt = stepMelt(sc)
-		ok = scores.melt ~= nil
-	end
-	if ok then
-		scores.soda = stepSoda(sc)
-		ok = scores.soda ~= nil
-	end
-	if ok then
-		scores.pour = stepPour(sc, shape)
-		ok = scores.pour ~= nil
-	end
-	if ok then
-		ok = stepStick(sc)
+	for _, k in ipairs({ "sugar", "melt", "soda", "pour", "stick" }) do
+		if not ok then
+			break
+		end
+		if k == "sugar" then
+			recs.sugar = stepSugar(sc)
+		elseif k == "melt" then
+			recs.melt = stepMelt(sc)
+		elseif k == "soda" then
+			recs.soda = stepSoda(sc)
+		elseif k == "pour" then
+			recs.pour = stepPour(sc, shape)
+		else
+			recs.stick = stepStick(sc)
+		end
+		ok = recs[k] ~= nil
 	end
 	local res = nil
 	if ok and not aborted then
 		ui:say("다 만들었어요!", "")
 		if start.test then
-			-- Studio 시험: 서버 대신 같은 식으로 셈 (MachineMakeService와 같은 가중치)
-			local q = math.floor((scores.sugar or 0) * 0.15 + (scores.melt or 0) * 0.3 + (scores.soda or 0) * 0.25 + (scores.pour or 0) * 0.3 + 0.5)
+			-- Studio 시험: 서버와 같은 검사·점수 (MachineMakeRules.evaluate) → 기록이 서버 검사를 통과하는지도 여기서 봄
+			local scores, why = Rules.evaluate(recs, start.t0, now(), #sc.cavities)
+			if not scores then
+				print("[MachineMake] test rejected:", why)
+				return sc, { ok = false, reason = "서버 검사 거절: " .. tostring(why) }
+			end
+			local q = Rules.quality(scores)
 			local grade = "Burnt"
 			for _, g in ipairs(Config.Grades) do
 				if q >= g.min then
@@ -525,11 +546,11 @@ local function round(stage, start)
 					break
 				end
 			end
-			print(string.format("[MachineMake] test sugar %d melt %d soda %d pour %d -> Q%d %s", scores.sugar or 0, scores.melt or 0, scores.soda or 0, scores.pour or 0, q, grade))
-			return sc, { ok = true, q = q, grade = grade, made = start.batch, perfect = grade == "Perfect" }
+			print(string.format("[MachineMake] test sugar %d melt %d soda %d pour %d -> Q%d %s", scores.sugar, scores.melt, scores.soda, scores.pour, q, grade))
+			return sc, { ok = true, q = q, grade = grade, made = #sc.cavities, perfect = grade == "Perfect" }
 		end
 		local okR, r = pcall(function()
-			return Remotes:WaitForChild("SubmitMachineMake"):InvokeServer(start.id, scores)
+			return Remotes:WaitForChild("SubmitMachineMake"):InvokeServer(start.id, recs)
 		end)
 		res = okR and r or nil
 	end
@@ -565,7 +586,7 @@ function MachineMake.start(stage, test)
 	end
 	local okS, start
 	if test and RunService:IsStudio() then
-		okS, start = true, { ok = true, test = true, id = "test", shape = test.shape or "Circle", batch = stage == 3 and 5 or 2 }
+		okS, start = true, { ok = true, test = true, t0 = now(), id = "test", shape = test.shape or "Circle", batch = stage == 3 and 5 or 2 }
 	else
 		okS, start = pcall(function()
 			return Remotes:WaitForChild("StartMachineMake"):InvokeServer(stage)

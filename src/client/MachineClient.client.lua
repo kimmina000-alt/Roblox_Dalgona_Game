@@ -441,8 +441,10 @@ function render()
 		return
 	end
 	local stage = mc.stage or 1
-	makeBtn.Visible = (stage == 2 or stage == 3)
-	makeBtn:SetAttribute("Stage", stage)
+	-- 직접 만들기는 그 기계 앞에서 연 창에서만 (빈 자리 "기계 보기"로 열면 mc = 가장 높은 단계라 엉뚱한 기계가 됨, 4단계면 버튼이 사라짐)
+	local direct = (openStage == 2 or openStage == 3) and stage == openStage
+	makeBtn.Visible = direct
+	makeBtn:SetAttribute("Stage", direct and stage or nil)
 	titleL.Text = stage >= 2 and string.format("%s (%d단계)", mc.name or "기계", stage) or "기계 자리"
 	if stage < 2 then
 		statusL.Text = "아직 기계가 없어요. 기계를 사면 혼자서 달고나를 만들어 진열해 줘요"
@@ -491,6 +493,9 @@ buyBtn.Activated:Connect(function()
 end)
 makeBtn.Activated:Connect(function()
 	local stage = makeBtn:GetAttribute("Stage")
+	if stage ~= 2 and stage ~= 3 then
+		return
+	end
 	local MachineMake = require(script.Parent:WaitForChild("MachineMake"))
 	gui.Enabled = false
 	local ok, why = MachineMake.start(stage)
