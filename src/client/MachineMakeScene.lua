@@ -375,8 +375,9 @@ function Scene:station()
 		end
 		local want = self.at(self.L.sodaCup.pos) - Vector3.new(0, 0.12, 0)
 		tub:PivotTo(tub:GetPivot() + (want - powder.Position))
+		-- 통 몸통·라벨만 숨김 (보이는 가루 = SodaPowderMesh, Soda는 원래 투명한 찍기 판정 자리)
 		for _, d in ipairs(tub:GetDescendants()) do
-			if d:IsA("BasePart") and d ~= powder and not d:IsDescendantOf(powder) then
+			if d:IsA("BasePart") and (d.Name == "SodaCanMesh" or d.Name == "SodaLabelMesh" or d.Name == "Tub") then
 				d.Transparency = 1
 				d.CastShadow = false
 			end
