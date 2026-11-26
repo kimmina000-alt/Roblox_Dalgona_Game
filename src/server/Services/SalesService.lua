@@ -296,18 +296,25 @@ local function furnitureSlot(shop, i, item)
 		local lift = SALES.lookSize * 0.5 + SALES.lookStick[1] -- 칸 가운데 = 달고나 가운데
 		return at(Vector3.new(c.X + nx * (h.X + 0.08), c.Y + dy - lift, c.Z + dz), Vector3.new(nx, 0, 0))
 	end
-	-- 작은 탁자: 윗면에 3×3, 달고나 넓은 면은 카운터 쪽
+	-- 작은 탁자: 윗면에 3×3, 달고나 넓은 면은 카운터 쪽.
+	-- 2026-11-26 사용자 "테이블 선에 맞춰서": 카운터 방향을 그대로 쓰면 비스듬해서 줄이 탁자 변과 어긋나고 모서리 밖으로 나감
+	-- → 카운터 쪽에 가장 가까운 탁자 변 방향(가게 축 ±X 또는 ±Z)으로 맞추고, 달고나 반 너비만큼 가장자리 안쪽에 둠
 	local dir = Vector3.new(1, 0, 0)
 	if A.counter then
 		local cc = localBox(pcf, A.counter)
 		local v = Vector3.new(cc.X - c.X, 0, cc.Z - c.Z)
 		if v.Magnitude > 0.1 then
-			dir = v.Unit
+			if math.abs(v.X) >= math.abs(v.Z) then
+				dir = Vector3.new(v.X > 0 and 1 or -1, 0, 0)
+			else
+				dir = Vector3.new(0, 0, v.Z > 0 and 1 or -1)
+			end
 		end
 	end
 	local right = Vector3.new(-dir.Z, 0, dir.X)
-	local wR = math.abs(right.X) * h.X + math.abs(right.Z) * h.Z -- 반 너비 (옆)
-	local wD = math.abs(dir.X) * h.X + math.abs(dir.Z) * h.Z -- 반 깊이 (카운터 쪽)
+	local edge = SALES.lookSize * 0.5 + 0.05 -- 달고나 반 너비 + 조금
+	local wR = math.max(0.2, math.abs(right.X) * h.X + math.abs(right.Z) * h.Z - edge) -- 반 너비 (옆), 가장자리 안쪽
+	local wD = math.max(0.2, math.abs(dir.X) * h.X + math.abs(dir.Z) * h.Z - 0.25) -- 반 깊이 (카운터 쪽)
 	local off = right * (-wR + (col + 0.5) * (2 * wR / g.cols)) + dir * (wD - (row + 0.5) * (2 * wD / g.rows)) -- 앞줄(카운터 쪽)부터
 	local pos = Vector3.new(c.X + off.X, c.Y + h.Y + 0.02 + CLOTH_LIFT, c.Z + off.Z) -- 테이블보 위
 	return at(pos, dir)
@@ -528,8 +535,18 @@ local function refreshShelf(index)
 	-- 칸마다 놓인 달고나 (item.sl)
 	local bySlot = {}
 	local n = 0
+	local openSet = {}
+	if data then
+		for _, k in ipairs(G.openSlots(data)) do
+			openSet[k] = true
+		end
+	else
+		for k = 1, slots do
+			openSet[k] = true
+		end
+	end
 	for _, it in ipairs(stock) do
-		if it.sl and it.sl <= slots and not bySlot[it.sl] then
+		if it.sl and openSet[it.sl] and not bySlot[it.sl] then
 			bySlot[it.sl] = it
 			n += 1
 		end
@@ -1259,7 +1276,10 @@ local function placeByTouch(player, area, hit)
 	if not shop or shop.owner ~= player or not data then
 		return { ok = false, reason = "내 가게 진열대만 쓸 수 있어요" }
 	end
-	local maxSlots = G.shelfSlots(data)
+	local openSet = {}
+	for _, k in ipairs(G.openSlots(data)) do
+		openSet[k] = true
+	end
 	local used = {}
 	for _, it in ipairs(data.stock) do
 		if it.sl then
@@ -1273,15 +1293,12 @@ local function placeByTouch(player, area, hit)
 		if area ~= "table1" then
 			return { ok = false, reason = "가게를 열어야 쓸 수 있는 자리예요" }
 		end
-		list = {}
-		for k = 1, maxSlots do
-			table.insert(list, k)
-		end
+		list = G.openSlots(data)
 	end
 	local function freeIn(l)
 		local out = {}
 		for _, i in ipairs(l) do
-			if i <= maxSlots and not used[i] and not Economy.isReserved(data, i) then -- 알바가 들고 가는 칸은 빼고
+			if openSet[i] and not used[i] and not Economy.isReserved(data, i) then -- 알바가 들고 가는 칸은 빼고
 				table.insert(out, i)
 			end
 		end
@@ -1297,7 +1314,11 @@ local function placeByTouch(player, area, hit)
 		end
 	end
 	if #free == 0 then
-		return { ok = false, reason = (list[1] > maxSlots) and "가게를 열어야 쓸 수 있는 자리예요" or "빈 자리가 없어요" }
+		local anyOpen = false
+		for _, i in ipairs(list) do
+			anyOpen = anyOpen or openSet[i] == true
+		end
+		return { ok = false, reason = anyOpen and "빈 자리가 없어요" or "진열장을 업그레이드하면 쓸 수 있는 자리예요" }
 	end
 	-- 누른 곳에 가장 가까운 빈 칸 (격자, 2026-11-24)
 	local slot = free[1]

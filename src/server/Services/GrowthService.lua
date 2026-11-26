@@ -674,7 +674,6 @@ end
 
 -- 진열 알바 (D33): 옮길 달고나 하나 고르기 (먼저 만든 것부터, 손 제작품 켜면 손 제작품 먼저, 들고 있는 것은 빼고)
 local function displayPick(player, d)
-	local maxSlots = G.shelfSlots(d)
 	local used = {}
 	for _, it in ipairs(d.stock) do
 		if it.sl then
@@ -682,7 +681,7 @@ local function displayPick(player, d)
 		end
 	end
 	local slot = nil
-	for k = 1, maxSlots do
+	for _, k in ipairs(G.openSlots(d)) do -- 열리는 순서대로 (G.SlotOpenOrder)
 		if not used[k] and not Economy.isReserved(d, k) then
 			slot = k
 			break
