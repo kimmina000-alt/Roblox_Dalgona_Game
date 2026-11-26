@@ -20,7 +20,7 @@ if not remotes then
 	remotes.Name = "Remotes"
 	remotes.Parent = ReplicatedStorage
 end
-for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", "GetPlayerState", "PackDalgona", "GrowthAction", "SubmitPpopgi" }) do
+for _, name in ipairs({ "StartProduction", "SubmitProduction", "BuyIngredient", "GetPlayerState", "PackDalgona", "GrowthAction", "SubmitPpopgi", "StartMachineMake", "SubmitMachineMake" }) do
 	if not remotes:FindFirstChild(name) then
 		local rf = Instance.new("RemoteFunction")
 		rf.Name = name
@@ -105,6 +105,7 @@ PlotService.init({ notify = EconomyService.notify })
 SalesService.init(PlayerDataService, EconomyService, PlotService) -- 진열대 + 손님 (Phase 3)
 require(Services:WaitForChild("OrderService")).init(PlayerDataService, EconomyService, PlotService) -- 주문 제작 손님 (D55)
 require(Services:WaitForChild("MarketService")).init(PlayerDataService, EconomyService, PlotService) -- 골목 슈퍼마켓·봉지·전화 배달 (D54)
+require(Services:WaitForChild("MachineMakeService")).init(PlayerDataService, EconomyService, remotes) -- 2·3단계 기계 직접 만들기 (D35·D41)
 require(Services:WaitForChild("BuildService")).init(PlayerDataService, EconomyService, PlotService) -- 건설(꾸미기) 모드 (D53)
 MachineDisplay.init() -- 가게 기계 자리 모습 (2~4단계 기계, MachineSlot 속성 Stage를 따라 바꿈, 20번)
 FactoryDisplay.init() -- 공장 건물(부지별 공장 공간)·가게 뒤 공장 문 모습 (5단계)

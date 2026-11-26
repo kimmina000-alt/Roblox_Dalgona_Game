@@ -332,6 +332,8 @@ local grid = new("ScrollingFrame", { Position = UDim2.fromOffset(10, 60), Size =
 UI.fillGrid(new("UIGridLayout", { CellSize = UDim2.fromOffset(100, 118), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = grid }), 100, 1.18) -- 줄 너비에 꽉 차게
 local nextRow = UI.card({ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 10, 1, -10), Size = UDim2.new(1, -20, 0, 70), ZIndex = 12, Parent = body })
 local nextL = UI.text({ Position = UDim2.fromOffset(14, 6), Size = UDim2.new(1, -190, 1, -12), TextSize = 19, FontFace = UI.F.bold, TextWrapped = true, Text = "", ZIndex = 13, Parent = nextRow })
+-- 직접 만들기 (D35·D41, 2026-11-26): 2·3단계 기계, 알바가 없을 때. 손 제작처럼 단계별로 (MachineMake)
+local makeBtn = UI.button({ Name = "MakeSelf", Text = "직접 만들기", Color = UI.C.green, AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 2), Size = UDim2.fromOffset(150, 40), TextSize = 19, ZIndex = 13, Visible = false, Parent = body })
 local buyBtn = UI.button({ Name = "Buy", Text = "사기", Color = UI.C.yellow, AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(160, 52), TextSize = 22, ZIndex = 13, Parent = nextRow })
 local msgL = UI.text({ AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -8), Size = UDim2.new(1, -40, 0, 22), TextSize = 16, TextColor3 = Color3.new(1, 1, 1), Outline = RED, TextXAlignment = Enum.TextXAlignment.Center, Text = "", ZIndex = 12, Parent = win })
 -- msgL 색(초록/빨강)은 글자 테두리로 보여 줌 (나무 판 위 흰 글씨)
@@ -431,6 +433,7 @@ function render()
 	end
 	table.clear(cards)
 	if not mc then
+		makeBtn.Visible = false
 		titleL.Text = "기계"
 		statusL.Text = "기계 정보를 아직 못 받았어요"
 		nextRow.Visible = false
@@ -438,6 +441,10 @@ function render()
 		return
 	end
 	local stage = mc.stage or 1
+	-- 직접 만들기는 그 기계 앞에서 연 창에서만 (빈 자리 "기계 보기"로 열면 mc = 가장 높은 단계라 엉뚱한 기계가 됨, 4단계면 버튼이 사라짐)
+	local direct = (openStage == 2 or openStage == 3) and stage == openStage
+	makeBtn.Visible = direct
+	makeBtn:SetAttribute("Stage", direct and stage or nil)
 	titleL.Text = stage >= 2 and string.format("%s (%d단계)", mc.name or "기계", stage) or "기계 자리"
 	if stage < 2 then
 		statusL.Text = "아직 기계가 없어요. 기계를 사면 혼자서 달고나를 만들어 진열해 줘요"
@@ -483,6 +490,20 @@ end
 
 buyBtn.Activated:Connect(function()
 	act("buy", "machine")
+end)
+makeBtn.Activated:Connect(function()
+	local stage = makeBtn:GetAttribute("Stage")
+	if stage ~= 2 and stage ~= 3 then
+		return
+	end
+	local MachineMake = require(script.Parent:WaitForChild("MachineMake"))
+	gui.Enabled = false
+	local ok, why = MachineMake.start(stage)
+	if not ok then
+		gui.Enabled = true
+		msgL.TextColor3 = RED
+		msgL.Text = tostring(why or "")
+	end
 end)
 closeBtn.Activated:Connect(function()
 	gui.Enabled = false
