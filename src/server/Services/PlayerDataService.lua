@@ -267,6 +267,24 @@ PlayerDataService.MIGRATIONS = {
 			end
 		end
 	end,
+	[18] = function(data)
+		-- v17 → v18 (2026-11-26): 진열 칸 여는 순서가 유리 진열장 → 작은 탁자 3개 → 걸이판 → 벽면 진열장으로 바뀜 (G.SlotOpenOrder).
+		-- 가게(빌림·삼)가 있는 저장에서 새 순서로 닫힌 칸에 놓인 달고나는 보관함으로 (없어지지 않음). 노점이면 그대로 (쟁반 1~5는 같음)
+		local shop = type(data.shop) == "table" and data.shop or nil
+		local hadShop = shop ~= nil and (shop.state == "rented" or shop.state == "owned")
+		if not hadShop or type(data.stock) ~= "table" then
+			return
+		end
+		local open = {}
+		for _, i in ipairs(G.openSlotsForTier(tonumber(data.displayTier) or 0)) do
+			open[i] = true
+		end
+		for _, it in ipairs(data.stock) do
+			if type(it) == "table" and type(it.sl) == "number" and not open[it.sl] then
+				it.sl = nil
+			end
+		end
+	end,
 }
 
 local JOB_ID = (game.JobId ~= "" and game.JobId) or ("studio-" .. HttpService:GenerateGUID(false))
