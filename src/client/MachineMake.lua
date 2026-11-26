@@ -447,7 +447,8 @@ local function stepPour(sc, shape)
 				allFull = false
 			end
 		end
-		if allFull or batter <= 0.01 then
+		-- 칸이 다 85% 넘어도 손을 뗄 때까지는 계속 (마지막 칸도 100%까지 채울 수 있게, 2026-11-26 시험: 바로 끝나 마지막 칸이 최대 67점)
+		if (allFull and not Pointer.down) or batter <= 0.01 then
 			break
 		end
 	end
