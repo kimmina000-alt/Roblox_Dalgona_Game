@@ -133,27 +133,34 @@ Studio 장소 저장 (main과 Studio 스크립트가 같은지 combined 체크�
 
 ---
 
-## 7. 지금 상태 (2026-11-26)
+## 7. 지금 상태 (2026-11-26, 묶음 1129)
 
-- main **796b6f6** = 묶음 1128, Studio 장소 **버전 234** (스크립트 107개, combined 체크섬 857229036).
-- 묶음 1128에 들어간 것: D35 2·3단계 기계 직접 만들기(사용자 기계 모델, 서버 재계산, 도감 기록, 붓기는 손을 뗄 때 끝남), 손 작업대 "E 달고나 만들기" 버튼 안 뜨던 것(`PromptStyle`), D35 문서.
-- 장소 234에 같이 저장된 Studio 변경 (다른 세션 작업): 2·3단계 사용자 기계 메시, 4단계 파스텔 기계(`MachineLayout.Stage4`), 파스텔 공장(`FactoryLayout`의 '기계 ' 폴더). 예전 코지 디자인은 `ServerStorage.Backup_1126`.
+- 최신 main과 Studio 장소 버전은 `docs/WORK_PRIORITIES.md` 맨 위 "묶음 NNNN 끝남" 줄을 본다 (이 문서는 묶음마다 고치지 않음).
+- 묶음 1128: D35 2·3단계 기계 직접 만들기, 손 작업대 "E 달고나 만들기" 버튼(`PromptStyle`).
+- 묶음 1129: 기계 직접 만들기가 손 작업대를 복제한 Station으로 **손 제작 단계 모듈(Steps/Melt, Steps/Soda)을 그대로** 돌림
+  (`MachineMakeScene:station`, 점수도 손 제작 식 — `shared/MachineMakeRules`), 붓기는 반투명 검은 판(`Ui:setMoldPad`),
+  2단계 몸통 옆·뒤 벽(만들기 화면 코드 + Studio `MachineLayout.Stage2`의 BodySideL/R·BodyBack), 2단계 소다 = 가운데 원통,
+  3단계 열선 빛 = 검은 원통 안쪽, 3단계 검은 판 넓힘. 진열 칸 여는 순서 `G.SlotOpenOrder`(유리 진열장 → 작은 탁자 3개 → 걸이판 →
+  벽면 진열장, 저장 v18), 작은 탁자 줄은 탁자 변에 맞춤. 이 안내 문서와 `tools/studio/` 도구.
+- 기계 메시 자리 값은 EditableMesh로 꼭짓점을 읽어 잼 (`AssetService:CreateEditableMeshAsync(Content.fromUri(meshId))`, Studio Edit에서 됨).
+  MeshPart 충돌 모양은 단순한 상자라 Raycast로는 못 잼.
 
-**다음 묶음 1129 — 사용자 Import가 먼저**
+**사용자 Import가 먼저인 것 (다음 묶음)**
 
 | 할 일 | 상태 | 메모 |
 |---|---|---|
 | 벽면 진열장 Import | 🙋 사용자 | `레퍼런스/wall_case/dalgona_wall_case.glb` → `PlotLayout.ShopModel` 벽에 (`WallCaseBack` Role "벽면 진열장"). 없으면 진열장 6단계는 "준비 중" |
 | 손 작업대 앞 긴 진열장·손님 의자 Import | 🙋 사용자 → 코드 | `레퍼런스/user_furniture/dalgona_user_furniture.glb` (HandCounterShelf, HandCounterShelf_Glass, CustomerStool). Import 뒤 놓는 코드 필요 |
-| 임시 기본 손님 NPC | 🙋 사용자 → 머지 | `레퍼런스/customers_basic/dalgona_customers_basic.glb` Import 뒤 `feat/basic-npc-1126` 합침 |
+| 임시 기본 손님 NPC | 🙋 사용자 → 머지 | `레퍼런스/customers_basic/dalgona_customers_basic.glb` Import 뒤 `feat/basic-npc-1126` 합침 (Import 전에 합치면 손님이 깨짐) |
 | D47 공장 대량 납품 | 기획만 있음 | GDD 14장 D47 |
 
 **확인 못 한 것 / 사용자에게 물을 것**
-- 기계 직접 만들기를 실제 서버로 한 판 (테스트 계정 소다 0) — 재료 빠짐·보관함·도감 기록.
-- 2인 시험 (1128).
+- 기계 직접 만들기를 실제 서버로 한 판 (테스트 계정 소다 0) — 재료 빠짐·보관함·도감 기록. 2인 시험.
+- 3단계 원통 안 열선 빛과 넓힌 검은 판은 화면으로 따로 못 봄 (2단계 화면은 봄).
 - 3단계 분홍 자판기 앞면 텍스처에 만화 캐릭터 그림 → GDD 4-1 "캐릭터·상표는 안 그림"과 다른지.
 - 파스텔 공장: 벨트·김 표시(`Fac_Pt_BeltStart/BeltEnd/Steam`)가 없어 애니메이션 위치가 어긋날 수 있음.
 - 남은 브랜치 `feat/build-mode-1125`, `feat/market-1125`, `feat/customers-ai-1125`는 다른 브랜치로 대신 들어갔거나 보류(AI 손님) — 합치지 말 것.
+- Studio Play 중 3D 화면이 하얗게만 나온 적이 있음 (UI만 보임). 잠시 뒤 다시 Play하면 돌아옴 — 코드 문제 아님.
 
 ---
 
