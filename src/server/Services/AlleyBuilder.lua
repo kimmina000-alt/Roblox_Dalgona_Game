@@ -25,7 +25,7 @@ local S_FRONT = P.rowZ + P.size.Z / 2 -- 남쪽 줄 가게 앞선 (-54)
 local N_FRONT = S_FRONT + ROAD_W -- 북쪽 줄 가게 앞선 (-22)
 local ROAD_Z0, ROAD_Z1 = S_FRONT, N_FRONT
 local ROAD_ZC = (ROAD_Z0 + ROAD_Z1) / 2
-local SHOP_HALF = 26 -- 가게 3D 반폭 (사용자 가게 모델 폭 46.7 + 걸이 간판, 2026-11-23 간격 55로 바뀜)
+local SHOP_HALF = 32 -- 가게 3D 반폭 (2026-11-27 가게 3D 3판: 벽 20.85 + 2층 바깥 계단 10.5 → 31.3. 예전 26 = 폭 46.7 + 걸이 간판)
 local LAST_X = ((PER_ROW - 1) / 2) * P.spacing -- 끝 가게 가운데 x (100)
 local END_X0 = LAST_X + SHOP_HALF + 6 -- 골목 끝 꾸미기 가게가 시작하는 x (87)
 local HALF = END_X0 + 52 -- 골목 끝 (꾸미기 가게 2칸쯤)

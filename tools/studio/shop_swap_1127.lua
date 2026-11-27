@@ -57,7 +57,7 @@ local PALETTE = {
 	["Cube.0862"] = { "공장 뒤 셔터", Color3.fromRGB(176, 178, 184), Enum.Material.DiamondPlate, false, 3 },
 }
 -- 안 쓰는 것: 새 카운터·진열장(예전 Role 가구가 같은 자리), 간판 판(예전 간판 판·이름판을 새 자리로), 2층 걸이 간판(예전 걸이 간판을 그 자리로),
--- 2-1 지붕(3 지붕과 겹침), 1층 뒤 문짝 두 장(FactoryDoor가 문), 전봇대(옆 가게 계단과 겹침)
+-- 2-1 지붕(3 지붕과 겹침), 1층 뒤 문짝 두 장(FactoryDoor가 문). 전봇대는 사용자 요청으로 남김(아래 3-3, 텍스처 그대로) — 대신 부지 간격 55 → 66
 
 -- 1) 옛 껍데기 → 백업
 local OLD_SHELL = { "Plane_Node", "ShopFloor_Node", "Cube.0142", "Cube.024", "Cube.019", "Cube.020", "Cube.022", "WindowGlass_1_Node", "WindowGlass_2_Node", "Plane.003_Node" }
@@ -185,6 +185,20 @@ collide(-10.85, 20.85, 0.4, 27.6, 17.7, 18.4) -- 1층 뒷벽 (문 오른쪽)
 collide(-17.05, -10.85, 11.3, 27.6, 17.7, 18.4) -- 문 위
 collide(-20.85, 20.85, 27.3, 27.9, -18, 18.4) -- 1층 천장 = 2층 바닥
 collide(-20.85, 20.85, 27.9, 55, -18.6, -18) -- 2층 앞벽
+
+-- 3-3) 전봇대 (가게 로컬 +X 쪽 뒤, x 24 ~ 28): 텍스처·색 그대로, 부딪힘 기본
+for _, d in ipairs(kit["전봇대"]:GetDescendants()) do
+	if d:IsA("BasePart") then
+		local c = d:Clone()
+		c.Name = "전봇대"
+		c.Size = d.Size * S
+		c.CFrame = plotCF * (CFrame.new(toLocal(d.Position)) * (d.CFrame - d.Position))
+		c.Anchored = true
+		c:SetAttribute("Role", "전봇대")
+		c:SetAttribute("ShopFloor", 3)
+		c.Parent = shell
+	end
+end
 
 -- 4) 예전 간판 판·이름판을 새 간판 자리로, 걸이 간판을 2층 걸이 간판 자리로
 local function moveModel(m, dLocal)
