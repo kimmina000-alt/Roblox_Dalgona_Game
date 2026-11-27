@@ -7,7 +7,7 @@
 -- mouth = 입 앞 (먹기 연출), hand = 오른손(ArmR 끝) 가운데, height = 키.
 
 return {
-	order = { "Ppogeuli", "Kkuldanji", "Mochi", "Godeungeo", "Dotori", "Owl", "Pongpong" },
+	order = { "Ppogeuli", "Kkuldanji", "Mochi", "Godeungeo", "Dotori", "Owl", "Pongpong", "Gomdol" },
 	types = {
 		Ppogeuli = {
 			label = "뽀글이",
@@ -105,6 +105,20 @@ return {
 				ArmR = { center = Vector3.new(0.599, 1.104, -0.007), size = Vector3.new(0.439, 1.021, 0.439), joint = Vector3.new(0.599, 1.402, 0.000) },
 				LegL = { center = Vector3.new(-0.240, 0.330, -0.114), size = Vector3.new(0.507, 0.660, 0.760), joint = Vector3.new(-0.240, 0.600, 0.000) },
 				LegR = { center = Vector3.new(0.240, 0.330, -0.114), size = Vector3.new(0.507, 0.660, 0.760), joint = Vector3.new(0.240, 0.600, 0.000) },
+			},
+		},
+		Gomdol = { -- tools/blender/gomdol.py (레퍼런스/npc/곰돌.glb, 2026-11-27)
+			label = "곰돌",
+			height = 3.800,
+			mouth = Vector3.new(-0.000, 2.296, -0.972),
+			hand = Vector3.new(0.726, 0.815, -0.088),
+			parts = {
+				Head = { center = Vector3.new(-0.000, 2.763, -0.152), size = Vector3.new(1.941, 2.075, 1.540), joint = Vector3.new(-0.000, 1.891, 0.000) },
+				Body = { center = Vector3.new(-0.003, 1.210, 0.000), size = Vector3.new(1.357, 1.319, 1.390), joint = Vector3.new(-0.000, 0.807, 0.000) },
+				ArmL = { center = Vector3.new(-0.473, 1.247, -0.122), size = Vector3.new(0.643, 0.833, 0.581), joint = Vector3.new(-0.323, 1.696, -0.122) },
+				ArmR = { center = Vector3.new(0.425, 1.311, -0.023), size = Vector3.new(0.717, 1.024, 0.484), joint = Vector3.new(0.317, 1.690, -0.023) },
+				LegL = { center = Vector3.new(-0.352, 0.485, -0.026), size = Vector3.new(0.492, 0.928, 0.618), joint = Vector3.new(-0.441, 0.838, -0.014) },
+				LegR = { center = Vector3.new(0.298, 0.472, 0.000), size = Vector3.new(0.601, 0.944, 0.679), joint = Vector3.new(0.339, 0.831, -0.035) },
 			},
 		},
 	},

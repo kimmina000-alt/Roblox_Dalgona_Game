@@ -437,6 +437,7 @@ G.Customers = {
 		{ id = "Dotori", name = "도토리", kind = "kid", weights = { 20, 18, 16, 14, 12 } },
 		{ id = "Godeungeo", name = "고등어 아저씨", kind = "regular", weights = { 15, 16, 16, 16, 15 } },
 		{ id = "Kkuldanji", name = "꿀단지", kind = "regular", weights = { 10, 14, 16, 17, 17 } },
+		{ id = "Gomdol", name = "곰돌", kind = "regular", weights = { 12, 14, 15, 15, 14 } }, -- 2026-11-27 사용자 NPC (tools/blender/gomdol.py)
 		{ id = "Ppogeuli", name = "뽀글이", kind = "tourist", weights = { 0, 8, 14, 18, 20 } },
 		{ id = "Owl", name = "부엉이", kind = "vip", weights = { 0, 2, 6, 10, 15 } },
 	},
