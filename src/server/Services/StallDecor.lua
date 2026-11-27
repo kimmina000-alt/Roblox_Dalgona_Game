@@ -97,20 +97,17 @@ local function rug(ws, top)
 	f.Parent = ws
 end
 
+-- 2026-11-27 사용자 "누런 빛깔 삭제": 노란 색조(TintColor)·따뜻한 그늘은 뺌. 파스텔 느낌용 채도만 조금 (색조 없음)
 local function grade()
 	if Lighting:FindFirstChild("CuteGrade") then
 		return
 	end
 	local cc = Instance.new("ColorCorrectionEffect")
 	cc.Name = "CuteGrade"
-	cc.Saturation = 0.15
-	cc.Contrast = 0.05
-	cc.Brightness = 0.02
-	cc.TintColor = Color3.fromRGB(255, 248, 240)
+	cc.Saturation = 0.1
+	cc.Contrast = 0.03
+	cc.TintColor = Color3.new(1, 1, 1)
 	cc.Parent = Lighting
-	-- 그림자 속도 따뜻하고 밝게 (둥글둥글한 파스텔 느낌, 너무 어두운 그늘 없이)
-	Lighting.Ambient = Color3.fromRGB(118, 106, 100)
-	Lighting.OutdoorAmbient = Color3.fromRGB(150, 138, 132)
 end
 
 -- 도구 사이 간격 넓히기 (사용자 요청 2026-11-19: 화로 · 설탕 그릇 · 철판 사이를 더 떨어뜨리고 테이블은 길어져도 됨).

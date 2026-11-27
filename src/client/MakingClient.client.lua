@@ -239,7 +239,7 @@ local function finish()
 	Pointer.enabled = false
 	Pointer.reset()
 	ui:show(false)
-	CameraRig.release()
+	CameraRig.allow(false) -- 아직 도는 단계가 카메라를 다시 잡지 못하게 (X 버그 2026-11-27)
 	setControls(true)
 	setCharacterHidden(false)
 	if station then
@@ -595,6 +595,7 @@ function startMaking(restart)
 		pickShape = true -- 작업대에 새로 앉으면 도안부터 고름
 	end
 	running = true
+	CameraRig.allow(true)
 	station.Prompt.Enabled = false
 	setFullSize(true)
 	setUnturned(true)

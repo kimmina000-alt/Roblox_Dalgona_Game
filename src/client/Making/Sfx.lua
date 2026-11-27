@@ -87,6 +87,16 @@ function Sfx.loop(key, volume, speed)
 	end
 end
 
+-- 반복 소리 바로 끄기 (loop(key, 0)은 서서히 줄어서 한 번만 부르면 계속 들림 — 2026-11-27 "설탕 다 받고도 소리")
+function Sfx.stopLoop(key)
+	local l = loops[key]
+	if l and not l.dead then
+		l.vol = 0
+		l.s.Volume = 0
+		l.s:Pause()
+	end
+end
+
 -- 젓는 소리: 상태마다 질감이 다름 (가루 = 사각사각, 결정 = 톡톡, 액체 = 부드럽게, 소다 뒤 = 둔한 거품)
 -- speed = 젓는 각속도 (rad/s). 빠를수록 크고 빠르게
 local STIR_KEYS = { "stirDry", "stirCrystal", "stirLiquid", "stirCream" }

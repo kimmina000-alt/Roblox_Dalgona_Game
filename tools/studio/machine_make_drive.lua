@@ -97,12 +97,16 @@ local function hold(pos3, t)
 	end
 	inject(false, P.pos)
 end
--- 3단계 기둥 아래로 국자 끌어 대기
+-- 국자 손잡이를 잡고 그릇을 bowl3 자리로 끌기 (손가락 = 그릇 + 손잡이 거리)
+local function dragBowlTo(bowl3, t)
+	hold(bowl3 + sc().gripOff, t)
+end
+-- 3단계 구멍 아래로 국자 끌어 대기 (MachineMake holdUnderPillar와 같은 높이)
 local function underPillar(key, t)
 	local s = sc()
 	local half = s.model.MachineStation.Ladle.Bowl.Size.X / 2
-	local pl = s[key]
-	hold(Vector3.new(pl.X, pl.Y - half - 0.35 * s.S, pl.Z), t)
+	local top = key == "sodaPillar" and s.sodaTop or s.sugarTop
+	dragBowlTo(Vector3.new(top.X, top.Y - half - 0.9 * s.S, top.Z), t)
 end
 local lo, hi = Config.Melt.tempLow, Config.Melt.tempHigh
 -- 국자 위에서 원 그리며 젓기 + 온도 맞추기 (위로 끌기 = 국자 올림 = 덜 뜨거움)
@@ -139,8 +143,12 @@ task.delay(1, function()
 			task.wait(0.6)
 			underPillar("sugarPillar", 2.6)
 		else
+			waitFor("배출구 아래로")
+			task.wait(0.6)
+			local half = sc().model.MachineStation.Ladle.Bowl.Size.X / 2
+			dragBowlTo(sc().sugarLadle + Vector3.new(0, half, 0), 1.5)
 			waitFor("꾹 누르고")
-			task.wait(0.9)
+			task.wait(0.6)
 			hold(sc().pressPos, 1.9) -- 설탕 약 0.8 (초록 칸)
 		end
 		waitFor("원을 그리며")
@@ -175,13 +183,9 @@ task.delay(1, function()
 			end
 		end
 		inject(false, P.pos) -- 손을 떼야 붓기가 끝남
-		waitFor("누름판을 꾹", 10)
-		task.wait(0.8)
-		hold(sc().plateCenter, math.log(Config.Press.h0 / 0.08) / Config.Press.k) -- 0.45 → 0.08
-		log("press done")
-		waitFor("막대 통에서", 10)
+		waitFor("막대 더미에서", 10)
 		task.wait(1.3)
-		-- 첫 칸: 막대 통에서 끌어 오기
+		-- 첫 칸: 막대 더미에서 끌어 오기, 나머지는 칸 누르기
 		local from, to = scr(sc():stickRest()), scr(sc().cavities[1].pos)
 		for k = 0, 20 do
 			inject(true, from:Lerp(to, k / 20))
@@ -192,6 +196,11 @@ task.delay(1, function()
 		for i = 2, #sc().cavities do
 			tap(scr(sc().cavities[i].pos))
 		end
+		waitFor("누름판을 꾹", 10)
+		task.wait(0.8)
+		_G.__pressShot = true
+		hold(sc().plateCenter, math.log(Config.Press.h0 / 0.08) / Config.Press.k) -- 0.45 → 0.08
+		log("press done")
 	end)
 	log("finished " .. tostring(ok) .. " " .. tostring(err))
 end)

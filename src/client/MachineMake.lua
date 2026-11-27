@@ -11,8 +11,10 @@
 -- 2026-11-26 D60~D63 (사용자 확정):
 --   D60 장면은 내 가게의 그 기계 자리에서 (MachineMakeScene), 카메라는 지금 자리에서 기계로 다가감.
 --   D61 막대는 손 작업대 막대(Steps/Stick.build): 막대 통에서 끌어 칸에 놓기 (칸을 바로 눌러도 꽂힘).
---   D62 붓기 뒤 넓은 누름판으로 한 번 누르기 (목표 0.08, 손 작업대 마지막 누르기와 같음).
+--   D62 넓은 누름판으로 한 번 누르기 (목표 0.08, 손 작업대 마지막 누르기와 같음).
 --   D63 3단계: 왼쪽 기둥 아래에 국자를 대고 있으면 설탕 정량, 녹인 뒤 오른쪽 기둥 아래에 대면 식소다 정량 → 바로 젓기.
+-- 2026-11-27 사용자: 순서 붓기 → 막대 → 누르기, 붓고 나면 국자는 화면에서 숨김, 칸 반죽은 볼록 → 누르면 납작,
+--   국자는 손잡이를 잡고 끌기(2·3단계, 그릇이 손가락에 가려지지 않게), 반복 소리는 단계 끝에 바로 끔(Sfx.stopLoop).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -45,8 +47,8 @@ local STEPS = {
 	{ key = "melt", label = "녹이기", icon = "🔥", title = "녹이기", desc = "" },
 	{ key = "soda", label = "소다", icon = "🧂", title = "소다", desc = "" },
 	{ key = "pour", label = "붓기", icon = "🍯", title = "금형판에 붓기", desc = "" },
-	{ key = "press", label = "누르기", icon = "⬇", title = "누름판", desc = "" },
 	{ key = "stick", label = "막대", icon = "🍡", title = "막대 꽂기", desc = "" },
+	{ key = "press", label = "누르기", icon = "⬇", title = "누름판", desc = "" },
 }
 local SUGAR_FULL = 1.5 -- 3단계 설탕 기둥: 정량이 다 나오는 데 걸리는 초 (Rules.SUGAR_HOLD 1.2 이상이어야 서버 통과)
 local SODA_FULL = 1.0 -- 3단계 소다 기둥
@@ -103,6 +105,23 @@ local function pointerAt(y)
 end
 local function flat(v)
 	return Vector3.new(v.X, 0, v.Z)
+end
+-- 국자 손잡이를 잡고 끌기: 누르고 있으면 손가락 = 손잡이 자리, 그릇은 그만큼 떨어져 따라옴 (planeY = 그릇 높이)
+local function dragLadle(sc, cur, planeY, dt, near3, maxR)
+	if Pointer.down then
+		local p = pointerAt(planeY)
+		if p then
+			local want = Vector3.new(p.X, planeY, p.Z) - (sc.gripOff or Vector3.zero)
+			if near3 and maxR then
+				local off = flat(want - near3)
+				if off.Magnitude > maxR then
+					want = Vector3.new(near3.X, planeY, near3.Z) + off.Unit * maxR
+				end
+			end
+			cur = cur:Lerp(want, 1 - math.exp(-dt * 14))
+		end
+	end
+	return cur
 end
 
 -- 국자 속 설탕 더미 (손 작업대와 같은 그릇 더미 메시 + 결정 낱알, Steps/Sugar). k = 0~1
@@ -220,11 +239,14 @@ local function stepCoin(sc)
 			if slot then
 				n += 1
 				Sfx.play("metalClink", 0.5, 1.4 + n * 0.1)
-				-- 동전이 앞에서 구멍으로 쏙 (세운 동전 = 원기둥 축이 Z)
-				local coin = Scene.part(sc.model, "Coin", Vector3.new(0.08, 0.55, 0.55), CFrame.new(slot), Color3.fromRGB(210, 210, 200), Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
+				-- 동전이 기계 앞에서 세로 투입구(검은 칸)로 쏙: 동전 면이 투입구 틈과 나란하게 세움 (원기둥 축 = 기계 X).
+				-- 2026-11-27 사용자 "투입구 윗부분 검은 칸에 위치 맞게": 예전엔 세계 Z로 움직여서 기계가 돌아 있으면 옆에서 들어갔음
+				local cs = 0.26 * sc.S
+				local coin = Scene.part(sc.model, "Coin", Vector3.new(0.03 * sc.S, cs, cs), CFrame.new(slot) * sc.rot, Color3.fromRGB(210, 210, 200), Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
 				task.spawn(function()
 					for k = 0, 10 do
-						coin.CFrame = CFrame.new(slot + Vector3.new(0, 0, -1.2 + k * 0.12)) * CFrame.Angles(0, math.rad(90), 0)
+						local back = (k / 10) * 0.2 * sc.S -- 마지막에 투입구 안으로
+						coin.CFrame = CFrame.new(slot + sc.dir(Vector3.new(0, 0, -0.6 * sc.S * (1 - k / 10) + back))) * sc.rot
 						task.wait(0.02)
 					end
 					coin:Destroy()
@@ -258,11 +280,22 @@ end
 local function stepSugar(sc, S, st)
 	ui:setStep(2)
 	shot(sc, "sugar")
-	local home = S.Bowl.Position
 	local catchAt = sc.sugarLadle + Vector3.new(0, S.bowlHalf, 0)
-	if (catchAt - home).Magnitude > 0.2 and not slide(sc, home, catchAt, 0.45) then
+	-- 국자 손잡이를 잡고 배출구 아래로 끌어 옴 (가까이 오면 딱 맞춰짐)
+	ui:say("국자 손잡이를 잡고 배출구 아래로 끌어 와요", "국자가 배출구 밑에 오면 딱 맞춰져요")
+	local cur = S.Bowl.Position
+	while flat(cur - catchAt).Magnitude > 0.35 * sc.S do
+		local dt = frame()
+		if not dt then
+			return nil
+		end
+		cur = dragLadle(sc, cur, catchAt.Y, dt, catchAt, 5 * sc.S)
+		sc:ladleBowlTo(cur)
+	end
+	if not slide(sc, cur, catchAt, 0.15) then
 		return nil
 	end
+	Sfx.play("metalClink", 0.35, 1.2)
 	local t0 = now()
 	local what = sc.stage == 3 and "설탕 버튼을" or "설탕 배출구를"
 	ui:say(what .. " 꾹 누르고 있으면 설탕이 나와요", "막대가 초록 칸에 오면 손을 떼요")
@@ -300,7 +333,7 @@ local function stepSugar(sc, S, st)
 			break
 		end
 	end
-	Sfx.loop("sugarPour", 0, 1)
+	Sfx.stopLoop("sugarPour")
 	sc:setStream(false)
 	ui:setMeter(false)
 	local rec = { t0 = t0, t1 = now(), fill = fill }
@@ -327,8 +360,10 @@ end
 -- key = "sugarPillar" | "sodaPillar", full = 정량이 다 나오는 초, onFill(k 0~1) = 국자 속 보이기. 반환 { t0, t1, held }
 local function holdUnderPillar(sc, S, key, full, color, onFill)
 	local pillar = sc[key]
-	local bowlY = pillar.Y - S.bowlHalf - 0.35 * sc.S
-	local reach = 0.4 * sc.S
+	local top = (key == "sodaPillar" and sc.sodaTop or sc.sugarTop) or pillar
+	-- 그릇은 판 아랫면(구멍)보다 조금 아래, 열선 컵보다 위
+	local bowlY = top.Y - S.bowlHalf - 0.9 * sc.S
+	local reach = 0.35 * sc.S
 	local t0 = now()
 	local held, wasUnder = 0, false
 	local cur = S.Bowl.Position
@@ -336,40 +371,31 @@ local function holdUnderPillar(sc, S, key, full, color, onFill)
 		local dt = frame()
 		if not dt then
 			sc:setStream(false)
+			Sfx.stopLoop("sugarPour")
 			return nil
 		end
-		-- 손가락을 따라 국자가 움직임 (기둥 높이 바로 아래 판 위, 기둥에서 너무 멀리는 못 감)
-		if Pointer.down then
-			local p = pointerAt(bowlY)
-			if p then
-				local off = flat(p - pillar)
-				if off.Magnitude > 5 * sc.S then
-					off = off.Unit * 5 * sc.S
-				end
-				local want = Vector3.new(pillar.X, bowlY, pillar.Z) + off
-				cur = cur:Lerp(want, 1 - math.exp(-dt * 14))
-			end
-		end
+		-- 손잡이를 잡고 끌면 국자가 따라옴 (구멍에서 너무 멀리는 못 감)
+		cur = dragLadle(sc, cur, bowlY, dt, top, 4 * sc.S)
 		sc:ladleBowlTo(cur)
-		local d = flat(S.Bowl.Position - pillar).Magnitude
+		local d = flat(S.Bowl.Position - top).Magnitude
 		local under = d < reach
 		sc:setPillarGlow(key, d < reach * 3)
 		if under then
 			held = math.min(full, held + dt)
 			onFill(held / full)
-			sc:setStream(true, pillar, color)
+			sc:setStream(true, top, color)
 			Sfx.loop("sugarPour", 0.5, key == "sodaPillar" and 1.3 or 1)
 		else
 			sc:setStream(false)
 			Sfx.loop("sugarPour", 0, 1)
 			if wasUnder then
-				ui:hint("기둥 아래에 계속 대고 있어요")
+				ui:hint("구멍 아래에 계속 대고 있어요")
 			end
 		end
 		wasUnder = under
 		ui:setMeter(true, held / full, 0.999, 1, string.format("%d%%", math.floor(held / full * 100 + 0.5)), key == "sodaPillar" and "소다" or "설탕")
 	end
-	Sfx.loop("sugarPour", 0, 1)
+	Sfx.stopLoop("sugarPour")
 	sc:setStream(false)
 	sc:setPillarGlow(key, false)
 	ui:setMeter(false)
@@ -398,7 +424,7 @@ local function stepPillarSugar(sc, S, st)
 	if not slide(sc, S.Bowl.Position, rest, 0.4) then
 		return nil
 	end
-	ui:say("국자를 왼쪽 기둥 아래로 끌어 대요", "대고 있으면 설탕이 정해진 만큼 나와요")
+	ui:say("국자 손잡이를 잡고 왼쪽 설탕 구멍 아래로 끌어 대요", "대고 있으면 설탕이 정해진 만큼 나와요")
 	local rec = holdUnderPillar(sc, S, "sugarPillar", SUGAR_FULL, WHITE, function(k)
 		showSugar(S, st, k)
 	end)
@@ -416,7 +442,7 @@ end
 -- 녹인 뒤 오른쪽 기둥에서 식소다 정량 → st.sodaPreset (Steps/Soda가 찍기 없이 바로 젓기)
 local function stepPillarSoda(sc, S, st)
 	shot(sc, "sodaPillar")
-	ui:say("국자를 오른쪽 기둥 아래로 끌어 대요", "식소다가 정해진 만큼 나와요 · 대면 바로 빠르게 저어요")
+	ui:say("국자 손잡이를 잡고 오른쪽 소다 구멍 아래로 끌어 대요", "식소다가 정해진 만큼 나와요 · 대면 바로 빠르게 저어요")
 	local first = nil
 	local rec = holdUnderPillar(sc, S, "sodaPillar", SODA_FULL, Color3.fromRGB(240, 240, 236), function()
 		first = first or now()
@@ -505,114 +531,41 @@ local function stepPour(sc, S, shape, st)
 			break
 		end
 	end
-	Sfx.loop("pourGlug", 0, 1)
+	Sfx.stopLoop("pourGlug")
 	sc:setPourStream(nil)
 	ui:setMeter(false)
 	ui:setMoldPad(false)
 	S:setContents({ Transparency = 1 })
+	sc:hideLadle() -- 다 부었으면 국자는 화면에서 숨김 (2026-11-27)
+	sc:setHeat(0)
 	return { t0 = t0, t1 = now(), fills = fills }
 end
 
----------------------------------------------------------------- ⑥ 넓은 누름판으로 한 번 누르기 (D62)
-local PRESS_VIS = 1.6 -- 두께 1 = 화면에서 이만큼 스터드
-local function stepPress(sc, S)
-	ui:setStep(6)
-	shot(sc, "press")
-	sc:ladleBowlTo(sc.ladleRest + Vector3.new(0, S.bowlHalf, 0))
-	sc:setHeat(0) -- 다 부었으니 화구 끔
-	local P = Config.Press
-	local target = P.targets[#P.targets]
-	local function hy(h)
-		return 0.04 + h * PRESS_VIS
-	end
-	if not sc:presser() then
-		-- 누름판을 못 찾음 (작업대 없음): 누르기 없이 목표 두께로 (점수는 그대로 나옴)
-		warn("[MachineMake] presser missing")
-	end
-	-- 위에서 내려와 반죽에 닿음
-	local top = hy(P.h0) + 3
-	local t = 0
-	while t < 0.45 do
-		local dt = frame()
-		if not dt then
-			return nil
-		end
-		t += dt
-		local k = math.min(t / 0.45, 1)
-		sc:presserTo(top + (hy(P.h0) - top) * k * k)
-	end
-	Sfx.play("pop", 0.4, 0.8)
-	ui:say("누름판을 꾹 누르고 있어요", "막대가 초록 칸에 오면 손을 떼요 · 한 번만 눌러요")
-	local h, t0, pressed = P.h0, nil, false
-	local lo, hi = target - 0.015, target + 0.02
-	while true do
-		local dt = frame()
-		if not dt then
-			sc:hidePresser()
-			ui:setMeter(false)
-			return nil
-		end
-		if Pointer.down then
-			t0 = t0 or now()
-			pressed = true
-			h = h * math.exp(-P.k * dt)
-			Sfx.loop("pourGlug", 0.15, 0.6)
-		elseif pressed then
-			break
-		end
-		if h < 0.03 then
-			break
-		end
-		sc:presserTo(hy(h))
-		sc:flattenCavities(math.clamp((P.h0 - h) / (P.h0 - target), 0, 1.2))
-		ui:setMeter(true, h / P.h0, lo / P.h0, hi / P.h0, string.format("%d%%", math.floor(target / h * 100 + 0.5)), "두께")
-	end
-	Sfx.loop("pourGlug", 0, 1)
-	ui:setMeter(false)
-	local t1 = now()
-	Sfx.play("pressSticky", 0.5, 1)
-	if h >= lo and h <= hi then
-		ui:toast("딱 알맞게 눌렀어요!", 0.8)
-	elseif h < P.crack then
-		ui:toast("너무 얇아서 갈라졌어요", 0.8)
-	elseif h > hi then
-		ui:toast("조금 두꺼워요", 0.8)
-	else
-		ui:toast("조금 얇아요", 0.8)
-	end
-	-- 누름판 들어 올림
-	t = 0
-	while t < 0.35 do
-		local dt = frame()
-		if not dt then
-			break
-		end
-		t += dt
-		sc:presserTo(hy(h) + 3 * math.min(t / 0.35, 1))
-	end
-	sc:hidePresser()
-	return { t0 = t0 or t1, t1 = t1 + 0.01, h = h }
-end
-
----------------------------------------------------------------- ⑦ 막대 꽂기 (D61, 손 작업대 막대) + 헹굼
--- 칸 i에 막대를 꽂은 자세 (한쪽 끝이 칸 가운데, 나머지는 앞(-Z)으로 빠져나옴, 막대 길이 = X축)
+---------------------------------------------------------------- ⑥ 막대 꽂기 (D61, 손 작업대 막대, 칸 크기에 맞춰 줄임)
+-- 칸 i에 막대를 꽂은 자세 (한쪽 끝이 칸 가운데쯤, 나머지는 앞(-Z)으로 빠져나옴, 막대 길이 = X축)
 local function stickCF(sc, i)
-	local p = sc:stickSpot(i) + sc.dir(Vector3.new(0, 0, -(StickStep.SIZE.LEN / 2 - sc.cavD * 0.15)))
+	local len = StickStep.SIZE.LEN * sc.stickScale
+	local p = sc:stickSpot(i) + sc.dir(Vector3.new(0, 0, -(len / 2 - sc.cavD * 0.1)))
 	return CFrame.new(p) * sc.rot * CFrame.Angles(0, math.rad(90), 0)
 end
 
+local function newStick(sc, S)
+	local m, place = StickStep.build(S)
+	place(CFrame.new(sc:stickRest()))
+	m:ScaleTo(sc.stickScale)
+	m.Parent = sc.model
+	return m
+end
+
 local function stepStick(sc, S)
-	ui:setStep(7)
+	ui:setStep(6)
 	shot(sc, "stick")
 	local t0 = now()
-	ui:say("막대 통에서 막대를 끌어 칸마다 놓아요", "칸을 바로 눌러도 꽂혀요")
-	sc:ladleBowlTo(sc.ladleRest + Vector3.new(0, S.bowlHalf, 0))
-	sc:setHeat(0)
+	ui:say("막대 더미에서 막대를 끌어 칸마다 놓아요", "칸을 바로 눌러도 꽂혀요")
 	local left = #sc.cavities
-	local drag, place = nil, nil
+	local drag = nil
 	local wasDown = false
-	local restCF = CFrame.new(sc:stickRest()) * sc.rot
-	local dragY = sc.cavY + 0.4
+	local dragY = sc.cavY + 0.15
 	local function freeNear(px)
 		local best, bd = nil, px
 		for i, c in ipairs(sc.cavities) do
@@ -625,10 +578,9 @@ local function stepStick(sc, S)
 		end
 		return best
 	end
-	local function plant(i, m, pl)
-		local c = sc.cavities[i]
-		pl(stickCF(sc, i))
-		c.stick, c.stickPlace = m, pl
+	local function plant(i, m)
+		sc.cavities[i].stick = m
+		m:PivotTo(stickCF(sc, i))
 		left -= 1
 		Sfx.play("pop", 0.5, 1.2)
 	end
@@ -642,17 +594,13 @@ local function stepStick(sc, S)
 		local d = Pointer.down
 		if d and not wasDown then
 			if near(sc:stickRest(), TAP_PX * 1.2) then
-				drag, place = StickStep.build(S)
-				drag.Parent = sc.model
-				place(restCF)
+				drag = newStick(sc, S)
 			else
 				local i = freeNear(80)
 				if i then
-					local m, pl = StickStep.build(S)
-					m.Parent = sc.model
-					plant(i, m, pl)
+					plant(i, newStick(sc, S))
 				else
-					ui:hint("막대 통에서 막대를 끌어 와요")
+					ui:hint("막대 더미에서 막대를 끌어 와요")
 				end
 			end
 		end
@@ -660,39 +608,120 @@ local function stepStick(sc, S)
 			if d then
 				local p = pointerAt(dragY)
 				if p then
-					place(CFrame.new(p) * sc.rot * CFrame.Angles(0, math.rad(90), 0))
+					drag:PivotTo(CFrame.new(p) * sc.rot * CFrame.Angles(0, math.rad(90), 0))
 				end
 			else
 				local i = freeNear(110)
 				if i then
-					plant(i, drag, place)
+					plant(i, drag)
 				else
 					drag:Destroy()
 					ui:hint("빈 칸 위에 놓아요")
 				end
-				drag, place = nil, nil
+				drag = nil
 			end
 		end
 		wasDown = d
 	end
-	-- 굳으면 막대째 떼어 올림
+	Sfx.play("stepDone", 0.4, 1)
 	task.wait(0.3)
+	return { t0 = t0, t1 = now() }
+end
+
+---------------------------------------------------------------- ⑦ 넓은 누름판으로 한 번 누르기 (D62): 볼록한 반죽 → 납작
+local function stepPress(sc, S, shape)
+	ui:setStep(7)
+	shot(sc, "press")
+	local P = Config.Press
+	local target = P.targets[#P.targets]
+	local top0 = math.max(0.03, sc:domeTop())
+	local function hy(h) -- 두께 h → 반죽 꼭대기 높이 (처음 h0 = 지금 볼록한 꼭대기)
+		return top0 * h / P.h0
+	end
+	if not sc:presser() then
+		warn("[MachineMake] presser missing")
+	end
+	-- 위에서 내려와 반죽 꼭대기에 닿음
+	local up = 1.5 * sc.S
+	local t = 0
+	while t < 0.45 do
+		local dt = frame()
+		if not dt then
+			sc:hidePresser()
+			return nil
+		end
+		t += dt
+		local k = math.min(t / 0.45, 1)
+		sc:presserTo(hy(P.h0) + up * (1 - k * k))
+	end
+	Sfx.play("pop", 0.4, 0.8)
+	ui:say("누름판을 꾹 누르고 있어요", "막대가 초록 칸에 오면 손을 떼요 · 한 번만 눌러요")
+	local h, t0, pressed = P.h0, nil, false
+	local lo, hi = target - 0.015, target + 0.02
+	while true do
+		local dt = frame()
+		if not dt then
+			sc:hidePresser()
+			ui:setMeter(false)
+			Sfx.stopLoop("pourGlug")
+			return nil
+		end
+		if Pointer.down then
+			t0 = t0 or now()
+			pressed = true
+			h = h * math.exp(-P.k * dt)
+			Sfx.loop("pourGlug", 0.15, 0.6)
+		elseif pressed then
+			break
+		else
+			Sfx.loop("pourGlug", 0, 1)
+		end
+		if h < 0.03 then
+			break
+		end
+		sc:presserTo(hy(h))
+		sc:flattenCavities(hy(h), (P.h0 - h) / (P.h0 - target))
+		ui:setMeter(true, h / P.h0, lo / P.h0, hi / P.h0, string.format("%d%%", math.floor(target / h * 100 + 0.5)), "두께")
+	end
+	Sfx.stopLoop("pourGlug")
+	ui:setMeter(false)
+	local t1 = now()
+	Sfx.play("pressSticky", 0.5, 1)
+	if h >= lo and h <= hi then
+		ui:toast("딱 알맞게 눌렀어요!", 0.8)
+	elseif h < P.crack then
+		ui:toast("너무 얇아서 갈라졌어요", 0.8)
+	elseif h > hi then
+		ui:toast("조금 두꺼워요", 0.8)
+	else
+		ui:toast("조금 얇아요", 0.8)
+	end
+	-- 누름판 들어 올리면 금형 모양대로 찍힌 달고나
+	t = 0
+	while t < 0.35 do
+		local dt = frame()
+		if not dt then
+			break
+		end
+		t += dt
+		sc:presserTo(hy(h) + up * math.min(t / 0.35, 1))
+	end
+	sc:hidePresser()
+	sc:finishCavities(shape)
+	-- 굳으면 막대째 떼어 올림
+	task.wait(0.4)
+	local lift = Vector3.new(0, sc.cavD * 0.3, 0)
 	for _, c in ipairs(sc.cavities) do
 		if c.look then
-			c.look:PivotTo(c.look:GetPivot() + Vector3.new(0, sc.cavD * 0.3, 0))
+			c.look:PivotTo(c.look:GetPivot() + lift)
 		end
 		if c.stick then
-			c.stick:PivotTo(c.stick:GetPivot() + Vector3.new(0, sc.cavD * 0.3, 0))
+			c.stick:PivotTo(c.stick:GetPivot() + lift)
 		end
 	end
 	Sfx.play("stepDone", 0.5, 1)
-	-- 국자 물에 헹굼 (영상 끝)
-	task.wait(0.5)
-	shot(sc, "rinse")
-	slide(sc, S.Bowl.Position, sc.waterPos + Vector3.new(0, 0.6, 0), 0.5)
-	Sfx.play("sodaDrop", 0.4, 0.7)
 	task.wait(0.4)
-	return { t0 = t0, t1 = now() }
+	return { t0 = t0 or t1, t1 = t1 + 0.01, h = h }
 end
 
 ---------------------------------------------------------------- 한 판
@@ -754,7 +783,8 @@ local function round(stage, start)
 			ok = stepPillarSoda(sc, S, ctx.state)
 		end
 		if ok then
-			rig("soda")
+			-- 3단계는 소다 통이 없음(기둥 정량) → 소다 화면 대신 국자를 내려다보는 녹이기 화면 (2026-11-27 "소다 뒤 화면 다 가려짐")
+			rig(stage == 3 and "melt" or "soda")
 			recs.soda = SodaStep.run(ctx)
 		end
 		ok = recs.soda ~= nil
@@ -769,12 +799,12 @@ local function round(stage, start)
 		ok = recs.pour ~= nil
 	end
 	if ok and not burnt then
-		recs.press = stepPress(sc, S)
-		ok = recs.press ~= nil
-	end
-	if ok and not burnt then
 		recs.stick = stepStick(sc, S)
 		ok = recs.stick ~= nil
+	end
+	if ok and not burnt then
+		recs.press = stepPress(sc, S, shape)
+		ok = recs.press ~= nil
 	end
 	if burnt and ok then
 		ui:say("앗, 까맣게 탔어요", "이번 판은 탄 달고나가 돼요")
@@ -830,7 +860,7 @@ local function finish(sc)
 	end
 	RunService:UnbindFromRenderStep("MachineMakeCam")
 	camCF, camGoal = nil, nil
-	CameraRig.release()
+	CameraRig.allow(false)
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70
@@ -873,6 +903,7 @@ function MachineMake.start(stage, test)
 	Pointer.enabled = true
 	Pointer.reset()
 	controls(false)
+	CameraRig.allow(true)
 	player:SetAttribute("Making", true)
 	-- 서버도 같은 속성 (칭호 숨김 · 주문 손님 기다림 절반 속도 D59 · 다른 사람 화면)
 	local re = Remotes:FindFirstChild("MakingState")

@@ -17,7 +17,8 @@ local Scoring = require(Shared:WaitForChild("Scoring"))
 
 local Rules = {}
 
-Rules.STEPS = { "sugar", "melt", "soda", "pour", "press", "stick" }
+-- 2026-11-27 사용자: 막대를 꽂은 다음 누름판 (손 작업대와 같은 순서)
+Rules.STEPS = { "sugar", "melt", "soda", "pour", "stick", "press" }
 -- 단계별 가중치 (D62·D63 권장안, 2026-11-26): 3단계는 설탕이 정량이라 0
 Rules.WEIGHTS = {
 	[2] = { sugar = 0.10, melt = 0.30, soda = 0.20, pour = 0.20, press = 0.20 },
@@ -253,7 +254,7 @@ function Rules.evaluate(raw, t0, now, n, stage)
 	if rec.stick and rec.stick.dur < 0.15 * n then
 		return nil, "stick too fast"
 	end
-	if not burnt and not (rec.pour and rec.press and rec.stick) then
+	if not burnt and not (rec.pour and rec.stick and rec.press) then
 		return nil, "missing step"
 	end
 	return scores
