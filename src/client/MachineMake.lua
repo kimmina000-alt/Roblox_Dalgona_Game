@@ -699,6 +699,7 @@ end
 local function round(stage, start)
 	local shape = start.shape
 	local sc = Scene.new(stage, start.batch or 2, shape)
+	MachineMake.scene = sc -- 자동 시험(tools/studio/machine_make_drive.lua)이 자리를 읽음
 	local S, why = sc:station()
 	if not S then
 		return sc, { ok = false, reason = why }

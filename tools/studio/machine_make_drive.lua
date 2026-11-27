@@ -1,6 +1,6 @@
 -- 2·3단계 기계 직접 만들기 자동 시험 (Studio Play 중, MCP execute_luau datamodel = Client로 붙여 넣어 실행).
 -- 서버 없이 Studio 시험 모드(MachineMake.start(stage, { shape }))로 한 판을 끝까지 하고,
--- 결과를 출력창에 "[MachineMake] test sugar .. melt .. soda .. pour .. burnt .. -> Q.. 등급" (또는 "test rejected: 이유")로 남김.
+-- 결과를 출력창에 "[MachineMake] test stage .. sugar .. melt .. soda .. pour .. press .. burnt .. -> Q.. 등급" (또는 "test rejected: 이유")로 남김.
 -- 시험 모드도 서버와 같은 검사(shared/MachineMakeRules.evaluate)를 돌리므로, 실제 입력 기록이 서버 검사를 통과하는지 볼 수 있음.
 -- 저장 데이터는 안 바뀜 (서버를 안 부름). 2026-11-26 기계 직접 만들기가 손 작업대 단계(Steps/Melt, Steps/Soda)를 쓰게 바뀐 뒤 버전.
 --
@@ -11,6 +11,8 @@
 --  * 녹이기·소다는 손 작업대와 같아서 국자 높이를 조절해야 안 탐: 온도계 글씨("123°")를 읽어 Pointer.side.delta로 국자를 올리고 내림.
 --  * 오래 가만히 두면(8초) 탄다 → 스크린샷을 찍느라 멈추면 탈 수 있음.
 --  * 결과 창(한 판 더 / 그만하기)은 열린 채로 끝남 → Play를 멈추면 됨. 진행 상황은 _G.__driveLog.
+-- 2026-11-26 D60~D63 뒤: 장면이 내 가게 기계 자리에 생겨서 자리는 MM.scene(MachineMakeScene)에서 읽음.
+--   3단계는 기둥 아래로 국자 끌기(설탕·소다), 붓기 뒤 누름판 1.38초 누르기, 막대는 첫 칸만 막대 통에서 끌고 나머지는 칸 누르기.
 local STAGE = 2 -- 2 또는 3
 local SHAPE = "Star"
 
@@ -28,15 +30,6 @@ local P = require(Client.Making.Pointer)
 local MM = require(Client.MachineMake)
 local Config = require(game:GetService("ReplicatedStorage").Shared.DalgonaConfig)
 
--- MachineMakeScene LAYOUT 값 (장면 원점 (0, 900, 0), S배). 장면 값을 바꾸면 여기도 같이.
-local L = ({
-	[2] = { S = 2.5, coin = Vector3.new(1.5, 1.36, -1.65), press = Vector3.new(0, 0.75, -1.65), cavY = 5.92, cavs = { Vector3.new(0.31, 0, 1.15), Vector3.new(-0.26, 0, 1.15) } },
-	[3] = {
-		S = 2, coin = Vector3.new(-0.94, 4.84, -2.45), press = Vector3.new(0.29, 4.13, -2.45), cavY = 1.5,
-		cavs = { Vector3.new(-0.65, 0, -1.75), Vector3.new(-1.6, 0, -1.75), Vector3.new(-2.55, 0, -1.75), Vector3.new(-1.12, 0, -0.8), Vector3.new(-2.08, 0, -0.8) },
-	},
-})[STAGE]
-local O, S = Vector3.new(0, 900, 0), L.S
 local function scr(p)
 	local v = workspace.CurrentCamera:WorldToViewportPoint(p)
 	return Vector2.new(v.X, v.Y - GuiService:GetGuiInset().Y)
@@ -90,8 +83,26 @@ local function temp()
 		end
 	end
 end
+local function sc()
+	return MM.scene
+end
 local function bowl()
-	return workspace.MachineMakeScene.MachineStation.Ladle.Bowl.Position
+	return sc().model.MachineStation.Ladle.Bowl.Position
+end
+local function hold(pos3, t)
+	local t0 = os.clock()
+	while os.clock() - t0 < t do
+		inject(true, scr(pos3))
+		RunService.RenderStepped:Wait()
+	end
+	inject(false, P.pos)
+end
+-- 3단계 기둥 아래로 국자 끌어 대기
+local function underPillar(key, t)
+	local s = sc()
+	local half = s.model.MachineStation.Ladle.Bowl.Size.X / 2
+	local pl = s[key]
+	hold(Vector3.new(pl.X, pl.Y - half - 0.35 * s.S, pl.Z), t)
 end
 local lo, hi = Config.Melt.tempLow, Config.Melt.tempHigh
 -- 국자 위에서 원 그리며 젓기 + 온도 맞추기 (위로 끌기 = 국자 올림 = 덜 뜨거움)
@@ -121,28 +132,34 @@ task.delay(1, function()
 		waitFor("동전 3개")
 		task.wait(1.3)
 		for _ = 1, 3 do
-			tap(scr(O + L.coin * S))
+			tap(scr(sc().coinList[1]))
 		end
-		waitFor("꾹 누르고")
-		task.wait(0.9)
-		local t0 = os.clock()
-		while os.clock() - t0 < 1.9 do -- 설탕 약 0.8 (초록 칸)
-			inject(true, scr(O + L.press * S))
-			RunService.RenderStepped:Wait()
+		if STAGE == 3 then
+			waitFor("왼쪽 기둥")
+			task.wait(0.6)
+			underPillar("sugarPillar", 2.6)
+		else
+			waitFor("꾹 누르고")
+			task.wait(0.9)
+			hold(sc().pressPos, 1.9) -- 설탕 약 0.8 (초록 칸)
 		end
-		inject(false, P.pos)
 		waitFor("원을 그리며")
 		task.wait(0.8)
-		stirUntil(7, "소다를 묻혀", 60) -- 녹이기: 적당한 빠르기
+		stirUntil(7, STAGE == 3 and "오른쪽 기둥" or "소다를 묻혀", 60) -- 녹이기: 적당한 빠르기
 		log("melt done")
 		task.wait(0.8)
-		local tub = workspace.MachineMakeScene.MachineStation.SodaTub.Soda
-		for _ = 1, 2 do -- 소다 2번 묻히고 국자에 털기
-			tap(scr(tub.Position))
-			task.wait(0.4)
+		if STAGE == 3 then
+			underPillar("sodaPillar", 2.0)
+			task.wait(0.8)
+		else
+			local tub = sc().model.MachineStation.SodaTub.Soda
+			for _ = 1, 2 do -- 소다 2번 묻히고 국자에 털기
+				tap(scr(tub.Position))
+				task.wait(0.4)
+			end
+			tap(scr(bowl()))
+			task.wait(0.5)
 		end
-		tap(scr(bowl()))
-		task.wait(0.5)
 		stirUntil(13, "검은 판", 40, lo) -- 소다: 빠르게, 불에서 조금 떼고
 		log("soda done")
 		task.wait(1.3)
@@ -158,10 +175,22 @@ task.delay(1, function()
 			end
 		end
 		inject(false, P.pos) -- 손을 떼야 붓기가 끝남
-		waitFor("막대를 꽂아요", 10)
+		waitFor("누름판을 꾹", 10)
+		task.wait(0.8)
+		hold(sc().plateCenter, math.log(Config.Press.h0 / 0.08) / Config.Press.k) -- 0.45 → 0.08
+		log("press done")
+		waitFor("막대 통에서", 10)
 		task.wait(1.3)
-		for _, c in ipairs(L.cavs) do
-			tap(scr(Vector3.new(O.X + c.X * S, O.Y + L.cavY * S, O.Z + c.Z * S)))
+		-- 첫 칸: 막대 통에서 끌어 오기
+		local from, to = scr(sc():stickRest()), scr(sc().cavities[1].pos)
+		for k = 0, 20 do
+			inject(true, from:Lerp(to, k / 20))
+			RunService.RenderStepped:Wait()
+		end
+		inject(false, to)
+		task.wait(0.3)
+		for i = 2, #sc().cavities do
+			tap(scr(sc().cavities[i].pos))
 		end
 	end)
 	log("finished " .. tostring(ok) .. " " .. tostring(err))
