@@ -530,8 +530,9 @@ end
 -- 커지는 동안 속성 Popping = true → MachineClient는 끝난 뒤에 움직일 부품의 처음 자리(AnimBase)를 잼
 -- 부지에 넣기 전에 부름 (처음 한 프레임이 큰 채로 보이지 않게)
 local function popIn(m)
+	local full = m:GetScale() -- 4단계 설비는 이미 1.5배 (2026-11-28: 예전엔 1로 돌아가 버림)
 	local ok = pcall(function()
-		m:ScaleTo(0.05)
+		m:ScaleTo(0.05 * full)
 	end)
 	if not ok then
 		return
@@ -546,10 +547,10 @@ local function popIn(m)
 			end
 			local k = math.min(t / 0.4, 1)
 			local e = 1 - (1 - k) ^ 3 -- 끝에서 부드럽게
-			m:ScaleTo(math.max(0.05, e * (1 + 0.12 * math.sin(math.pi * k))))
+			m:ScaleTo(full * math.max(0.05, e * (1 + 0.12 * math.sin(math.pi * k))))
 		end
 		if m.Parent then
-			m:ScaleTo(1)
+			m:ScaleTo(full)
 			m:SetAttribute("Popping", nil)
 		end
 	end)
