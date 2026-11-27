@@ -465,7 +465,7 @@ end
 -- 화면 점에 있는 물건: 물건 노드마다 부품 상자에 광선을 대 봄 (2026-11-27 사용자 "냉장고만 옮겨짐": 가게 가구 부품은
 -- 대부분 CanQuery = false라 레이캐스트에 안 맞아서 버튼(CanQuery)이 있는 냉장고만 골라졌음). 가장 가까운 것
 local function itemAt(screen)
-	local ray = camera:ViewportPointToRay(screen.X, screen.Y)
+	local ray = camera:ScreenPointToRay(screen.X, screen.Y) -- 누른 자리(GUI 좌표, 위 메뉴 줄 아래 기준) → ScreenPointToRay
 	local best, bt = nil, math.huge
 	for _, it in pairs(items) do
 		for _, n in ipairs(it.nodes) do
@@ -485,7 +485,7 @@ end
 
 -- 화면 점 → 부지 로컬 바닥 점 (스터드, 바닥 = 부지 기준 높이)
 local function floorAt(screen)
-	local ray = camera:ViewportPointToRay(screen.X, screen.Y)
+	local ray = camera:ScreenPointToRay(screen.X, screen.Y) -- 누른 자리(GUI 좌표, 위 메뉴 줄 아래 기준) → ScreenPointToRay
 	local n = plotCF.UpVector
 	local denom = ray.Direction:Dot(n)
 	if math.abs(denom) < 1e-4 then
