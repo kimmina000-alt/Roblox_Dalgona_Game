@@ -78,6 +78,7 @@ local doneBtn = bigButton("✔ 완료", C.green, 4)
 
 ---------------------------------------------------------------- 상태
 local active = false
+local dragInput = nil -- 지금 물건을 끄는 손가락 (폰)
 local plot, plotCF = nil, nil
 local CELL = 2
 local area = nil -- { x0, x1, z0, z1 } 부지 로컬 스터드
@@ -388,9 +389,9 @@ local function exit(restore)
 		end
 	end
 	table.clear(hidden)
+	dragInput = nil
 	camera.CameraType = Enum.CameraType.Custom
 	showRoof()
-	controls(true)
 end
 
 local function enter()
@@ -418,15 +419,16 @@ local function enter()
 	game:GetService("ProximityPromptService").Enabled = false
 	selected = nil
 	for _, g in ipairs(playerGui:GetChildren()) do
-		if g:IsA("ScreenGui") and g ~= gui and g.Enabled then
+		-- 폰 조이스틱(TouchGui)은 남김: 꾸미는 동안에도 걸어 다님
+		if g:IsA("ScreenGui") and g ~= gui and g.Enabled and g.Name ~= "TouchGui" then
 			hidden[g] = true
 			g.Enabled = false
 		end
 	end
 	gui.Enabled = true
-	hideRoof()
-	controls(false)
-	aimCamera()
+	-- 2026-11-28 사용자 "꾸미기 때 창이 다 가려짐, 일반 플레이 화면에서 가구를 옮기게, 화면 회전 가능하게":
+	-- 위에서 내려다보는 카메라(aimCamera)·지붕 숨기기(hideRoof)·조작 끄기를 안 하고 평소 카메라 그대로.
+	-- 물건을 끄는 동안만 카메라를 그 자리에 멈춤 (손가락 끌기가 화면 돌리기로 가지 않게)
 	refresh()
 end
 
@@ -497,19 +499,34 @@ local function floorAt(screen)
 	return Vector2.new(p.X, p.Z)
 end
 
-local function pressAt(pos)
+-- 끄는 동안 카메라 멈춤 (평소 카메라는 끌면 돌아감)
+local function holdCamera(on)
+	if on then
+		local cf = camera.CFrame
+		camera.CameraType = Enum.CameraType.Scriptable
+		camera.CFrame = cf
+	else
+		camera.CameraType = Enum.CameraType.Custom
+	end
+end
+
+-- 누른 자리에 물건이 있으면 고르고 끌기 시작. 빈 곳이면 고른 것은 그대로 두고 화면 돌리기(평소 카메라)에 맡김
+local function pressAt(pos, input)
 	local it = itemAt(pos)
+	if not it then
+		return
+	end
 	if it ~= selected then
 		checkSeq += 1
 	end
 	selected = it
 	dragging = false
-	if it then
-		local f = floorAt(pos)
-		if f then
-			dragging = true
-			grab = f - Vector2.new(it.x * CELL, it.z * CELL)
-		end
+	local f = floorAt(pos)
+	if f then
+		dragging = true
+		dragInput = input
+		grab = f - Vector2.new(it.x * CELL, it.z * CELL)
+		holdCamera(true)
 	end
 	refresh()
 end
@@ -544,19 +561,28 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		pressAt(Vector2.new(input.Position.X, input.Position.Y))
+		if not dragging then -- 두 번째 손가락(확대·축소)은 끌기로 안 침
+			pressAt(Vector2.new(input.Position.X, input.Position.Y), input)
+		end
 	elseif input.KeyCode == Enum.KeyCode.R then
 		rotate()
 	end
 end)
 UserInputService.InputChanged:Connect(function(input)
-	if active and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+	if not active then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseMovement or (input.UserInputType == Enum.UserInputType.Touch and input == dragInput) then
 		moveTo(Vector2.new(input.Position.X, input.Position.Y))
 	end
 end)
 UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or (input.UserInputType == Enum.UserInputType.Touch and input == dragInput) then
+		if dragging then
+			holdCamera(false)
+		end
 		dragging = false
+		dragInput = nil
 	end
 end)
 
@@ -661,11 +687,7 @@ end)
 me.CharacterAdded:Connect(function()
 	exit(true)
 end)
-RunService.RenderStepped:Connect(function()
-	if active and camera.CameraType ~= Enum.CameraType.Scriptable then
-		camera.CameraType = Enum.CameraType.Scriptable
-	end
-end)
+-- (예전: 꾸미는 동안 카메라를 위에서 고정 — 2026-11-28부터 평소 카메라, 끄는 동안만 holdCamera)
 
 ---------------------------------------------------------------- HUD 메뉴 버튼 [🛠 꾸미기]
 task.spawn(function()
