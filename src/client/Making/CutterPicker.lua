@@ -63,7 +63,39 @@ local function preview(parent, entry)
 	vpf.CurrentCamera = cam
 end
 
--- 반환: ShapeCatalog 항목, 또는 nil (중간에 나감)
+-- 달고나빵 카드 (2026-11-27 사용자 "모양틀 고를 때 달고나빵 선택할 수 있게"): 틀 대신 봉긋한 빵 모양 미리 보기.
+-- 고르면 동그라미(Common) 도안 항목에 bread = true를 얹은 항목을 돌려줌 → 붓고 나서 누르기 대신 설탕 뿌리기 (Steps/Bread)
+local function breadEntry()
+	local G = require(Shared:WaitForChild("GrowthConfig"))
+	local base = ShapeCatalog.get("Circle") or ShapeCatalog.list[1]
+	return setmetatable({ bread = true, name = "달고나빵", price = G.BreadBasePrice or 6 }, { __index = base })
+end
+local function breadPreview(parent)
+	local vpf = new("ViewportFrame", {
+		Name = "Preview",
+		BackgroundColor3 = Color3.fromRGB(246, 226, 190),
+		Ambient = Color3.fromRGB(200, 196, 190),
+		LightColor = Color3.fromRGB(255, 255, 255),
+		LightDirection = Vector3.new(-0.4, -1, -0.6),
+		Size = UDim2.new(1, -12, 1, -52),
+		Position = UDim2.fromOffset(6, 6),
+		ZIndex = 33,
+		Parent = parent,
+	})
+	corner(vpf, 10)
+	local ok, look = pcall(function()
+		return require(Shared:WaitForChild("DalgonaLook")).build({ s = "Circle", g = "Good", bread = true, id = 1 }, { diameter = 1.6, stick = false })
+	end)
+	if ok and look then
+		look:PivotTo(CFrame.new())
+		look.Parent = vpf
+	end
+	local cam = new("Camera", { FieldOfView = 30, Parent = vpf })
+	cam.CFrame = CFrame.lookAt(Vector3.new(0, 2.6, 2.2), Vector3.new(0, 0.1, 0))
+	vpf.CurrentCamera = cam
+end
+
+-- 반환: ShapeCatalog 항목(달고나빵이면 bread = true), 또는 nil (중간에 나감)
 function Picker.run(ctx, currentId)
 	local ui = ctx.ui
 	local chosen = nil
@@ -145,6 +177,21 @@ function Picker.run(ctx, currentId)
 	})
 	new("UIPadding", { PaddingBottom = UDim.new(0, 8), PaddingRight = UDim.new(0, 6), Parent = scroll })
 
+	-- 맨 앞: 달고나빵 (틀 없이, 잠금 없음)
+	do
+		local G = require(Shared:WaitForChild("GrowthConfig"))
+		local card = new("TextButton", { Name = "Bread", Text = "", AutoButtonColor = true, BackgroundColor3 = CREAM, LayoutOrder = 0, ZIndex = 32, Parent = scroll })
+		corner(card, 12)
+		new("UIStroke", { Color = Color3.fromRGB(214, 150, 74), Thickness = currentId == "Bread" and 4 or 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = card })
+		breadPreview(card)
+		new("TextLabel", { Text = "달고나빵", FontFace = UI.F.heavy, TextSize = 17, TextColor3 = INK, BackgroundTransparency = 1, Position = UDim2.new(0, 4, 1, -45), Size = UDim2.new(1, -8, 0, 20), ZIndex = 33, Parent = card })
+		local tag = new("TextLabel", { Text = string.format("틀 없음 · %d코인", G.BreadBasePrice or 6), FontFace = UI.F.heavy, TextSize = 13, TextColor3 = Color3.new(1, 1, 1), BackgroundColor3 = Color3.fromRGB(214, 150, 74), Position = UDim2.new(0, 8, 1, -24), Size = UDim2.new(1, -16, 0, 19), ZIndex = 33, Parent = card })
+		corner(tag, 8)
+		card.Activated:Connect(function()
+			Sfx.play("pop", 0.6, 1.1)
+			chosen = breadEntry()
+		end)
+	end
 	for i, entry in ipairs(ShapeCatalog.list) do
 		local g = ShapeCatalog.grade(entry.grade)
 		local card = new("TextButton", {

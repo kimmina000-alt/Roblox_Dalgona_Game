@@ -371,6 +371,9 @@ local function exit(restore)
 		return
 	end
 	active = false
+	-- 꾸미기 끝: 다른 버튼·진열·보관함 누르기 다시 켬
+	me:SetAttribute("Building", nil)
+	game:GetService("ProximityPromptService").Enabled = true
 	dragging = false
 	checkSeq += 1
 	if restore then
@@ -409,6 +412,10 @@ local function enter()
 		return
 	end
 	active = true
+	-- 꾸미기 중에는 꾸미기만 (2026-11-27 사용자 "달고나 들고 진열장 눌러도 진열이 아니라 위치 수정으로"):
+	-- 모든 기계·가구 버튼(ProximityPrompt)을 끄고, 진열·보관함 클라이언트는 이 속성을 보고 누르기를 무시
+	me:SetAttribute("Building", true)
+	game:GetService("ProximityPromptService").Enabled = false
 	selected = nil
 	for _, g in ipairs(playerGui:GetChildren()) do
 		if g:IsA("ScreenGui") and g ~= gui and g.Enabled then

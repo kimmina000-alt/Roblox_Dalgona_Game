@@ -379,9 +379,21 @@ local function syncStack(plot, animate)
 				if att then
 					att:Destroy()
 				end
+				-- 꾸미기로 자리(MachineSlot)를 옮겼으면 기계를 새 자리에 다시 세움 (2026-11-27 사용자 "2·3단계 기계도 옮길 수 있게":
+				-- 예전엔 기계가 이미 있으면 그대로 둬서 바닥 판만 옮겨지고 기계는 제자리였음). 움직이는 부품의 처음 자리(AnimBase)가
+				-- 바뀌어서 옮기지 않고 새로 만듦
+				local top = slotTop(slot)
+				if m then
+					local was = m:GetAttribute("SlotCF")
+					if typeof(was) ~= "CFrame" or (was.Position - top.Position).Magnitude > 0.05 or was.LookVector:Dot(top.LookVector) < 0.999 then
+						m:Destroy()
+						m = nil
+					end
+				end
 				if not m and BUILDERS[n] then
-					m = buildMachine(plot, name, n, slotTop(slot), slot.Name)
+					m = buildMachine(plot, name, n, top, slot.Name)
 					if m then
+						m:SetAttribute("SlotCF", top)
 						if animate then
 							popIn(m)
 						end

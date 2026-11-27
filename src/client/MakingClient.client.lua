@@ -309,7 +309,7 @@ local function runSession()
 	ui:setStep(1)
 	CameraRig.go("sugar")
 	if pickShape then
-		local picked = CutterPicker.run(ctx, shape.id)
+		local picked = CutterPicker.run(ctx, shape.bread and "Bread" or shape.id)
 		if ctx.aborted or not picked then
 			return
 		end
@@ -432,16 +432,10 @@ local function runSession()
 			break
 		end
 		Sfx.play("stepDone", 0.45) -- 단계 끝 "띵"
-		-- 달고나빵 (2026-11-27 사용자): 붓고 나서 누르기 전에 고름. 달고나빵이면 설탕 가루를 뿌리고 끝 (누르기·모양 찍기 없음)
+		-- 달고나빵 (2026-11-27 사용자 "모양틀 고를 때 달고나빵 선택"): 도안 고르기에서 달고나빵을 골랐으면
+		-- 붓고 나서 누르기·모양 찍기 대신 설탕 가루를 뿌리고 끝
 		if step.key == "pour" and ctx.state.dalgona then
-			local bask = ui:ask("잘 부었어요!", string.format("그대로 누르면 달고나, 설탕 가루를 뿌리면 달고나빵 (%d코인부터)", GrowthConfig.BreadBasePrice), "누르기", "달고나빵")
-			while not bask.choice do
-				if not ctx.frame() then
-					bask.close()
-					return
-				end
-			end
-			if bask.choice == 2 then
+			if shape.bread then
 				CameraRig.go("press")
 				local brec = BreadStep.run(ctx)
 				if ctx.aborted or not brec then

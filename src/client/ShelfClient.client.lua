@@ -53,7 +53,8 @@ end
 
 local function making()
 	local ms = playerGui:FindFirstChild("MakingScreen")
-	return ms and ms.Enabled
+	-- 꾸미기 중(BuildClient 속성 Building)에도 진열 안 함: 진열장을 누르면 꾸미기(위치 옮기기)로 (2026-11-27)
+	return (ms and ms.Enabled) or player:GetAttribute("Building") == true
 end
 
 -- 놓을 수 있을 때 가구 테두리
@@ -161,6 +162,7 @@ end)
 player:GetAttributeChangedSignal("Carrying"):Connect(refresh)
 player:GetAttributeChangedSignal("Unshelved"):Connect(refresh)
 player:GetAttributeChangedSignal("PlotIndex"):Connect(refresh)
+player:GetAttributeChangedSignal("Building"):Connect(refresh)
 task.spawn(function()
 	while true do
 		task.wait(1)
