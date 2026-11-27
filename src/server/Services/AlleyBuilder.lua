@@ -422,7 +422,43 @@ local function shopkeeper(m)
 	return npc
 end
 
+-- 편집 화면 틀 (2026-11-28 사용자 "플레이할 때만 보이는 건물·진열을 Studio 편집 화면에서도 보이고, 거기서 고치면 게임에 반영"):
+-- Workspace.AlleyMarket / Workspace.AlleyStationery (속성 AlleyTemplate = true, tools/studio/alley_templates_1128.lua가 게임 자리에 놓음).
+-- 있으면 ServerStorage.Assets 모델 대신 이걸 쓰고, 편집 화면에 놓인 자리(문 앞 바닥 = Mk_Pt_Door에서 1.5 앞) 그대로 세움.
+-- 선반 물건(슈퍼 Mk_Goods, 문구사 St_Goods)도 틀에 있는 그대로 (옮기거나 지워도 반영). 서버 시작 때 틀은 ServerStorage로 옮김
+local templates = {} -- [이름] = 틀 | false
+local canons = {} -- [이름] = 기준 자리(문 앞 바닥 = 원점, 앞 = -Z)로 옮긴 복제
+local function templateFront(t)
+	local door = findPart(t, "Mk_Pt_Door")
+	return door and door.CFrame * CFrame.new(0, -door.Size.Y / 2, 1.5) or nil
+end
+local function takeTemplate(name)
+	if templates[name] == nil then
+		templates[name] = false
+		local t = workspace:FindFirstChild(name)
+		if t and t:IsA("Model") and t:GetAttribute("AlleyTemplate") and templateFront(t) then
+			t.Parent = ServerStorage -- 게임에서 두 번 보이지 않게 (편집 화면의 원본은 그대로)
+			templates[name] = t
+			local c = t:Clone()
+			c:PivotTo(templateFront(t):Inverse() * c:GetPivot())
+			c:SetAttribute("AlleyTemplate", nil)
+			canons[name] = c
+			print("[Alley] 편집 화면 틀을 씀: " .. name)
+		end
+	end
+	return templates[name] or nil, canons[name]
+end
+-- 틀이 있으면 그 자리, 없으면 nil
+local function templateTarget(name)
+	local t = takeTemplate(name)
+	return t and templateFront(t) or nil
+end
+
 local function marketSource()
+	local _, canon = takeTemplate("AlleyMarket")
+	if canon then
+		return canon
+	end
 	local sa = ServerStorage:FindFirstChild("Assets")
 	local src = sa and (sa:FindFirstChild("AlleyMarket") or sa:FindFirstChild("Market"))
 	return src and src:IsA("Model") and src or nil
@@ -514,6 +550,10 @@ end
 -- ShapeCatalog 순서)을 세워 진열, 가운데 탁자(Display = "ladles")에 국자(ServerStorage.Assets.LadleMesh). 파는 기능은 아직 없음 (D64 ③ 문방구)
 local ShapeCatalog = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("ShapeCatalog"))
 local function stationerySource()
+	local _, canon = takeTemplate("AlleyStationery")
+	if canon then
+		return canon
+	end
 	local sa = ServerStorage:FindFirstChild("Assets")
 	local src = sa and sa:FindFirstChild("AlleyStationery")
 	return src and src:IsA("Model") and src or nil
@@ -544,6 +584,8 @@ local function displayCutters(board, ids, from, holder)
 			placed += 1
 			local c = src:Clone()
 			c.Name = "Cutter_" .. ids[i - 1]
+			c:SetAttribute("ItemId", "cutter") -- 눌러서 사기 (ShelfShopService)
+			c:SetAttribute("ShapeId", ids[i - 1])
 			local k = H / math.max(src.Size.Z, src.Size.X)
 			c.Size = src.Size * k
 			c.Anchored = true
@@ -575,22 +617,12 @@ local function displayLadles(top, holder)
 		c.Parent = holder
 	end
 end
-local function stationerySpot(target)
-	local src = stationerySource()
-	if not src then
-		return nil
-	end
-	local m = model("AlleyStationery")
-	m:SetAttribute("Stationery", true)
-	local c = src:Clone()
-	c.Name = "Building"
-	local at = marketFront(c)
-	c:PivotTo(CFrame.new(-at) * c:GetPivot()) -- 기준 자리: 문 앞 바닥 → (0, 0, 0), 앞 = -Z
-	c.Parent = m
+-- 문구사 선반 판(속성 Display)에 모양틀·국자를 놓음. into = St_Goods를 넣을 곳 (없으면 building). 편집 화면 틀을 채울 때도 씀
+function A.fillStationery(c, into)
 	local goods = Instance.new("Model")
 	goods.Name = "St_Goods"
 	goods:SetAttribute("FarHide", 80) -- 멀면 클라이언트가 숨김 (슈퍼 Mk_Goods와 같음)
-	goods.Parent = m
+	goods.Parent = into or c
 	local ids = {}
 	for _, s in ipairs(ShapeCatalog.list or {}) do
 		table.insert(ids, s.id)
@@ -623,6 +655,24 @@ local function stationerySpot(target)
 	for _, t in ipairs(tables) do
 		displayLadles(t, goods)
 	end
+	return goods
+end
+local function stationerySpot(target)
+	local src = stationerySource()
+	if not src then
+		return nil
+	end
+	local m = model("AlleyStationery")
+	m:SetAttribute("Stationery", true)
+	local c = src:Clone()
+	c.Name = "Building"
+	local at = marketFront(c)
+	c:PivotTo(CFrame.new(-at) * c:GetPivot()) -- 기준 자리: 문 앞 바닥 → (0, 0, 0), 앞 = -Z
+	c.Parent = m
+	-- 틀(편집 화면)에서 이미 채운 선반이면 그대로, 아니면 지금 채움
+	if not c:FindFirstChild("St_Goods") then
+		A.fillStationery(c, m)
+	end
 	m:PivotTo(target * m:GetPivot())
 	return m
 end
@@ -638,12 +688,12 @@ local function endShops()
 			if sx == 1 and side == "S" then
 				-- 동쪽 끝 남쪽 첫 칸 = 골목 슈퍼 (D54)
 				local mw = marketDims()
-				marketSpot(0, mw, CFrame.new(sx * (x + mw / 2), 0, frontZ) * rot)
+				marketSpot(0, mw, templateTarget("AlleyMarket") or CFrame.new(sx * (x + mw / 2), 0, frontZ) * rot)
 				x += mw + 2
 			elseif sx == -1 and side == "S" and stationerySource() then
 				-- 서쪽 끝 남쪽 첫 칸 = 문구사 (2026-11-27)
 				local sw = stationeryDims()
-				stationerySpot(CFrame.new(sx * (x + sw / 2), 0, frontZ) * rot)
+				stationerySpot(templateTarget("AlleyStationery") or CFrame.new(sx * (x + sw / 2), 0, frontZ) * rot)
 				x += sw + 2
 			end
 			while true do
@@ -965,6 +1015,18 @@ function A.lighting()
 end
 
 ---------------------------------------------------------------- 만들기
+
+-- 편집 화면 틀을 놓을 게임 자리 (tools/studio/alley_templates_1128.lua가 씀): 문 앞 바닥 CFrame, 앞 = LookVector
+function A.defaultFront(name)
+	if name == "AlleyMarket" then
+		local mw = marketDims()
+		return CFrame.new(END_X0 + mw / 2, 0, ROAD_Z0) * CFrame.Angles(0, math.pi, 0)
+	elseif name == "AlleyStationery" then
+		local sw = stationeryDims()
+		return sw and CFrame.new(-(END_X0 + sw / 2), 0, ROAD_Z0) * CFrame.Angles(0, math.pi, 0) or nil
+	end
+	return nil
+end
 
 function A.build()
 	local old = workspace:FindFirstChild("Alley")

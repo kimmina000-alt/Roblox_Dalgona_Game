@@ -280,7 +280,9 @@ function EconomyService.notify(player, text)
 end
 
 -- 재료 묶음 사기. 반환: { ok, reason }
-function EconomyService.buy(player, ingredientId, packs)
+-- shelf = true: 골목 슈퍼 선반 봉지를 눌러 삼 (ShelfShopService가 선반 앞 거리·재고를 확인하고 부름, 2026-11-28).
+-- 계산대 앞 검사만 건너뜀. 산 것은 똑같이 봉지로 (가게에 들어가면 냉장고·서랍장)
+local function buyIngredient(player, ingredientId, packs, shelf)
 	local ing = ingredientById[ingredientId]
 	if not ing then
 		return { ok = false, reason = "모르는 재료" }
@@ -301,7 +303,7 @@ function EconomyService.buy(player, ingredientId, packs)
 	local cost = ing.price * packs
 	-- 슈퍼마켓 (D54, MarketService): 슈퍼가 골목에 있으면 슈퍼 계산대 앞에서만 사고, 산 것은 봉지에 (가게에 들어가면 냉장고·서랍장으로)
 	local market = EconomyService.marketHook
-	if market then
+	if market and not shelf then
 		local okM, why = market.check(player)
 		if not okM then
 			return { ok = false, reason = why }
@@ -327,6 +329,15 @@ function EconomyService.buy(player, ingredientId, packs)
 		market.toBag(player, ing.id, ing.pack * packs)
 	end
 	return { ok = true, amount = ing.pack * packs, cost = cost, bag = market ~= nil }
+end
+
+function EconomyService.buy(player, ingredientId, packs)
+	return buyIngredient(player, ingredientId, packs, false)
+end
+
+-- 서버 안에서만 부름 (리모트로 열지 않음): 선반 봉지 1개 = 그 재료 1팩
+function EconomyService.shelfBuy(player, ingredientId)
+	return buyIngredient(player, ingredientId, 1, true)
 end
 
 -- 제작 시작 전 확인. 반환: ok, 이유(한국어, 화면에 띄움)
