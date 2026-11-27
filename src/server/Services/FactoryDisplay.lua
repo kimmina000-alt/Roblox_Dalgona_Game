@@ -14,6 +14,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local PROMPT_DISTANCE = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("GrowthConfig")).PromptDistance or 6 -- 기계·가구 버튼이 뜨는 거리 (2026-11-24)
 
 local FactoryBuilder = require(script.Parent:WaitForChild("FactoryBuilder"))
+local FactoryLine5 = require(script.Parent:WaitForChild("FactoryLine5"))
 local Layout = require(script.Parent:WaitForChild("LayoutTemplate"))
 local layout = nil -- 편집 화면에서 고친 공장 틀 (아래 factoryLayout)
 
@@ -67,7 +68,7 @@ local ANIM = {
 }
 -- 공정 키 (알바생 D30 / 공정 표시등 / 빈 작업복 걸이)
 local STATION_KEYS = { "sugar", "boil", "press", "inspect", "pack" }
-local CONSOLE = { Line_ConsolePanel_Node = true, Fac_Console_Node = true } -- 제어대 ProximityPrompt를 붙일 부품
+local CONSOLE = { Line_ConsolePanel_Node = true, Fac_Console_Node = true, Fac_Console = true } -- 제어대 ProximityPrompt를 붙일 부품
 -- 공장 공정 (알바생 자리·공정 옷·기계 앞 "내가 하기")
 local STATIONS = {
 	-- 공장 모델 기준 자리 (x = 라인 따라, z = 앞 통로 STAND_Z, 라인을 보고 섬). 옷 색
@@ -228,6 +229,16 @@ local function buildBuilding(lot)
 		local lotPart = b:FindFirstChild("Lot")
 		if lotPart then
 			lotPart:Destroy() -- 울타리 틀은 buildLot이 씀
+		end
+		-- 2026-11-27 사용자 참고 사진 "스테인리스 생산 라인": 틀의 예전 파스텔 라인(Line_·Deco_ 부품)은 지우고
+		-- 같은 자리에 코드로 세운 라인(FactoryLine5, S5_ 부품)을 놓음. 틀에 이미 S5_ 라인이 있으면(편집 화면에서 새로 고친 틀) 그대로
+		if not b:FindFirstChild("S5_Line", true) then
+			for _, d in ipairs(b:GetDescendants()) do
+				if d:IsA("Model") and d.Parent and (d.Name:match("^Line_") or d.Name:match("^Deco_")) then
+					d:Destroy()
+				end
+			end
+			FactoryLine5.build(b, cf)
 		end
 	else
 		b = src:Clone()
