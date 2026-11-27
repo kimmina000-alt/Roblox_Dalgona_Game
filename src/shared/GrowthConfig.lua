@@ -318,7 +318,8 @@ G.ShopWorld = {
 	cameraMaxZoom = 34, -- 캐릭터에서 카메라까지 최대 거리
 	cameraMaxHeight = 20, -- 캐릭터 머리 위로 카메라가 올라갈 수 있는 최대 높이 (가게 지붕 약 16~29보다 낮게 → 지붕 너머로 마을이 안 보임)
 	-- 가게와 가게 사이 틈 담벼락 (서버 AlleyBuilder): 길 앞선에서 recess만큼 틈 안쪽에 세움 (틈 앞 화분·연탄은 길 쪽에 남음)
-	gapWall = { recess = 10, height = 12, buildingHalf = 21.1 }, -- buildingHalf = 가게 3D 벽 반폭 (PlotLayout.ShopModel 벽 x ±21.1)
+	-- stair = 2층 바깥 계단이 벽 밖으로 나온 폭 (가게 3D 3판 2026-11-27, 가게 로컬 -X 쪽. 벽 반폭은 20.85)
+	gapWall = { recess = 10, height = 12, buildingHalf = 21.1, stair = 10.6 }, -- buildingHalf = 가게 3D 벽 반폭 (PlotLayout.ShopModel 벽 x ±21.1)
 	-- 가게 안 출입: 내 가게, 그리고 남의 가게 중 열린 곳(월세 내고 연 가게·산 가게)만. 가게 앞선(부지 로컬 z) 안쪽을 막음
 	gate = { z = -17.6, halfWidth = 21.2, depth = 60, height = 14 },
 }
