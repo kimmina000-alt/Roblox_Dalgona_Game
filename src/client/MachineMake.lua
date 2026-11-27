@@ -361,8 +361,10 @@ end
 local function holdUnderPillar(sc, S, key, full, color, onFill)
 	local pillar = sc[key]
 	local top = (key == "sodaPillar" and sc.sodaTop or sc.sugarTop) or pillar
-	-- 그릇은 판 아랫면(구멍)보다 조금 아래, 열선 컵보다 위
-	local bowlY = top.Y - S.bowlHalf - 0.9 * sc.S
+	-- 그릇은 기둥 입구 바로 아래 (2026-11-27 기둥을 다시 보이게 함), 열선 컵보다 위
+	local bowlY = top.Y - S.bowlHalf - sc.PILLAR_GAP * sc.S
+	local markAt = Vector3.new(top.X, bowlY, top.Z)
+	local bowlD = math.max(S.Bowl.Size.Y, S.Bowl.Size.Z)
 	local reach = 0.35 * sc.S
 	local t0 = now()
 	local held, wasUnder = 0, false
@@ -371,6 +373,7 @@ local function holdUnderPillar(sc, S, key, full, color, onFill)
 		local dt = frame()
 		if not dt then
 			sc:setStream(false)
+			sc:setHoldMark(nil)
 			Sfx.stopLoop("sugarPour")
 			return nil
 		end
@@ -380,6 +383,7 @@ local function holdUnderPillar(sc, S, key, full, color, onFill)
 		local d = flat(S.Bowl.Position - top).Magnitude
 		local under = d < reach
 		sc:setPillarGlow(key, d < reach * 3)
+		sc:setHoldMark(under and "under" or (d < reach * 3 and "near" or "far"), markAt, bowlD, S.bowlHalf)
 		if under then
 			held = math.min(full, held + dt)
 			onFill(held / full)
@@ -397,6 +401,7 @@ local function holdUnderPillar(sc, S, key, full, color, onFill)
 	end
 	Sfx.stopLoop("sugarPour")
 	sc:setStream(false)
+	sc:setHoldMark(nil)
 	sc:setPillarGlow(key, false)
 	ui:setMeter(false)
 	Sfx.play("stepDone", 0.4, 1.3)

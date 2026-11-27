@@ -101,12 +101,12 @@ end
 local function dragBowlTo(bowl3, t)
 	hold(bowl3 + sc().gripOff, t)
 end
--- 3단계 구멍 아래로 국자 끌어 대기 (MachineMake holdUnderPillar와 같은 높이)
+-- 3단계 기둥 입구 아래로 국자 끌어 대기 (MachineMake holdUnderPillar와 같은 높이)
 local function underPillar(key, t)
 	local s = sc()
 	local half = s.model.MachineStation.Ladle.Bowl.Size.X / 2
 	local top = key == "sodaPillar" and s.sodaTop or s.sugarTop
-	dragBowlTo(Vector3.new(top.X, top.Y - half - 0.9 * s.S, top.Z), t)
+	dragBowlTo(Vector3.new(top.X, top.Y - (s.S_ and s.S_.bowlHalf or half) - s.PILLAR_GAP * s.S, top.Z), t)
 end
 local lo, hi = Config.Melt.tempLow, Config.Melt.tempHigh
 -- 국자 위에서 원 그리며 젓기 + 온도 맞추기 (위로 끌기 = 국자 올림 = 덜 뜨거움)
@@ -139,7 +139,7 @@ task.delay(1, function()
 			tap(scr(sc().coinList[1]))
 		end
 		if STAGE == 3 then
-			waitFor("왼쪽 기둥")
+			waitFor("설탕 구멍")
 			task.wait(0.6)
 			underPillar("sugarPillar", 2.6)
 		else
@@ -153,7 +153,7 @@ task.delay(1, function()
 		end
 		waitFor("원을 그리며")
 		task.wait(0.8)
-		stirUntil(7, STAGE == 3 and "오른쪽 기둥" or "소다를 묻혀", 60) -- 녹이기: 적당한 빠르기
+		stirUntil(7, STAGE == 3 and "소다 구멍" or "소다를 묻혀", 60) -- 녹이기: 적당한 빠르기
 		log("melt done")
 		task.wait(0.8)
 		if STAGE == 3 then

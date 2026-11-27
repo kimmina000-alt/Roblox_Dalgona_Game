@@ -11,10 +11,12 @@
 -- 자리 값은 메시 기준(바닥 가운데 = 원점, 앞 = -Z, 화면 오른쪽 = -X, 메시 단위). 2026-11-26 메시 꼭짓점(EditableMesh)으로 잼.
 -- 2026-11-27 사용자: "주변 환경 그대로 보이게(기계 위치는 플레이어가 자유롭게 바꿈)", "국자 더 크게" → 기계를 키우지 않고(S = 1)
 --   가게에 놓인 그 크기·자리 그대로, 그 단계 기계만 같은 자리 복제로 바꿔 끼움 (주변 가게·다른 기계는 그대로 보임).
---   3단계 설탕·소다 기둥은 화면을 가려서 복제 메시에서 지움(EditableMesh로 그 면만 뺌), 설탕·소다는 기둥이 있던 판 아래에서 나옴.
+--   (3단계 기둥을 지웠다가 같은 날 사용자 "나오는 입구 기둥 보여야 함" → 기둥은 그대로, 설탕·소다는 기둥 아래 입구에서,
+--   국자 댈 자리는 빛나는 고리 + "여기에 대요"로 표시 Scene:setHoldMark)
 --   막대 통 대신 막대 더미(Steps/Stick.build), 누름판은 눕힌 채(손 작업대 모양 그대로), 칸 반죽은 볼록 → 누르면 납작.
 local Players = game:GetService("Players")
 local AssetService = game:GetService("AssetService")
+local GuiService = game:GetService("GuiService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DalgonaLook = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("DalgonaLook"))
 local Making = script.Parent:WaitForChild("Making")
@@ -26,6 +28,7 @@ local ViewClear = require(Making:WaitForChild("ViewClear"))
 
 local Scene = {}
 Scene.__index = Scene
+Scene.PILLAR_GAP = 0.25 -- 3단계: 기둥 입구 아래 국자 그릇 위 끝까지 틈 (메시 단위)
 
 local SKY = CFrame.new(0, 900, 0) -- 내 가게 기계를 못 찾을 때만
 local C = {
@@ -235,9 +238,7 @@ function Scene.new(stage, cavities, shape)
 		mm.CFrame = CF(0, L.size.Y * S / 2, 0)
 		mm.Parent = m
 		self.machine = mm
-		if L.pillars then
-			self:removePillars(mm, L)
-		end
+		-- (2026-11-27 다시 사용자 "나오는 입구 기둥 보여야 함" → 기둥은 지우지 않음. removePillars는 남겨 둠)
 	else
 		self.machine = part(m, "MachineBox", L.size * S, CF(0, L.size.Y * S / 2, 0), stage == 3 and Color3.fromRGB(240, 150, 176) or Color3.fromRGB(200, 50, 50), Enum.Material.Metal)
 	end
@@ -263,10 +264,10 @@ function Scene.new(stage, cavities, shape)
 	self.burnerPos = at(L.burner)
 	self.sugarPillar = L.sugarPillar and at(L.sugarPillar) or nil
 	self.sodaPillar = L.sodaPillar and at(L.sodaPillar) or nil
-	if L.pillarTop then
-		-- 기둥을 지웠으니 설탕·소다는 판 아랫면(기둥 위 끝)에서 나옴
-		self.sugarTop = at(Vector3.new(L.sugarPillar.X, L.pillarTop, L.sugarPillar.Z))
-		self.sodaTop = at(Vector3.new(L.sodaPillar.X, L.pillarTop, L.sodaPillar.Z))
+	if L.sugarPillar then
+		-- 설탕·소다는 기둥 아래 끝(입구)에서 나옴
+		self.sugarTop = self.sugarPillar
+		self.sodaTop = self.sodaPillar
 	end
 
 	-- 화구 열선 빛. 3단계는 검은 컵 "안쪽"이 빨갛게: 안쪽 바닥 원판 + 안벽을 따라 세운 열선 12개
@@ -351,7 +352,14 @@ function Scene.new(stage, cavities, shape)
 	self.stickScale = math.clamp(cavD / 1.4, 0.25, 1)
 	m.Parent = self.inShop and plot or workspace
 	if self.inShop then
-		ViewClear.start(m) -- 카메라와 장면 사이 가게 천장·벽을 내 화면에서 숨김 (손 작업대와 같은 모듈)
+		-- 카메라와 볼 자리 사이를 실제로 가리는 가게 부품만 내 화면에서 숨김 (기계 뒤 벽·천장은 그대로 = 그 자리에서 다가가 보이게)
+		ViewClear.start(m, function()
+			local pts = { self.plateCenter, self:bowlPos(), at(Vector3.new(0, L.size.Y * 0.5, -L.size.Z * 0.5)) }
+			if self.camTarget then
+				table.insert(pts, self.camTarget)
+			end
+			return pts
+		end)
 	end
 	return self
 end
@@ -682,6 +690,63 @@ function Scene:setPillarGlow(key, on)
 	end
 end
 
+-- 3단계 국자 대는 자리 표시 (2026-11-27 사용자 "어디 대고 있어야 하는지 표시"): 기둥 입구 아래 국자 그릇 자리에
+-- 빛나는 점선 고리 + 그 아래 화면 글씨 "▲ 여기에 대요" (BillboardGui는 화면에 안 잡혀서 만들기 화면 글씨를 매 프레임 그 자리로).
+-- state = nil(숨김) / "far" / "near" / "under". center = 그릇 가운데, d = 그릇 지름, rim = 그릇 반 높이. 매 프레임 부름
+local MARK_SEGS = 18
+function Scene:setHoldMark(state, center, d, rim)
+	local mk = self.holdMark
+	if not state then
+		if mk then
+			for _, seg in ipairs(mk.segs) do
+				seg.Transparency = 1
+			end
+			mk.label.Visible = false
+		end
+		return
+	end
+	if not mk then
+		mk = { segs = {} }
+		for k = 1, MARK_SEGS do
+			mk.segs[k] = part(self.model, "HoldMark", Vector3.new(0.1, 0.05, 0.05), CFrame.new(center), Color3.fromRGB(255, 226, 90), Enum.Material.Neon, { CastShadow = false })
+		end
+		local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
+		local screen = pg:FindFirstChild("MachineMakingScreen")
+		local t = Instance.new("TextLabel")
+		t.Name = "HoldMarkLabel"
+		t.AnchorPoint = Vector2.new(0.5, 0)
+		t.Size = UDim2.fromOffset(170, 30)
+		t.BackgroundTransparency = 1
+		t.Font = Enum.Font.GothamBold
+		t.TextScaled = true
+		t.TextColor3 = Color3.fromRGB(255, 236, 120)
+		t.TextStrokeTransparency = 0.1
+		t.Text = "▲ 여기에 대요"
+		t.ZIndex = 5
+		t.Parent = screen
+		mk.label, mk.screen = t, screen
+		self.holdMark = mk
+	end
+	local r = d * 0.6
+	local y = center.Y + (rim or 0.3) + 0.03
+	local seg = 2 * math.pi * r / MARK_SEGS * 0.55 -- 점선: 고리 둘레의 55%만
+	local pulse = 0.5 + 0.5 * math.sin(os.clock() * 6)
+	local under = state == "under"
+	for k, p in ipairs(mk.segs) do
+		local a = (k / MARK_SEGS) * 2 * math.pi + os.clock() * 0.8
+		local pos = Vector3.new(center.X + math.cos(a) * r, y, center.Z + math.sin(a) * r)
+		p.Size = Vector3.new(seg, 0.05, 0.05)
+		p.CFrame = CFrame.lookAt(pos, pos + Vector3.new(-math.sin(a), 0, math.cos(a))) * CFrame.Angles(0, math.rad(90), 0)
+		p.Color = under and Color3.fromRGB(120, 230, 120) or Color3.fromRGB(255, 226, 90)
+		p.Transparency = under and 0.2 or (state == "near" and 0.05 or 0.15) + 0.3 * pulse
+	end
+	local cam = workspace.CurrentCamera
+	local v, on = cam:WorldToViewportPoint(Vector3.new(center.X, y - 2 * (rim or 0.3) - 0.15, center.Z))
+	local inset = (mk.screen and mk.screen.IgnoreGuiInset) and 0 or GuiService:GetGuiInset().Y
+	mk.label.Position = UDim2.fromOffset(v.X, v.Y - inset)
+	mk.label.Visible = on and not under
+end
+
 -- 설탕(소다) 줄기: top(배출구·기둥 끝)에서 국자까지
 function Scene:setStream(on, top, color)
 	local s = self.stream
@@ -840,6 +905,7 @@ function Scene:shot(name)
 			t, d, p = self.waterPos:Lerp(self.burnerPos, 0.5), 18, 45
 		end
 	end
+	self.camTarget = t
 	d *= self.L.cam or 1
 	local cam = workspace.CurrentCamera
 	local vp = cam.ViewportSize
@@ -852,6 +918,9 @@ function Scene:shot(name)
 end
 
 function Scene:destroy()
+	if self.holdMark then
+		self.holdMark.label:Destroy()
+	end
 	if self.S_ then
 		pcall(function()
 			self.S_:clearFx()
