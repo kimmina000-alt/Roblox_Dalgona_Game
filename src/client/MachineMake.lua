@@ -289,18 +289,9 @@ local function stepSugar(sc, S, st)
 	ui:setStep(2)
 	shot(sc, "sugar")
 	local catchAt = sc.sugarLadle + Vector3.new(0, S.bowlHalf, 0)
-	-- 국자 손잡이를 잡고 배출구 아래로 끌어 옴 (가까이 오면 딱 맞춰짐)
-	ui:say("국자 손잡이를 잡고 배출구 아래로 끌어 와요", "국자가 배출구 밑에 오면 딱 맞춰져요")
-	local cur = S.Bowl.Position
-	while flat(cur - catchAt).Magnitude > 0.35 * sc.S do
-		local dt = frame()
-		if not dt then
-			return nil
-		end
-		cur = dragLadle(sc, cur, catchAt.Y, dt, catchAt, 5 * sc.S)
-		sc:ladleBowlTo(cur)
-	end
-	if not slide(sc, cur, catchAt, 0.15) then
+	-- 동전을 넣으면 국자가 배출구 아래에 놓인 채 시작 (2026-11-28 사용자: 예전엔 손잡이를 잡고 끌어 와야 했음)
+	ui:say("국자가 배출구 아래에 놓였어요", "")
+	if not slide(sc, S.Bowl.Position, catchAt, 0.45) then
 		return nil
 	end
 	Sfx.play("metalClink", 0.35, 1.2)
@@ -740,6 +731,61 @@ local function stepPress(sc, S, shape, ctx)
 	return { t0 = t0 or t1, t1 = t1 + 0.01, h = h }
 end
 
+---------------------------------------------------------------- 완성품 크게 보여 주기 (2026-11-28 사용자 "2·3단계도 완성하면 1단계처럼 확대해서")
+-- 첫 칸 달고나(3D 반죽 + 막대)를 복제해 카메라 앞 화면 가운데로 날아오게 하고 천천히 돌림 (손 작업대 Showcase처럼)
+local function showcase(sc)
+	local c = sc.cavities[1]
+	local base = c and (c.bpart or c.look)
+	if not base then
+		return
+	end
+	local cam = workspace.CurrentCamera
+	local origin = CFrame.new(c.pos) * sc.rot
+	local items = {}
+	local function grab(inst)
+		local cf = inst:IsA("BasePart") and inst.CFrame or inst:GetPivot()
+		local cl = inst:Clone()
+		cl.Parent = sc.model
+		table.insert(items, { inst = cl, rel = origin:ToObjectSpace(cf) })
+	end
+	grab(base)
+	if c.stick then
+		grab(c.stick)
+	end
+	local function put(cf)
+		for _, it in ipairs(items) do
+			local w = cf * it.rel
+			if it.inst:IsA("BasePart") then
+				it.inst.CFrame = w
+			else
+				it.inst:PivotTo(w)
+			end
+		end
+	end
+	-- 화면 세로의 약 45%를 채우는 거리
+	local D = sc.cavD * 1.6
+	local dist = D / (2 * math.tan(math.rad(cam.FieldOfView) / 2)) / 0.45
+	Sfx.play("stepDone", 0.4, 1.2)
+	local t, T = 0, 3.0
+	while t < T do
+		local dt = frame()
+		if not dt then
+			break
+		end
+		t += dt
+		local k = math.min(t / 0.5, 1)
+		k = k * k * (3 - 2 * k)
+		local camCF = cam.CFrame
+		local center = (camCF * CFrame.new(0, 0, -dist)).Position
+		-- 윗면이 카메라를 보게 세우고 천천히 돎
+		local face = CFrame.lookAt(center, camCF.Position) * CFrame.Angles(math.rad(-90), 0, 0) * CFrame.Angles(0, t * 1.2, 0)
+		put(origin:Lerp(face, k))
+	end
+	for _, it in ipairs(items) do
+		it.inst:Destroy()
+	end
+end
+
 ---------------------------------------------------------------- 한 판
 local function round(stage, start)
 	local shape = start.shape
@@ -830,6 +876,9 @@ local function round(stage, start)
 	if ok and not burnt then
 		recs.press = stepPress(sc, S, shape, ctx)
 		ok = recs.press ~= nil
+		if ok then
+			showcase(sc)
+		end
 	end
 	if burnt and ok then
 		ui:say("앗, 까맣게 탔어요", "이번 판은 탄 달고나가 돼요")

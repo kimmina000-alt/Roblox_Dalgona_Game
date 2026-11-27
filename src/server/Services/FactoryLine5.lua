@@ -352,6 +352,14 @@ function Line.build(parent, f)
 	ball(m, "S5_SidePostKnob", 0.4, f * CFrame.new(bx - 2.0, 3.2, Z - 0.6), "brass")
 	vcyl(m, "S5_SidePostRod", 0.6, 0.12, f * CFrame.new(bx - 2.0, 2.95, Z - 0.6), "frame")
 
+	-- 알바생·"내가 하기" 자리 (라인 앞 통로, 라인을 봄): FactoryDisplay·FactoryMini가 Fac_Stand_<공정>을 찾음
+	for key, x in pairs({ sugar = hx, boil = kx, press = 18.5, inspect = ux, pack = bx + 0.4 }) do
+		mark(m, "Fac_Stand_" .. key, f * CFrame.new(x, 0.15, Z - 3.0))
+	end
+
+	-- 2026-11-28 사용자 "4·5단계 기계 1.5배": 라인 가운데 바닥(부지 기준 x 16, z 20.3)을 기준으로 1.5배
+	m.WorldPivot = f * CFrame.new(16, 0, Z)
+	m:ScaleTo(1.5)
 	m.Parent = parent
 	return m
 end

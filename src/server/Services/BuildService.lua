@@ -274,6 +274,7 @@ local function josa(word, withBatchim, without)
 end
 
 -- 배치 layout이 괜찮나 (부지 i 기준). 반환: ok, 이유
+local REQUIRE_PATH = false -- 손님·알바가 지나갈 폭 4 길을 검사할지
 local function validate(i, layout)
 	local info = capture(i)
 	if not info then
@@ -289,14 +290,15 @@ local function validate(i, layout)
 			if r[1] < A.x0 or r[2] > A.x1 or r[3] < A.z0 or r[4] > A.z1 then
 				return false, itemName(key) .. ": 가게 밖으로 나가요"
 			end
-			for _, f in ipairs(fixed) do
+			for _, f in ipairs(rec.def.wall and {} or fixed) do -- 벽에 거는 물건은 바닥 고정물과 높이가 달라 안 겹침
 				if overlap(r, f) then
 					return false, itemName(key) .. ": 고정된 물건과 겹쳐요"
 				end
 			end
 		end
 		for k2, r2 in pairs(rects) do
-			if overlap(r, r2) and (e or layout[k2]) then
+			local sameLevel = (rec.def.wall == true) == (info.items[k2].def.wall == true) -- 벽 물건끼리·바닥 물건끼리만 겹침 검사
+			if sameLevel and overlap(r, r2) and (e or layout[k2]) then
 				return false, string.format("%s %s 겹쳐요", josa(itemName(key), "과", "와"), josa(itemName(k2), "이", "가"))
 			end
 		end
@@ -312,7 +314,11 @@ local function validate(i, layout)
 	for _, f in ipairs(fixed) do
 		table.insert(all, f)
 	end
-	local ok, bad = pathOk(all, targets)
+	-- 2026-11-28 사용자 "가구끼리 폭 4 거리 둬야 함? 겹치지만 않으면 설치 가능하게": 길 검사는 끔 (REQUIRE_PATH)
+	local ok, bad = true, nil
+	if REQUIRE_PATH then
+		ok, bad = pathOk(all, targets)
+	end
 	if not ok then
 		return false, bad == "entry" and "입구가 막혀요" or (itemName(bad) .. " 앞으로 가는 길(폭 4)이 막혀요")
 	end

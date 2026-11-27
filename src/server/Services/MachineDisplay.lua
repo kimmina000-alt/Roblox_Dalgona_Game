@@ -221,8 +221,10 @@ local function lf(m, name, len, dia, cf, mat, props) -- 앞(-Z)을 보는 원판
 	return p
 end
 
+local LINE_SCALE = 1.5 -- 2026-11-28 사용자 "4·5단계 기계 1.5배 키우기"
 local function buildLine(m, base)
 	pcall(ensureVariants)
+	local top0 = base
 	-- 배출 트레이가 -X로 1.75 나와서 전체(약 8.4) 가운데를 자리 가운데에 맞춤
 	base = base * CFrame.new(0.8, 0, 0)
 	local W, D = 6.6, 2.4 -- 본체 상자
@@ -420,10 +422,15 @@ local function buildLine(m, base)
 	for i, off in ipairs({ Vector3.new(0.15, 0, 0.12), Vector3.new(-0.2, 0, -0.18), Vector3.new(-0.15, 0.04, 0.25) }) do
 		lc(m, "S4_TrayDalgona", 0.05, 0.42, base * CFrame.new(trayX + off.X, trayY + 0.06 + off.Y, off.Z) * CFrame.Angles(math.rad(i * 4), 0, 0), "dalgona")
 	end
-	return W + 1.8, D + 0.2, frameTop + 0.7
+	-- 자리 윗면(top0)을 기준으로 1.5배 (바닥에 붙은 채 커짐)
+	m.WorldPivot = top0
+	m:ScaleTo(LINE_SCALE)
+	return (W + 1.8) * LINE_SCALE, (D + 0.2) * LINE_SCALE, (frameTop + 0.7) * LINE_SCALE
 end
 
 local BUILDERS = { [2] = buildSteel, [3] = buildPink, [4] = buildLine }
+-- 편집 화면 틀(Workspace.MachineLayout.Stage4)을 이 모양으로 다시 만들 때 쓰는 도구용 (tools/studio/rebuild_layouts.lua)
+Display.buildLine = buildLine
 local NAMES = { [2] = "철제 판매기", [3] = "분홍 자판기", [4] = "연속 생산 설비" }
 
 -- 편집 화면에서 고친 기계 모양 (판매 세션 2026-11-22, 사용자 "기계도 고치게"):

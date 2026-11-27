@@ -207,6 +207,29 @@ local function factoryLayout()
 	return nil
 end
 
+-- 가게 3D 안 공장 홀(Role "공장 건물", 2026-11-27 가게 3판의 "3" 건물)에 라인을 길이 방향으로 가운데 놓음.
+-- 2026-11-28: 1.5배로 키운 라인(약 53)이 홀 폭(약 42)보다 길어서 홀 깊이(약 72) 방향으로 돌림. 포장(배출) 끝이 가게 쪽
+local function fitLineToHall(line, plot, cf)
+	local shop = plot and plot:FindFirstChild("ShopModel")
+	local hall
+	for _, d in ipairs(shop and shop:GetDescendants() or {}) do
+		if d:IsA("BasePart") and d:GetAttribute("Role") == "공장 건물" then
+			hall = d
+			break
+		end
+	end
+	if not (hall and line) then
+		return
+	end
+	local axis = hall.Size.Z >= hall.Size.X and hall.CFrame.LookVector or hall.CFrame.RightVector
+	axis = Vector3.new(axis.X, 0, axis.Z).Unit
+	if axis:Dot(cf.LookVector) > 0 then -- 부지 -Z(LookVector) = 가게 쪽. 라인 -X(포장 끝)가 그쪽을 보게
+		axis = -axis
+	end
+	local pos = Vector3.new(hall.Position.X, line:GetPivot().Position.Y, hall.Position.Z)
+	line:PivotTo(CFrame.fromMatrix(pos, axis, Vector3.yAxis))
+end
+
 -- 해금된 가게에만 공장 3D
 local function buildBuilding(lot)
 	if lot:FindFirstChild("Building") then
@@ -238,7 +261,7 @@ local function buildBuilding(lot)
 					d:Destroy()
 				end
 			end
-			FactoryLine5.build(b, cf)
+			fitLineToHall(FactoryLine5.build(b, cf), lot.Parent, cf)
 		end
 	else
 		b = src:Clone()

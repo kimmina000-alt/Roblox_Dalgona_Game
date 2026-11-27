@@ -334,30 +334,45 @@ function Scene.new(stage, cavities, shape)
 	end
 	self.cavities = {}
 	local sum = Vector3.zero
+	-- 고른 도안 모양 금형 (2026-11-27 사용자 "금형틀에 처음 만들 때 고른 모양틀로"): 어두운 칸 + 밝은 금속 모양 선.
+	-- DalgonaLook 모양 위쪽 = 모델 -Z → 180° 돌려 화면 위쪽(기계 뒤)이 모양 위쪽
+	local function markAt(pos, name)
+		local mark = DalgonaLook.build({ s = shape, g = "Good" }, { diameter = cavD, stick = false })
+		mark.Name = name
+		for _, p in ipairs(mark:GetDescendants()) do
+			if p:IsA("BasePart") then
+				p.CastShadow = false
+				if p.Name == "Disc" or p.Name == "Rim" then
+					p.Color = Color3.fromRGB(30, 28, 28)
+					p.Material = Enum.Material.Metal
+				elseif p.Name == "Groove" then
+					p.Color = Color3.fromRGB(150, 150, 158)
+					p.Material = Enum.Material.Metal
+				end
+			end
+		end
+		mark:PivotTo(CFrame.new(pos + Vector3.new(0, 0.005, 0)) * self.rot * CFrame.Angles(0, math.pi, 0))
+		mark.Parent = m
+	end
 	for i, v in ipairs(spots) do
 		local pos = at(Vector3.new(v.X, L.cavY, v.Z))
 		sum += pos
 		if L.markCavities then
-			-- 고른 도안 모양 금형 (2026-11-27 사용자 "금형틀에 처음 만들 때 고른 모양틀로"): 어두운 칸 + 밝은 금속 모양 선.
-			-- DalgonaLook 모양 위쪽 = 모델 -Z → 180° 돌려 화면 위쪽(기계 뒤)이 모양 위쪽
-			local mark = DalgonaLook.build({ s = shape, g = "Good" }, { diameter = cavD, stick = false })
-			mark.Name = "Cavity" .. i
-			for _, p in ipairs(mark:GetDescendants()) do
-				if p:IsA("BasePart") then
-					p.CastShadow = false
-					if p.Name == "Disc" or p.Name == "Rim" then
-						p.Color = Color3.fromRGB(30, 28, 28)
-						p.Material = Enum.Material.Metal
-					elseif p.Name == "Groove" then
-						p.Color = Color3.fromRGB(150, 150, 158)
-						p.Material = Enum.Material.Metal
-					end
-				end
-			end
-			mark:PivotTo(CFrame.new(pos + Vector3.new(0, 0.005, 0)) * self.rot * CFrame.Angles(0, math.pi, 0))
-			mark.Parent = m
+			markAt(pos, "Cavity" .. i)
 		end
 		table.insert(self.cavities, { pos = pos, fill = 0, look = nil, stick = nil })
+	end
+	-- 2단계 금형판: 이번 판에 안 쓰는 칸까지 8칸 모두 고른 모양 (2026-11-28 사용자 "금형틀 공간에 처음에 선택한 모양 틀 보이게")
+	if L.markCavities and L.cavs then
+		local used = {}
+		for _, v in ipairs(spots) do
+			used[v.X] = true
+		end
+		for k, x in ipairs(L.cavs) do
+			if not used[x] then
+				markAt(at(Vector3.new(x, L.cavY, L.cavZ)), "CavityIdle" .. k)
+			end
+		end
 	end
 	self.plateCenter = sum / math.max(#spots, 1)
 	self.ladleRest = at(L.ladleRest)
@@ -1114,17 +1129,22 @@ end
 function Scene:shot(name)
 	local t, d, p
 	if self.stage == 3 then
+		-- 2026-11-28 사용자 "3단계 뷰 좀 더 위로, 항공뷰로, 화면 가리는 건 만들기 할 때만 숨기기": 위에서 내려다보고,
+		-- 보라 판(기계 몸 메시)이 가리는 설탕·소다·녹이기 때만 기계 몸을 내 화면에서 반투명하게
 		if name == "coin" then
-			t, d, p = self.at(Vector3.new(0, 3.9, -2.45)), 19, 12
+			t, d, p = self.at(Vector3.new(0, 3.9, -2.45)), 19, 20
 		elseif name == "sugar" or name == "sodaPillar" then
-			t, d, p = self.at(Vector3.new(1.1, 2.0, -1.4)), 15, 26
+			t, d, p = self.at(Vector3.new(1.1, 1.6, -1.3)), 13, 58
 		elseif name == "cup" then
-			-- 녹이기·소다: 열선 컵이 보라 판 아래 움푹한 곳이라 위에서는 가려짐 → 앞에서 비스듬히 들여다봄 (2026-11-27)
-			t, d, p = self.at(Vector3.new(self.L.cup.x, 1.35, self.L.cup.z)), 8, 34
+			t, d, p = self.at(Vector3.new(self.L.cup.x, 1.2, self.L.cup.z)), 8, 62
 		elseif name == "pour" or name == "stick" or name == "press" then
-			t, d, p = self.plateCenter + self.dir(Vector3.new(0.6, 0, -0.4)), 12, 50
+			t, d, p = self.plateCenter + self.dir(Vector3.new(0.6, 0, -0.3)), 11, 64
 		else
-			t, d, p = self.waterPos:Lerp(self.burnerPos, 0.5), 18, 35
+			t, d, p = self.waterPos:Lerp(self.burnerPos, 0.5), 18, 55
+		end
+		if self.machine then
+			local fade = (name == "sugar" or name == "sodaPillar" or name == "cup") and 0.72 or 0
+			self.machine.LocalTransparencyModifier = fade
 		end
 	else
 		if name == "coin" then

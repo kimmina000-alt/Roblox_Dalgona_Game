@@ -143,10 +143,7 @@ task.delay(1, function()
 			task.wait(0.6)
 			underPillar("sugarPillar", 2.6)
 		else
-			waitFor("배출구 아래로")
-			task.wait(0.6)
-			local half = sc().model.MachineStation.Ladle.Bowl.Size.X / 2
-			dragBowlTo(sc().sugarLadle + Vector3.new(0, half, 0), 1.5)
+			-- 2026-11-28부터 동전을 넣으면 국자가 배출구 아래로 저절로 옴 (끌기 없음)
 			waitFor("꾹 누르고")
 			task.wait(0.6)
 			hold(sc().pressPos, 1.9) -- 설탕 약 0.8 (초록 칸)
