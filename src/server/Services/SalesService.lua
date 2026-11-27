@@ -113,7 +113,7 @@ local function buildLook(item, size)
 	local burnt = item and item.g == "Burnt"
 	local disc = part(m, "Disc", Vector3.new(size * 0.12, size, size), CFrame.Angles(0, 0, math.rad(90)), burnt and Color3.fromRGB(60, 40, 28) or DALGONA, nil, { Shape = Enum.PartType.Cylinder })
 	part(m, "Rim", Vector3.new(size * 0.08, size * 1.08, size * 1.08), CFrame.Angles(0, 0, math.rad(90)), GRADE_RIM[item and item.g] or GRADE_RIM.Normal, nil, { Shape = Enum.PartType.Cylinder })
-	if not (item and item.plain) then
+	if not (item and (item.plain or item.bread)) then
 		part(m, "Stick", Vector3.new(size * 0.07, size * 0.07, size * 0.75), CFrame.new(0, 0, size * 0.75), Color3.fromRGB(235, 215, 170))
 	end
 	m.PrimaryPart = disc
@@ -123,7 +123,7 @@ end
 
 local function lookKey(item)
 	local pp = type(item.pp) == "table" and (tostring(item.pp[1]) .. "," .. tostring(item.pp[2])) or ""
-	return table.concat({ tostring(item.id), tostring(item.s), tostring(item.g), tostring(item.pk), tostring(item.plain), tostring(item.br), pp }, "|")
+	return table.concat({ tostring(item.id), tostring(item.s), tostring(item.g), tostring(item.pk), tostring(item.plain), tostring(item.br), tostring(item.bread), pp }, "|")
 end
 
 ---------------------------------------------------------------- 진열대
@@ -558,8 +558,7 @@ local function refreshShelf(index)
 			s.rim.Transparency = 0
 			s.rim.Color = GRADE_RIM[item.g] or GRADE_RIM.Normal
 			s.disc.Color = (item.g == "Burnt") and Color3.fromRGB(60, 40, 28) or DALGONA
-			local shape = ShapeCatalog.get(item.s)
-			s.disc:SetAttribute("Shape", shape and shape.name or item.s)
+			s.disc:SetAttribute("Shape", ShapeCatalog.itemName(item)) -- 달고나빵·민짜는 그 이름 (2026-11-27)
 			s.disc:SetAttribute("Hand", item.hand == true or nil) -- 손 제작 "수제" 도장 (D58, UI 화면)
 			-- 완성품 모양으로 진열: 원판·테두리는 숨기고(칸 안내 자리로만 씀) 모양 모델을 눕혀 둠
 			local key = lookKey(item)
@@ -591,8 +590,7 @@ local function refreshShelf(index)
 	shop.label.Text = string.format(slots < SALES.shelfSlots and "쟁반 %d/%d" or "진열대 %d/%d", n, slots) -- 노점은 쟁반 5칸 (D21)
 	for i, c in pairs(shop.cards or {}) do
 		local item = bySlot[i]
-		local shape = item and ShapeCatalog.get(item.s)
-		c.Text = shape and shape.name or ""
+		c.Text = item and ShapeCatalog.itemName(item) or ""
 	end
 end
 

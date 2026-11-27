@@ -99,6 +99,11 @@ G.PackCost = { wrapper = 1, twistTie = 1 }
 -- 설탕은 Common 1회분, 뽑기·도감 안 됨
 G.PlainBasePrice = 8
 G.PlainSugarGrade = "Common"
+-- 달고나빵 (2026-11-27 사용자 "누르지 않은 반죽 위에 설탕가루 뿌린 게 달고나빵, 메뉴에 추가하고 가격 책정"):
+-- 붓고 누르지 않은 봉긋한 반죽 + 설탕 가루. 고른 도안과 상관없이 기본값 6 × 품질 (손 제작 ×1.5, 포장 ×1.1).
+-- 메뉴판 값은 기본 달고나 2,000원(민짜 8) 비율로 1,500원 = 6. 설탕은 Common 1회분, 뽑기·도감 안 됨
+G.BreadBasePrice = 6
+G.BreadMenuWon = 1500
 G.PackWindowSeconds = 180 -- 다 만든 뒤 이 시간 안에 포장해야 함
 
 -- 판매가 (GDD 13장, 기획 확정 2026-11-20): round(도안 가격 × 품질 배율 × 뽑기 보너스 × 포장 1.1)

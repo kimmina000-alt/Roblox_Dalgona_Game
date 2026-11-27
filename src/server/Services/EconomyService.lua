@@ -558,7 +558,8 @@ end
 function EconomyService.onMade(player, shape, result)
 	-- 민짜 달고나 (D20): 틀을 안 찍었으면 기본값 8, 설탕 Common 1회분
 	local plain = result.plain == true
-	local need = G.recipe(plain and G.PlainSugarGrade or shape.grade)
+	local bread = result.bread == true -- 달고나빵 (2026-11-27): 기본값 G.BreadBasePrice, 설탕 Common 1회분
+	local need = G.recipe((plain or bread) and G.PlainSugarGrade or shape.grade)
 	local reward = { exp = G.expFor(result.grade), levelUps = {}, coins = 0 }
 	Data.update(player, function(d)
 		for id, n in pairs(need) do
@@ -570,10 +571,11 @@ function EconomyService.onMade(player, shape, result)
 				s = shape.id,
 				g = result.grade,
 				q = result.Q,
-				b = plain and G.PlainBasePrice or shape.price,
+				b = bread and G.BreadBasePrice or (plain and G.PlainBasePrice or shape.price),
 				m = result.mult or 1,
 				pk = false,
 				plain = plain or nil,
+				bread = bread or nil,
 				hand = true, -- 손 제작 "수제" (D58: 판매가 ×G.HandMadeMult)
 			}
 			item.p = G.salePrice(item.b, item.m, G.GachaBonusDefault, false, true)

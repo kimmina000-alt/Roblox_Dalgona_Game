@@ -25,6 +25,7 @@ local TOP_DIM = 0.9 -- 반점이 밝아 보이게 기본 정점 색을 이만큼
 Batter.TOP_DIM = TOP_DIM
 local TOP = 0.88 -- 기본 모양 꼭대기 높이 (찍은 모양 안쪽이 솟을 여유)
 local BOUND = 1.8 -- 메시 경계 상자 (MeshPart 크기 기준을 고정하려고 모서리 점 2개를 박아 둠). 방울로 그린 모양(하트 끝 등)이 반지름 1 밖으로 나가도 들어가게
+Batter.BOUND, Batter.TOP = BOUND, TOP -- 기계 금형판(MachineMakeScene)이 같은 메시를 복제한 부품을 칸마다 놓을 때 씀
 
 local function lerp(a, b, t)
 	return a + (b - a) * t

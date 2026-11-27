@@ -250,7 +250,20 @@ local function buildMachine(plot, name, stage, top, slotName)
 		return nil
 	end
 	applyMachineLayout(m, stage, top)
-	local anchor = part(m, "PromptAnchor", Vector3.new(0.2, 0.2, 0.2), top * CFrame.new(0, 2.2, -(d or 2.4) / 2 - 0.3), Color3.new(1, 1, 1), { Transparency = 1, CanQuery = false, CastShadow = false })
+	local anchorCF = top * CFrame.new(0, 2.2, -(d or 2.4) / 2 - 0.3)
+	-- 사용자 기계 메시(Stage2Machine·Stage3Machine)가 있으면 그 앞면 밖·위쪽에 (2026-11-27 사용자 "만들기 버튼이 기계에 가려져
+	-- 안 보임": 예전 자리는 메시 앞면보다 안쪽·낮은 곳이라 버튼 판(PromptStyle, AlwaysOnTop 아님)이 기계 속에 묻혔음).
+	-- 버튼 판은 PromptAnchor + 2.2 높이에 뜸 → 판이 기계 높이의 70%쯤, 앞면에서 0.6 앞에 오게
+	local mesh = m:FindFirstChild("Stage" .. stage .. "Machine", true)
+	if mesh and mesh:IsA("BasePart") then
+		local s = mesh.Size
+		local base = mesh.CFrame * CFrame.new(0, -s.Y / 2, 0)
+		local pos = base:PointToWorldSpace(Vector3.new(0, math.max(0.5, s.Y * 0.7 - 2.2), -s.Z / 2 - 0.6))
+		anchorCF = CFrame.new(pos) * (top - top.Position)
+		-- 머리 위 상태판(MachineClient: 앵커 + Height - 0.6)은 기계 꼭대기 조금 위
+		h = s.Y + 1.2 - (pos.Y - base.Position.Y) + 0.6
+	end
+	local anchor = part(m, "PromptAnchor", Vector3.new(0.2, 0.2, 0.2), anchorCF, Color3.new(1, 1, 1), { Transparency = 1, CanQuery = false, CastShadow = false })
 	local pr = addPrompt(anchor, NAMES[stage], "도안 고르기")
 	pr:SetAttribute("MachineStage", stage)
 	m:SetAttribute("Height", h or 5)

@@ -293,7 +293,15 @@ local function load()
 	end
 	for key, e in pairs(res.items or {}) do
 		local def = defs[key]
-		local nodes = def and findNodes(plot, def) or {}
+		-- 계산대·유리 진열장은 꾸미기에서 안 옮김 (2026-11-27 사용자 "카운터 진열대 제외 모두 바꿀 수 있도록")
+		local nodes = (def and key ~= "counter") and findNodes(plot, def) or {}
+		-- 기계 자리(MachineSlot)는 바닥 판뿐 → 그 위 기계(Machine2·3·4)도 같이 끌려 보이게 (서버는 [완료] 때 MachineDisplay.sync로 옮김)
+		if def and def.machine and #nodes > 0 then
+			local mm = plot:FindFirstChild("Machine" .. tostring(key):gsub("^m", ""))
+			if mm then
+				table.insert(nodes, mm)
+			end
+		end
 		if #nodes > 0 then
 			local it = { key = key, name = e.name or key, w = e.w or 1, d = e.d or 1, nodes = {}, x0 = e.x, z0 = e.z, r0 = e.r or 0, x = e.x, z = e.z, r = e.r or 0, ok = true }
 			for _, n in ipairs(nodes) do
@@ -419,25 +427,51 @@ end
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
-local function itemAt(screen)
-	local ray = camera:ViewportPointToRay(screen.X, screen.Y)
-	local ex = { me.Character }
-	for _, d in ipairs(roofParts) do
-		table.insert(ex, d)
-	end
-	rayParams.FilterDescendantsInstances = ex
-	local hit = workspace:Raycast(ray.Origin, ray.Direction * 600, rayParams)
-	if not hit then
-		return nil
-	end
-	for _, it in pairs(items) do
-		for _, n in ipairs(it.nodes) do
-			if hit.Instance == n.inst or hit.Instance:IsDescendantOf(n.inst) then
-				return it
+-- 광선이 상자(cf, size)에 닿는 거리 (안 닿으면 nil)
+local function rayBox(origin, dir, cf, size)
+	local o = cf:PointToObjectSpace(origin)
+	local d = cf:VectorToObjectSpace(dir)
+	local h = size / 2
+	local tmin, tmax = 0, math.huge
+	for _, ax in ipairs({ "X", "Y", "Z" }) do
+		local oa, da, ha = o[ax], d[ax], h[ax]
+		if math.abs(da) < 1e-8 then
+			if oa < -ha or oa > ha then
+				return nil
+			end
+		else
+			local t1, t2 = (-ha - oa) / da, (ha - oa) / da
+			if t1 > t2 then
+				t1, t2 = t2, t1
+			end
+			tmin, tmax = math.max(tmin, t1), math.min(tmax, t2)
+			if tmin > tmax then
+				return nil
 			end
 		end
 	end
-	return nil
+	return tmin
+end
+
+-- 화면 점에 있는 물건: 물건 노드마다 부품 상자에 광선을 대 봄 (2026-11-27 사용자 "냉장고만 옮겨짐": 가게 가구 부품은
+-- 대부분 CanQuery = false라 레이캐스트에 안 맞아서 버튼(CanQuery)이 있는 냉장고만 골라졌음). 가장 가까운 것
+local function itemAt(screen)
+	local ray = camera:ViewportPointToRay(screen.X, screen.Y)
+	local best, bt = nil, math.huge
+	for _, it in pairs(items) do
+		for _, n in ipairs(it.nodes) do
+			local parts = n.inst:IsA("BasePart") and { n.inst } or n.inst:GetDescendants()
+			for _, p in ipairs(parts) do
+				if p:IsA("BasePart") and p.Transparency < 0.95 and p.Size.Magnitude > 0.05 then
+					local t = rayBox(ray.Origin, ray.Direction, p.CFrame, p.Size)
+					if t and t < bt then
+						best, bt = it, t
+					end
+				end
+			end
+		end
+	end
+	return best
 end
 
 -- 화면 점 → 부지 로컬 바닥 점 (스터드, 바닥 = 부지 기준 높이)

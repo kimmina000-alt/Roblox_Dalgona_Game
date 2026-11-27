@@ -1,6 +1,7 @@
 -- 완성된 달고나 겉모습 (2026-11-21 사용자: "진열대에 내가 만든 완성품 모양으로 진열", "손님은 그 완성품 들고 먹으면서 감")
 -- 보관함 아이템(stock item) 하나로 작은 달고나 모델을 만든다. 서버·클라이언트 둘 다 씀 (Part만, 메시·EditableMesh 없음)
---   item.s = 도안 id, item.g = 등급, item.pk = 포장, item.plain = 민짜(모양 안 찍음), item.br = 쪼개짐(지금은 안 팔림)
+--   item.s = 도안 id, item.g = 등급, item.pk = 포장, item.plain = 민짜(모양 안 찍음), item.br = 쪼개짐(지금은 안 팔림),
+--   item.bread = 달고나빵 (봉긋한 반죽 + 설탕 가루, 2026-11-27)
 -- DalgonaLook.build(item, opts 또는 지름) → Model (PrimaryPart = "Disc", 피벗 = 원판 가운데)
 --   opts.diameter (기본 1.0), opts.upright = true면 세워서(원판 면이 +Z, 막대는 아래), 아니면 눕혀서(면이 위 +Y, 막대는 +Z)
 --   opts.stick (기본 true) 막대, opts.anchored (기본 true)
@@ -109,8 +110,24 @@ function DalgonaLook.build(item, opts)
 	local disc = part(m, "Disc", Vector3.new(T, D, D), base * CFrame.Angles(0, 0, math.rad(90)), color, { Shape = Enum.PartType.Cylinder, Anchored = anchored })
 	-- 가장자리 살짝 진한 띠 (구운 테두리)
 	part(m, "Rim", Vector3.new(T * 0.9, D * 1.02, D * 1.02), base * CFrame.new(0, -T * 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), color:Lerp(Color3.new(0.3, 0.17, 0.08), 0.25), { Shape = Enum.PartType.Cylinder, Anchored = anchored })
-	-- 찍힌 모양 홈 (민짜·탄 것은 없음)
-	if item and not item.plain and item.g ~= "Burnt" then
+	-- 달고나빵 (2026-11-27): 누르지 않은 봉긋한 반죽 + 위에 하얀 설탕 가루, 막대·모양 없음
+	if item and item.bread then
+		local dome = part(m, "BreadDome", Vector3.new(D * 0.92, T * 5, D * 0.92), base * CFrame.new(0, T / 2, 0), color:Lerp(Color3.fromRGB(196, 120, 52), 0.35), { Anchored = anchored })
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Sphere
+		mesh.Parent = dome
+		local rng = Random.new(#tostring(item.id or "") + 7)
+		for i = 1, 22 do
+			local a = rng:NextNumber(0, 2 * math.pi)
+			local r = math.sqrt(rng:NextNumber()) * R * 0.72
+			local k = 1 - (r / (R * 0.92)) ^ 2
+			local y = T / 2 + T * 2.5 * math.sqrt(math.max(k, 0)) + 0.004
+			local sz = math.max(0.015, D * 0.03)
+			part(m, "BreadSugar", Vector3.new(sz, sz * 0.6, sz), base * CFrame.new(math.cos(a) * r, y, math.sin(a) * r) * CFrame.Angles(0, a, 0), Color3.fromRGB(252, 252, 250), { Anchored = anchored })
+		end
+	end
+	-- 찍힌 모양 홈 (민짜·탄 것·달고나빵은 없음)
+	if item and not item.plain and not item.bread and item.g ~= "Burnt" then
 		local o = outlineFor(item.s or "")
 		if o and o.r > 0 then
 			local k = R * 0.72 / o.r
@@ -130,7 +147,7 @@ function DalgonaLook.build(item, opts)
 		end
 	end
 	-- 막대 (원판 아래쪽 = 눕힌 기준 +Z 쪽으로 나옴)
-	if opts.stick ~= false then
+	if opts.stick ~= false and not (item and item.bread) then
 		local L = D * 0.9
 		part(m, "Stick", Vector3.new(D * 0.1, T * 0.5, L), base * CFrame.new(0, 0, R * 0.45 + L / 2), STICK, { Anchored = anchored, Material = Enum.Material.Wood })
 	end

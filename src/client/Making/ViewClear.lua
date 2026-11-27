@@ -131,6 +131,29 @@ local function scan()
 		-- 가게 건물 통메시(ShopModel.Plane 42×26×77 — 벽·천장이 한 덩어리)처럼 큰 부품은 카메라가 그 상자 안이라 통째로 숨겨져
 		-- "배경이 날아감" → 큰 부품(BIG 넘게)은 숨기지 않음
 		local omin, omax = origin - Vector3.one, origin + Vector3.one
+		-- 알바·손님(Humanoid 모델)이 카메라와 기계 사이에 서 있으면 숨김 (부품이 CanQuery=false라 레이캐스트에 안 잡힘, 2026-11-27)
+		local pts = points()
+		for _, h in ipairs(plot:GetDescendants()) do
+			if h:IsA("Humanoid") and h.Parent and h.Parent:IsA("Model") then
+				local ch = h.Parent
+				local root = ch.PrimaryPart or ch:FindFirstChild("HumanoidRootPart")
+				if root and hidden[root] == nil then
+					local p = root.Position
+					for _, t in ipairs(pts) do
+						local d = t - origin
+						local u = math.clamp((p - origin):Dot(d) / math.max(d:Dot(d), 1e-6), 0, 1)
+						if (origin + d * u - p).Magnitude < 2.5 then
+							for _, q in ipairs(ch:GetDescendants()) do
+								if q:IsA("BasePart") then
+									hide(q)
+								end
+							end
+							break
+						end
+					end
+				end
+			end
+		end
 		for _, p in ipairs(plot:GetDescendants()) do
 			if p:IsA("BasePart") and hidden[p] == nil and not p:IsDescendantOf(model) and not big(p) then
 				local pmin, pmax = aabb(p)

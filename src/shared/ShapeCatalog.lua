@@ -69,6 +69,19 @@ function Catalog.get(id)
 	return Catalog.byId[id]
 end
 
+-- 보관함·진열 아이템 이름 (달고나빵·민짜는 도안 이름 대신)
+function Catalog.itemName(item)
+	if type(item) ~= "table" then
+		return ""
+	end
+	if item.bread then
+		return "달고나빵"
+	end
+	local e = Catalog.byId[item.s or ""]
+	local n = e and e.name or tostring(item.s or "")
+	return item.plain and ("민짜 달고나") or n
+end
+
 function Catalog.grade(id)
 	return Catalog.Grades[gradeIndex[id] or 1]
 end

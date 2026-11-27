@@ -49,6 +49,7 @@ local FIELDS = {
 	soda = { { "delay", 0, 120, 120 }, { "amount", 0, 3, 0 }, { "fastFrac", 0, 1, 0 }, { "puff", 0, 1, 0 } },
 	pour = { { "dist", 0, 10, 10 }, { "remain", 0, 1, 1 }, { "spread", 1, 5, 1 }, { "round", 0, 1, 1 } },
 	press = {},
+	bread = { { "amount", 0, 2, 0 } }, -- 달고나빵: 누르기·모양 찍기 대신 설탕 뿌리기 (2026-11-27)
 	stamp = { { "dist", 0, 10, 10 }, { "angle", -180, 180, 180 }, { "hold", 0, 10, 10 }, { "skipped", 0, 1, 0 } }, -- skipped: 틀을 안 찍고 끝냄 (2026-11-20)
 }
 
@@ -125,6 +126,20 @@ local function sanitize(session, raw, mods)
 	local burnt = false
 	for _, step in ipairs(Config.Steps) do
 		local r = raw[step.key]
+		-- 달고나빵 (2026-11-27): 붓기 뒤 누르기·모양 찍기 없이 설탕 뿌리기(raw.bread) 하나로 끝
+		if r == nil and step.key == "press" and type(raw.bread) == "table" and out.pour and not burnt then
+			local b = raw.bread
+			local t0, t1 = num(b.t0, 0, math.huge, -1), num(b.t1, 0, math.huge, -1)
+			if t0 < prevEnd - 0.5 or t1 <= t0 then
+				return nil, "bad order bread"
+			end
+			if t1 - t0 < Config.Server.minStep or t1 - t0 > Config.Server.maxStep then
+				return nil, string.format("bad duration bread %.2f", t1 - t0)
+			end
+			prevEnd = t1
+			out.bread = { t0 = t0, t1 = t1, amount = num(b.amount, 0, 2, 0) }
+			break
+		end
 		if r == nil then
 			if burnt then
 				break -- 녹이다 태우면 뒤 단계 없음

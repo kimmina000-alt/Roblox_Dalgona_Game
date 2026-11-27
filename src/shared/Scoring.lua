@@ -62,6 +62,17 @@ function Scoring.pour(r)
 end
 
 -- 일직선 등으로 길쭉하게 부어 틀이 안 맞음 = 실패
+-- 달고나빵 설탕 뿌리기 (2026-11-27): amount 0.65~1.0 만점, 적으면 비례, 많으면 0.6 넘게 더 뿌리면 0점
+function Scoring.bread(r)
+	local a = r.amount or 0
+	if a < 0.65 then
+		return 100 * c01(a / 0.65)
+	elseif a <= 1.0 then
+		return 100
+	end
+	return 100 * c01(1 - (a - 1.0) / 0.6)
+end
+
 function Scoring.misshaped(records)
 	local p = records.pour
 	return p ~= nil and (p.spread or 1) > Config.Pour.failSpread
@@ -153,6 +164,13 @@ function Scoring.compute(records, shape)
 	local M = s.soda
 	local P = 0.3 * s.pour + 0.7 * s.press
 	local S = s.stamp
+	-- 달고나빵 (2026-11-27): 누르기·모양 찍기 대신 설탕 뿌리기. P = 붓기 50% + 뿌리기 50%, S = 뿌리기
+	local bread = type(records.bread) == "table"
+	if bread then
+		s.bread = Scoring.bread(records.bread)
+		P = 0.5 * s.pour + 0.5 * s.bread
+		S = s.bread
+	end
 	local w = Config.Weights
 	local q = w.T * T + w.M * M + w.P * P + w.S * S
 	local burnt = records.melt ~= nil and records.melt.burnt == true
@@ -172,8 +190,8 @@ function Scoring.compute(records, shape)
 		s[k] = round(v)
 	end
 	-- 민짜 달고나 (D20): 틀을 안 찍었으면 고른 도안 대신 기본값
-	local plain = records.stamp ~= nil and (records.stamp.skipped or 0) >= 0.5
-	local basePrice = plain and Growth.PlainBasePrice or (shape or Config.Shape).price
+	local plain = not bread and records.stamp ~= nil and (records.stamp.skipped or 0) >= 0.5
+	local basePrice = bread and Growth.BreadBasePrice or (plain and Growth.PlainBasePrice or (shape or Config.Shape).price)
 	return {
 		Q = q,
 		T = round(T),
@@ -189,6 +207,7 @@ function Scoring.compute(records, shape)
 		cracked = (records.press ~= nil and records.press.cracked == true)
 			or (records.stamp ~= nil and records.stamp.hold > diff(records.stamp).crackHold),
 		plain = plain,
+		bread = bread or nil,
 		price = round(basePrice * g.mult),
 	}
 end

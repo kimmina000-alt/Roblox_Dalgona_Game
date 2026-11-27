@@ -28,6 +28,7 @@ local Ppopgi = require(Making:WaitForChild("Ppopgi"))
 local StepsFolder = Making:WaitForChild("Steps")
 
 local STEP_MODULES = {}
+local BreadStep = require(Making:WaitForChild("Steps"):WaitForChild("Bread")) -- 달고나빵 (2026-11-27)
 for _, step in ipairs(Config.Steps) do
 	local name = step.key:sub(1, 1):upper() .. step.key:sub(2)
 	STEP_MODULES[step.key] = require(StepsFolder:WaitForChild(name))
@@ -431,6 +432,26 @@ local function runSession()
 			break
 		end
 		Sfx.play("stepDone", 0.45) -- 단계 끝 "띵"
+		-- 달고나빵 (2026-11-27 사용자): 붓고 나서 누르기 전에 고름. 달고나빵이면 설탕 가루를 뿌리고 끝 (누르기·모양 찍기 없음)
+		if step.key == "pour" and ctx.state.dalgona then
+			local bask = ui:ask("잘 부었어요!", string.format("그대로 누르면 달고나, 설탕 가루를 뿌리면 달고나빵 (%d코인부터)", GrowthConfig.BreadBasePrice), "누르기", "달고나빵")
+			while not bask.choice do
+				if not ctx.frame() then
+					bask.close()
+					return
+				end
+			end
+			if bask.choice == 2 then
+				CameraRig.go("press")
+				local brec = BreadStep.run(ctx)
+				if ctx.aborted or not brec then
+					return
+				end
+				ctx.records.bread = brec
+				ctx.state.bread = true
+				break
+			end
+		end
 		-- 단계 사이 짧은 숨 (성공 피드백이 보이게)
 		local w = 0
 		while w < 0.35 do
@@ -557,7 +578,11 @@ local function runSession()
 	end
 	ui:say(string.format("%s · 완성도 %d%%", result.grade, result.Q), "")
 	Pointer.enabled = false
-	ui:showResult(result, shape, {
+	local shownShape = shape
+	if result.bread then
+		shownShape = setmetatable({ name = "달고나빵", price = GrowthConfig.BreadBasePrice }, { __index = shape })
+	end
+	ui:showResult(result, shownShape, {
 		retry = function()
 			ui:hideResult()
 			task.spawn(startMaking, true)

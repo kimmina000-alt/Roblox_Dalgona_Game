@@ -34,6 +34,7 @@ local SugarStep = require(Steps:WaitForChild("Sugar"))
 local MeltStep = require(Steps:WaitForChild("Melt"))
 local SodaStep = require(Steps:WaitForChild("Soda"))
 local StickStep = require(Steps:WaitForChild("Stick"))
+local Dalgona = require(Making:WaitForChild("Dalgona"))
 local Scene = require(script.Parent:WaitForChild("MachineMakeScene"))
 
 local player = Players.LocalPlayer
@@ -129,12 +130,19 @@ local function showSugar(S, st, k)
 	if k <= 0.01 then
 		return
 	end
-	if SugarStep.pile(S, st, math.min(k, 1), WHITE) then
+	-- 손 작업대 설탕 단계(Steps/Sugar)처럼 국자 바닥에 얇은 설탕 층을 깔고 그 위에 더미.
+	-- (2026-11-27 사용자 "3단계 설탕 위치 안 맞음": 층을 안 깔아서 녹이기가 시작되면 더미가 남아 있던 내용물 높이로
+	--  뛰어올라 국자 테두리 위 뚜껑처럼 보였음)
+	local fill = math.min(k, 1)
+	S:setContents({ thickness = 0.03 + 0.04 * fill, Transparency = 0, Material = Enum.Material.Sand, Color = WHITE })
+	if SugarStep.pile(S, st, fill, WHITE) then
 		-- 더미는 설탕 그릇 더미 메시를 복제함 → 복제한 작업대에선 그릇이 숨겨져 있어 보이게 되돌림
 		if st.pile and st.pile.Transparency > 0.5 then
 			st.pile.Transparency = 0
 		end
-		while #st.grains < math.floor(GRAINS * math.min(k, 1)) do
+		-- 그릇 더미 모양이면 따로 낱알 없음 (손 작업대와 같음)
+		local count = S.WhiteBowl:FindFirstChild("SugarHeapMesh") and 0 or GRAINS
+		while #st.grains < math.floor(count * fill) do
 			SugarStep.addGrain(S, st.grains, st)
 		end
 	else
@@ -590,6 +598,7 @@ local function stepStick(sc, S)
 		Sfx.play("pop", 0.5, 1.2)
 	end
 	while left > 0 do
+		sc:settleBatter((now() - t0) / 3)
 		if not frame() then
 			if drag then
 				drag:Destroy()
@@ -634,15 +643,15 @@ local function stepStick(sc, S)
 end
 
 ---------------------------------------------------------------- ⑦ 넓은 누름판으로 한 번 누르기 (D62): 볼록한 반죽 → 납작
-local function stepPress(sc, S, shape)
+-- 2026-11-27 사용자: 손 작업대처럼 누르는 동안 누름판이 투명해지고 반죽이 눌리는 모양(가운데 평평 + 가장자리 둥근 턱, 손 작업대
+-- 3D 반죽 BatterMesh 그대로)이 보임, 금형 모양 홈이 찍힘. 완성품 색은 손 작업대와 같은 겉모습 색(Dalgona.lookFor·colorFor)
+local function stepPress(sc, S, shape, ctx)
 	ui:setStep(7)
 	shot(sc, "press")
 	local P = Config.Press
 	local target = P.targets[#P.targets]
-	local top0 = math.max(0.03, sc:domeTop())
-	local function hy(h) -- 두께 h → 반죽 꼭대기 높이 (처음 h0 = 지금 볼록한 꼭대기)
-		return top0 * h / P.h0
-	end
+	sc:prepareStamp(shape)
+	local top = math.max(0.02, sc:pressBatter(P.h0, target))
 	if not sc:presser() then
 		warn("[MachineMake] presser missing")
 	end
@@ -657,12 +666,13 @@ local function stepPress(sc, S, shape)
 		end
 		t += dt
 		local k = math.min(t / 0.45, 1)
-		sc:presserTo(hy(P.h0) + up * (1 - k * k))
+		sc:presserTo(top + up * (1 - k * k))
 	end
 	Sfx.play("pop", 0.4, 0.8)
 	ui:say("누름판을 꾹 누르고 있어요", "막대가 초록 칸에 오면 손을 떼요 · 한 번만 눌러요")
 	local h, t0, pressed = P.h0, nil, false
 	local lo, hi = target - 0.015, target + 0.02
+	local fade = 0
 	while true do
 		local dt = frame()
 		if not dt then
@@ -684,8 +694,11 @@ local function stepPress(sc, S, shape)
 		if h < 0.03 then
 			break
 		end
-		sc:presserTo(hy(h))
-		sc:flattenCavities(hy(h), (P.h0 - h) / (P.h0 - target))
+		-- 누르는 동안은 누름판이 사라짐 (손 작업대 Steps/Press와 같음)
+		fade += ((Pointer.down and 1 or 0) - fade) * (1 - math.exp(-dt * 12))
+		sc:fadePresser(fade)
+		top = sc:pressBatter(h, target)
+		sc:presserTo(top)
 		ui:setMeter(true, h / P.h0, lo / P.h0, hi / P.h0, string.format("%d%%", math.floor(target / h * 100 + 0.5)), "두께")
 	end
 	Sfx.stopLoop("pourGlug")
@@ -701,7 +714,7 @@ local function stepPress(sc, S, shape)
 	else
 		ui:toast("조금 얇아요", 0.8)
 	end
-	-- 누름판 들어 올리면 금형 모양대로 찍힌 달고나
+	-- 누름판이 다시 보이며 들어 올려짐 → 금형 모양대로 찍힌 달고나
 	t = 0
 	while t < 0.35 do
 		local dt = frame()
@@ -709,21 +722,19 @@ local function stepPress(sc, S, shape)
 			break
 		end
 		t += dt
-		sc:presserTo(hy(h) + up * math.min(t / 0.35, 1))
+		local k = math.min(t / 0.35, 1)
+		sc:fadePresser(1 - k)
+		sc:presserTo(top + up * k)
 	end
 	sc:hidePresser()
-	sc:finishCavities(shape)
+	local color = nil
+	pcall(function()
+		color = Dalgona.colorFor(Dalgona.lookFor(ctx.records, ctx.state))
+	end)
+	sc:finishCavities(shape, color)
 	-- 굳으면 막대째 떼어 올림
 	task.wait(0.4)
-	local lift = Vector3.new(0, sc.cavD * 0.3, 0)
-	for _, c in ipairs(sc.cavities) do
-		if c.look then
-			c.look:PivotTo(c.look:GetPivot() + lift)
-		end
-		if c.stick then
-			c.stick:PivotTo(c.stick:GetPivot() + lift)
-		end
-	end
+	sc:liftCavities(sc.cavD * 0.3)
 	Sfx.play("stepDone", 0.5, 1)
 	task.wait(0.4)
 	return { t0 = t0 or t1, t1 = t1 + 0.01, h = h }
@@ -817,7 +828,7 @@ local function round(stage, start)
 		ok = recs.stick ~= nil
 	end
 	if ok and not burnt then
-		recs.press = stepPress(sc, S, shape)
+		recs.press = stepPress(sc, S, shape, ctx)
 		ok = recs.press ~= nil
 	end
 	if burnt and ok then

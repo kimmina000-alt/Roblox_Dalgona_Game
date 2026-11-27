@@ -25,6 +25,10 @@ local StickStep = require(Making:WaitForChild("Steps"):WaitForChild("Stick"))
 local Workstations = require(Making:WaitForChild("Workstations"))
 local ViewScale = require(Making:WaitForChild("ViewScale"))
 local ViewClear = require(Making:WaitForChild("ViewClear"))
+local BatterMesh = require(Making:WaitForChild("BatterMesh"))
+local Toon = require(Making:WaitForChild("Toon"))
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("DalgonaConfig"))
+local CutterShapes = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("CutterShapes"))
 
 local Scene = {}
 Scene.__index = Scene
@@ -45,8 +49,10 @@ local C = {
 -- 메시 기준 자리 (S배 하기 전 값)
 local LAYOUT = {
 	[2] = {
-		S = 1,
-		cam = 0.5, -- 카메라 거리 배율 (예전 S 2.5 기준 값에 곱함)
+		-- 2026-11-27 사용자 "국자 크기에 맞춰 기계 더 확대": 가게 크기(1)에서 국자(그릇 지름 약 0.9)에 맞게 키움.
+		-- 뒷면은 진짜 기계 자리에 맞춘 채 앞으로 커짐. cam = 카메라 거리 배율 (예전 S 2.5 기준 값에 곱함)
+		S = 1.8,
+		cam = 0.9,
 		size = Vector3.new(4.86, 5.86, 3.23),
 		coins = { Vector3.new(1.5, 1.36, -1.65), Vector3.new(-1.5, 1.36, -1.65) }, -- 앞면 동전 구멍 2개 (어느 쪽이든)
 		press = Vector3.new(0, 0.75, -1.65), -- 설탕: 배출구를 꾹 누름
@@ -59,16 +65,17 @@ local LAYOUT = {
 		cavD = 0.46,
 		cavs = { 1.9, 1.39, 0.82, 0.31, -0.26, -0.83, -1.4, -1.97 }, -- 칸 x (z = cavZ)
 		cavZ = 1.15,
-		markCavities = false, -- 메시에 칸이 그려져 있음
+		-- 메시 칸에는 여러 모양이 그려져 있음 → 쓰는 칸에 이번에 고른 도안 모양 금형을 올림 (2026-11-27 사용자)
+		markCavities = true,
 		-- 메시가 앞판·윗판·금형판뿐이라 옆·뒤가 뚫려 보임 → 몸통 벽을 Part로 (x ±2.43, 앞판 z -1.11, 뒤 z 1.61, 윗판 4.52)
 		body = { x = 2.43, zFront = -1.11, zBack = 1.61, top = 4.5 },
-		stickBox = Vector3.new(-1.9, 4.52, -0.75), -- 막대 통: 윗판 오른쪽 앞 (D61)
+		stickBox = Vector3.new(-2.0, 4.52, 0.45), -- 막대 더미: 윗판 오른쪽, 금형판 바로 앞 (붓기·막대 화면에 같이 보이게, 2026-11-27)
 		shelfY = 4.5, -- 물그릇 올린 옆 선반 높이
 		ladleRest = Vector3.new(-1.3, 0.1, -2.3),
 	},
 	[3] = {
-		S = 1,
-		cam = 0.62,
+		S = 1.4,
+		cam = 0.87,
 		size = Vector3.new(6.32, 7.13, 4.97),
 		coins = { Vector3.new(-0.93, 5.1, -2.5) }, -- 앞판 동전 투입구 윗부분 검은 칸 (2026-11-27 사용자 화면으로 맞춤)
 		pillars = { { x = 1.9, z = -1.21 }, { x = 0.3, z = -1.21 } }, -- 지울 기둥 (y pillarY0 ~ pillarTop)
@@ -330,17 +337,23 @@ function Scene.new(stage, cavities, shape)
 		local pos = at(Vector3.new(v.X, L.cavY, v.Z))
 		sum += pos
 		if L.markCavities then
-			local mark = DalgonaLook.build({ s = shape, g = "Burnt" }, { diameter = cavD, stick = false })
+			-- 고른 도안 모양 금형 (2026-11-27 사용자 "금형틀에 처음 만들 때 고른 모양틀로"): 어두운 칸 + 밝은 금속 모양 선.
+			-- DalgonaLook 모양 위쪽 = 모델 -Z → 180° 돌려 화면 위쪽(기계 뒤)이 모양 위쪽
+			local mark = DalgonaLook.build({ s = shape, g = "Good" }, { diameter = cavD, stick = false })
 			mark.Name = "Cavity" .. i
 			for _, p in ipairs(mark:GetDescendants()) do
 				if p:IsA("BasePart") then
 					p.CastShadow = false
-					if p.Name == "Disc" then
+					if p.Name == "Disc" or p.Name == "Rim" then
 						p.Color = Color3.fromRGB(30, 28, 28)
+						p.Material = Enum.Material.Metal
+					elseif p.Name == "Groove" then
+						p.Color = Color3.fromRGB(150, 150, 158)
+						p.Material = Enum.Material.Metal
 					end
 				end
 			end
-			mark:PivotTo(CFrame.new(pos + Vector3.new(0, 0.005, 0)) * self.rot)
+			mark:PivotTo(CFrame.new(pos + Vector3.new(0, 0.005, 0)) * self.rot * CFrame.Angles(0, math.pi, 0))
 			mark.Parent = m
 		end
 		table.insert(self.cavities, { pos = pos, fill = 0, look = nil, stick = nil })
@@ -522,6 +535,8 @@ function Scene:station()
 		sm:PivotTo(CFrame.new(self.stickBoxPos + Vector3.new(0, y, 0)) * self.rot * CFrame.Angles(0, math.rad(90 + (i - 2) * 6), 0))
 		table.insert(self.stickPile, sm)
 	end
+	-- 칸 반죽 3D 메시를 미리 만들어 둠 (붓기 첫 칸에서 메시를 만드느라 멈칫해 첫 칸이 덜 차던 것, 손 작업대 Pour와 같은 방법)
+	BatterMesh.prewarm(self.model, Color3.fromRGB(206, 152, 96))
 	self.S_ = S
 	return S
 end
@@ -779,9 +794,63 @@ function Scene:setPourStream(from, to, color)
 	s.Transparency = 0
 end
 
--- 금형판 칸 i에 붓는 반죽 (fill 0~1.3): 손 작업대처럼 볼록한 반죽 (2026-11-27). color = 국자 반죽 색
+-- 금형판 칸 반죽 (2026-11-27 사용자 "손 작업대처럼 누르기 전 볼록, 누르면 납작, 완성품도 손 작업대와 똑같이"):
+-- 손 작업대 3D 반죽(BatterMesh, EditableMesh) 하나를 만들고 칸마다 그 메시 부품을 복제해 놓음. 복제 부품은 같은 EditableMesh를
+-- 그대로 보여 줘서(2026-11-27 Studio 확인: MeshContent.Object 같음) 모양(언덕 → 누른 턱 → 찍힌 홈)은 한 번만 계산하고
+-- 칸마다 크기만 다름. 손 작업대와 같은 비율: 막 부은 언덕 = 다 누른 지름의 42%, 누른 두께 h → 보이는 높이 (Dalgona:setThickness와 같은 식)
+-- EditableMesh를 못 쓰면 예전 공 모양 반죽.
+local HAND_D = 2.2 -- 손 작업대 다 누른 달고나 지름 (스터드) — 칸 크기와의 비율로 높이·모양 선을 줄임
+local MOUND_D = 0.72 -- 막 부은 언덕 지름 / 칸 (누르면 칸 가득 1.0까지 퍼짐)
+local VIS_K = 1.87 -- 보이는 높이 배율: 막 부은 언덕 높이 = 칸 지름의 20%가 되게 (손 작업대 두께 식 × 칸 비율 × 이 값)
+local function tint(c)
+	local k = 1 / (BatterMesh.TOP_DIM or 1)
+	return Color3.new(math.min(1, c.R * k), math.min(1, c.G * k), math.min(1, c.B * k))
+end
+-- BatterMesh:place와 같은 약속 (메시 경계 ±BOUND = 크기, 가장자리 반지름 1 = 지름/2, 기본 꼭대기 TOP = 높이)
+local function placeBatter(p, center, width, height, rot)
+	local B, T = BatterMesh.BOUND or 1.8, BatterMesh.TOP or 0.88
+	local sy = math.max(height / T, 0.01)
+	p.Size = Vector3.new(math.max(width * B, 0.02), sy, math.max(width * B, 0.02))
+	p.CFrame = CFrame.new(center.X, center.Y + sy / 2, center.Z) * rot
+end
+-- 칸 i의 반죽 부품 (첫 칸 = 원본 메시 부품, 나머지 = 복제)
+function Scene:batterPart(i, color)
+	local c = self.cavities[i]
+	if c.bpart then
+		return c.bpart
+	end
+	if self.bm == nil then
+		local b = BatterMesh.new(self.model, color or Color3.fromRGB(206, 152, 96), math.random(1, 9999))
+		self.bm = b or false
+		if b then
+			b.part.Transparency = 0
+			b:setShape(0, 0.5)
+		end
+	end
+	local bm = self.bm
+	if not bm then
+		return nil
+	end
+	local p
+	if not self.bmUsed then
+		self.bmUsed = true
+		p = bm.part
+		c.master = true
+	else
+		p = bm.part:Clone()
+		p.Parent = self.model
+	end
+	p.Name = "Batter" .. i
+	p.CastShadow = false
+	if color then
+		p.Color = tint(color)
+	end
+	Toon.outline(p)
+	c.bpart = p
+	return p
+end
 function Scene:domeH(fill)
-	return self.cavD * 0.32 * math.clamp(fill, 0.2, 1.15)
+	return self.cavD * 0.98 * 0.2 * (0.5 + 0.5 * math.clamp(fill, 0, 1))
 end
 function Scene:setCavityFill(i, fill, shape, color)
 	local c = self.cavities[i]
@@ -789,18 +858,30 @@ function Scene:setCavityFill(i, fill, shape, color)
 	if fill <= 0.02 then
 		return
 	end
-	if not c.dome then
-		c.dome = part(self.model, "Batter" .. i, Vector3.new(0.1, 0.05, 0.1), CFrame.new(c.pos), color or Color3.fromRGB(206, 152, 96), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball, CastShadow = false })
+	local p = self:batterPart(i, color)
+	if p then
+		local D1 = self.cavD * 0.98
+		local f = math.min(fill, 1)
+		local d = D1 * MOUND_D * (0.55 + 0.45 * f) * (1 + 0.6 * math.max(0, fill - 1))
+		local h = self:domeH(fill)
+		placeBatter(p, c.pos, d, h, self.rot)
+		if color then
+			p.Color = tint(color)
+		end
+		c.domeD, c.domeH = d, h
+	else
+		if not c.dome then
+			c.dome = part(self.model, "Batter" .. i, Vector3.new(0.1, 0.05, 0.1), CFrame.new(c.pos), color or Color3.fromRGB(206, 152, 96), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball, CastShadow = false })
+		end
+		local k = math.clamp(fill, 0, 1.15)
+		local d = self.cavD * (0.35 + 0.6 * k)
+		c.dome.Size = Vector3.new(d, self:domeH(fill) * 2, d)
+		c.dome.CFrame = CFrame.new(c.pos) * self.rot
+		if color then
+			c.dome.Color = color
+		end
+		c.domeD, c.domeH = d, self:domeH(fill)
 	end
-	local k = math.clamp(fill, 0, 1.15)
-	local d = self.cavD * (0.35 + 0.6 * k)
-	local h = self:domeH(fill) * 2 -- 공 모양의 위 절반만 칸 위로 (아래 절반은 칸 속)
-	c.dome.Size = Vector3.new(d, h, d)
-	c.dome.CFrame = CFrame.new(c.pos) * self.rot
-	if color then
-		c.dome.Color = color
-	end
-	c.domeD = d
 	if fill > 1.15 and not c.spill then
 		-- 넘침: 둘레로 흘러나온 얇은 반죽
 		c.spill = cyl(self.model, "Spill" .. i, 0.02, self.cavD * 1.3, c.pos + Vector3.new(0, 0.005, 0), color or Color3.fromRGB(214, 150, 70), Enum.Material.SmoothPlastic, { Transparency = 0.2 })
@@ -811,43 +892,193 @@ end
 function Scene:domeTop()
 	local h = 0
 	for _, c in ipairs(self.cavities) do
-		if c.dome then
-			h = math.max(h, c.dome.Size.Y / 2)
-		end
+		h = math.max(h, c.domeH or 0)
 	end
 	return h
 end
 
--- 누르는 동안: 반죽 꼭대기가 top(스터드) 아래로 눌리고 옆으로 조금 퍼짐 (k = 0~1 누른 정도)
-function Scene:flattenCavities(top, k)
-	for _, c in ipairs(self.cavities) do
-		if c.dome then
-			local h0 = c.dome0 or c.dome.Size.Y / 2
-			c.dome0 = h0
-			local h = math.max(0.012, math.min(h0, top))
-			local d = math.min(self.cavD * 1.05, (c.domeD or self.cavD) * (1 + 0.15 * math.clamp(k, 0, 1)))
-			c.dome.Size = Vector3.new(d, h * 2, d)
-			c.dome.CFrame = CFrame.new(c.pos) * self.rot
-		end
+-- 붓고 난 뒤 부은 결이 낮아지며 매끈해짐 (손 작업대처럼). k = 0~1
+function Scene:settleBatter(k)
+	if self.bm then
+		k = math.clamp(k, 0, 1)
+		self.bm:setShape(0, 0.5 * (1 - k))
+		self.bm:setPores(1 - 0.6 * k)
 	end
 end
 
--- 다 누른 뒤: 반죽이 금형 모양대로 찍힌 달고나가 됨
-function Scene:finishCavities(shape)
-	for i, c in ipairs(self.cavities) do
+-- 모양 선 (CutterShapes 외곽선·안쪽 구멍·장식선)을 칸 가운데 기준 세계 선분으로 (화면 위쪽 = 기계 뒤 +Z, 오른쪽 = -X)
+function Scene:shapeSegs(shape, center)
+	local data
+	for _, s in ipairs(CutterShapes) do
+		if s.id == shape then
+			data = s
+			break
+		end
+	end
+	if not data then
+		return nil
+	end
+	local k = self.cavD * 0.98 / HAND_D
+	local w = math.max(0.012, 0.07 * k)
+	local segs, closed = {}, {}
+	local function add(pts, isClosed, outline)
+		local n = #pts
+		for i = 1, (isClosed and n or n - 1) do
+			local a, b = pts[i], pts[i % n + 1]
+			local s = {
+				a = center + self.dir(Vector3.new(-a[1] * k, 0, a[2] * k)),
+				b = center + self.dir(Vector3.new(-b[1] * k, 0, b[2] * k)),
+				w = w,
+			}
+			table.insert(segs, s)
+			if outline then
+				table.insert(closed, s)
+			end
+		end
+	end
+	add(data.outline, true, true)
+	for _, h in ipairs(data.holes or {}) do
+		add(h, true, true)
+	end
+	for _, l in ipairs(data.lines or {}) do
+		local pts = {}
+		for _, p in ipairs(l) do
+			if type(p) == "table" then
+				table.insert(pts, p)
+			end
+		end
+		if #pts >= 2 then
+			add(pts, l.closed == true, false)
+		end
+	end
+	local function isInside(p)
+		local cross = 0
+		for _, s in ipairs(closed) do
+			local az, bz = s.a.Z, s.b.Z
+			if (az > p.Z) ~= (bz > p.Z) then
+				local x = s.a.X + (p.Z - az) / (bz - az) * (s.b.X - s.a.X)
+				if x > p.X then
+					cross += 1
+				end
+			end
+		end
+		return cross % 2 == 1
+	end
+	return segs, isInside
+end
+
+-- 누르기 시작: 금형 모양(찍힐 홈)을 메시에 미리 계산 (원본 부품을 다 누른 크기로 잠깐 놓고 손 작업대 prepareStamp)
+function Scene:prepareStamp(shape)
+	local bm = self.bm
+	local c
+	for _, cc in ipairs(self.cavities) do
+		if cc.master then
+			c = cc
+		end
+	end
+	if not (bm and c) then
+		return
+	end
+	local cf, size = bm.part.CFrame, bm.part.Size
+	placeBatter(bm.part, c.pos, self.cavD * 0.98, 0.1, self.rot)
+	local segs, isInside = self:shapeSegs(shape, c.pos)
+	if segs then
+		bm:prepareStamp(segs, isInside)
+		self.stampReady = true
+	end
+	bm.part.Size, bm.part.CFrame = size, cf
+end
+
+-- 누르는 동안 (h = 손 작업대 두께 값, h0 0.45 → 목표 0.08): 손 작업대와 같은 식으로 언덕이 납작한 원판(가장자리 둥근 턱)이 되고
+-- 칸 크기까지 퍼지며, 반쯤부터 금형 모양 홈이 찍힘. 반환 = 가장 높은 반죽 윗면 높이 (누름판 아랫면 자리)
+function Scene:pressBatter(h, target)
+	local P = Config.Press
+	local D1 = self.cavD * 0.98
+	local flat = math.clamp((P.h0 * 0.95 - h) / (P.h0 * 0.95 - 0.1), 0, 1)
+	local vis = h * 0.75 * (1 - 0.3 * (1 - flat)) * (1 + 0.7 * flat) * (D1 / HAND_D) * VIS_K
+	local prog = math.clamp((P.h0 - h) / (P.h0 - target), 0, 1) -- 누른 정도 (칸 크기까지 퍼짐)
+	local top = 0
+	if self.bm then
+		self.bm:setShape(flat, 0)
+		self.bm:setPores(0.4 * (1 - flat))
+		if self.stampReady then
+			self.bm:setStamp(math.clamp((flat - 0.35) / 0.65, 0, 1) * math.clamp(target / math.max(h, 1e-3), 0, 1.15))
+		end
+		for _, c in ipairs(self.cavities) do
+			if c.bpart then
+				local f = math.clamp(c.fill or 1, 0.3, 1.15)
+				local d = D1 * (MOUND_D + (1 - MOUND_D) * math.sqrt(prog)) * (0.9 + 0.1 * math.min(f, 1))
+				local hh = vis * (0.85 + 0.15 * math.min(f, 1))
+				placeBatter(c.bpart, c.pos, d, hh, self.rot)
+				c.domeH = hh
+				top = math.max(top, hh)
+			end
+		end
+		return top
+	end
+	-- 예전 공 모양 반죽
+	for _, c in ipairs(self.cavities) do
 		if c.dome then
-			local color = c.dome.Color
+			local hh = math.max(0.012, math.min(c.domeH or vis, vis))
+			local d = math.min(self.cavD * 1.05, (c.domeD or self.cavD) * (1 + 0.15 * flat))
+			c.dome.Size = Vector3.new(d, hh * 2, d)
+			c.dome.CFrame = CFrame.new(c.pos) * self.rot
+			top = math.max(top, hh)
+		end
+	end
+	return top
+end
+
+-- 다 누른 뒤: 손 작업대 달고나 색(제작 기록으로 정한 겉모습)으로. 3D 반죽이 없으면 예전처럼 찍힌 달고나 모델
+function Scene:finishCavities(shape, color)
+	for i, c in ipairs(self.cavities) do
+		if c.bpart then
+			if color then
+				c.bpart.Color = tint(color)
+			end
+		elseif c.dome then
+			local col = color or c.dome.Color
 			c.dome:Destroy()
 			c.dome = nil
 			c.look = DalgonaLook.build({ s = shape, g = "Good" }, { diameter = self.cavD * 0.98, stick = false })
 			c.look.Name = "Fill" .. i
 			for _, p in ipairs(c.look:GetDescendants()) do
 				if p:IsA("BasePart") and p.Name == "Disc" then
-					p.Color = color
+					p.Color = col
 				end
 			end
-			c.look:PivotTo(CFrame.new(c.pos + Vector3.new(0, 0.012, 0)) * self.rot)
+			c.look:PivotTo(CFrame.new(c.pos + Vector3.new(0, 0.012, 0)) * self.rot * CFrame.Angles(0, math.pi, 0))
 			c.look.Parent = self.model
+		end
+	end
+end
+
+-- 다 굳으면 막대째 들어 올림
+function Scene:liftCavities(dy)
+	for _, c in ipairs(self.cavities) do
+		for _, inst in ipairs({ c.bpart, c.look, c.stick }) do
+			if inst then
+				if inst:IsA("BasePart") then
+					inst.CFrame += Vector3.new(0, dy, 0)
+				else
+					inst:PivotTo(inst:GetPivot() + Vector3.new(0, dy, 0))
+				end
+			end
+		end
+	end
+end
+
+-- 누름판 투명하게 (손 작업대처럼 누르는 동안은 사라져서 반죽이 눌리는 게 보임). k = 0 보임 ~ 1 안 보임
+function Scene:fadePresser(k)
+	local pr = self.press
+	if not pr then
+		return
+	end
+	for _, d in ipairs(pr.model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.LocalTransparencyModifier = k
+		elseif d:IsA("Highlight") then
+			d.Enabled = k < 0.5
 		end
 	end
 end
@@ -900,7 +1131,8 @@ function Scene:shot(name)
 		elseif name == "sugar" then
 			t, d, p = self.at(Vector3.new(0, 0.9, -1.8)), 13, 18
 		elseif name == "pour" or name == "stick" or name == "press" then
-			t, d, p = self.plateCenter + self.dir(Vector3.new(-1.0, 0, -1.2)), 10, 58
+			-- 2026-11-27 사용자 "붓기 때 금형틀이 잘 안 보임": 뒤쪽 위에 들린 금형판 가운데를 앞에서 내려다봄
+			t, d, p = self.plateCenter + self.dir(Vector3.new(0, 0, -0.25 * self.S)), 6, 52
 		else
 			t, d, p = self.waterPos:Lerp(self.burnerPos, 0.5), 18, 45
 		end
@@ -918,6 +1150,12 @@ function Scene:shot(name)
 end
 
 function Scene:destroy()
+	if self.bm then
+		pcall(function()
+			self.bm:destroy()
+		end)
+		self.bm = nil
+	end
 	if self.holdMark then
 		self.holdMark.label:Destroy()
 	end
