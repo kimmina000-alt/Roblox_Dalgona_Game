@@ -771,7 +771,12 @@ local function round(stage, start)
 	if ok then
 		ui:setStep(3)
 		sc:setHeat(1)
-		rig("melt")
+		-- 3단계 컵은 보라 판 아래라 위에서 내려다보면 가려짐 → 앞에서 들여다보는 장면 카메라 (2단계는 손 작업대 카메라 그대로)
+		if stage == 3 then
+			shot(sc, "cup")
+		else
+			rig("melt")
+		end
 		recs.melt = MeltStep.run(ctx)
 		ok = recs.melt ~= nil
 		burnt = ok and (recs.melt.burnt == true)
@@ -783,8 +788,12 @@ local function round(stage, start)
 			ok = stepPillarSoda(sc, S, ctx.state)
 		end
 		if ok then
-			-- 3단계는 소다 통이 없음(기둥 정량) → 소다 화면 대신 국자를 내려다보는 녹이기 화면 (2026-11-27 "소다 뒤 화면 다 가려짐")
-			rig(stage == 3 and "melt" or "soda")
+			-- 3단계는 소다 통이 없음(기둥 정량) → 소다 화면 대신 컵을 앞에서 들여다보는 화면 (2026-11-27 "소다 뒤 화면 다 가려짐")
+			if stage == 3 then
+				shot(sc, "cup")
+			else
+				rig("soda")
+			end
 			recs.soda = SodaStep.run(ctx)
 		end
 		ok = recs.soda ~= nil

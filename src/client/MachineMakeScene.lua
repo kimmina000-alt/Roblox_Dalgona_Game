@@ -372,6 +372,9 @@ function Scene:station()
 		ViewScale.setFull(ws, true)
 	end
 	local clone = ws:Clone()
+	-- 누름판도 원래 크기일 때 따로 복제해 둠 (가게 작업대 누름판은 내 화면에서 거의 0 크기로 줄어 있음, 2026-11-27)
+	local presserSrc = ws:FindFirstChild("Presser")
+	self.presserSrc = presserSrc and presserSrc:Clone() or nil
 	if vs ~= nil and vs ~= 1 then
 		ViewScale.setFull(ws, false)
 	end
@@ -399,6 +402,10 @@ function Scene:station()
 	end
 	local target = self.burnerPos
 	clone:PivotTo(clone:GetPivot() + Vector3.new(target.X - gx / gn, target.Y - grillTop, target.Z - gz / gn))
+	-- 화로 속성 GrillTopY는 세계 높이 그대로 남아 있음 → 옮긴 자리로 고침 (안 고치면 Station이 국자를 원래 작업대 높이에 띄움, 2026-11-27)
+	if brazier then
+		brazier:SetAttribute("GrillTopY", target.Y)
+	end
 	-- 국자·나무젓가락·소다통만 보이게 (누름판은 누르기 단계에서 따로 꺼냄, 막대 통은 안 씀 — 막대 더미를 따로 놓음)
 	local keep = {}
 	for _, n in ipairs({ "Ladle", "Chopsticks", "SodaTub" }) do
@@ -516,49 +523,43 @@ function Scene:stickRest()
 	return self.stickBoxPos + Vector3.new(0, StickStep.SIZE.THICK * self.stickScale * 3, 0)
 end
 
--- 3단계 기둥 지우기: 복제 메시를 EditableMesh로 읽어 기둥 자리(가로 반지름 0.22, 높이 pillarY0~pillarTop+0.05) 안에만 있는 면을 뺌.
--- 실패하면(권한 등) 기둥이 그대로 보일 뿐 만들기는 됨
+-- 3단계 기둥 지우기: 복제 메시를 EditableMesh로 읽어 기둥 자리(가로 반지름 0.22, 높이 pillarY0 ~ pillarTop 바로 아래)의
+-- 꼭짓점을 모두 기둥 위 끝 한 점으로 모음 → 기둥 면이 넓이 0이 되어 안 보임. (게임 안에서는 에셋 메시의 면을 빼는 건 막혀 있어서
+-- "EditableMesh is fixed-size" — 꼭짓점 옮기기만 됨, 2026-11-27 확인). 실패하면 기둥이 그대로 보일 뿐 만들기는 됨
 function Scene:removePillars(mm, L)
 	local ok, err = pcall(function()
 		local em = AssetService:CreateEditableMeshAsync(Content.fromUri(mm.MeshId))
 		local mn, mx = Vector3.one * math.huge, -Vector3.one * math.huge
-		for _, v in ipairs(em:GetVertices()) do
+		local verts = em:GetVertices()
+		for _, v in ipairs(verts) do
 			local p = em:GetPosition(v)
 			mn, mx = mn:Min(p), mx:Max(p)
 		end
 		local ext, mid = mx - mn, (mn + mx) / 2
-		local function inPillar(p)
-			local u = (p - mid) / ext * L.size
+		local function toMesh(x, y, z) -- 메시 기준 자리(바닥 가운데 원점) → 메시 정점 좌표
+			return mid + Vector3.new(x, y - L.size.Y / 2, z) / L.size * ext
+		end
+		local moved = 0
+		for _, v in ipairs(verts) do
+			local u = (em:GetPosition(v) - mid) / ext * L.size
 			local y = u.Y + L.size.Y / 2
-			if y < L.pillarY0 or y > L.pillarTop + 0.05 then
-				return false
-			end
-			for _, pl in ipairs(L.pillars) do
-				if Vector2.new(u.X - pl.x, u.Z - pl.z).Magnitude < 0.22 then
-					return true
+			if y >= L.pillarY0 and y < L.pillarTop - 0.02 then
+				for _, pl in ipairs(L.pillars) do
+					if Vector2.new(u.X - pl.x, u.Z - pl.z).Magnitude < 0.22 then
+						em:SetPosition(v, toMesh(pl.x, L.pillarTop - 0.01, pl.z))
+						moved += 1
+						break
+					end
 				end
 			end
-			return false
 		end
-		local removed = 0
-		for _, f in ipairs(em:GetFaces()) do
-			local all = true
-			for _, v in ipairs(em:GetFaceVertices(f)) do
-				if not inPillar(em:GetPosition(v)) then
-					all = false
-					break
-				end
-			end
-			if all then
-				em:RemoveFace(f)
-				removed += 1
-			end
-		end
-		if removed > 0 then
+		if moved > 0 then
 			local mp = AssetService:CreateMeshPartAsync(Content.fromObject(em))
+			local tex = mm.TextureID
 			mm:ApplyMesh(mp)
+			mm.TextureID = tex -- ApplyMesh가 텍스처를 비움 (2026-11-27 확인: 기계가 하얗게 나왔음)
 		end
-		self.pillarsRemoved = removed
+		self.pillarsRemoved = moved
 	end)
 	if not ok then
 		warn("[MachineMake] pillars not removed:", err)
@@ -591,9 +592,8 @@ function Scene:presser()
 	if self.press then
 		return self.press
 	end
-	-- 복제 작업대의 누름판은 숨겨 놓았으니, 내 가게 손 작업대의 누름판(원래 투명도 그대로)을 복제
-	local ws = Workstations.mine()
-	local src = ws and ws:FindFirstChild("Presser")
+	-- 복제 작업대의 누름판은 숨겨 놓았으니, station()에서 원래 크기일 때 따로 복제해 둔 누름판을 씀
+	local src = self.presserSrc
 	if not src then
 		return nil
 	end
@@ -602,6 +602,8 @@ function Scene:presser()
 	for _, d in ipairs(p:GetDescendants()) do
 		if d:IsA("BasePart") then
 			d.LocalTransparencyModifier = 0
+			-- 손 작업대에서 붓기 때 숨긴 채(Transparency 1)일 수 있음 → 판정용 원판(Disc)만 투명, 나머지는 보이게
+			d.Transparency = d.Name == "Disc" and 1 or 0
 			d.CanQuery, d.CanCollide, d.CanTouch = false, false, false
 			d.Anchored = true
 		elseif d:IsA("ProximityPrompt") then
@@ -819,6 +821,9 @@ function Scene:shot(name)
 			t, d, p = self.at(Vector3.new(0, 3.9, -2.45)), 19, 12
 		elseif name == "sugar" or name == "sodaPillar" then
 			t, d, p = self.at(Vector3.new(1.1, 2.0, -1.4)), 15, 26
+		elseif name == "cup" then
+			-- 녹이기·소다: 열선 컵이 보라 판 아래 움푹한 곳이라 위에서는 가려짐 → 앞에서 비스듬히 들여다봄 (2026-11-27)
+			t, d, p = self.at(Vector3.new(self.L.cup.x, 1.35, self.L.cup.z)), 8, 34
 		elseif name == "pour" or name == "stick" or name == "press" then
 			t, d, p = self.plateCenter + self.dir(Vector3.new(0.6, 0, -0.4)), 12, 50
 		else
