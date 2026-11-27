@@ -25,7 +25,9 @@ os.makedirs(OUT, exist_ok=True)
 CID, LABEL = "Gomdol", "곰돌"
 HEIGHT = 3.8  # stud (다른 손님 3.0 ~ 4.1)
 TEX = 1024
-ARM_DROP = 58  # 옆으로 뻗은 팔을 어깨에서 내리는 각도 (도). 내려야 걷기·먹기(X축 회전)에서 팔이 앞뒤로 흔들림
+ARM_DROP = 40  # 옆으로 뻗은 팔을 어깨에서 내리는 각도 (도). 내려야 걷기·먹기(X축 회전)에서 팔이 앞뒤로 흔들림
+# 2026-11-28 사용자: 58°면 둥근 배 속으로 팔이 들어감 → 40°로 덜 내리고 어깨를 바깥으로 ARM_OUT(stud)만큼 빼서 A자처럼
+ARM_OUT = 0.22
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
 scene = bpy.context.scene
@@ -242,9 +244,11 @@ aL, bL = lohi(verts["ArmL"])
 aR, bR = lohi(verts["ArmR"])
 sx = max(aL.x - bc.x, bc.x - bR.x)
 for n, (a, b), side in (("ArmL", (aL, bL), 1), ("ArmR", (aR, bR), -1)):
-    joints[n] = Vector((bc.x + side * sx, (a.y + b.y) / 2, (a.z + b.z) / 2 + (b.z - a.z) * 0.25))
+    joints[n] = Vector((bc.x + side * (sx + ARM_OUT), (a.y + b.y) / 2, (a.z + b.z) / 2 + (b.z - a.z) * 0.25))
 
 for n, sub in objs.items():
+    if n in ("ArmL", "ArmR") and ARM_OUT:
+        bmesh.ops.translate(sub, verts=sub.verts, vec=Vector(((1 if n == "ArmL" else -1) * ARM_OUT, 0, 0)))
     if n in ("ArmL", "ArmR") and ARM_DROP:
         j = joints[n]
         R = Matrix.Rotation(math.radians(ARM_DROP if n == "ArmL" else -ARM_DROP), 4, "Y")
