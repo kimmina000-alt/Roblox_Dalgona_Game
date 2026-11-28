@@ -620,6 +620,16 @@ function PlotService.get(player)
 	return i and plots[i] or nil, i
 end
 
+-- 편집 화면 도구(tools/studio/edit_preview.lua)용: 플레이어 없이 i번 가게에 작업대를 게임과 같은 자리로 세워 봄
+-- (편집 화면의 작업대 틀 WorkstationLayout을 그 자리에 겹쳐 놓으려고). 게임 중에는 안 씀
+function PlotService.previewWorkstation(i)
+	if not plots[i] then
+		return nil
+	end
+	local ws = buildWorkstation(i, { UserId = 0, Name = "미리보기" })
+	return ws
+end
+
 -- 번호로 부지 { model, owner, cframe, signLabel }
 function PlotService.plotAt(i)
 	return plots[i]

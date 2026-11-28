@@ -678,7 +678,7 @@ local function stationerySpot(target)
 end
 
 -- 골목 양 끝, 길 양쪽에 꾸미기 가게. 기준 자리(앞선 z = CANON_Z, 앞 = -Z)에서 만든 뒤 제자리로 옮김
-local function endShops()
+local function endShops(realOnly)
 	local idx = 1
 	for _, sx in ipairs({ -1, 1 }) do
 		for _, side in ipairs({ "S", "N" }) do
@@ -696,7 +696,7 @@ local function endShops()
 				stationerySpot(templateTarget("AlleyStationery") or CFrame.new(sx * (x + sw / 2), 0, frontZ) * rot)
 				x += sw + 2
 			end
-			while true do
+			while not realOnly do
 				local def = SHOPS[((idx - 1) % #SHOPS) + 1]
 				if def[1] == "행복문방구" and stationerySource() then
 					idx += 1 -- 진짜 문구사가 있으면 같은 이름 꾸미기 가게는 건너뜀
@@ -1017,13 +1017,95 @@ function A.defaultFront(name)
 	return nil
 end
 
-function A.build()
-	local old = workspace:FindFirstChild("Alley")
+-- 전선 다시 잇기: folder 바로 아래 전봇대(UtilityPole)마다 꼭대기 고리를 달고, 같은 줄 이웃끼리 + 길 건너 같은 x끼리 처진 전선(Beam).
+-- 굳힌 골목에서 전봇대를 옮기거나 지워도 전선이 맞게 (2026-11-28)
+function A.rewire(root)
+	local old = root:FindFirstChild("Wires")
 	if old then
 		old:Destroy()
 	end
+	local wires = Instance.new("Model")
+	wires.Name = "Wires"
+	local rows = { S = {}, N = {} }
+	for _, m in ipairs(root:GetChildren()) do
+		if m:IsA("Model") and m.Name == "UtilityPole" then
+			local cf, size = m:GetBoundingBox()
+			local pos = Vector3.new(cf.X, cf.Y - size.Y / 2 + 20.6, cf.Z)
+			local anchor = part(wires, "WireAnchor", Vector3.new(0.2, 0.2, 0.2), CFrame.new(pos), C.metal, Enum.Material.Metal, { Transparency = 1, CanCollide = false, CanQuery = false })
+			local a1 = Instance.new("Attachment")
+			a1.Position = Vector3.new(-2.6, 0, 0)
+			a1.Parent = anchor
+			local a2 = Instance.new("Attachment")
+			a2.Position = Vector3.new(2.6, 0, 0)
+			a2.Parent = anchor
+			table.insert(rows[pos.Z < ROAD_ZC and "S" or "N"], { a1, a2, anchor, x = pos.X })
+		end
+	end
+	local function wire(a0, a1, parent, sag)
+		local b = Instance.new("Beam")
+		b.Attachment0 = a0
+		b.Attachment1 = a1
+		b.Width0, b.Width1 = 0.12, 0.12
+		b.Color = ColorSequence.new(Color3.fromRGB(50, 46, 46))
+		b.Segments = 12
+		b.CurveSize0 = -sag
+		b.CurveSize1 = sag
+		b.FaceCamera = true
+		b.Parent = parent
+	end
+	for _, row in pairs(rows) do
+		table.sort(row, function(a, b)
+			return a.x < b.x
+		end)
+		for i = 2, #row do
+			wire(row[i - 1][1], row[i][1], row[i - 1][3], 3)
+			wire(row[i - 1][2], row[i][2], row[i - 1][3], 3)
+		end
+	end
+	for _, s in ipairs(rows.S) do
+		for _, n in ipairs(rows.N) do
+			if math.abs(s.x - n.x) < 1 then
+				wire(s[2], n[1], s[3], 2)
+			end
+		end
+	end
+	wires.Parent = root
+end
+
+function A.build()
+	local old = workspace:FindFirstChild("Alley")
 	local sa = ServerStorage:FindFirstChild("Assets")
 	assets = sa and sa:FindFirstChild("Alley")
+	-- 굳힌 골목 (2026-11-28 사용자 "편집 모드에서 수정하면 게임에도 적용되도록"): 편집 화면의 Workspace.Alley에 속성 Baked = true면
+	-- 지우지 않고 그대로 씀 (바닥·전봇대·가로등·자전거·화분·꾸미기 가게 등 편집 화면에서 옮기거나 지운 그대로).
+	-- 다시 만드는 것은 기능이 있는 골목 슈퍼·문구사(편집 화면 틀 AlleyMarket·AlleyStationery에서)와 전선뿐.
+	-- 굳히기: tools/studio/edit_preview.lua
+	if old and old:GetAttribute("Baked") then
+		folder = old
+		for _, n in ipairs({ "AlleyMarket", "AlleyStationery" }) do
+			for _, c in ipairs(folder:GetChildren()) do
+				if c.Name == n then
+					c:Destroy()
+				end
+			end
+		end
+		for _, d in ipairs(folder:GetDescendants()) do
+			if d:IsA("BasePart") then
+				d.Locked = false
+			end
+		end
+		endShops(true)
+		A.rewire(folder)
+		local spawn = workspace:FindFirstChildOfClass("SpawnLocation")
+		if spawn then
+			spawn.CFrame = CFrame.new(-HALF + 16, 0.5, ROAD_ZC)
+		end
+		A.lighting()
+		return folder
+	end
+	if old then
+		old:Destroy()
+	end
 	folder = Instance.new("Folder")
 	folder.Name = "Alley"
 	collectKeepOut()

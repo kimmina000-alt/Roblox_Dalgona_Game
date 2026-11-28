@@ -662,6 +662,9 @@ local function sync(plot, fac)
 	task.spawn(syncStaff, plot, fac)
 end
 
+-- 편집 화면 도구(tools/studio/edit_preview.lua)가 1번 가게 공장 부지 자리를 알려고 씀
+Display.lotFrame = lotFrame
+
 function Display.init()
 	layout = factoryLayout()
 	if layout then
