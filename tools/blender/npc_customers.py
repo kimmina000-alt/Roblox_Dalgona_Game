@@ -37,7 +37,7 @@ CHARS = [
          cage=0.02, ray=0.08, normals=False),  # 치마 속 면이 가까워서 광선을 길게 하거나 면 방향을 다시 잡으면 안쪽을 맞힘
     # 고등어: NPC.blend는 예전에 칠한 NPC1.png를 쓰지만 얼룩져서, 줄무늬 털·러닝셔츠·초록 츄리닝이 깔끔한 Tripo 원본으로 구움
     dict(id="Godeungeo", label="고등어 아저씨", node="5dd62282", high="72074874-0075-400e-adbc-617e296774b7.glb", height=3.8, drop=55, out=0.12),
-    # 2026-11-28 원본 보고 정함: da9ebd85 = 노란 오리(병아리) → 퐁퐁이, 96fa4588 = 경찰 회색 고양이(꼬리 조각 .007은 몸) → 도토리 자리(임시, 이름은 사용자 확인)
+    # 2026-11-28 원본 보고 정함: da9ebd85 = 노란 오리(병아리) → 퐁퐁이, 96fa4588 = 경찰 회색 고양이(꼬리 조각 .007은 몸) → 도토리 (이름 그대로, 사용자 확인 2026-11-28)
     dict(id="Pongpong", label="퐁퐁이", node="da9ebd85", high="dcba157d-4bdb-4326-8837-096c61c8e4df.glb", height=3.3, drop=50, out=0.1,
          cage=0.06, ray=0.2),
     dict(id="Dotori", label="도토리", node="96fa4588", high="policeman cat 3d model.glb", merge=[".007"], height=3.7, drop=50, out=0.1),
