@@ -259,10 +259,26 @@ function Scene.new(stage, cavities, shape)
 		local h = b.top * S
 		local depth = (b.zBack - b.zFront) * S
 		local zc = (b.zBack + b.zFront) / 2 * S
-		for _, sx in ipairs({ 1, -1 }) do
-			part(m, "BodySide", Vector3.new(0.08, h, depth), CF(sx * (b.x * S - 0.04), h / 2, zc), C.red, Enum.Material.Metal)
+		-- 바깥면에 기계 아틀라스의 옆면 그림 칸(빨간 철판 + 은색 테두리, 1-3: x 512 · y 392 · 256칸)을 잘라 붙임 (2026-11-30 사용자 "옆면·외곽선 수정")
+		local atlas = self.machine and self.machine:IsA("MeshPart") and self.machine.TextureID or ""
+		local function skin(p, face, w, hh)
+			if atlas == "" then
+				return
+			end
+			local t = Instance.new("Texture")
+			t.Name = "SideSkin"
+			t.Texture = atlas
+			t.Face = face
+			t.StudsPerTileU, t.StudsPerTileV = w * 4, hh * 4
+			t.OffsetStudsU, t.OffsetStudsV = 512 / 1024 * w * 4, 392 / 1024 * hh * 4
+			t.Parent = p
 		end
-		part(m, "BodyBack", Vector3.new(b.x * 2 * S, h, 0.08), CF(0, h / 2, b.zBack * S - 0.04), C.red, Enum.Material.Metal)
+		for _, sx in ipairs({ 1, -1 }) do
+			local sp = part(m, "BodySide", Vector3.new(0.08, h, depth), CF(sx * (b.x * S - 0.04), h / 2, zc), C.red, Enum.Material.Metal)
+			skin(sp, sx > 0 and Enum.NormalId.Right or Enum.NormalId.Left, depth, h)
+		end
+		local bp = part(m, "BodyBack", Vector3.new(b.x * 2 * S, h, 0.08), CF(0, h / 2, b.zBack * S - 0.04), C.red, Enum.Material.Metal)
+		skin(bp, b.zBack > 0 and Enum.NormalId.Back or Enum.NormalId.Front, b.x * 2 * S, h)
 	end
 
 	self.coinList = {}

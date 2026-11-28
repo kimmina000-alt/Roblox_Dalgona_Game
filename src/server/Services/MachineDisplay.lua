@@ -531,10 +531,29 @@ end
 -- 부지에 넣기 전에 부름 (처음 한 프레임이 큰 채로 보이지 않게)
 local function popIn(m)
 	local full = m:GetScale() -- 4단계 설비는 이미 1.5배 (2026-11-28: 예전엔 1로 돌아가 버림)
+	-- ScaleTo가 Texture 반복 크기·위치도 줄였다가 제대로 되돌리지 않음 (2026-11-30: 2단계 옆면 그림이 잘게 반복됨) → 끝나면 원래 값으로
+	local tex = {}
+	for _, d in ipairs(m:GetDescendants()) do
+		if d:IsA("Texture") then
+			tex[d] = { d.StudsPerTileU, d.StudsPerTileV, d.OffsetStudsU, d.OffsetStudsV }
+		end
+	end
+	-- 값만 되돌리면 서버 값은 맞는데 클라이언트에는 줄어든 값이 남음 (속성 변경이 안 넘어감) → 새 Texture로 바꿔 끼움
+	local function restoreTex()
+		for d, v in pairs(tex) do
+			if d.Parent then
+				local c = d:Clone()
+				c.StudsPerTileU, c.StudsPerTileV, c.OffsetStudsU, c.OffsetStudsV = v[1], v[2], v[3], v[4]
+				c.Parent = d.Parent
+				d:Destroy()
+			end
+		end
+	end
 	local ok = pcall(function()
 		m:ScaleTo(0.05 * full)
 	end)
 	if not ok then
+		restoreTex()
 		return
 	end
 	m:SetAttribute("Popping", true)
@@ -551,6 +570,7 @@ local function popIn(m)
 		end
 		if m.Parent then
 			m:ScaleTo(full)
+			restoreTex()
 			m:SetAttribute("Popping", nil)
 		end
 	end)
