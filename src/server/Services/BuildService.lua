@@ -125,14 +125,26 @@ local function capture(i)
 end
 
 -- 물건 하나가 차지하는 부지 로컬 사각형 (x0, x1, z0, z1): 자리 e(격자) 또는 처음 자리
+-- 옮긴 자리 가운데 (부지 로컬 스터드)와 회전. 벽에 거는 물건(def.wall)은 벽을 따라 옆으로만: 깊이는 처음 그대로, 회전 없음
+-- (2026-11-28: 격자로 반올림한 깊이로 옮기면 포스터가 벽 속 0.2 안으로 들어가 안 보였음)
+local function placed(rec, e)
+	if rec.def.wall then
+		return e.x * CELL, rec.c0.Z, 0
+	end
+	return e.x * CELL, e.z * CELL, e.r or 0
+end
+
 local function rectOf(rec, e)
 	local cx, cz, hx, hz = rec.c0.X, rec.c0.Z, rec.half.X, rec.half.Z
 	if e then
-		cx, cz = e.x * CELL, e.z * CELL
-		if (e.r or 0) % 2 == 1 then
+		local r
+		cx, cz, r = placed(rec, e)
+		if r % 2 == 1 then
 			hx, hz = hz, hx
 		end
 	end
+	-- 아주 얇은 물건(포스터 두께 0)도 반 칸 두께로 (안 그러면 사각형이 비어 아무것과도 안 겹침, 2026-11-28)
+	hx, hz = math.max(hx, CELL / 4), math.max(hz, CELL / 4)
 	local pad = B.pad
 	return { cx - hx + pad, cx + hx - pad, cz - hz + pad, cz + hz - pad }
 end
@@ -273,6 +285,21 @@ local function josa(word, withBatchim, without)
 	return word .. (hasBatchim(word) and withBatchim or without)
 end
 
+-- 놓을 수 있는 범위 = G.Build.area + 물건들의 처음 자리 (2026-11-28: 새 가게 3D는 앞 방이 더 깊어서 냉장고·벽 선반·메뉴판·포스터의
+-- 처음 자리가 area 뒤 끝(z 15) 밖 → 벽을 따라 옮기기만 해도 "가게 밖으로 나가요"였음). 화면(get)도 같은 범위로 빨강/초록
+local function areaOf(info)
+	local A = { x0 = B.area.x0, x1 = B.area.x1, z0 = B.area.z0, z1 = B.area.z1 }
+	for _, rec in pairs(info.items) do
+		-- 처음 자리 그대로 + 격자에 맞춘 처음 자리 (격자로 반올림하면 최대 반 칸 밀림)
+		local snapped = { x = math.floor(rec.c0.X / CELL + 0.5), z = math.floor(rec.c0.Z / CELL + 0.5), r = 0 }
+		for _, d0 in ipairs({ rectOf(rec, nil), rectOf(rec, snapped) }) do
+			A.x0, A.x1 = math.min(A.x0, d0[1]), math.max(A.x1, d0[2])
+			A.z0, A.z1 = math.min(A.z0, d0[3]), math.max(A.z1, d0[4])
+		end
+	end
+	return A
+end
+
 -- 배치 layout이 괜찮나 (부지 i 기준). 반환: ok, 이유
 local REQUIRE_PATH = false -- 손님·알바가 지나갈 폭 4 길을 검사할지
 local function validate(i, layout)
@@ -282,17 +309,17 @@ local function validate(i, layout)
 	end
 	local rects, targets = {}, {}
 	local fixed = fixedRects(i)
+	local A = areaOf(info)
 	for key, rec in pairs(info.items) do
 		local e = layout[key]
 		local r = rectOf(rec, e)
 		if e then
-			local A = B.area
 			if r[1] < A.x0 or r[2] > A.x1 or r[3] < A.z0 or r[4] > A.z1 then
 				return false, itemName(key) .. ": 가게 밖으로 나가요"
 			end
 			for _, f in ipairs(rec.def.wall and {} or fixed) do -- 벽에 거는 물건은 바닥 고정물과 높이가 달라 안 겹침
 				if overlap(r, f) then
-					return false, itemName(key) .. ": 고정된 물건과 겹쳐요"
+					return false, itemName(key) .. (f.name == "Workstation" and ": 손 작업대와 겹쳐요" or f.name == "FactoryDoor" and ": 공장 문 앞을 막아요" or ": 고정된 물건과 겹쳐요")
 				end
 			end
 		end
@@ -338,7 +365,8 @@ local function apply(i, layout)
 		local e = layout[key]
 		local T = CFrame.new()
 		if e then
-			T = CFrame.new(e.x * CELL, 0, e.z * CELL) * CFrame.Angles(0, math.rad(90 * (e.r or 0)), 0) * CFrame.new(-rec.c0.X, 0, -rec.c0.Z)
+			local px, pz, pr = placed(rec, e)
+			T = CFrame.new(px, 0, pz) * CFrame.Angles(0, math.rad(90 * pr), 0) * CFrame.new(-rec.c0.X, 0, -rec.c0.Z)
 		end
 		for _, n in ipairs(rec.nodes) do
 			if n.inst.Parent then
@@ -406,7 +434,7 @@ local function action(player, what, key, x, z, r)
 				default = def0,
 			}
 		end
-		return { ok = true, layout = layout, items = items, area = B.area, cell = CELL }
+		return { ok = true, layout = layout, items = items, area = info and areaOf(info) or B.area, cell = CELL }
 	end
 	if not canBuild(d) then
 		return { ok = false, reason = "가게를 임대하면 꾸밀 수 있어요" }
