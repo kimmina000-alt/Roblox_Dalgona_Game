@@ -130,7 +130,9 @@ local function hook(p)
 	local item = p:GetAttribute("ItemId")
 	if item == "cutter" then
 		local entry = ShapeCatalog.get(p:GetAttribute("ShapeId") or "")
-		p:SetAttribute("ShelfLabel", entry and string.format("%s 모양틀 · %s", entry.name, cutterPrice(entry) and (cutterPrice(entry) .. "코인") or "도감 보상"))
+		local need = entry and G.UnlockLevel[entry.grade]
+		local what = cutterPrice(entry) and (cutterPrice(entry) .. "코인") or (need and string.format("Lv%d 기본", need)) or "도감 보상"
+		p:SetAttribute("ShelfLabel", entry and string.format("%s 모양틀 · %s", entry.name, what))
 	elseif ING[item] then
 		p:SetAttribute("ShelfLabel", string.format("%s %d개 · %d코인", ING[item].name, ING[item].pack, ING[item].price))
 	end
