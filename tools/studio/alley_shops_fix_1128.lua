@@ -165,3 +165,35 @@ do
 	print("[fix] 슈퍼 봉지", slot)
 end
 return "ok"
+
+-- 2026-11-28 추가 (사용자 "문구사 문 옆에 벽 투명해져서 안 보임"): 지붕·뒷벽 메시를 뺄 때 문 판 양옆 기둥 앞면도 같이 빠짐 → 기둥 파트.
+-- 게임이 쓰는 편집 화면 틀(Workspace.AlleyStationery)과 Assets 원본 둘 다. 아래를 따로 실행.
+--[[
+local function pillars(m)
+	local look = m.Mk_Look
+	local big, panels = nil, {}
+	for _, d in ipairs(look:GetChildren()) do
+		if d.Name == "Cube.052" and (not big or d.Size.Z > big.Size.Z) then big = d end
+		if d.Name == "Cube.050" or d.Name == "Cube.051" then table.insert(panels, d) end
+	end
+	for _, d in ipairs(look:GetChildren()) do
+		if d.Name == "St_FrontPillar" then d:Destroy() end
+	end
+	local cf = big.CFrame
+	for _, pn in ipairs(panels) do
+		local lp = cf:PointToObjectSpace(pn.Position)
+		local side = lp.X > 0 and 1 or -1
+		local inner, outer = lp.X + side * pn.Size.X / 2, side * big.Size.X / 2
+		local p = Instance.new("Part")
+		p.Name = "St_FrontPillar"
+		p.Anchored, p.CanCollide, p.CanQuery = true, false, false
+		p.Material, p.Color = Enum.Material.Concrete, Color3.fromRGB(232, 232, 228)
+		p.Size = Vector3.new(math.abs(outer - inner), big.Size.Y, 0.3)
+		p.CFrame = cf * CFrame.new((outer + inner) / 2, 0, lp.Z - pn.Size.Z / 2 - 0.1)
+		p.Parent = look
+	end
+end
+pillars(workspace.AlleyStationery)
+pillars(game.ServerStorage.Assets.AlleyStationery)
+-- 예전에 가져와 Workspace에 남은 Scene·Rig(고정 안 됨 → Play에서 길에 떨어짐)는 ServerStorage.Backup_1127.ImportedScenes로 옮김
+]]
