@@ -557,6 +557,25 @@ function Scene:station()
 	-- 칸 반죽 3D 메시를 미리 만들어 둠 (붓기 첫 칸에서 메시를 만드느라 멈칫해 첫 칸이 덜 차던 것, 손 작업대 Pour와 같은 방법)
 	BatterMesh.prewarm(self.model, Color3.fromRGB(206, 152, 96))
 	self.S_ = S
+	-- 3단계는 위에서 내려다봐서 젓는 동안 세운 젓가락 윗끝이 카메라 바로 앞으로 와 화면을 큰 나무 덩어리처럼 가림 (2026-11-30 확인):
+	-- 카메라에서 2.5 이내로 오면 내 화면에서만 반투명하게
+	if self.stage == 3 and S.Chopsticks then
+		local parts = {}
+		for _, d in ipairs(S.Chopsticks:GetDescendants()) do
+			if d:IsA("BasePart") then
+				table.insert(parts, d)
+			end
+		end
+		self.nearCamConn = game:GetService("RunService").RenderStepped:Connect(function()
+			local cam = workspace.CurrentCamera.CFrame.Position
+			for _, d in ipairs(parts) do
+				if d.Parent and d.LocalTransparencyModifier < 1 then
+					local dist = (d.Position - cam).Magnitude - d.Size.Magnitude / 2
+					d.LocalTransparencyModifier = math.clamp((2.5 - dist) / 1.5, 0, 0.6)
+				end
+			end
+		end)
+	end
 	return S
 end
 
@@ -1174,6 +1193,10 @@ function Scene:shot(name)
 end
 
 function Scene:destroy()
+	if self.nearCamConn then
+		self.nearCamConn:Disconnect()
+		self.nearCamConn = nil
+	end
 	if self.bm then
 		pcall(function()
 			self.bm:destroy()

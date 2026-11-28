@@ -132,6 +132,19 @@ local function newOrder(player, d)
 		t = G.Customers.types[math.random(3)] -- 아이 셋 중
 	end
 	local shape = pickShape(d, t.kind, t.id)
+	-- Studio 시험 전용: 플레이어 속성 TestOrderFromStock이면 보관함에 있는(등급이 맞는) 모양으로 주문 ([팔기]까지 시험)
+	if game:GetService("RunService"):IsStudio() and player:GetAttribute("TestOrderFromStock") then
+		if O.orders[t.kind].pack ~= false then
+			t = G.Customers.types[1] -- 포장 없는 아이 손님
+		end
+		local minQ = O.orders[t.kind].minQ
+		for _, it in ipairs(d.stock or {}) do
+			if (G.GradeRank[it.g] or 0) >= (G.GradeRank[minQ] or 0) then
+				shape = it.s
+				break
+			end
+		end
+	end
 	if not shape then
 		t = G.Customers.types[math.random(3)]
 		shape = pickShape(d, t.kind, t.id)
@@ -310,6 +323,10 @@ local function step(player)
 		end
 		local ready = #matchList(d, o)
 		local cashier = G.helperAt(d, "cashier")
+		-- Studio 시험 전용: 플레이어 속성 TestNoCashier면 계산 알바가 없는 것처럼 ([팔기] 길 시험, 저장 데이터는 안 바뀜)
+		if cashier and game:GetService("RunService"):IsStudio() and player:GetAttribute("TestNoCashier") then
+			cashier = nil
+		end
 		-- 계산 알바(D43)가 있으면 맞는 게 생기는 순간 자동으로 건넴 (D59 Q1 ②: 지금 그대로)
 		if cashier and ready > 0 then
 			give(player, nil, true)
