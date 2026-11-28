@@ -29,18 +29,19 @@ TEX = 1024
 
 # node = NPC.glb 조각 이름의 Tripo 노드 id 앞부분, high = 색 원본, image = 색 그림을 사용자 그림으로 바꿀 때
 # merge = 몸에 합칠 조각 이름 끝(꼬리 등), drop/out = 팔 내리는 각도·어깨 바깥으로 빼는 거리(stud), dark = 굽기 빈 곳 판정 밝기
+# 팔: 2026-11-28 사용자 "캐릭터들 팔 확인" → 50~55°로 내리면 둥근 몸통 옆에 붙어 가려짐. 곰돌(꿀단지)처럼 40° · 어깨 0.22 바깥으로
 CHARS = [
     # 부엉이: 사용자가 조각 UV에 직접 칠한 그림(npc/부엉이.png, NPC.glb에 들어 있음)을 그대로 구움. UV 없는 날개 두 장은 머리 뒤 색
     dict(id="Owl", label="부엉이", node="e13fd375", high="@self", flat=["ArmL", "ArmR"], height=3.8, drop=0, out=0.0),
-    dict(id="Ppogeuli", label="뽀글이", node="6ead940e", high="624a2904-7790-493a-aba6-d2f3bde6f51f.glb", height=3.7, drop=50, out=0.12),
-    dict(id="Mochi", label="설기", node="5552b582", high="2a470809-7a60-42fa-9b60-2a0058a0764f.glb", height=4.0, drop=50, out=0.1,
+    dict(id="Ppogeuli", label="뽀글이", node="6ead940e", high="624a2904-7790-493a-aba6-d2f3bde6f51f.glb", height=3.7, drop=40, out=0.22),
+    dict(id="Mochi", label="설기", node="5552b582", high="2a470809-7a60-42fa-9b60-2a0058a0764f.glb", height=4.0, drop=40, out=0.22,
          cage=0.02, ray=0.08, normals=False),  # 치마 속 면이 가까워서 광선을 길게 하거나 면 방향을 다시 잡으면 안쪽을 맞힘
     # 고등어: NPC.blend는 예전에 칠한 NPC1.png를 쓰지만 얼룩져서, 줄무늬 털·러닝셔츠·초록 츄리닝이 깔끔한 Tripo 원본으로 구움
-    dict(id="Godeungeo", label="고등어 아저씨", node="5dd62282", high="72074874-0075-400e-adbc-617e296774b7.glb", height=3.8, drop=55, out=0.12),
+    dict(id="Godeungeo", label="고등어 아저씨", node="5dd62282", high="72074874-0075-400e-adbc-617e296774b7.glb", height=3.8, drop=40, out=0.22),
     # 2026-11-28 원본 보고 정함: da9ebd85 = 노란 오리(병아리) → 퐁퐁이, 96fa4588 = 경찰 회색 고양이(꼬리 조각 .007은 몸) → 도토리 (이름 그대로, 사용자 확인 2026-11-28)
-    dict(id="Pongpong", label="퐁퐁이", node="da9ebd85", high="dcba157d-4bdb-4326-8837-096c61c8e4df.glb", height=3.3, drop=50, out=0.1,
+    dict(id="Pongpong", label="퐁퐁이", node="da9ebd85", high="dcba157d-4bdb-4326-8837-096c61c8e4df.glb", height=3.3, drop=40, out=0.22,
          cage=0.06, ray=0.2),
-    dict(id="Dotori", label="도토리", node="96fa4588", high="policeman cat 3d model.glb", merge=[".007"], height=3.7, drop=50, out=0.1),
+    dict(id="Dotori", label="도토리", node="96fa4588", high="policeman cat 3d model.glb", merge=[".007"], height=3.7, drop=40, out=0.22),
 ]
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
