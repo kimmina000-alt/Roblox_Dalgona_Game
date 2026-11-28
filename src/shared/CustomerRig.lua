@@ -12,7 +12,7 @@ return {
 		Ppogeuli = { -- tools/blender/npc_customers.py (레퍼런스/NPC.glb, 2026-11-28)
 			label = "뽀글이",
 			height = 3.700,
-			mouth = Vector3.new(-0.000, 2.252, -0.885),
+			mouth = Vector3.new(-0.000, 2.389, -0.885),
 			hand = Vector3.new(1.329, 0.922, 0.229),
 			parts = {
 				Head = { center = Vector3.new(-0.007, 2.702, -0.052), size = Vector3.new(2.125, 1.997, 1.585), joint = Vector3.new(-0.000, 2.036, 0.000) },
@@ -23,10 +23,24 @@ return {
 				LegR = { center = Vector3.new(0.323, 0.433, 0.028), size = Vector3.new(0.529, 0.866, 0.680), joint = Vector3.new(0.316, 0.762, 0.031) },
 			},
 		},
+		Kkuldanji = { -- 곰돌 모델 = 꿀단지 (2026-11-28 사용자). tools/blender/gomdol.py (레퍼런스/npc/곰돌.glb)
+			label = "꿀단지",
+			height = 3.800,
+			mouth = Vector3.new(-0.000, 2.296, -0.972),
+			hand = Vector3.new(1.197, 0.985, -0.088),
+			parts = {
+				Head = { center = Vector3.new(-0.000, 2.763, -0.152), size = Vector3.new(1.941, 2.075, 1.540), joint = Vector3.new(-0.000, 1.891, 0.000) },
+				Body = { center = Vector3.new(-0.003, 1.210, 0.000), size = Vector3.new(1.357, 1.319, 1.390), joint = Vector3.new(-0.000, 0.807, 0.000) },
+				ArmL = { center = Vector3.new(-0.842, 1.327, -0.122), size = Vector3.new(0.780, 0.719, 0.581), joint = Vector3.new(-0.543, 1.696, -0.122) },
+				ArmR = { center = Vector3.new(0.766, 1.371, -0.023), size = Vector3.new(0.914, 0.859, 0.484), joint = Vector3.new(0.537, 1.690, -0.023) },
+				LegL = { center = Vector3.new(-0.352, 0.485, -0.026), size = Vector3.new(0.492, 0.928, 0.618), joint = Vector3.new(-0.441, 0.838, -0.014) },
+				LegR = { center = Vector3.new(0.298, 0.472, 0.000), size = Vector3.new(0.601, 0.944, 0.679), joint = Vector3.new(0.339, 0.831, -0.035) },
+			},
+		},
 		Mochi = { -- tools/blender/npc_customers.py (레퍼런스/NPC.glb, 2026-11-28)
 			label = "설기",
 			height = 4.000,
-			mouth = Vector3.new(-0.000, 2.287, -0.808),
+			mouth = Vector3.new(-0.000, 2.415, -0.808),
 			hand = Vector3.new(1.161, 0.844, 0.019),
 			parts = {
 				Head = { center = Vector3.new(-0.005, 2.819, 0.014), size = Vector3.new(1.607, 2.362, 1.544), joint = Vector3.new(-0.000, 1.988, 0.000) },
@@ -40,7 +54,7 @@ return {
 		Godeungeo = { -- tools/blender/npc_customers.py (레퍼런스/NPC.glb, 2026-11-28)
 			label = "고등어 아저씨",
 			height = 3.800,
-			mouth = Vector3.new(-0.000, 2.525, -0.907),
+			mouth = Vector3.new(-0.000, 2.652, -0.869),
 			hand = Vector3.new(1.265, 1.230, 0.170),
 			parts = {
 				Head = { center = Vector3.new(-0.000, 2.921, -0.107), size = Vector3.new(1.793, 1.758, 1.500), joint = Vector3.new(-0.000, 2.343, 0.000) },
@@ -54,7 +68,7 @@ return {
 		Dotori = { -- tools/blender/npc_customers.py (레퍼런스/NPC.glb, 2026-11-28)
 			label = "도토리",
 			height = 3.700,
-			mouth = Vector3.new(-0.000, 2.233, -0.903),
+			mouth = Vector3.new(-0.000, 2.360, -0.903),
 			hand = Vector3.new(1.067, 1.089, -0.032),
 			parts = {
 				Head = { center = Vector3.new(-0.000, 2.688, -0.223), size = Vector3.new(1.435, 2.024, 1.486), joint = Vector3.new(-0.000, 2.000, 0.000) },
@@ -68,7 +82,7 @@ return {
 		Owl = { -- tools/blender/npc_customers.py (레퍼런스/NPC.glb, 2026-11-28)
 			label = "부엉이",
 			height = 3.800,
-			mouth = Vector3.new(-0.000, 2.161, -0.862),
+			mouth = Vector3.new(-0.000, 2.437, -0.862),
 			hand = Vector3.new(1.424, 1.449, -0.604),
 			parts = {
 				Head = { center = Vector3.new(0.030, 2.670, -0.001), size = Vector3.new(1.709, 2.261, 1.623), joint = Vector3.new(-0.000, 2.070, 0.000) },
@@ -82,7 +96,7 @@ return {
 		Pongpong = { -- tools/blender/npc_customers.py (레퍼런스/NPC.glb, 2026-11-28)
 			label = "퐁퐁이",
 			height = 3.300,
-			mouth = Vector3.new(-0.000, 1.870, -0.826),
+			mouth = Vector3.new(-0.000, 2.098, -0.851),
 			hand = Vector3.new(1.055, 0.794, -0.286),
 			parts = {
 				Head = { center = Vector3.new(-0.000, 2.314, 0.094), size = Vector3.new(1.878, 1.973, 1.954), joint = Vector3.new(-0.000, 1.775, 0.000) },
@@ -91,20 +105,6 @@ return {
 				ArmR = { center = Vector3.new(0.671, 1.202, -0.075), size = Vector3.new(0.820, 0.882, 0.654), joint = Vector3.new(0.424, 1.476, -0.075) },
 				LegL = { center = Vector3.new(-0.291, 0.369, 0.000), size = Vector3.new(0.274, 0.738, 0.430), joint = Vector3.new(-0.252, 0.649, 0.112) },
 				LegR = { center = Vector3.new(0.291, 0.361, 0.000), size = Vector3.new(0.274, 0.722, 0.430), joint = Vector3.new(0.252, 0.635, 0.112) },
-			},
-		},
-		Kkuldanji = { -- tools/blender/gomdol.py (레퍼런스/npc/곰돌.glb, 2026-11-27)
-			label = "꿀단지",
-			height = 3.800,
-			mouth = Vector3.new(-0.000, 2.144, -0.972),
-			hand = Vector3.new(1.197, 0.985, -0.088),
-			parts = {
-				Head = { center = Vector3.new(-0.000, 2.658, -0.152), size = Vector3.new(1.941, 2.285, 1.540), joint = Vector3.new(-0.000, 1.891, 0.000) },
-				Body = { center = Vector3.new(-0.002, 1.210, 0.000), size = Vector3.new(1.445, 1.319, 1.390), joint = Vector3.new(-0.000, 0.807, 0.000) },
-				ArmL = { center = Vector3.new(-0.842, 1.371, -0.122), size = Vector3.new(0.780, 0.808, 0.581), joint = Vector3.new(-0.543, 1.696, -0.122) },
-				ArmR = { center = Vector3.new(0.766, 1.377, -0.023), size = Vector3.new(0.914, 0.871, 0.484), joint = Vector3.new(0.537, 1.690, -0.023) },
-				LegL = { center = Vector3.new(-0.352, 0.485, -0.026), size = Vector3.new(0.492, 0.928, 0.618), joint = Vector3.new(-0.441, 0.838, -0.014) },
-				LegR = { center = Vector3.new(0.298, 0.472, 0.000), size = Vector3.new(0.601, 0.944, 0.679), joint = Vector3.new(0.339, 0.831, -0.035) },
 			},
 		},
 	},
