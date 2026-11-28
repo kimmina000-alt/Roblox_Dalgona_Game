@@ -214,6 +214,8 @@ for n, sub in objs.items():
         j = joints[n]
         R = Matrix.Rotation(math.radians(ARM_DROP if n == "ArmL" else -ARM_DROP), 4, "Y")
         bmesh.ops.transform(sub, matrix=Matrix.Translation(j) @ R @ Matrix.Translation(-j), verts=sub.verts)
+    if n == "Body":  # 어깨 채우기 (직각으로 깎인 어깨)
+        npc_bake.add_shoulders(sub, {"ArmL": joints["ArmL"], "ArmR": joints["ArmR"]}, {"ArmL": verts["ArmL"], "ArmR": verts["ArmR"]})
     if n in npc_bake.CAPS:  # 관절 이음새 (팔·목)
         npc_bake.add_cap(sub, n, joints[n], verts["Body"] if n == "Head" else None)
     a, b = lohi([v.co for v in sub.verts])
@@ -282,7 +284,7 @@ root.select_set(True)
 for o in objs.values():
     o.select_set(True)
 bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "dalgona_gomdol.glb"), export_format="GLB", use_selection=True,
-                          export_image_format="JPEG", export_jpeg_quality=90)
+                          export_image_format="AUTO")  # PNG (JPEG는 Roblox에서 한 번 더 눌려 얼룩져 보임, 2026-11-28)
 
 # 미리 보기: 서 있기 · 걷기 · 먹기 (관절 점 기준 회전이 리그와 같은지 확인)
 world = bpy.data.worlds.new("W")

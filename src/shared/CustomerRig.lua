@@ -16,7 +16,7 @@ return {
 			hand = Vector3.new(1.329, 0.922, 0.229),
 			parts = {
 				Head = { center = Vector3.new(-0.007, 2.702, -0.052), size = Vector3.new(2.125, 1.997, 1.585), joint = Vector3.new(-0.000, 2.036, 0.000) },
-				Body = { center = Vector3.new(-0.014, 1.266, -0.035), size = Vector3.new(1.382, 1.592, 1.340), joint = Vector3.new(-0.000, 0.736, 0.000) },
+				Body = { center = Vector3.new(-0.014, 1.286, -0.035), size = Vector3.new(1.382, 1.633, 1.340), joint = Vector3.new(-0.000, 0.736, 0.000) },
 				ArmL = { center = Vector3.new(-0.821, 1.448, -0.137), size = Vector3.new(1.125, 1.163, 0.695), joint = Vector3.new(-0.443, 1.841, -0.137) },
 				ArmR = { center = Vector3.new(0.771, 1.492, 0.115), size = Vector3.new(1.171, 1.190, 0.653), joint = Vector3.new(0.415, 1.881, 0.115) },
 				LegL = { center = Vector3.new(-0.306, 0.423, -0.054), size = Vector3.new(0.564, 0.814, 0.628), joint = Vector3.new(-0.295, 0.732, -0.032) },
@@ -100,7 +100,7 @@ return {
 			hand = Vector3.new(1.197, 0.985, -0.088),
 			parts = {
 				Head = { center = Vector3.new(-0.000, 2.658, -0.152), size = Vector3.new(1.941, 2.285, 1.540), joint = Vector3.new(-0.000, 1.891, 0.000) },
-				Body = { center = Vector3.new(-0.003, 1.210, 0.000), size = Vector3.new(1.357, 1.319, 1.390), joint = Vector3.new(-0.000, 0.807, 0.000) },
+				Body = { center = Vector3.new(-0.002, 1.210, 0.000), size = Vector3.new(1.445, 1.319, 1.390), joint = Vector3.new(-0.000, 0.807, 0.000) },
 				ArmL = { center = Vector3.new(-0.842, 1.371, -0.122), size = Vector3.new(0.780, 0.808, 0.581), joint = Vector3.new(-0.543, 1.696, -0.122) },
 				ArmR = { center = Vector3.new(0.766, 1.377, -0.023), size = Vector3.new(0.914, 0.871, 0.484), joint = Vector3.new(0.537, 1.690, -0.023) },
 				LegL = { center = Vector3.new(-0.352, 0.485, -0.026), size = Vector3.new(0.492, 0.928, 0.618), joint = Vector3.new(-0.441, 0.838, -0.014) },

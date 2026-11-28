@@ -441,3 +441,57 @@ def cycles_bake(scene, high, low, img, cage, ray):
     px = np.empty(W * H * 4, np.float32)
     img.pixels.foreach_get(px)
     return px.reshape(H, W, 4)[:, :, :3].copy()
+
+
+def add_shoulders(body, joints, arms):
+    """몸통 어깨 채우기 (2026-11-28 사용자: 어깨가 직각으로 깎인 것처럼 보임 → 목에서 팔로 둥글게 내려오게).
+    팔을 내리고 바깥으로 뺀 뒤 몸통의 팔 붙던 자리가 세로로 잘린 면으로 남아서, 어깨 관절 쪽에 몸통 색 타원 덩어리를 붙여 경사를 만듦.
+    body = 몸통 bmesh, joints = {"ArmL": Vector, "ArmR": Vector}, arms = {"ArmL": [점], "ArmR": [점]} (팔 크기 재기용)"""
+    uvl = body.loops.layers.uv.active
+    pts, uvs = [], []
+    for f in body.faces:
+        for l in f.loops:
+            pts.append(l.vert.co.copy())
+            uvs.append(l[uvl].uv.copy())
+    if not pts:
+        return
+    top = max(p.z for p in pts)
+    cx = (max(p.x for p in pts) + min(p.x for p in pts)) / 2
+    for name, side in (("ArmL", 1), ("ArmR", -1)):
+        j = joints.get(name)
+        if j is None:
+            continue
+        near = sorted(arms[name], key=lambda p: (p - j).length)[: max(12, len(arms[name]) // 8)]
+        r = max(0.1, sum((p - j).length for p in near) / len(near))
+        # 몸통 쪽 깊이(앞뒤)는 몸통 그 높이 두께의 70%
+        # 어깨 높이·관절 앞뒤 근처 점만 (도토리처럼 꼬리가 몸통에 합쳐진 경우 꼬리를 재지 않게)
+        ring = [p for p in pts if abs(p.z - j.z) < r and (p.x - cx) * side > 0 and abs(p.y - j.y) < r * 2.5]
+        depth = (max(p.y for p in ring) - min(p.y for p in ring)) if ring else r * 2
+        rx = abs(j.x - cx) * 0.55 + r * 0.6
+        ry = max(r * 0.9, depth * 0.36)
+        rz = min(r * 1.1, max(0.12, top - j.z + r * 0.3))
+        center = Vector((j.x - side * rx * 0.55, sum(p.y for p in ring) / len(ring) if ring else j.y, j.z - rz * 0.15))
+        # 색은 어깨 아래 몸통 옆면에서만 (깃·가장자리 줄무늬를 안 집게)
+        pick_ix = [i for i, p in enumerate(pts) if p.z < center.z - rz * 0.3 and p.z > center.z - rz * 2.5 and (p.x - cx) * side > 0 and abs(p.y - center.y) < ry * 1.2]
+        if not pick_ix:
+            pick_ix = list(range(len(pts)))
+        pick = [pts[i] for i in pick_ix]
+        bm2 = bmesh.new()
+        bmesh.ops.create_uvsphere(bm2, u_segments=16, v_segments=10, radius=1.0)
+        newv = {}
+        for v in bm2.verts:
+            newv[v] = body.verts.new(center + Vector((v.co.x * rx, v.co.y * ry, v.co.z * rz)))
+        for f in bm2.faces:
+            try:
+                nf = body.faces.new([newv[v] for v in f.verts])
+            except ValueError:
+                continue
+            nf.smooth = True
+            for l in nf.loops:
+                q = l.vert.co
+                # 색 = 몸통에서 가장 가까운 점, 단 어깨 덩어리 바깥쪽 끝(팔 쪽)이 팔 붙던 단면 색을 집지 않게 안쪽으로 당겨서 찾음
+                q2 = Vector((q.x + (cx - q.x) * 0.3, q.y, min(q.z, center.z - rz * 0.6)))
+                k = min(range(len(pick)), key=lambda i: (pick[i] - q2).length_squared)
+                k = pick_ix[k]
+                l[uvl].uv = uvs[k]
+        bm2.free()

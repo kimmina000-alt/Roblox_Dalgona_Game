@@ -35,7 +35,7 @@ TEX = 1024
 # 팔: 2026-11-28 사용자 "캐릭터들 팔 확인" → 50~55°로 내리면 둥근 몸통 옆에 붙어 가려짐. 곰돌(꿀단지)처럼 40° · 어깨 0.22 바깥으로
 CHARS = [
     # 부엉이: 사용자가 조각 UV에 직접 칠한 그림(npc/부엉이.png, NPC.glb에 들어 있음)을 그대로 구움. UV 없는 날개 두 장은 머리 뒤 색
-    dict(id="Owl", label="부엉이", node="e13fd375", high="@self", flat=["ArmL", "ArmR"], height=3.8, drop=0, out=0.0),
+    dict(id="Owl", label="부엉이", node="e13fd375", high="@self", flat=["ArmL", "ArmR"], height=3.8, drop=0, out=0.0, shoulders=False),  # 날개를 안 내려서 어깨 채우기 없음
     # 뽀글이: 곱슬 털 결이 디자인이라 흐림 1번만, 묻힌 자리 메우기는 털 결 없는 판이 생겨 끔 (2026-11-28)
     dict(id="Ppogeuli", label="뽀글이", node="6ead940e", high="624a2904-7790-493a-aba6-d2f3bde6f51f.glb", height=3.7, drop=40, out=0.22,
          clean=(12, 0.45, 1), bury=False, erase=[(0.577, 0.112, 0.014)]),  # erase = 머리 옆 빨간 점 (원본 얼룩, 사용자 표시 2026-11-28)
@@ -339,6 +339,8 @@ def build(cfg):
             j = joints[n]
             R = Matrix.Rotation(math.radians(drop if n == "ArmL" else -drop), 4, "Y")
             bmesh.ops.transform(sub, matrix=Matrix.Translation(j) @ R @ Matrix.Translation(-j), verts=sub.verts)
+        if n == "Body" and cfg.get("shoulders", True):
+            npc_bake.add_shoulders(sub, {"ArmL": joints["ArmL"], "ArmR": joints["ArmR"]}, {"ArmL": verts["ArmL"], "ArmR": verts["ArmR"]})
         if n in CAPS and cfg.get("caps", True):
             add_cap(sub, n, joints[n], subs_rest.get(n))
         a, b = lohi([v.co for v in sub.verts])
@@ -407,7 +409,7 @@ for r in results:
     for o in r["objs"].values():
         o.select_set(True)
 bpy.ops.export_scene.gltf(filepath=os.path.join(OUT, "dalgona_customers_npc.glb"), export_format="GLB", use_selection=True,
-                          export_image_format="JPEG", export_jpeg_quality=90)
+                          export_image_format="AUTO")  # PNG (JPEG는 Roblox에서 한 번 더 눌려 얼룩져 보임, 2026-11-28)
 
 # 미리 보기: 손님마다 서기 · 걷기 · 먹기
 world = bpy.data.worlds.new("W")
