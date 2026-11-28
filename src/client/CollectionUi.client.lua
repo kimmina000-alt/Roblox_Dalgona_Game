@@ -39,9 +39,8 @@ local CUSTOMER_LOOK = {
 	Kkuldanji = { icon = "🐻", color = Color3.fromRGB(240, 196, 90), kind = "단골" },
 	Ppogeuli = { icon = "🐩", color = Color3.fromRGB(196, 150, 120), kind = "멋쟁이 관광객" },
 	Owl = { icon = "🦉", color = Color3.fromRGB(180, 150, 220), kind = "귀한 손님" },
-	Gomdol = { icon = "🧸", color = Color3.fromRGB(255, 200, 110), kind = "단골" }, -- 2026-11-27 사용자 곰돌 (레퍼런스/npc/곰돌.glb)
 }
-local CUSTOMER_ORDER = { "Pongpong", "Mochi", "Dotori", "Godeungeo", "Kkuldanji", "Gomdol", "Ppogeuli", "Owl" }
+local CUSTOMER_ORDER = { "Pongpong", "Mochi", "Dotori", "Godeungeo", "Kkuldanji", "Ppogeuli", "Owl" }
 local HEART_AT = (G.Collection and G.Collection.hearts) or { 10, 50, 150 } -- D38 하트 1·2·3 (서버 GrowthConfig.Collection과 같게)
 
 -- 손님 이름: 서버와 같은 GrowthConfig.Customers.types[].name (없으면 CustomerRig label)

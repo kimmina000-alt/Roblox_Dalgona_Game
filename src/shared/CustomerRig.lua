@@ -7,7 +7,7 @@
 -- mouth = 입 앞 (먹기 연출), hand = 오른손(ArmR 끝) 가운데, height = 키.
 
 return {
-	order = { "Ppogeuli", "Kkuldanji", "Mochi", "Godeungeo", "Dotori", "Owl", "Pongpong", "Gomdol" },
+	order = { "Ppogeuli", "Kkuldanji", "Mochi", "Godeungeo", "Dotori", "Owl", "Pongpong" },
 	types = {
 		Ppogeuli = { -- tools/blender/npc_customers.py (레퍼런스/NPC.glb, 2026-11-28)
 			label = "뽀글이",
@@ -23,18 +23,18 @@ return {
 				LegR = { center = Vector3.new(0.323, 0.433, 0.028), size = Vector3.new(0.529, 0.866, 0.680), joint = Vector3.new(0.316, 0.762, 0.031) },
 			},
 		},
-		Kkuldanji = {
+		Kkuldanji = { -- 곰돌 모델 = 꿀단지 (2026-11-28 사용자). tools/blender/gomdol.py (레퍼런스/npc/곰돌.glb)
 			label = "꿀단지",
-			height = 3.074,
-			mouth = Vector3.new(-0.000, 1.964, -0.650),
-			hand = Vector3.new(0.691, 0.900, -0.020),
+			height = 3.800,
+			mouth = Vector3.new(-0.000, 2.296, -0.972),
+			hand = Vector3.new(1.197, 0.985, -0.088),
 			parts = {
-				Head = { center = Vector3.new(-0.000, 2.349, -0.160), size = Vector3.new(1.607, 1.450, 1.720), joint = Vector3.new(-0.000, 1.750, 0.000) },
-				Body = { center = Vector3.new(-0.000, 1.250, 0.120), size = Vector3.new(1.150, 1.000, 1.140), joint = Vector3.new(-0.000, 0.750, 0.000) },
-				ArmL = { center = Vector3.new(-0.691, 1.197, -0.020), size = Vector3.new(0.512, 1.077, 0.483), joint = Vector3.new(-0.691, 1.519, 0.000) },
-				ArmR = { center = Vector3.new(0.691, 1.197, -0.020), size = Vector3.new(0.512, 1.077, 0.483), joint = Vector3.new(0.691, 1.519, 0.000) },
-				LegL = { center = Vector3.new(-0.276, 0.405, -0.093), size = Vector3.new(0.507, 0.810, 0.673), joint = Vector3.new(-0.276, 0.750, 0.000) },
-				LegR = { center = Vector3.new(0.276, 0.405, -0.093), size = Vector3.new(0.507, 0.810, 0.673), joint = Vector3.new(0.276, 0.750, 0.000) },
+				Head = { center = Vector3.new(-0.000, 2.763, -0.152), size = Vector3.new(1.941, 2.075, 1.540), joint = Vector3.new(-0.000, 1.891, 0.000) },
+				Body = { center = Vector3.new(-0.003, 1.210, 0.000), size = Vector3.new(1.357, 1.319, 1.390), joint = Vector3.new(-0.000, 0.807, 0.000) },
+				ArmL = { center = Vector3.new(-0.842, 1.327, -0.122), size = Vector3.new(0.780, 0.719, 0.581), joint = Vector3.new(-0.543, 1.696, -0.122) },
+				ArmR = { center = Vector3.new(0.766, 1.371, -0.023), size = Vector3.new(0.914, 0.859, 0.484), joint = Vector3.new(0.537, 1.690, -0.023) },
+				LegL = { center = Vector3.new(-0.352, 0.485, -0.026), size = Vector3.new(0.492, 0.928, 0.618), joint = Vector3.new(-0.441, 0.838, -0.014) },
+				LegR = { center = Vector3.new(0.298, 0.472, 0.000), size = Vector3.new(0.601, 0.944, 0.679), joint = Vector3.new(0.339, 0.831, -0.035) },
 			},
 		},
 		Mochi = { -- tools/blender/npc_customers.py (레퍼런스/NPC.glb, 2026-11-28)
@@ -105,20 +105,6 @@ return {
 				ArmR = { center = Vector3.new(0.506, 1.046, -0.075), size = Vector3.new(0.684, 0.752, 0.654), joint = Vector3.new(0.304, 1.476, -0.075) },
 				LegL = { center = Vector3.new(-0.291, 0.369, 0.000), size = Vector3.new(0.274, 0.738, 0.430), joint = Vector3.new(-0.252, 0.649, 0.112) },
 				LegR = { center = Vector3.new(0.291, 0.361, 0.000), size = Vector3.new(0.274, 0.722, 0.430), joint = Vector3.new(0.252, 0.635, 0.112) },
-			},
-		},
-		Gomdol = { -- tools/blender/gomdol.py (레퍼런스/npc/곰돌.glb, 2026-11-27)
-			label = "곰돌",
-			height = 3.800,
-			mouth = Vector3.new(-0.000, 2.296, -0.972),
-			hand = Vector3.new(1.197, 0.985, -0.088),
-			parts = {
-				Head = { center = Vector3.new(-0.000, 2.763, -0.152), size = Vector3.new(1.941, 2.075, 1.540), joint = Vector3.new(-0.000, 1.891, 0.000) },
-				Body = { center = Vector3.new(-0.003, 1.210, 0.000), size = Vector3.new(1.357, 1.319, 1.390), joint = Vector3.new(-0.000, 0.807, 0.000) },
-				ArmL = { center = Vector3.new(-0.842, 1.327, -0.122), size = Vector3.new(0.780, 0.719, 0.581), joint = Vector3.new(-0.543, 1.696, -0.122) },
-				ArmR = { center = Vector3.new(0.766, 1.371, -0.023), size = Vector3.new(0.914, 0.859, 0.484), joint = Vector3.new(0.537, 1.690, -0.023) },
-				LegL = { center = Vector3.new(-0.352, 0.485, -0.026), size = Vector3.new(0.492, 0.928, 0.618), joint = Vector3.new(-0.441, 0.838, -0.014) },
-				LegR = { center = Vector3.new(0.298, 0.472, 0.000), size = Vector3.new(0.601, 0.944, 0.679), joint = Vector3.new(0.339, 0.831, -0.035) },
 			},
 		},
 	},

@@ -22,7 +22,7 @@ LOW, HIGH, OUT = (os.path.abspath(a) for a in argv[:3])
 REPO = os.path.abspath(argv[3]) if len(argv) > 3 else None
 os.makedirs(OUT, exist_ok=True)
 
-CID, LABEL = "Gomdol", "곰돌"
+CID, LABEL = "Kkuldanji", "꿀단지"  # 2026-11-28 사용자: 곰돌 = 꿀단지 (메시 이름 Kkuldanji_<부품>)
 HEIGHT = 3.8  # stud (다른 손님 3.0 ~ 4.1)
 TEX = 1024
 ARM_DROP = 40  # 옆으로 뻗은 팔을 어깨에서 내리는 각도 (도). 내려야 걷기·먹기(X축 회전)에서 팔이 앞뒤로 흔들림
