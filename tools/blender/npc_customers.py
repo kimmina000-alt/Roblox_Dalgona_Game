@@ -20,6 +20,9 @@ import bpy
 from mathutils import Matrix, Vector
 from mathutils.bvhtree import BVHTree
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import npc_bake  # noqa: E402
+
 argv = sys.argv[sys.argv.index("--") + 1:]
 REF, DL, OUT = (os.path.abspath(a) for a in argv[:3])
 REPO = os.path.abspath(argv[3]) if len(argv) > 3 and os.path.isdir(argv[3]) else None
@@ -33,14 +36,17 @@ TEX = 1024
 CHARS = [
     # 부엉이: 사용자가 조각 UV에 직접 칠한 그림(npc/부엉이.png, NPC.glb에 들어 있음)을 그대로 구움. UV 없는 날개 두 장은 머리 뒤 색
     dict(id="Owl", label="부엉이", node="e13fd375", high="@self", flat=["ArmL", "ArmR"], height=3.8, drop=0, out=0.0),
-    dict(id="Ppogeuli", label="뽀글이", node="6ead940e", high="624a2904-7790-493a-aba6-d2f3bde6f51f.glb", height=3.7, drop=40, out=0.22),
+    # 뽀글이: 곱슬 털 결이 디자인이라 흐림 1번만, 묻힌 자리 메우기는 털 결 없는 판이 생겨 끔 (2026-11-28)
+    dict(id="Ppogeuli", label="뽀글이", node="6ead940e", high="624a2904-7790-493a-aba6-d2f3bde6f51f.glb", height=3.7, drop=40, out=0.22,
+         clean=(12, 0.45, 1), bury=False, erase=[(0.577, 0.112, 0.014)]),  # erase = 머리 옆 빨간 점 (원본 얼룩, 사용자 표시 2026-11-28)
     dict(id="Mochi", label="설기", node="5552b582", high="2a470809-7a60-42fa-9b60-2a0058a0764f.glb", height=4.0, drop=40, out=0.22,
-         cage=0.02, ray=0.08, normals=False),  # 치마 속 면이 가까워서 광선을 길게 하거나 면 방향을 다시 잡으면 안쪽을 맞힘
+         cage=0.02, ray=0.08, normals=False, bury=False),  # 치마 속 면이 가까워서 광선을 길게 하거나 면 방향을 다시 잡으면 안쪽을 맞힘
     # 고등어: NPC.blend는 예전에 칠한 NPC1.png를 쓰지만 얼룩져서, 줄무늬 털·러닝셔츠·초록 츄리닝이 깔끔한 Tripo 원본으로 구움
     dict(id="Godeungeo", label="고등어 아저씨", node="5dd62282", high="72074874-0075-400e-adbc-617e296774b7.glb", height=3.8, drop=40, out=0.22),
     # 2026-11-28 원본 보고 정함: da9ebd85 = 노란 오리(병아리) → 퐁퐁이, 96fa4588 = 경찰 회색 고양이(꼬리 조각 .007은 몸) → 도토리 (이름 그대로, 사용자 확인 2026-11-28)
+    # bury=False: 날개가 가슴 앞에 붙어 있던 모델이라 "묻힌 자리 메우기"를 하면 셔츠 앞 단추가 지워짐 (2026-11-28)
     dict(id="Pongpong", label="퐁퐁이", node="da9ebd85", high="dcba157d-4bdb-4326-8837-096c61c8e4df.glb", height=3.3, drop=40, out=0.22,
-         cage=0.06, ray=0.2),
+         cage=0.06, ray=0.2, bury=False),
     dict(id="Dotori", label="도토리", node="96fa4588", high="policeman cat 3d model.glb", merge=[".007"], height=3.7, drop=40, out=0.22),
 ]
 
@@ -91,6 +97,9 @@ for o in npc_all:
 
 npc_names = [o.name for o in npc_all]
 results = []
+
+
+CAPS, add_cap = npc_bake.CAPS, npc_bake.add_cap
 
 
 def build(cfg):
@@ -219,7 +228,7 @@ def build(cfg):
     joined.data.uv_layers.new(name="UVMap")
     bpy.ops.object.mode_set(mode="EDIT")
     bpy.ops.mesh.select_all(action="SELECT")
-    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.01)
+    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.02)
     bpy.ops.object.mode_set(mode="OBJECT")
     img = bpy.data.images.new(cid + "_Color", TEX, TEX)
     mat = bpy.data.materials.new(cid)
@@ -232,18 +241,17 @@ def build(cfg):
     nt.nodes.active = tex
     joined.data.materials.clear()
     joined.data.materials.append(mat)
-    scene.render.engine = "CYCLES"
-    scene.cycles.samples = 4
-    scene.cycles.device = "CPU"
-    scene.render.bake.use_selected_to_active = True
-    scene.render.bake.cage_extrusion = cfg.get("cage", 0.06)
-    scene.render.bake.max_ray_distance = cfg.get("ray", 0.2)
-    scene.render.bake.margin = 6
-    bpy.ops.object.select_all(action="DESELECT")
-    high.select_set(True)
-    joined.select_set(True)
-    bpy.context.view_layer.objects.active = joined
-    bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"})
+    # 2026-11-28 작업 지시서(얼룩·번짐 제거): Cycles 광선 굽기 대신 npc_bake.transfer (면 방향 맞는 원본 표면 색만, 빈 곳은 같은 UV 섬 안에서 메움)
+    jlo, jhi = lohi(world_verts(joined))
+    base = npc_bake.cycles_bake(scene, high, joined, img, cfg.get("cage", 0.06), cfg.get("ray", 0.2))  # 얼굴은 예전 굽기 그대로
+    mpath = os.path.join(OUT, cid + "_mask.png")
+    got, miss = npc_bake.transfer(joined, high, img, jhi.z - jlo.z, margin=12, mask_path=mpath, part_attr="part", bury=cfg.get("bury", True),
+                                     off=cfg.get("cage", 0.06), ray=cfg.get("ray", 0.2), face_part=order.index("Head"), face_base=base)
+    print(f"[npc] {cid} 색 옮김 {got} 텍셀, 못 찾아 메움 {miss}")
+    # 원본 그림 자체의 얼룩(허옇게 번진 줄·반점) 정리. cfg clean = (K, 당김) 또는 False
+    ck = cfg.get("clean", (12, 0.6, 4))
+    if ck:
+        print(f"[npc] {cid} 얼룩 정리", npc_bake.clean(img, mpath, OUT, *ck, erase=cfg.get("erase", ())))
     img.filepath_raw = os.path.join(OUT, cid + "_color.png")
     img.file_format = "PNG"
     img.save()
@@ -264,44 +272,8 @@ def build(cfg):
     fz = min(v.co.z for v in src.verts)
     bmesh.ops.translate(src, verts=src.verts, vec=Vector((-fx, -fy, -fz)))
     uvl = src.loops.layers.uv.active
-    # 원본에서는 팔·다리 속이던 자리(어깨·엉덩이)는 굽기에서 새까맣게 나옴 → 머리 말고는 그런 면을 맞닿은 면의 색으로
-    px = list(img.pixels)
-
-    def lum(uv):
-        x = min(TEX - 1, max(0, int(uv.x * TEX)))
-        y = min(TEX - 1, max(0, int(uv.y * TEX)))
-        i = (y * TEX + x) * 4
-        return 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]
-
-    th = cfg.get("dark", 0.035)
+    # (예전 "까만 면 → 이웃 면 한 점 색으로 UV 모으기"는 줄무늬·번짐의 원인이라 뺌. npc_bake가 빈 곳을 섬 안에서 메움)
     head_ix = order.index("Head")
-    dark = set()
-    for f in src.faces:
-        if f[pl] == head_ix:
-            continue
-        c = sum((l[uvl].uv for l in f.loops), Vector((0, 0))) / len(f.loops)
-        if lum(c) < th or min(lum(l[uvl].uv.lerp(c, 0.3)) for l in f.loops) < th:
-            dark.add(f)
-    while dark:
-        fixed = []
-        for f in dark:
-            done = False
-            for e in f.edges:
-                for g in e.link_faces:
-                    if g is not f and g not in dark and g[pl] == f[pl]:
-                        uv = g.loops[0][uvl].uv.copy()
-                        for l in f.loops:
-                            l[uvl].uv = uv
-                        fixed.append(f)
-                        done = True
-                        break
-                if done:
-                    break
-        if not fixed:
-            break
-        for f in fixed:
-            dark.discard(f)
-
     # UV 없던 조각(부엉이 날개): 머리 뒤쪽 가운데 면의 색 한 가지로
     flat_ix = [order.index(n) for n in cfg.get("flat", [])]
     if flat_ix:
@@ -358,6 +330,7 @@ def build(cfg):
         joints[n] = Vector((bc.x + side * (sx + out), (a.y + b.y) / 2, (a.z + b.z) / 2 + (b.z - a.z) * 0.25))
     objs, boxes = {}, {}
     drop = cfg.get("drop", 0)
+    subs_rest = {"Head": [v.co.copy() for v in subs["Body"].verts]}  # 목 이음새 크기 = 몸 윗부분 굵기
     for n in order:
         sub = subs[n]
         if n in ("ArmL", "ArmR") and out:
@@ -366,6 +339,8 @@ def build(cfg):
             j = joints[n]
             R = Matrix.Rotation(math.radians(drop if n == "ArmL" else -drop), 4, "Y")
             bmesh.ops.transform(sub, matrix=Matrix.Translation(j) @ R @ Matrix.Translation(-j), verts=sub.verts)
+        if n in CAPS and cfg.get("caps", True):
+            add_cap(sub, n, joints[n], subs_rest.get(n))
         a, b = lohi([v.co for v in sub.verts])
         c = (a + b) / 2
         bmesh.ops.translate(sub, verts=sub.verts, vec=-c)
@@ -457,15 +432,23 @@ def rot(x=0, y=0, z=0):
 
 
 POSES = [{}, {"LegL": rot(x=-28), "LegR": rot(x=26), "ArmL": rot(x=24), "ArmR": rot(x=-24)}, {"ArmR": rot(x=-110), "Head": rot(x=8)}]
+# 검수용 돌려 보기 (2026-11-28 작업 지시서 "정면·측면·후면, 대기·걷기·뛰기·팔 움직임"): 앞 · 옆 · 뒤 · 크게 걷기(뛰기) · 팔 앞뒤 끝까지
+TURN = [(0, {}), (90, {}), (180, {}), (0, {"LegL": rot(x=-45), "LegR": rot(x=42), "ArmL": rot(x=45), "ArmR": rot(x=-45), "Body": rot(z=6)}),
+        (90, {"LegL": rot(x=-45), "LegR": rot(x=42), "ArmL": rot(x=60), "ArmR": rot(x=-110), "Head": rot(x=10)})]
+SHEETS = [("_preview.png", [(0, p) for p in POSES], 1500), ("_turn.png", TURN, 2400)]
 for r in results:
+  for suffix, poses, resx in SHEETS:
+    scene.render.resolution_x = resx
+    pose_list = poses
     for o in scene.objects:
         if o.type == "MESH":
             o.hide_render = True
     made = []
-    for k, pose in enumerate(POSES):
+    for k, (yaw, pose) in enumerate(pose_list):
         r2 = r["root"].copy()
         scene.collection.objects.link(r2)
-        r2.location = ((k - 1) * 3.2, 0, 0)
+        r2.location = ((k - (len(pose_list) - 1) / 2) * 3.2, 0, 0)
+        r2.rotation_euler = (0, 0, math.radians(yaw))
         made.append(r2)
         for n, o in r["objs"].items():
             o2 = o.copy()
@@ -476,9 +459,9 @@ for r in results:
             c, _ = r["boxes"][n]
             o2.matrix_basis = Matrix.Translation(j) @ pose.get(n, Matrix()) @ Matrix.Translation(c - j)
             made.append(o2)
-    cam.location = (0, -15, 3.0)
+    cam.location = (0, -15 * len(pose_list) / 3, 3.0)
     cam.rotation_euler = (Vector((0, 0, 1.8)) - cam.location).to_track_quat("-Z", "Y").to_euler()
-    scene.render.filepath = os.path.join(OUT, r["cfg"]["id"] + "_preview.png")
+    scene.render.filepath = os.path.join(OUT, r["cfg"]["id"] + suffix)
     bpy.ops.render.render(write_still=True)
     for o in made:
         bpy.data.objects.remove(o, do_unlink=True)

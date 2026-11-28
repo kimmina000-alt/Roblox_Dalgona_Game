@@ -17,6 +17,9 @@ import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import npc_bake  # noqa: E402
+
 argv = sys.argv[sys.argv.index("--") + 1:]
 LOW, HIGH, OUT = (os.path.abspath(a) for a in argv[:3])
 REPO = os.path.abspath(argv[3]) if len(argv) > 3 else None
@@ -112,7 +115,7 @@ joined.name = "GomdolJoined"
 joined.data.uv_layers.new(name="UVMap")
 bpy.ops.object.mode_set(mode="EDIT")
 bpy.ops.mesh.select_all(action="SELECT")
-bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.01)
+bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.02)
 bpy.ops.object.mode_set(mode="OBJECT")
 
 img = bpy.data.images.new("Gomdol_Color", TEX, TEX)
@@ -127,18 +130,13 @@ nt.nodes.active = tex
 joined.data.materials.clear()
 joined.data.materials.append(mat)
 
-scene.render.engine = "CYCLES"
-scene.cycles.samples = 4
-scene.cycles.device = "CPU"
-scene.render.bake.use_selected_to_active = True
-scene.render.bake.cage_extrusion = 0.02
-scene.render.bake.max_ray_distance = 0.08
-scene.render.bake.margin = 6
-bpy.ops.object.select_all(action="DESELECT")
-high.select_set(True)
-joined.select_set(True)
-bpy.context.view_layer.objects.active = joined
-bpy.ops.object.bake(type="DIFFUSE", pass_filter={"COLOR"})
+# 2026-11-28 작업 지시서(얼룩·번짐 제거): 광선 굽기 대신 npc_bake.transfer + 얼룩 정리 (npc_customers.py와 같음)
+_lo, _hi = bbox([joined])
+_base = npc_bake.cycles_bake(scene, high, joined, img, 0.02, 0.08)  # 얼굴은 예전 굽기 그대로
+_mp = os.path.join(OUT, "gomdol_mask.png")
+print("[gomdol] 색 옮김", npc_bake.transfer(joined, high, img, _hi.z - _lo.z, margin=12, mask_path=_mp, part_attr="part",
+                                         off=0.02, ray=0.08, face_part=order.index("Head"), face_base=_base))
+print("[gomdol] 얼룩 정리", npc_bake.clean(img, _mp, OUT, 12, 0.6))
 img.filepath_raw = os.path.join(OUT, "gomdol_color.png")
 img.file_format = "PNG"
 img.save()
@@ -160,44 +158,7 @@ fy = (min(p.y for p in feet) + max(p.y for p in feet)) / 2
 fz = min(v.co.z for v in src.verts)
 bmesh.ops.translate(src, verts=src.verts, vec=Vector((-fx, -fy, -fz)))
 uvl = src.loops.layers.uv.active
-# 어깨·엉덩이처럼 원본에서는 팔·다리 속이던 자리는 굽기에서 검게 나옴 → 머리(눈·입은 진짜 검정) 말고는
-# 검게 구워진 면의 UV를 맞닿은 밝은 면의 UV 한 점으로 바꿈 (안쪽으로 번져 가며)
-px = list(img.pixels)
-
-
-def lum(uv):
-    x = min(TEX - 1, max(0, int(uv.x * TEX)))
-    y = min(TEX - 1, max(0, int(uv.y * TEX)))
-    i = (y * TEX + x) * 4
-    return 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2]
-
-
-head_ix = order.index("Head")
-dark = set()
-for f in src.faces:
-    if f[pl] == head_ix:
-        continue
-    c = sum((l[uvl].uv for l in f.loops), Vector((0, 0))) / len(f.loops)
-    if lum(c) < 0.3 or min(lum(l[uvl].uv.lerp(c, 0.3)) for l in f.loops) < 0.3:
-        dark.add(f)
-print("[gomdol] dark faces", len(dark))
-while dark:
-    fixed = []
-    for f in dark:
-        for e in f.edges:
-            for g in e.link_faces:
-                if g is not f and g not in dark and g[pl] == f[pl]:
-                    uv = g.loops[0][uvl].uv.copy()
-                    for l in f.loops:
-                        l[uvl].uv = uv
-                    fixed.append(f)
-                    break
-            if fixed and fixed[-1] is f:
-                break
-    if not fixed:
-        break
-    for f in fixed:
-        dark.discard(f)
+# (예전 "검은 면 UV를 이웃 한 점으로" 정리는 번짐 원인이라 뺌 — npc_bake가 묻힌 자리를 섬 안에서 메움)
 
 root = bpy.data.objects.new("Customer_" + CID, None)
 scene.collection.objects.link(root)
@@ -253,6 +214,8 @@ for n, sub in objs.items():
         j = joints[n]
         R = Matrix.Rotation(math.radians(ARM_DROP if n == "ArmL" else -ARM_DROP), 4, "Y")
         bmesh.ops.transform(sub, matrix=Matrix.Translation(j) @ R @ Matrix.Translation(-j), verts=sub.verts)
+    if n in npc_bake.CAPS:  # 관절 이음새 (팔·목)
+        npc_bake.add_cap(sub, n, joints[n], verts["Body"] if n == "Head" else None)
     a, b = lohi([v.co for v in sub.verts])
     c = (a + b) / 2
     bmesh.ops.translate(sub, verts=sub.verts, vec=-c)
