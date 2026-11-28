@@ -11,6 +11,7 @@ local ViewClear = {}
 local hidden = {} -- 부품 → 숨기기 전 LocalTransparencyModifier
 local conn = nil
 local model = nil
+local points = nil -- 기계 만들기: 카메라가 봐야 하는 자리 목록을 돌려주는 함수 (있으면 테이블 위 기둥 검사 없이 가린 것만 숨김)
 local acc = 0
 
 local SCAN_EVERY = 0.15 -- 초. 카메라가 단계마다 옮겨 가서 계속 다시 봄
@@ -33,6 +34,13 @@ local function hide(p)
 			end
 		end
 	end
+end
+
+-- 기계 만들기에서 숨기지 않는 큰 부품 (가게 건물 통메시 등)
+local BIG = 20
+local function big(p)
+	local s = p.Size
+	return math.max(s.X, s.Y, s.Z) > BIG
 end
 
 -- 이 부품을 숨겨도 되나: 같은 가게 부지 안이고 작업대 밖
@@ -117,33 +125,73 @@ local function scan()
 	-- 그래서 이 가게 부지 부품을 직접 돌며 축 정렬 상자로 겹침을 잼:
 	--   ① 카메라 둘레(1 stud)에 걸친 부품  ② 테이블 바로 위 기둥(작업대 바닥 넓이 + 여유, 테이블 윗면 ~ 카메라 위)과 겹치는 부품
 	-- 알바생 미니미(모델 속성 Minime)는 카운터 위에 서 있어도 남김 (카메라를 직접 가리면 아래 레이캐스트가 숨김)
-	local top = model:FindFirstChild("TableTop")
-	local cf, size = tableBox()
-	local y0 = (top and top:IsA("BasePart")) and (top.Position.Y + top.Size.Y / 2 + 0.3) or (cf.Position.Y + size.Y / 2)
-	local y1 = math.max(origin.Y + 1, y0 + 1)
-	local half = (cf - cf.Position):VectorToWorldSpace(size / 2)
-	local hx, hz = math.abs(half.X) + 0.5, math.abs(half.Z) + 0.5
-	local cmin = Vector3.new(cf.Position.X - hx, y0, cf.Position.Z - hz)
-	local cmax = Vector3.new(cf.Position.X + hx, y1, cf.Position.Z + hz)
-	local omin, omax = origin - Vector3.one, origin + Vector3.one
-	for _, p in ipairs(plot:GetDescendants()) do
-		if p:IsA("BasePart") and hidden[p] == nil and not p:IsDescendantOf(model) then
-			local mm = p:FindFirstAncestorWhichIsA("Model")
-			local isMinime = mm ~= nil and (mm:GetAttribute("Minime") == true or (mm.Parent ~= nil and mm.Parent:GetAttribute("Minime") == true))
-			if not isMinime then
+	if points then
+		-- 기계 만들기 (2026-11-27 사용자 "배경 날아감"): 기계 위 기둥 검사는 기계 뒤 벽·천장까지 통째로 숨겨서 뺌.
+		-- 카메라와 볼 자리 사이를 실제로 가리는 것(레이캐스트)·카메라에 걸친 것만 숨김.
+		-- 가게 건물 통메시(ShopModel.Plane 42×26×77 — 벽·천장이 한 덩어리)처럼 큰 부품은 카메라가 그 상자 안이라 통째로 숨겨져
+		-- "배경이 날아감" → 큰 부품(BIG 넘게)은 숨기지 않음
+		local omin, omax = origin - Vector3.one, origin + Vector3.one
+		-- 알바·손님(Humanoid 모델)이 카메라와 기계 사이에 서 있으면 숨김 (부품이 CanQuery=false라 레이캐스트에 안 잡힘, 2026-11-27)
+		local pts = points()
+		for _, h in ipairs(plot:GetDescendants()) do
+			if h:IsA("Humanoid") and h.Parent and h.Parent:IsA("Model") then
+				local ch = h.Parent
+				local root = ch.PrimaryPart or ch:FindFirstChild("HumanoidRootPart")
+				if root and hidden[root] == nil then
+					local p = root.Position
+					for _, t in ipairs(pts) do
+						local d = t - origin
+						local u = math.clamp((p - origin):Dot(d) / math.max(d:Dot(d), 1e-6), 0, 1)
+						if (origin + d * u - p).Magnitude < 2.5 then
+							for _, q in ipairs(ch:GetDescendants()) do
+								if q:IsA("BasePart") then
+									hide(q)
+								end
+							end
+							break
+						end
+					end
+				end
+			end
+		end
+		for _, p in ipairs(plot:GetDescendants()) do
+			if p:IsA("BasePart") and hidden[p] == nil and not p:IsDescendantOf(model) and not big(p) then
 				local pmin, pmax = aabb(p)
-				local inColumn = pmax.X > cmin.X and pmin.X < cmax.X and pmax.Y > cmin.Y and pmin.Y < cmax.Y and pmax.Z > cmin.Z and pmin.Z < cmax.Z
-				local atCam = pmax.X > omin.X and pmin.X < omax.X and pmax.Y > omin.Y and pmin.Y < omax.Y and pmax.Z > omin.Z and pmin.Z < omax.Z
-				if inColumn or atCam then
+				if pmax.X > omin.X and pmin.X < omax.X and pmax.Y > omin.Y and pmin.Y < omax.Y and pmax.Z > omin.Z and pmin.Z < omax.Z then
 					hide(p)
 					table.insert(ex, p)
+				end
+			end
+		end
+	else
+		local top = model:FindFirstChild("TableTop")
+		local cf, size = tableBox()
+		local y0 = (top and top:IsA("BasePart")) and (top.Position.Y + top.Size.Y / 2 + 0.3) or (cf.Position.Y + size.Y / 2)
+		local y1 = math.max(origin.Y + 1, y0 + 1)
+		local half = (cf - cf.Position):VectorToWorldSpace(size / 2)
+		local hx, hz = math.abs(half.X) + 0.5, math.abs(half.Z) + 0.5
+		local cmin = Vector3.new(cf.Position.X - hx, y0, cf.Position.Z - hz)
+		local cmax = Vector3.new(cf.Position.X + hx, y1, cf.Position.Z + hz)
+		local omin, omax = origin - Vector3.one, origin + Vector3.one
+		for _, p in ipairs(plot:GetDescendants()) do
+			if p:IsA("BasePart") and hidden[p] == nil and not p:IsDescendantOf(model) then
+				local mm = p:FindFirstAncestorWhichIsA("Model")
+				local isMinime = mm ~= nil and (mm:GetAttribute("Minime") == true or (mm.Parent ~= nil and mm.Parent:GetAttribute("Minime") == true))
+				if not isMinime then
+					local pmin, pmax = aabb(p)
+					local inColumn = pmax.X > cmin.X and pmin.X < cmax.X and pmax.Y > cmin.Y and pmin.Y < cmax.Y and pmax.Z > cmin.Z and pmin.Z < cmax.Z
+					local atCam = pmax.X > omin.X and pmin.X < omax.X and pmax.Y > omin.Y and pmin.Y < omax.Y and pmax.Z > omin.Z and pmin.Z < omax.Z
+					if inColumn or atCam then
+						hide(p)
+						table.insert(ex, p)
+					end
 				end
 			end
 		end
 	end
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Exclude
-	for _, t in ipairs(targets()) do
+	for _, t in ipairs(points and points() or targets()) do
 		for _ = 1, 10 do
 			params.FilterDescendantsInstances = ex
 			local r = workspace:Raycast(origin, t - origin, params)
@@ -151,7 +199,7 @@ local function scan()
 				break
 			end
 			local p = r.Instance
-			if hideable(p, plot) then
+			if hideable(p, plot) and not (points and big(p)) then
 				hide(p)
 			end
 			-- 숨길 수 없는 것(다른 곳·제작 도구)도 지나서 그 뒤를 봄
@@ -160,9 +208,11 @@ local function scan()
 	end
 end
 
-function ViewClear.start(m)
+-- pts (선택): 볼 자리 목록을 돌려주는 함수 (기계 만들기)
+function ViewClear.start(m, pts)
 	ViewClear.stop()
 	model = m
+	points = pts
 	acc = SCAN_EVERY
 	conn = RunService.RenderStepped:Connect(function(dt)
 		acc += dt
@@ -195,6 +245,7 @@ function ViewClear.stop()
 	end
 	table.clear(guis)
 	model = nil
+	points = nil
 end
 
 return ViewClear

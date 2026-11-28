@@ -235,4 +235,8 @@ function Stick.follow(st, flat)
 	st.stickPlace(CFrame.lookAt(Vector3.new(mid.X, y, mid.Z), Vector3.new(mid.X, y, mid.Z) + look))
 end
 
+-- 2·3단계 기계 직접 만들기도 같은 아이스크림 막대를 씀 (D61, 2026-11-26)
+Stick.build = build
+Stick.SIZE = { LEN = LEN, WIDTH = WIDTH, THICK = THICK }
+
 return Stick

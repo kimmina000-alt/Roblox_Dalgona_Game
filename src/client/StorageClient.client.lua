@@ -235,7 +235,7 @@ local function targets(plot)
 end
 
 local function tryOpen(screenPos)
-	if making() then
+	if making() or player:GetAttribute("Building") == true then -- 꾸미기 중에는 꾸미기만 (2026-11-27)
 		return
 	end
 	local plot = myPlot()

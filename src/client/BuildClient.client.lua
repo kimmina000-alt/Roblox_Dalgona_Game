@@ -78,6 +78,7 @@ local doneBtn = bigButton("✔ 완료", C.green, 4)
 
 ---------------------------------------------------------------- 상태
 local active = false
+local dragInput = nil -- 지금 물건을 끄는 손가락 (폰)
 local plot, plotCF = nil, nil
 local CELL = 2
 local area = nil -- { x0, x1, z0, z1 } 부지 로컬 스터드
@@ -293,7 +294,15 @@ local function load()
 	end
 	for key, e in pairs(res.items or {}) do
 		local def = defs[key]
-		local nodes = def and findNodes(plot, def) or {}
+		-- 계산대·유리 진열장은 꾸미기에서 안 옮김 (2026-11-27 사용자 "카운터 진열대 제외 모두 바꿀 수 있도록")
+		local nodes = (def and key ~= "counter") and findNodes(plot, def) or {}
+		-- 기계 자리(MachineSlot)는 바닥 판뿐 → 그 위 기계(Machine2·3·4)도 같이 끌려 보이게 (서버는 [완료] 때 MachineDisplay.sync로 옮김)
+		if def and def.machine and #nodes > 0 then
+			local mm = plot:FindFirstChild("Machine" .. tostring(key):gsub("^m", ""))
+			if mm then
+				table.insert(nodes, mm)
+			end
+		end
 		if #nodes > 0 then
 			local it = { key = key, name = e.name or key, w = e.w or 1, d = e.d or 1, nodes = {}, x0 = e.x, z0 = e.z, r0 = e.r or 0, x = e.x, z = e.z, r = e.r or 0, ok = true }
 			for _, n in ipairs(nodes) do
@@ -363,6 +372,9 @@ local function exit(restore)
 		return
 	end
 	active = false
+	-- 꾸미기 끝: 다른 버튼·진열·보관함 누르기 다시 켬
+	me:SetAttribute("Building", nil)
+	game:GetService("ProximityPromptService").Enabled = true
 	dragging = false
 	checkSeq += 1
 	if restore then
@@ -377,9 +389,9 @@ local function exit(restore)
 		end
 	end
 	table.clear(hidden)
+	dragInput = nil
 	camera.CameraType = Enum.CameraType.Custom
 	showRoof()
-	controls(true)
 end
 
 local function enter()
@@ -401,17 +413,22 @@ local function enter()
 		return
 	end
 	active = true
+	-- 꾸미기 중에는 꾸미기만 (2026-11-27 사용자 "달고나 들고 진열장 눌러도 진열이 아니라 위치 수정으로"):
+	-- 모든 기계·가구 버튼(ProximityPrompt)을 끄고, 진열·보관함 클라이언트는 이 속성을 보고 누르기를 무시
+	me:SetAttribute("Building", true)
+	game:GetService("ProximityPromptService").Enabled = false
 	selected = nil
 	for _, g in ipairs(playerGui:GetChildren()) do
-		if g:IsA("ScreenGui") and g ~= gui and g.Enabled then
+		-- 폰 조이스틱(TouchGui)은 남김: 꾸미는 동안에도 걸어 다님
+		if g:IsA("ScreenGui") and g ~= gui and g.Enabled and g.Name ~= "TouchGui" then
 			hidden[g] = true
 			g.Enabled = false
 		end
 	end
 	gui.Enabled = true
-	hideRoof()
-	controls(false)
-	aimCamera()
+	-- 2026-11-28 사용자 "꾸미기 때 창이 다 가려짐, 일반 플레이 화면에서 가구를 옮기게, 화면 회전 가능하게":
+	-- 위에서 내려다보는 카메라(aimCamera)·지붕 숨기기(hideRoof)·조작 끄기를 안 하고 평소 카메라 그대로.
+	-- 물건을 끄는 동안만 카메라를 그 자리에 멈춤 (손가락 끌기가 화면 돌리기로 가지 않게)
 	refresh()
 end
 
@@ -419,30 +436,56 @@ end
 local rayParams = RaycastParams.new()
 rayParams.FilterType = Enum.RaycastFilterType.Exclude
 
-local function itemAt(screen)
-	local ray = camera:ViewportPointToRay(screen.X, screen.Y)
-	local ex = { me.Character }
-	for _, d in ipairs(roofParts) do
-		table.insert(ex, d)
-	end
-	rayParams.FilterDescendantsInstances = ex
-	local hit = workspace:Raycast(ray.Origin, ray.Direction * 600, rayParams)
-	if not hit then
-		return nil
-	end
-	for _, it in pairs(items) do
-		for _, n in ipairs(it.nodes) do
-			if hit.Instance == n.inst or hit.Instance:IsDescendantOf(n.inst) then
-				return it
+-- 광선이 상자(cf, size)에 닿는 거리 (안 닿으면 nil)
+local function rayBox(origin, dir, cf, size)
+	local o = cf:PointToObjectSpace(origin)
+	local d = cf:VectorToObjectSpace(dir)
+	local h = size / 2
+	local tmin, tmax = 0, math.huge
+	for _, ax in ipairs({ "X", "Y", "Z" }) do
+		local oa, da, ha = o[ax], d[ax], h[ax]
+		if math.abs(da) < 1e-8 then
+			if oa < -ha or oa > ha then
+				return nil
+			end
+		else
+			local t1, t2 = (-ha - oa) / da, (ha - oa) / da
+			if t1 > t2 then
+				t1, t2 = t2, t1
+			end
+			tmin, tmax = math.max(tmin, t1), math.min(tmax, t2)
+			if tmin > tmax then
+				return nil
 			end
 		end
 	end
-	return nil
+	return tmin
+end
+
+-- 화면 점에 있는 물건: 물건 노드마다 부품 상자에 광선을 대 봄 (2026-11-27 사용자 "냉장고만 옮겨짐": 가게 가구 부품은
+-- 대부분 CanQuery = false라 레이캐스트에 안 맞아서 버튼(CanQuery)이 있는 냉장고만 골라졌음). 가장 가까운 것
+local function itemAt(screen)
+	local ray = camera:ScreenPointToRay(screen.X, screen.Y) -- 누른 자리(GUI 좌표, 위 메뉴 줄 아래 기준) → ScreenPointToRay
+	local best, bt = nil, math.huge
+	for _, it in pairs(items) do
+		for _, n in ipairs(it.nodes) do
+			local parts = n.inst:IsA("BasePart") and { n.inst } or n.inst:GetDescendants()
+			for _, p in ipairs(parts) do
+				if p:IsA("BasePart") and p.Transparency < 0.95 and p.Size.Magnitude > 0.05 then
+					local t = rayBox(ray.Origin, ray.Direction, p.CFrame, p.Size)
+					if t and t < bt then
+						best, bt = it, t
+					end
+				end
+			end
+		end
+	end
+	return best
 end
 
 -- 화면 점 → 부지 로컬 바닥 점 (스터드, 바닥 = 부지 기준 높이)
 local function floorAt(screen)
-	local ray = camera:ViewportPointToRay(screen.X, screen.Y)
+	local ray = camera:ScreenPointToRay(screen.X, screen.Y) -- 누른 자리(GUI 좌표, 위 메뉴 줄 아래 기준) → ScreenPointToRay
 	local n = plotCF.UpVector
 	local denom = ray.Direction:Dot(n)
 	if math.abs(denom) < 1e-4 then
@@ -456,19 +499,34 @@ local function floorAt(screen)
 	return Vector2.new(p.X, p.Z)
 end
 
-local function pressAt(pos)
+-- 끄는 동안 카메라 멈춤 (평소 카메라는 끌면 돌아감)
+local function holdCamera(on)
+	if on then
+		local cf = camera.CFrame
+		camera.CameraType = Enum.CameraType.Scriptable
+		camera.CFrame = cf
+	else
+		camera.CameraType = Enum.CameraType.Custom
+	end
+end
+
+-- 누른 자리에 물건이 있으면 고르고 끌기 시작. 빈 곳이면 고른 것은 그대로 두고 화면 돌리기(평소 카메라)에 맡김
+local function pressAt(pos, input)
 	local it = itemAt(pos)
+	if not it then
+		return
+	end
 	if it ~= selected then
 		checkSeq += 1
 	end
 	selected = it
 	dragging = false
-	if it then
-		local f = floorAt(pos)
-		if f then
-			dragging = true
-			grab = f - Vector2.new(it.x * CELL, it.z * CELL)
-		end
+	local f = floorAt(pos)
+	if f then
+		dragging = true
+		dragInput = input
+		grab = f - Vector2.new(it.x * CELL, it.z * CELL)
+		holdCamera(true)
 	end
 	refresh()
 end
@@ -503,19 +561,28 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-		pressAt(Vector2.new(input.Position.X, input.Position.Y))
+		if not dragging then -- 두 번째 손가락(확대·축소)은 끌기로 안 침
+			pressAt(Vector2.new(input.Position.X, input.Position.Y), input)
+		end
 	elseif input.KeyCode == Enum.KeyCode.R then
 		rotate()
 	end
 end)
 UserInputService.InputChanged:Connect(function(input)
-	if active and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+	if not active then
+		return
+	end
+	if input.UserInputType == Enum.UserInputType.MouseMovement or (input.UserInputType == Enum.UserInputType.Touch and input == dragInput) then
 		moveTo(Vector2.new(input.Position.X, input.Position.Y))
 	end
 end)
 UserInputService.InputEnded:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or (input.UserInputType == Enum.UserInputType.Touch and input == dragInput) then
+		if dragging then
+			holdCamera(false)
+		end
 		dragging = false
+		dragInput = nil
 	end
 end)
 
@@ -620,11 +687,7 @@ end)
 me.CharacterAdded:Connect(function()
 	exit(true)
 end)
-RunService.RenderStepped:Connect(function()
-	if active and camera.CameraType ~= Enum.CameraType.Scriptable then
-		camera.CameraType = Enum.CameraType.Scriptable
-	end
-end)
+-- (예전: 꾸미는 동안 카메라를 위에서 고정 — 2026-11-28부터 평소 카메라, 끄는 동안만 holdCamera)
 
 ---------------------------------------------------------------- HUD 메뉴 버튼 [🛠 꾸미기]
 task.spawn(function()

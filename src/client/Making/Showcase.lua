@@ -44,7 +44,7 @@ function Showcase.collect(S, dal, st)
 	for _, c in ipairs(dal.cracks or {}) do
 		add(c.part)
 	end
-	local NAMES = { Crack = true, Engrave = true, EngraveShadow = true, EngraveLight = true, DalgonaSwirl = true }
+	local NAMES = { Crack = true, Engrave = true, EngraveShadow = true, EngraveLight = true, DalgonaSwirl = true, BreadSugar = true } -- BreadSugar = 달고나빵 설탕 가루 (2026-11-27)
 	for _, p in ipairs(S.fx:GetChildren()) do
 		if NAMES[p.Name] then
 			add(p)

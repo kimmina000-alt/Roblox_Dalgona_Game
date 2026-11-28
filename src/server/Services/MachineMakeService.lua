@@ -135,12 +135,12 @@ function MM.submit(player, id, raw)
 		return { ok = false, reason = "time" }
 	end
 	-- 점수는 클라이언트가 보낸 값이 아니라 입력 기록으로 다시 셈 (순서·시간·표본 수 검사 포함)
-	local scores, why = Rules.evaluate(raw, s.t0, nowT, s.batch)
+	local scores, why = Rules.evaluate(raw, s.t0, nowT, s.batch, s.stage)
 	if not scores then
 		warn("[MachineMake] rejected", player.Name, why)
 		return { ok = false, reason = "기록이 이상해서 이번 판은 못 받았어요" }
 	end
-	local q = Rules.quality(scores)
+	local q = Rules.quality(scores, s.stage)
 	local grade = gradeOf(q)
 	local m = G.Machines[s.stage]
 	local made, perfect, ups, newShapes = 0, false, {}, {}

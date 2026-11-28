@@ -8,6 +8,13 @@
 --   화면 오른쪽 반투명 검은 판(Ui:setMoldPad)의 칸을 누르고 있으면 그 칸에 부음.
 -- 서버로는 점수가 아니라 입력 기록(단계 시각·설탕 양·손 제작 녹이기/소다 기록·칸마다 채운 양)을 보냄.
 -- 점수·품질 Q는 shared/MachineMakeRules로 서버가 다시 셈 (Studio 시험 모드도 같은 함수). 개수·Perfect 1개 규칙은 서버가 정함
+-- 2026-11-26 D60~D63 (사용자 확정):
+--   D60 장면은 내 가게의 그 기계 자리에서 (MachineMakeScene), 카메라는 지금 자리에서 기계로 다가감.
+--   D61 막대는 손 작업대 막대(Steps/Stick.build): 막대 통에서 끌어 칸에 놓기 (칸을 바로 눌러도 꽂힘).
+--   D62 넓은 누름판으로 한 번 누르기 (목표 0.08, 손 작업대 마지막 누르기와 같음).
+--   D63 3단계: 왼쪽 기둥 아래에 국자를 대고 있으면 설탕 정량, 녹인 뒤 오른쪽 기둥 아래에 대면 식소다 정량 → 바로 젓기.
+-- 2026-11-27 사용자: 순서 붓기 → 막대 → 누르기, 붓고 나면 국자는 화면에서 숨김, 칸 반죽은 볼록 → 누르면 납작,
+--   국자는 손잡이를 잡고 끌기(2·3단계, 그릇이 손가락에 가려지지 않게), 반복 소리는 단계 끝에 바로 끔(Sfx.stopLoop).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -26,6 +33,8 @@ local Steps = Making:WaitForChild("Steps")
 local SugarStep = require(Steps:WaitForChild("Sugar"))
 local MeltStep = require(Steps:WaitForChild("Melt"))
 local SodaStep = require(Steps:WaitForChild("Soda"))
+local StickStep = require(Steps:WaitForChild("Stick"))
+local Dalgona = require(Making:WaitForChild("Dalgona"))
 local Scene = require(script.Parent:WaitForChild("MachineMakeScene"))
 
 local player = Players.LocalPlayer
@@ -40,7 +49,10 @@ local STEPS = {
 	{ key = "soda", label = "소다", icon = "🧂", title = "소다", desc = "" },
 	{ key = "pour", label = "붓기", icon = "🍯", title = "금형판에 붓기", desc = "" },
 	{ key = "stick", label = "막대", icon = "🍡", title = "막대 꽂기", desc = "" },
+	{ key = "press", label = "누르기", icon = "⬇", title = "누름판", desc = "" },
 }
+local SUGAR_FULL = 1.5 -- 3단계 설탕 기둥: 정량이 다 나오는 데 걸리는 초 (Rules.SUGAR_HOLD 1.2 이상이어야 서버 통과)
+local SODA_FULL = 1.0 -- 3단계 소다 기둥
 local TAP_PX = 110 -- 도구 화면 자리에서 이만큼 안을 누르면 그 도구
 local SUGAR_RATE = Rules.SUGAR_RATE
 local SUGAR_LO, SUGAR_HI, SUGAR_MAX = Rules.SUGAR_LO, Rules.SUGAR_HI, Rules.SUGAR_MAX
@@ -78,6 +90,64 @@ local function screenOf(pos)
 end
 local function near(pos, px)
 	return (Pointer.pos - screenOf(pos)).Magnitude < (px or TAP_PX)
+end
+-- 손가락 자리를 높이 y인 가로 판 위 세계 자리로
+local function pointerAt(y)
+	local inset = game:GetService("GuiService"):GetGuiInset()
+	local ray = workspace.CurrentCamera:ViewportPointToRay(Pointer.pos.X, Pointer.pos.Y + inset.Y)
+	if math.abs(ray.Direction.Y) < 1e-4 then
+		return nil
+	end
+	local t = (y - ray.Origin.Y) / ray.Direction.Y
+	if t < 0 then
+		return nil
+	end
+	return ray.Origin + ray.Direction * t
+end
+local function flat(v)
+	return Vector3.new(v.X, 0, v.Z)
+end
+-- 국자 손잡이를 잡고 끌기: 누르고 있으면 손가락 = 손잡이 자리, 그릇은 그만큼 떨어져 따라옴 (planeY = 그릇 높이)
+local function dragLadle(sc, cur, planeY, dt, near3, maxR)
+	if Pointer.down then
+		local p = pointerAt(planeY)
+		if p then
+			local want = Vector3.new(p.X, planeY, p.Z) - (sc.gripOff or Vector3.zero)
+			if near3 and maxR then
+				local off = flat(want - near3)
+				if off.Magnitude > maxR then
+					want = Vector3.new(near3.X, planeY, near3.Z) + off.Unit * maxR
+				end
+			end
+			cur = cur:Lerp(want, 1 - math.exp(-dt * 14))
+		end
+	end
+	return cur
+end
+
+-- 국자 속 설탕 더미 (손 작업대와 같은 그릇 더미 메시 + 결정 낱알, Steps/Sugar). k = 0~1
+local function showSugar(S, st, k)
+	if k <= 0.01 then
+		return
+	end
+	-- 손 작업대 설탕 단계(Steps/Sugar)처럼 국자 바닥에 얇은 설탕 층을 깔고 그 위에 더미.
+	-- (2026-11-27 사용자 "3단계 설탕 위치 안 맞음": 층을 안 깔아서 녹이기가 시작되면 더미가 남아 있던 내용물 높이로
+	--  뛰어올라 국자 테두리 위 뚜껑처럼 보였음)
+	local fill = math.min(k, 1)
+	S:setContents({ thickness = 0.03 + 0.04 * fill, Transparency = 0, Material = Enum.Material.Sand, Color = WHITE })
+	if SugarStep.pile(S, st, fill, WHITE) then
+		-- 더미는 설탕 그릇 더미 메시를 복제함 → 복제한 작업대에선 그릇이 숨겨져 있어 보이게 되돌림
+		if st.pile and st.pile.Transparency > 0.5 then
+			st.pile.Transparency = 0
+		end
+		-- 그릇 더미 모양이면 따로 낱알 없음 (손 작업대와 같음)
+		local count = S.WhiteBowl:FindFirstChild("SugarHeapMesh") and 0 or GRAINS
+		while #st.grains < math.floor(count * fill) do
+			SugarStep.addGrain(S, st.grains, st)
+		end
+	else
+		S:setContents({ Transparency = 0, thickness = 0.05 + 0.3 * math.min(k, 1), Color = WHITE, Material = Enum.Material.Sand })
+	end
 end
 
 -- 다른 화면(HUD·메뉴·기계 창 등) 숨기기. 다른 UI들은 "MakingScreen" 이름만 보고 숨어서, 여기서 직접 끄고 끝나면 켜 둔 것만 다시 켬
@@ -177,11 +247,14 @@ local function stepCoin(sc)
 			if slot then
 				n += 1
 				Sfx.play("metalClink", 0.5, 1.4 + n * 0.1)
-				-- 동전이 앞에서 구멍으로 쏙 (세운 동전 = 원기둥 축이 Z)
-				local coin = Scene.part(sc.model, "Coin", Vector3.new(0.08, 0.55, 0.55), CFrame.new(slot), Color3.fromRGB(210, 210, 200), Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
+				-- 동전이 기계 앞에서 세로 투입구(검은 칸)로 쏙: 동전 면이 투입구 틈과 나란하게 세움 (원기둥 축 = 기계 X).
+				-- 2026-11-27 사용자 "투입구 윗부분 검은 칸에 위치 맞게": 예전엔 세계 Z로 움직여서 기계가 돌아 있으면 옆에서 들어갔음
+				local cs = 0.26 * sc.S
+				local coin = Scene.part(sc.model, "Coin", Vector3.new(0.03 * sc.S, cs, cs), CFrame.new(slot) * sc.rot, Color3.fromRGB(210, 210, 200), Enum.Material.Metal, { Shape = Enum.PartType.Cylinder })
 				task.spawn(function()
 					for k = 0, 10 do
-						coin.CFrame = CFrame.new(slot + Vector3.new(0, 0, -1.2 + k * 0.12)) * CFrame.Angles(0, math.rad(90), 0)
+						local back = (k / 10) * 0.2 * sc.S -- 마지막에 투입구 안으로
+						coin.CFrame = CFrame.new(slot + sc.dir(Vector3.new(0, 0, -0.6 * sc.S * (1 - k / 10) + back))) * sc.rot
 						task.wait(0.02)
 					end
 					coin:Destroy()
@@ -215,11 +288,13 @@ end
 local function stepSugar(sc, S, st)
 	ui:setStep(2)
 	shot(sc, "sugar")
-	local home = S.Bowl.Position
 	local catchAt = sc.sugarLadle + Vector3.new(0, S.bowlHalf, 0)
-	if (catchAt - home).Magnitude > 0.2 and not slide(sc, home, catchAt, 0.45) then
+	-- 동전을 넣으면 국자가 배출구 아래에 놓인 채 시작 (2026-11-28 사용자: 예전엔 손잡이를 잡고 끌어 와야 했음)
+	ui:say("국자가 배출구 아래에 놓였어요", "")
+	if not slide(sc, S.Bowl.Position, catchAt, 0.45) then
 		return nil
 	end
+	Sfx.play("metalClink", 0.35, 1.2)
 	local t0 = now()
 	local what = sc.stage == 3 and "설탕 버튼을" or "설탕 배출구를"
 	ui:say(what .. " 꾹 누르고 있으면 설탕이 나와요", "막대가 초록 칸에 오면 손을 떼요")
@@ -251,26 +326,13 @@ local function stepSugar(sc, S, st)
 			Sfx.loop("sugarPour", 0, 1)
 		end
 		-- 손 작업대와 같은 국자 속 설탕 더미(그릇 더미 메시) + 결정 낱알 (Steps/Sugar)
-		if fill > 0.01 then
-			local k = math.clamp(fill / SUGAR_HI, 0, 1.2)
-			if SugarStep.pile(S, st, math.min(k, 1), WHITE) then
-				-- 더미는 설탕 그릇 더미 메시를 복제함 → 복제한 작업대에선 그릇이 숨겨져 있어 보이게 되돌림
-				if st.pile and st.pile.Transparency > 0.5 then
-					st.pile.Transparency = 0
-				end
-				while #st.grains < math.floor(GRAINS * math.min(k, 1)) do
-					SugarStep.addGrain(S, st.grains, st)
-				end
-			else
-				S:setContents({ Transparency = 0, thickness = 0.05 + 0.3 * math.min(k, 1), Color = WHITE, Material = Enum.Material.Sand })
-			end
-		end
+		showSugar(S, st, math.clamp(fill / SUGAR_HI, 0, 1.2))
 		ui:setMeter(true, fill / SUGAR_MAX, SUGAR_LO / SUGAR_MAX, SUGAR_HI / SUGAR_MAX, string.format("%d%%", math.floor(fill / SUGAR_HI * 100 + 0.5)), "설탕")
 		if (pressed and not on) or fill >= SUGAR_MAX then
 			break
 		end
 	end
-	Sfx.loop("sugarPour", 0, 1)
+	Sfx.stopLoop("sugarPour")
 	sc:setStream(false)
 	ui:setMeter(false)
 	local rec = { t0 = t0, t1 = now(), fill = fill }
@@ -291,6 +353,110 @@ local function stepSugar(sc, S, st)
 	end
 	S.Ladle:PivotTo(onBurner)
 	return rec
+end
+
+---------------------------------------------------------------- 3단계 기둥 (D63): 국자를 끌어 기둥 아래에 대고 있으면 정량이 나옴
+-- key = "sugarPillar" | "sodaPillar", full = 정량이 다 나오는 초, onFill(k 0~1) = 국자 속 보이기. 반환 { t0, t1, held }
+local function holdUnderPillar(sc, S, key, full, color, onFill)
+	local pillar = sc[key]
+	local top = (key == "sodaPillar" and sc.sodaTop or sc.sugarTop) or pillar
+	-- 그릇은 기둥 입구 바로 아래 (2026-11-27 기둥을 다시 보이게 함), 열선 컵보다 위
+	local bowlY = top.Y - S.bowlHalf - sc.PILLAR_GAP * sc.S
+	local markAt = Vector3.new(top.X, bowlY, top.Z)
+	local bowlD = math.max(S.Bowl.Size.Y, S.Bowl.Size.Z)
+	local reach = 0.35 * sc.S
+	local t0 = now()
+	local held, wasUnder = 0, false
+	local cur = S.Bowl.Position
+	while held < full do
+		local dt = frame()
+		if not dt then
+			sc:setStream(false)
+			sc:setHoldMark(nil)
+			Sfx.stopLoop("sugarPour")
+			return nil
+		end
+		-- 손잡이를 잡고 끌면 국자가 따라옴 (구멍에서 너무 멀리는 못 감)
+		cur = dragLadle(sc, cur, bowlY, dt, top, 4 * sc.S)
+		sc:ladleBowlTo(cur)
+		local d = flat(S.Bowl.Position - top).Magnitude
+		local under = d < reach
+		sc:setPillarGlow(key, d < reach * 3)
+		sc:setHoldMark(under and "under" or (d < reach * 3 and "near" or "far"), markAt, bowlD, S.bowlHalf)
+		if under then
+			held = math.min(full, held + dt)
+			onFill(held / full)
+			sc:setStream(true, top, color)
+			Sfx.loop("sugarPour", 0.5, key == "sodaPillar" and 1.3 or 1)
+		else
+			sc:setStream(false)
+			Sfx.loop("sugarPour", 0, 1)
+			if wasUnder then
+				ui:hint("구멍 아래에 계속 대고 있어요")
+			end
+		end
+		wasUnder = under
+		ui:setMeter(true, held / full, 0.999, 1, string.format("%d%%", math.floor(held / full * 100 + 0.5)), key == "sodaPillar" and "소다" or "설탕")
+	end
+	Sfx.stopLoop("sugarPour")
+	sc:setStream(false)
+	sc:setHoldMark(nil)
+	sc:setPillarGlow(key, false)
+	ui:setMeter(false)
+	Sfx.play("stepDone", 0.4, 1.3)
+	return { t0 = t0, t1 = now(), held = held }
+end
+
+-- 국자를 화구(열선 컵) 위 녹이기 자리로
+local function toBurner(sc, S)
+	local onBurner = S:ladleAt(Config.Melt.hMin)
+	local pv = S.Ladle:GetPivot()
+	local bowlHome = onBurner.Position - (pv.Position - S.Bowl.Position)
+	if not slide(sc, S.Bowl.Position, bowlHome, 0.5) then
+		return false
+	end
+	S.Ladle:PivotTo(onBurner)
+	return true
+end
+
+local function stepPillarSugar(sc, S, st)
+	ui:setStep(2)
+	shot(sc, "sugar")
+	st.grains = {}
+	-- 국자는 앞쪽 받침에서 시작 (화구 컵이 바로 설탕 기둥 아래라서)
+	local rest = sc.ladleRest + Vector3.new(0, S.bowlHalf, 0)
+	if not slide(sc, S.Bowl.Position, rest, 0.4) then
+		return nil
+	end
+	ui:say("국자 손잡이를 잡고 왼쪽 설탕 구멍 아래로 끌어 대요", "대고 있으면 설탕이 정해진 만큼 나와요")
+	local rec = holdUnderPillar(sc, S, "sugarPillar", SUGAR_FULL, WHITE, function(k)
+		showSugar(S, st, k)
+	end)
+	if not rec then
+		return nil
+	end
+	ui:toast("설탕 딱 알맞아요!", 0.8)
+	task.wait(0.3)
+	if not toBurner(sc, S) then
+		return nil
+	end
+	return rec
+end
+
+-- 녹인 뒤 오른쪽 기둥에서 식소다 정량 → st.sodaPreset (Steps/Soda가 찍기 없이 바로 젓기)
+local function stepPillarSoda(sc, S, st)
+	shot(sc, "sodaPillar")
+	ui:say("국자 손잡이를 잡고 오른쪽 소다 구멍 아래로 끌어 대요", "식소다가 정해진 만큼 나와요 · 대면 바로 빠르게 저어요")
+	local first = nil
+	local rec = holdUnderPillar(sc, S, "sodaPillar", SODA_FULL, Color3.fromRGB(240, 240, 236), function()
+		first = first or now()
+	end)
+	if not rec then
+		return false
+	end
+	st.sodaPreset = Rules.SODA_FIXED
+	st.sodaAt = first or now()
+	return toBurner(sc, S)
 end
 
 ---------------------------------------------------------------- ⑤ 금형판에 붓기 (반투명 검은 판)
@@ -369,63 +535,262 @@ local function stepPour(sc, S, shape, st)
 			break
 		end
 	end
-	Sfx.loop("pourGlug", 0, 1)
+	Sfx.stopLoop("pourGlug")
 	sc:setPourStream(nil)
 	ui:setMeter(false)
 	ui:setMoldPad(false)
 	S:setContents({ Transparency = 1 })
+	sc:hideLadle() -- 다 부었으면 국자는 화면에서 숨김 (2026-11-27)
+	sc:setHeat(0)
 	return { t0 = t0, t1 = now(), fills = fills }
 end
 
----------------------------------------------------------------- ⑥ 막대 꽂기 + 헹굼
+---------------------------------------------------------------- ⑥ 막대 꽂기 (D61, 손 작업대 막대, 칸 크기에 맞춰 줄임)
+-- 칸 i에 막대를 꽂은 자세 (한쪽 끝이 칸 가운데쯤, 나머지는 앞(-Z)으로 빠져나옴, 막대 길이 = X축)
+local function stickCF(sc, i)
+	local len = StickStep.SIZE.LEN * sc.stickScale
+	local p = sc:stickSpot(i) + sc.dir(Vector3.new(0, 0, -(len / 2 - sc.cavD * 0.1)))
+	return CFrame.new(p) * sc.rot * CFrame.Angles(0, math.rad(90), 0)
+end
+
+local function newStick(sc, S)
+	local m, place = StickStep.build(S)
+	place(CFrame.new(sc:stickRest()))
+	m:ScaleTo(sc.stickScale)
+	m.Parent = sc.model
+	return m
+end
+
 local function stepStick(sc, S)
 	ui:setStep(6)
 	shot(sc, "stick")
 	local t0 = now()
-	ui:say("칸마다 막대를 꽂아요", "굳기 전에 칸을 하나씩 눌러요")
-	sc:ladleBowlTo(sc.ladleRest + Vector3.new(0, S.bowlHalf, 0))
-	sc:setHeat(0) -- 다 부었으니 화구 끔
-	local left, seen = #sc.cavities, Pointer.presses
-	while left > 0 do
-		if not frame() then
-			return nil
-		end
-		if Pointer.presses ~= seen then
-			seen = Pointer.presses
-			for i, c in ipairs(sc.cavities) do
-				if not c.stick and near(c.pos, 70) then
-					sc:addStick(i)
-					left -= 1
-					Sfx.play("pop", 0.5, 1.2)
-					break
+	ui:say("막대 더미에서 막대를 끌어 칸마다 놓아요", "칸을 바로 눌러도 꽂혀요")
+	local left = #sc.cavities
+	local drag = nil
+	local wasDown = false
+	local dragY = sc.cavY + 0.15
+	local function freeNear(px)
+		local best, bd = nil, px
+		for i, c in ipairs(sc.cavities) do
+			if not c.stick then
+				local d = (Pointer.pos - screenOf(c.pos)).Magnitude
+				if d < bd then
+					best, bd = i, d
 				end
 			end
 		end
+		return best
 	end
-	-- 굳으면 막대째 떼어 올림
+	local function plant(i, m)
+		sc.cavities[i].stick = m
+		m:PivotTo(stickCF(sc, i))
+		left -= 1
+		Sfx.play("pop", 0.5, 1.2)
+	end
+	while left > 0 do
+		sc:settleBatter((now() - t0) / 3)
+		if not frame() then
+			if drag then
+				drag:Destroy()
+			end
+			return nil
+		end
+		local d = Pointer.down
+		if d and not wasDown then
+			if near(sc:stickRest(), TAP_PX * 1.2) then
+				drag = newStick(sc, S)
+			else
+				local i = freeNear(80)
+				if i then
+					plant(i, newStick(sc, S))
+				else
+					ui:hint("막대 더미에서 막대를 끌어 와요")
+				end
+			end
+		end
+		if drag then
+			if d then
+				local p = pointerAt(dragY)
+				if p then
+					drag:PivotTo(CFrame.new(p) * sc.rot * CFrame.Angles(0, math.rad(90), 0))
+				end
+			else
+				local i = freeNear(110)
+				if i then
+					plant(i, drag)
+				else
+					drag:Destroy()
+					ui:hint("빈 칸 위에 놓아요")
+				end
+				drag = nil
+			end
+		end
+		wasDown = d
+	end
+	Sfx.play("stepDone", 0.4, 1)
 	task.wait(0.3)
-	for _, c in ipairs(sc.cavities) do
-		if c.look then
-			c.look:PivotTo(c.look:GetPivot() + Vector3.new(0, sc.cavD * 0.3, 0))
+	return { t0 = t0, t1 = now() }
+end
+
+---------------------------------------------------------------- ⑦ 넓은 누름판으로 한 번 누르기 (D62): 볼록한 반죽 → 납작
+-- 2026-11-27 사용자: 손 작업대처럼 누르는 동안 누름판이 투명해지고 반죽이 눌리는 모양(가운데 평평 + 가장자리 둥근 턱, 손 작업대
+-- 3D 반죽 BatterMesh 그대로)이 보임, 금형 모양 홈이 찍힘. 완성품 색은 손 작업대와 같은 겉모습 색(Dalgona.lookFor·colorFor)
+local function stepPress(sc, S, shape, ctx)
+	ui:setStep(7)
+	shot(sc, "press")
+	local P = Config.Press
+	local target = P.targets[#P.targets]
+	sc:prepareStamp(shape)
+	local top = math.max(0.02, sc:pressBatter(P.h0, target))
+	if not sc:presser() then
+		warn("[MachineMake] presser missing")
+	end
+	-- 위에서 내려와 반죽 꼭대기에 닿음
+	local up = 1.5 * sc.S
+	local t = 0
+	while t < 0.45 do
+		local dt = frame()
+		if not dt then
+			sc:hidePresser()
+			return nil
 		end
-		if c.stick then
-			c.stick.Position += Vector3.new(0, sc.cavD * 0.3, 0)
+		t += dt
+		local k = math.min(t / 0.45, 1)
+		sc:presserTo(top + up * (1 - k * k))
+	end
+	Sfx.play("pop", 0.4, 0.8)
+	ui:say("누름판을 꾹 누르고 있어요", "막대가 초록 칸에 오면 손을 떼요 · 한 번만 눌러요")
+	local h, t0, pressed = P.h0, nil, false
+	local lo, hi = target - 0.015, target + 0.02
+	local fade = 0
+	while true do
+		local dt = frame()
+		if not dt then
+			sc:hidePresser()
+			ui:setMeter(false)
+			Sfx.stopLoop("pourGlug")
+			return nil
+		end
+		if Pointer.down then
+			t0 = t0 or now()
+			pressed = true
+			h = h * math.exp(-P.k * dt)
+			Sfx.loop("pourGlug", 0.15, 0.6)
+		elseif pressed then
+			break
+		else
+			Sfx.loop("pourGlug", 0, 1)
+		end
+		if h < 0.03 then
+			break
+		end
+		-- 누르는 동안은 누름판이 사라짐 (손 작업대 Steps/Press와 같음)
+		fade += ((Pointer.down and 1 or 0) - fade) * (1 - math.exp(-dt * 12))
+		sc:fadePresser(fade)
+		top = sc:pressBatter(h, target)
+		sc:presserTo(top)
+		ui:setMeter(true, h / P.h0, lo / P.h0, hi / P.h0, string.format("%d%%", math.floor(target / h * 100 + 0.5)), "두께")
+	end
+	Sfx.stopLoop("pourGlug")
+	ui:setMeter(false)
+	local t1 = now()
+	Sfx.play("pressSticky", 0.5, 1)
+	if h >= lo and h <= hi then
+		ui:toast("딱 알맞게 눌렀어요!", 0.8)
+	elseif h < P.crack then
+		ui:toast("너무 얇아서 갈라졌어요", 0.8)
+	elseif h > hi then
+		ui:toast("조금 두꺼워요", 0.8)
+	else
+		ui:toast("조금 얇아요", 0.8)
+	end
+	-- 누름판이 다시 보이며 들어 올려짐 → 금형 모양대로 찍힌 달고나
+	t = 0
+	while t < 0.35 do
+		local dt = frame()
+		if not dt then
+			break
+		end
+		t += dt
+		local k = math.min(t / 0.35, 1)
+		sc:fadePresser(1 - k)
+		sc:presserTo(top + up * k)
+	end
+	sc:hidePresser()
+	local color = nil
+	pcall(function()
+		color = Dalgona.colorFor(Dalgona.lookFor(ctx.records, ctx.state))
+	end)
+	sc:finishCavities(shape, color)
+	-- 굳으면 막대째 떼어 올림
+	task.wait(0.4)
+	sc:liftCavities(sc.cavD * 0.3)
+	Sfx.play("stepDone", 0.5, 1)
+	task.wait(0.4)
+	return { t0 = t0 or t1, t1 = t1 + 0.01, h = h }
+end
+
+---------------------------------------------------------------- 완성품 크게 보여 주기 (2026-11-28 사용자 "2·3단계도 완성하면 1단계처럼 확대해서")
+-- 첫 칸 달고나(3D 반죽 + 막대)를 복제해 카메라 앞 화면 가운데로 날아오게 하고 천천히 돌림 (손 작업대 Showcase처럼)
+local function showcase(sc)
+	local c = sc.cavities[1]
+	local base = c and (c.bpart or c.look)
+	if not base then
+		return
+	end
+	local cam = workspace.CurrentCamera
+	local origin = CFrame.new(c.pos) * sc.rot
+	local items = {}
+	local function grab(inst)
+		local cf = inst:IsA("BasePart") and inst.CFrame or inst:GetPivot()
+		local cl = inst:Clone()
+		cl.Parent = sc.model
+		table.insert(items, { inst = cl, rel = origin:ToObjectSpace(cf) })
+	end
+	grab(base)
+	if c.stick then
+		grab(c.stick)
+	end
+	local function put(cf)
+		for _, it in ipairs(items) do
+			local w = cf * it.rel
+			if it.inst:IsA("BasePart") then
+				it.inst.CFrame = w
+			else
+				it.inst:PivotTo(w)
+			end
 		end
 	end
-	Sfx.play("stepDone", 0.5, 1)
-	-- 국자 물에 헹굼 (영상 끝)
-	task.wait(0.5)
-	shot(sc, "rinse")
-	slide(sc, S.Bowl.Position, sc.waterPos + Vector3.new(0, 0.6, 0), 0.5)
-	Sfx.play("sodaDrop", 0.4, 0.7)
-	task.wait(0.4)
-	return { t0 = t0, t1 = now() }
+	-- 화면 세로의 약 45%를 채우는 거리
+	local D = sc.cavD * 1.6
+	local dist = D / (2 * math.tan(math.rad(cam.FieldOfView) / 2)) / 0.45
+	Sfx.play("stepDone", 0.4, 1.2)
+	local t, T = 0, 3.0
+	while t < T do
+		local dt = frame()
+		if not dt then
+			break
+		end
+		t += dt
+		local k = math.min(t / 0.5, 1)
+		k = k * k * (3 - 2 * k)
+		local camCF = cam.CFrame
+		local center = (camCF * CFrame.new(0, 0, -dist)).Position
+		-- 윗면이 카메라를 보게 세우고 천천히 돎
+		local face = CFrame.lookAt(center, camCF.Position) * CFrame.Angles(math.rad(-90), 0, 0) * CFrame.Angles(0, t * 1.2, 0)
+		put(origin:Lerp(face, k))
+	end
+	for _, it in ipairs(items) do
+		it.inst:Destroy()
+	end
 end
 
 ---------------------------------------------------------------- 한 판
 local function round(stage, start)
 	local shape = start.shape
 	local sc = Scene.new(stage, start.batch or 2, shape)
+	MachineMake.scene = sc -- 자동 시험(tools/studio/machine_make_drive.lua)이 자리를 읽음
 	local S, why = sc:station()
 	if not S then
 		return sc, { ok = false, reason = why }
@@ -458,13 +823,22 @@ local function round(stage, start)
 	local burnt = false
 	local ok = stepCoin(sc)
 	if ok then
-		recs.sugar = stepSugar(sc, S, ctx.state)
+		if stage == 3 then
+			recs.sugar = stepPillarSugar(sc, S, ctx.state)
+		else
+			recs.sugar = stepSugar(sc, S, ctx.state)
+		end
 		ok = recs.sugar ~= nil
 	end
 	if ok then
 		ui:setStep(3)
 		sc:setHeat(1)
-		rig("melt")
+		-- 3단계 컵은 보라 판 아래라 위에서 내려다보면 가려짐 → 앞에서 들여다보는 장면 카메라 (2단계는 손 작업대 카메라 그대로)
+		if stage == 3 then
+			shot(sc, "cup")
+		else
+			rig("melt")
+		end
 		recs.melt = MeltStep.run(ctx)
 		ok = recs.melt ~= nil
 		burnt = ok and (recs.melt.burnt == true)
@@ -472,8 +846,18 @@ local function round(stage, start)
 	if ok and not burnt then
 		Sfx.play("stepDone", 0.45)
 		ui:setStep(4)
-		rig("soda")
-		recs.soda = SodaStep.run(ctx)
+		if stage == 3 then
+			ok = stepPillarSoda(sc, S, ctx.state)
+		end
+		if ok then
+			-- 3단계는 소다 통이 없음(기둥 정량) → 소다 화면 대신 컵을 앞에서 들여다보는 화면 (2026-11-27 "소다 뒤 화면 다 가려짐")
+			if stage == 3 then
+				shot(sc, "cup")
+			else
+				rig("soda")
+			end
+			recs.soda = SodaStep.run(ctx)
+		end
 		ok = recs.soda ~= nil
 		if ok and ctx.state.burntLate then
 			recs.soda.burnt = true
@@ -489,6 +873,13 @@ local function round(stage, start)
 		recs.stick = stepStick(sc, S)
 		ok = recs.stick ~= nil
 	end
+	if ok and not burnt then
+		recs.press = stepPress(sc, S, shape, ctx)
+		ok = recs.press ~= nil
+		if ok then
+			showcase(sc)
+		end
+	end
 	if burnt and ok then
 		ui:say("앗, 까맣게 탔어요", "이번 판은 탄 달고나가 돼요")
 		task.wait(1.5)
@@ -500,12 +891,12 @@ local function round(stage, start)
 		end
 		if start.test then
 			-- Studio 시험: 서버와 같은 검사·점수 (MachineMakeRules.evaluate) → 기록이 서버 검사를 통과하는지도 여기서 봄
-			local scores, why2 = Rules.evaluate(recs, start.t0, now(), #sc.cavities)
+			local scores, why2 = Rules.evaluate(recs, start.t0, now(), #sc.cavities, stage)
 			if not scores then
 				print("[MachineMake] test rejected:", why2)
 				return sc, { ok = false, reason = "서버 검사 거절: " .. tostring(why2) }
 			end
-			local q = Rules.quality(scores)
+			local q = Rules.quality(scores, stage)
 			local grade = "Burnt"
 			for _, g in ipairs(Config.Grades) do
 				if q >= g.min then
@@ -513,7 +904,7 @@ local function round(stage, start)
 					break
 				end
 			end
-			print(string.format("[MachineMake] test sugar %d melt %d soda %d pour %d burnt %s -> Q%d %s", scores.sugar, scores.melt, scores.soda, scores.pour, tostring(scores.burnt), q, grade))
+			print(string.format("[MachineMake] test stage %d sugar %d melt %d soda %d pour %d press %d burnt %s -> Q%d %s", stage, scores.sugar, scores.melt, scores.soda, scores.pour, scores.press or 0, tostring(scores.burnt), q, grade))
 			return sc, { ok = true, q = q, grade = grade, made = #sc.cavities, perfect = grade == "Perfect" }
 		end
 		local okR, r = pcall(function()
@@ -543,13 +934,17 @@ local function finish(sc)
 	end
 	RunService:UnbindFromRenderStep("MachineMakeCam")
 	camCF, camGoal = nil, nil
-	CameraRig.release()
+	CameraRig.allow(false)
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Custom
 	cam.FieldOfView = 70
 	controls(true)
 	hideOthers(false)
 	player:SetAttribute("Making", nil)
+	local re = Remotes:FindFirstChild("MakingState")
+	if re then
+		re:FireServer(false)
+	end
 end
 
 -- stage = 2·3. 기계 창의 [직접 만들기]가 부름. test = { shape } 는 Studio에서만: 서버 없이 한 판 (화면 시험용, 저장 안 바뀜)
@@ -582,7 +977,13 @@ function MachineMake.start(stage, test)
 	Pointer.enabled = true
 	Pointer.reset()
 	controls(false)
+	CameraRig.allow(true)
 	player:SetAttribute("Making", true)
+	-- 서버도 같은 속성 (칭호 숨김 · 주문 손님 기다림 절반 속도 D59 · 다른 사람 화면)
+	local re = Remotes:FindFirstChild("MakingState")
+	if re then
+		re:FireServer(true)
+	end
 	task.spawn(function()
 		while running do
 			local ok, sc, res = pcall(round, stage, start)

@@ -437,6 +437,24 @@ function Soda.run(ctx)
 			ui:setWorldTip(nil)
 		end
 	end
+	-- 정량 소다 (D63, 2026-11-26: 3단계 기계는 오른쪽 기둥에서 정해진 양이 국자에 이미 들어옴 — MachineMake가 st.sodaPreset을 넣음).
+	-- 찍기 단계 없이 바로 빠르게 젓기. 손 작업대는 st.sodaPreset이 없어서 지금과 똑같음
+	if st.sodaPreset then
+		rec.amount = st.sodaPreset
+		dips = 1
+		firstDrop = st.sodaAt or ctx.now()
+		rec.delay = firstDrop - (st.meltDoneAt or firstDrop)
+		st.sodaPreset, st.sodaAt = nil, nil
+		phase = "stir"
+		P.sideZone = Heat.sideZoneFor(ui)
+		local bowl = S.Bowl.Position
+		local spot = Fx.mesh("SodaMound", S.Ladle, { Name = "FxSoda", Color = Color3.fromRGB(252, 252, 252), Material = Enum.Material.Sand })
+		if spot and spot:IsA("MeshPart") then
+			Fx.placeDome(spot, Vector3.new(bowl.X, S:contentsTopY() - 0.01, bowl.Z), 0.45, 0.45 * Fx.HEIGHT.SodaMound * 0.6, 0)
+			table.insert(spots, spot)
+		end
+		ui:say("빠르게 저어요!", "FAST 쪽이 정답 · 불에서 떼고 저어요")
+	end
 
 	while true do
 		local dt = ctx.frame()

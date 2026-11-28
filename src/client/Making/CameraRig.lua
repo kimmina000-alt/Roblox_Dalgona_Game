@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local CameraRig = {}
+local allowed = true -- CameraRig.allow 참고
 
 local TABLE_TOP = 3.5
 local TILT = 0.12 -- 완전 수직이면 도구가 납작해 보여서 플레이어 쪽으로 살짝 기울임
@@ -137,6 +138,9 @@ end
 local tracker = nil
 local frontEase = 0.9
 function CameraRig.track(fn)
+	if not allowed then
+		return
+	end
 	tracker = fn
 end
 
@@ -158,7 +162,21 @@ function trackPose(p, poseKey)
 	return CFrame.lookAt(pos, p, origin:VectorToWorldSpace(Vector3.new(0, 0, -1)))
 end
 
+-- 만들기를 끝낸(X) 뒤에는 카메라를 다시 잡지 않음 (2026-11-27 버그: 손 작업대에서 X를 누르면 아직 돌던 단계가
+-- CameraRig.go를 다시 불러 카메라가 Scriptable로 다시 묶여 가게 천장·천막에 가려진 채 리스폰해도 안 풀렸음).
+-- MakingClient·MachineMake가 시작할 때 allow(true), 끝낼 때 allow(false)
+function CameraRig.allow(on)
+	allowed = on and true or false
+	if not allowed then
+		CameraRig.release()
+	end
+end
+
 local function step(dt)
+	if not allowed then
+		CameraRig.release()
+		return
+	end
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Scriptable
 	cam.FieldOfView = FOV
@@ -175,6 +193,9 @@ local function step(dt)
 end
 
 function CameraRig.go(key, instant)
+	if not allowed then
+		return
+	end
 	local pose = STEP_POSE[key] or key
 	if bound and pose == current and not instant then
 		return -- 같은 화면이면 카메라를 움직이지 않음
@@ -199,6 +220,9 @@ end
 -- 정면 보기 (2026-11-20: 비닐 씌울 때는 항공뷰 말고 정면에서). focus = 보여 줄 곳(세계 좌표).
 -- 테이블 앞(플레이어 쪽 +Z)에서 눈높이로 수평에 가깝게 바라봄. ease초에 걸쳐 부드럽게 옮겨 감
 function CameraRig.goFront(focus, ease)
+	if not allowed then
+		return
+	end
 	tracker = nil
 	current = "front"
 	local cam = workspace.CurrentCamera
@@ -219,6 +243,9 @@ end
 -- height = 테이블 윗면 위 카메라 높이, tilt = 플레이어 쪽으로 기울인 정도
 -- upDir(세계 방향, 생략 가능) = 화면 위쪽이 될 방향. 생략하면 작업대 뒤쪽(-Z) (포장 화면 돌리기, 2026-11-21)
 function CameraRig.goPoint(focus, height, tilt, ease, upDir)
+	if not allowed then
+		return
+	end
 	tracker = nil
 	current = "point"
 	local cam = workspace.CurrentCamera

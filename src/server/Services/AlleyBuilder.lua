@@ -793,26 +793,15 @@ function A.lighting()
 	Lighting.ClockTime = 15.2
 	Lighting.Brightness = 2.6
 	Lighting.GeographicLatitude = 35
-	Lighting.Ambient = Color3.fromRGB(120, 104, 96)
-	Lighting.OutdoorAmbient = Color3.fromRGB(150, 135, 125)
-	Lighting.ColorShift_Top = Color3.fromRGB(255, 225, 180)
-	local atm = Lighting:FindFirstChildOfClass("Atmosphere")
-	if not atm then
-		atm = Instance.new("Atmosphere")
-		atm.Parent = Lighting
+	-- 2026-11-27 사용자 "게임 속 누런 빛깔이랑 분위기 삭제": 따뜻한 색 이동·누런 대기(Haze)·노란 색 보정을 뺌.
+	--   하늘·대기는 Studio에 저장된 값(무채색 Atmosphere) 그대로, 그늘만 너무 어둡지 않게 무채색으로
+	Lighting.Ambient = Color3.fromRGB(118, 118, 118)
+	Lighting.OutdoorAmbient = Color3.fromRGB(140, 140, 140)
+	Lighting.ColorShift_Top = Color3.new(0, 0, 0)
+	local old = Lighting:FindFirstChild("AlleyGrade")
+	if old then
+		old:Destroy()
 	end
-	atm.Density = 0.28
-	atm.Offset = 0.2
-	atm.Color = Color3.fromRGB(235, 215, 190)
-	atm.Decay = Color3.fromRGB(150, 120, 100)
-	atm.Haze = 0.6
-	atm.Glare = 0.2
-	local cc = Lighting:FindFirstChild("AlleyGrade") or Instance.new("ColorCorrectionEffect")
-	cc.Name = "AlleyGrade"
-	cc.Saturation = -0.05
-	cc.Contrast = 0.05
-	cc.TintColor = Color3.fromRGB(255, 245, 228)
-	cc.Parent = Lighting
 end
 
 ---------------------------------------------------------------- 만들기

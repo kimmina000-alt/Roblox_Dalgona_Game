@@ -116,8 +116,8 @@ end
 -- 반환: 알림 목록, 레벨업 목록, 새 칭호 목록, 금테 새로
 function CollectionService.onMade(d, shape, result)
 	local notes, ups = {}, {}
-	if result.plain then
-		return notes, ups, {}, false -- 민짜는 도감에 안 셈 (D20)
+	if result.plain or result.bread then
+		return notes, ups, {}, false -- 민짜·달고나빵은 도감에 안 셈 (D20, 2026-11-27)
 	end
 	local rank = G.GradeRank[result.grade] or 0
 	local c = d.collection[shape.id]

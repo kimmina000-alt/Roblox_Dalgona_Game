@@ -28,6 +28,7 @@ local Ppopgi = require(Making:WaitForChild("Ppopgi"))
 local StepsFolder = Making:WaitForChild("Steps")
 
 local STEP_MODULES = {}
+local BreadStep = require(Making:WaitForChild("Steps"):WaitForChild("Bread")) -- 달고나빵 (2026-11-27)
 for _, step in ipairs(Config.Steps) do
 	local name = step.key:sub(1, 1):upper() .. step.key:sub(2)
 	STEP_MODULES[step.key] = require(StepsFolder:WaitForChild(name))
@@ -239,7 +240,7 @@ local function finish()
 	Pointer.enabled = false
 	Pointer.reset()
 	ui:show(false)
-	CameraRig.release()
+	CameraRig.allow(false) -- 아직 도는 단계가 카메라를 다시 잡지 못하게 (X 버그 2026-11-27)
 	setControls(true)
 	setCharacterHidden(false)
 	if station then
@@ -308,7 +309,7 @@ local function runSession()
 	ui:setStep(1)
 	CameraRig.go("sugar")
 	if pickShape then
-		local picked = CutterPicker.run(ctx, shape.id)
+		local picked = CutterPicker.run(ctx, shape.bread and "Bread" or shape.id)
 		if ctx.aborted or not picked then
 			return
 		end
@@ -431,6 +432,20 @@ local function runSession()
 			break
 		end
 		Sfx.play("stepDone", 0.45) -- 단계 끝 "띵"
+		-- 달고나빵 (2026-11-27 사용자 "모양틀 고를 때 달고나빵 선택"): 도안 고르기에서 달고나빵을 골랐으면
+		-- 붓고 나서 누르기·모양 찍기 대신 설탕 가루를 뿌리고 끝
+		if step.key == "pour" and ctx.state.dalgona then
+			if shape.bread then
+				CameraRig.go("press")
+				local brec = BreadStep.run(ctx)
+				if ctx.aborted or not brec then
+					return
+				end
+				ctx.records.bread = brec
+				ctx.state.bread = true
+				break
+			end
+		end
 		-- 단계 사이 짧은 숨 (성공 피드백이 보이게)
 		local w = 0
 		while w < 0.35 do
@@ -557,7 +572,11 @@ local function runSession()
 	end
 	ui:say(string.format("%s · 완성도 %d%%", result.grade, result.Q), "")
 	Pointer.enabled = false
-	ui:showResult(result, shape, {
+	local shownShape = shape
+	if result.bread then
+		shownShape = setmetatable({ name = "달고나빵", price = GrowthConfig.BreadBasePrice }, { __index = shape })
+	end
+	ui:showResult(result, shownShape, {
 		retry = function()
 			ui:hideResult()
 			task.spawn(startMaking, true)
@@ -595,6 +614,7 @@ function startMaking(restart)
 		pickShape = true -- 작업대에 새로 앉으면 도안부터 고름
 	end
 	running = true
+	CameraRig.allow(true)
 	station.Prompt.Enabled = false
 	setFullSize(true)
 	setUnturned(true)

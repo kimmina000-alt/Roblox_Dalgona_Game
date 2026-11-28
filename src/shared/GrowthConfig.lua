@@ -99,6 +99,11 @@ G.PackCost = { wrapper = 1, twistTie = 1 }
 -- 설탕은 Common 1회분, 뽑기·도감 안 됨
 G.PlainBasePrice = 8
 G.PlainSugarGrade = "Common"
+-- 달고나빵 (2026-11-27 사용자 "누르지 않은 반죽 위에 설탕가루 뿌린 게 달고나빵, 메뉴에 추가하고 가격 책정"):
+-- 붓고 누르지 않은 봉긋한 반죽 + 설탕 가루. 고른 도안과 상관없이 기본값 6 × 품질 (손 제작 ×1.5, 포장 ×1.1).
+-- 메뉴판 값은 기본 달고나 2,000원(민짜 8) 비율로 1,500원 = 6. 설탕은 Common 1회분, 뽑기·도감 안 됨
+G.BreadBasePrice = 6
+G.BreadMenuWon = 1500
 G.PackWindowSeconds = 180 -- 다 만든 뒤 이 시간 안에 포장해야 함
 
 -- 판매가 (GDD 13장, 기획 확정 2026-11-20): round(도안 가격 × 품질 배율 × 뽑기 보너스 × 포장 1.1)
@@ -392,7 +397,11 @@ G.Build = {
 		{ key = "table2", name = "작은 탁자 2", roles = { "작은 탁자 2" }, needPath = true },
 		{ key = "table3", name = "작은 탁자 3", roles = { "작은 탁자 3" }, needPath = true },
 		{ key = "fridge", name = "냉장고", roles = { "냉장고" } },
-		{ key = "drawer", name = "서랍장", roles = { "서랍장" } }, -- 위 벽 선반은 벽에 붙어 그대로
+		{ key = "drawer", name = "서랍장", roles = { "서랍장" } },
+		-- 벽에 거는 물건 (2026-11-28 사용자 "가격표·포스터·냉장고 위 선반도 가구로"): wall = 바닥 가구와는 안 겹침 검사 (높이가 달라서)
+		{ key = "menu", name = "메뉴판", roles = { "뒷벽 메뉴판 (나무 테)" }, wall = true },
+		{ key = "poster", name = "포스터", roles = { "포스터" }, wall = true },
+		{ key = "shelf", name = "벽 선반", roles = { "위 선반", "아래 선반", "재료 병 (흑설탕)", "재료 병 (땅콩 가루)", "재료 병 (설탕)", "재료 병 (캐러멜)", "재료 병 (콩가루)", "재료 병 (소다)", "재료 병 (계피)", "병 뚜껑" }, wall = true },
 		{ key = "m2", name = "철제 판매기 자리", names = { "MachineSlot2" }, machine = true },
 		{ key = "m3", name = "분홍 자판기 자리", names = { "MachineSlot3" }, machine = true },
 		{ key = "m4", name = "연속 생산 설비 자리", names = { "MachineSlot4" }, machine = true },
