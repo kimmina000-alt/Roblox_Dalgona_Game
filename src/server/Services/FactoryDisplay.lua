@@ -108,7 +108,29 @@ local function lotFrame(plot)
 	local back = Vector3.new(panel.Position.X - floor.Position.X, 0, panel.Position.Z - floor.Position.Z).Unit
 	local topY = floor.Position.Y + floor.Size.Y / 2
 	local c = Vector3.new(panel.Position.X, topY, panel.Position.Z) + back * (GAP + LOT_D / 2)
+	-- 2026-11-27 가게 3D 3판(store-1): 공장 문이 1층 뒷벽 한쪽(부지 로컬 x -14)에 있어서, 부지는 문이 아니라
+	-- 가게 가운데 뒤(뒤 큰 건물 "3" 안)에 놓음. 방향 = 부지 CFrame의 뒤(+Z), 깊이 = 문 높이 그대로
+	local pcf = plot:GetAttribute("PlotCFrame")
+	if typeof(pcf) == "CFrame" then
+		back = pcf:VectorToWorldSpace(Vector3.zAxis)
+		local dz = pcf:PointToObjectSpace(panel.Position).Z
+		c = Vector3.new(0, topY, 0) + Vector3.new(1, 0, 1) * (pcf * Vector3.new(0, 0, dz)) + back * (GAP + LOT_D / 2)
+	end
 	return CFrame.lookAt(c, c - back)
+end
+
+-- 공장 부지가 가게 3D 안 큰 건물(Role "공장 건물") 속이면 실내: 잔디·울타리 없이 바닥만 (영역 판정용 Ground는 안 보이게 남김)
+local function indoorLot(plot)
+	local shop = plot:FindFirstChild("ShopModel")
+	if not shop then
+		return false
+	end
+	for _, d in ipairs(shop:GetDescendants()) do
+		if d:IsA("BasePart") and d:GetAttribute("Role") == "공장 건물" then
+			return true
+		end
+	end
+	return false
 end
 
 -- 울타리 친 공장 부지 (6칸 모두)
@@ -183,6 +205,15 @@ local function buildLot(plot)
 				return d.Name == "Ground" or d.Name == "LotSign"
 			end,
 		})
+	end
+	if indoorLot(plot) then
+		for _, d in ipairs(lot:GetChildren()) do
+			if d ~= ground and d ~= sign then
+				d:Destroy()
+			end
+		end
+		ground.Transparency = 1
+		lot:SetAttribute("Indoor", true)
 	end
 	lot.PrimaryPart = ground
 	lot:SetAttribute("LotCFrame", cf)
