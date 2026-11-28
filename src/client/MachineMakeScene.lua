@@ -60,7 +60,8 @@ local LAYOUT = {
 		sugarLadle = Vector3.new(0, 0.12, -1.95), -- 설탕 받을 때 국자 그릇 바닥 자리 (배출구 아래, 기계 앞)
 		burner = Vector3.new(1.4, 4.52, -0.1), -- 윗판 왼쪽 화구 윗면
 		burnerD = 0.6,
-		sodaCup = { pos = Vector3.new(0.04, 4.83, -0.58), r = 0.22 }, -- 가운데 원통 (테두리 높이, 안쪽 반지름) — 소다를 여기에
+		-- 2026-11-28 사용자 새 3D(store-machines.glb): 가운데 원통이 뒤로 0.93 옮겨짐 (-0.58 → 0.35)
+		sodaCup = { pos = Vector3.new(0.04, 4.83, 0.35), r = 0.22 }, -- 가운데 원통 (테두리 높이, 안쪽 반지름) — 소다를 여기에
 		cavY = 5.92, -- 금형판 윗면 (뒤쪽에 들린 판, 칸 8개)
 		cavD = 0.46,
 		cavs = { 1.9, 1.39, 0.82, 0.31, -0.26, -0.83, -1.4, -1.97 }, -- 칸 x (z = cavZ)
@@ -77,31 +78,33 @@ local LAYOUT = {
 		-- 2026-11-28 사용자 "3단계도 같이": 기계는 가게 크기 그대로(1), 카메라를 더 가까이 (11-27 S 1.4 / cam 0.87이었음)
 		S = 1,
 		cam = 0.5,
-		size = Vector3.new(6.32, 7.13, 4.97),
-		coins = { Vector3.new(-0.93, 5.1, -2.5) }, -- 앞판 동전 투입구 윗부분 검은 칸 (2026-11-27 사용자 화면으로 맞춤)
-		pillars = { { x = 1.9, z = -1.21 }, { x = 0.3, z = -1.21 } }, -- 지울 기둥 (y pillarY0 ~ pillarTop)
-		pillarY0 = 2.3,
-		pillarTop = 3.46, -- 기둥 위 끝 = 보라 판 아랫면 (설탕·소다가 여기서 나옴)
-		-- D63: 앞면 아래 은색 기둥 두 개 (꼭짓점으로 잼: x 1.90 / 0.30, z -1.21, 아래 끝 2.43). 왼쪽 = 설탕, 오른쪽 = 식소다
-		sugarPillar = Vector3.new(1.9, 2.43, -1.21),
-		sodaPillar = Vector3.new(0.3, 2.43, -1.21),
-		spout = Vector3.new(1.9, 2.43, -1.21),
-		-- 검은 컵(열선): 가운데 (1.90, -1.21), 테두리 높이 1.02, 바깥 반지름 0.94, 안쪽 0.64, 안쪽 바닥 0.40
-		cup = { x = 1.9, z = -1.21, rim = 1.02, rOut = 0.94, rIn = 0.64, floor = 0.4 },
-		sugarLadle = Vector3.new(1.9, 1.02, -1.21),
-		burner = Vector3.new(1.9, 1.02, -1.21), -- 국자 받침 = 컵 테두리
-		-- 오른쪽 검은 판: 메시 판(x -2.85~-0.42)이 5칸보다 좁음 → 옆으로 넓힌 판을 Part로 덮고 칸을 고르게. 앞쪽은 막대 통 자리만큼 더
-		tray = { x0 = -3.1, x1 = -0.1, z0 = -2.75, z1 = -0.2, top = 1.5 },
+		-- 2026-11-28 사용자 새 3D(store-machines.glb, tools/blender/stage23_user.py로 다시 뽑음): 몸통 6.32×7.13 → 7.29×8.77,
+		-- 보라 판·기둥이 1.16 위로, 컵·기둥이 왼쪽(+x)으로 0.48, 오른쪽 검은 판이 넓고 깊어짐 (x -3.33~0.06, z -2.31~0.51)
+		size = Vector3.new(7.29, 8.77, 4.97),
+		coins = { Vector3.new(-1.02, 6.55, -2.5) }, -- 앞판 동전 투입구 윗부분 검은 칸 (판 z 5.27~7.02, 예전과 같은 비율 자리)
+		pillars = { { x = 2.38, z = -1.21 }, { x = 0.78, z = -1.21 } }, -- 지울 기둥 (y pillarY0 ~ pillarTop)
+		pillarY0 = 3.46,
+		pillarTop = 4.62, -- 기둥 위 끝 = 보라 판 아랫면 (설탕·소다가 여기서 나옴)
+		-- D63: 앞면 아래 은색 기둥 두 개 (꼭짓점으로 잼: x 2.38 / 0.78, z -1.21, 아래 끝 3.59). 왼쪽 = 설탕, 오른쪽 = 식소다
+		sugarPillar = Vector3.new(2.38, 3.59, -1.21),
+		sodaPillar = Vector3.new(0.78, 3.59, -1.21),
+		spout = Vector3.new(2.38, 3.59, -1.21),
+		-- 검은 컵(열선): 가운데 (2.38, -1.21), 테두리 높이 1.02, 바깥 반지름 0.94, 안쪽 0.64, 안쪽 바닥 0.40
+		cup = { x = 2.38, z = -1.21, rim = 1.02, rOut = 0.94, rIn = 0.64, floor = 0.4 },
+		sugarLadle = Vector3.new(2.38, 1.02, -1.21),
+		burner = Vector3.new(2.38, 1.02, -1.21), -- 국자 받침 = 컵 테두리
+		-- 오른쪽 검은 판: 새 메시 판(x -3.33~0.06)은 5칸이 들어감. 앞쪽만 막대 통 자리만큼 Part로 더
+		tray = { x0 = -3.33, x1 = 0.06, z0 = -2.75, z1 = 0.51, top = 1.5 },
 		cavY = 1.5,
 		cavD = 0.7,
 		cavGrid = { -- 5칸: 앞줄 3 + 뒷줄 2
-			Vector3.new(-0.65, 0, -1.75), Vector3.new(-1.6, 0, -1.75), Vector3.new(-2.55, 0, -1.75),
-			Vector3.new(-1.12, 0, -0.8), Vector3.new(-2.08, 0, -0.8),
+			Vector3.new(-0.7, 0, -1.65), Vector3.new(-1.65, 0, -1.65), Vector3.new(-2.6, 0, -1.65),
+			Vector3.new(-1.17, 0, -0.55), Vector3.new(-2.13, 0, -0.55),
 		},
 		markCavities = true, -- 판이 민판이라 칸 자국을 올림
-		stickBox = Vector3.new(-0.45, 1.5, -2.5), -- 막대 통: 넓힌 판 오른쪽 앞
+		stickBox = Vector3.new(-0.3, 1.5, -2.5), -- 막대 통: 판 오른쪽 앞
 		shelfY = 1.7,
-		ladleRest = Vector3.new(0.3, 0.45, -1.9),
+		ladleRest = Vector3.new(0.78, 0.45, -1.9),
 	},
 }
 
@@ -1132,9 +1135,9 @@ function Scene:shot(name)
 		-- 2026-11-28 사용자 "3단계 뷰 좀 더 위로, 항공뷰로, 화면 가리는 건 만들기 할 때만 숨기기": 위에서 내려다보고,
 		-- 보라 판(기계 몸 메시)이 가리는 설탕·소다·녹이기 때만 기계 몸을 내 화면에서 반투명하게
 		if name == "coin" then
-			t, d, p = self.at(Vector3.new(0, 3.9, -2.45)), 19, 20
+			t, d, p = self.at(Vector3.new(0, 5.3, -2.45)), 19, 20
 		elseif name == "sugar" or name == "sodaPillar" then
-			t, d, p = self.at(Vector3.new(1.1, 1.6, -1.3)), 13, 58
+			t, d, p = self.at(Vector3.new(1.5, 2.2, -1.3)), 14, 58
 		elseif name == "cup" then
 			t, d, p = self.at(Vector3.new(self.L.cup.x, 1.2, self.L.cup.z)), 8, 62
 		elseif name == "pour" or name == "stick" or name == "press" then
