@@ -152,7 +152,11 @@ end
 
 -- 7) 손 작업대 틀: 게임이 1번 가게에 세우는 자리에 겹침 (보기용 작업대는 자리만 재고 지움)
 if wsLayout and p1 then
+	-- 가게를 산 상태(가게 안 자리 HandStationInside)로 계산: 지금 플레이하는 계정 화면과 같게 (2026-11-28)
+	local oldState = p1.model:GetAttribute("ShopState")
+	p1.model:SetAttribute("ShopState", "owned")
 	local ok, ws = pcall(PlotService.previewWorkstation, 1)
+	p1.model:SetAttribute("ShopState", oldState)
 	if ok and ws then
 		moveTemplate(wsLayout, ws:GetPivot())
 		ws:Destroy()
